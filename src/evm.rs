@@ -1,15 +1,18 @@
-use std::{str::FromStr, time::Instant};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::iter::Map;
 use std::ops::Deref;
+use std::{str::FromStr, time::Instant};
 
+use crate::rand;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
-use revm::{db::BenchmarkDB, Bytecode, TransactTo, db::CacheDB, Host, Return, Interpreter, Env, SelfDestructResult, Spec, CreateInputs, Gas, CallInputs, LatestSpec, Contract};
 use revm::AccountInfo;
-use revm::Return::{Continue};
-use crate::rand;
+use revm::Return::Continue;
+use revm::{
+    db::BenchmarkDB, db::CacheDB, Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host,
+    Interpreter, LatestSpec, Return, SelfDestructResult, Spec, TransactTo,
+};
 const MAP_SIZE: usize = 256;
 
 pub type VMState = HashMap<H160, HashMap<U256, U256>>;
@@ -44,15 +47,12 @@ impl Host for FuzzHost {
         unsafe {
             match *interp.instruction_pointer {
                 0x57 => {
-                    let jump_dest = if interp.stack
-                            .peek(0)
-                            .expect("stack underflow")
-                            .is_zero() {
+                    let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
                         interp.stack.peek(1).expect("stack underflow").as_u64()
-                    } else { 1 };
-                    self.jmp_map[(
-                        interp.program_counter() ^ (jump_dest as usize)
-                    ) % MAP_SIZE] += 1;
+                    } else {
+                        1
+                    };
+                    self.jmp_map[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] += 1;
                 }
                 _ => {}
             }
@@ -73,13 +73,19 @@ impl Host for FuzzHost {
         unsafe {
             println!("load account {}", address);
         }
-        Some((true, self.data.contains_key(&address) || self.code.contains_key(&address)))
+        Some((
+            true,
+            self.data.contains_key(&address) || self.code.contains_key(&address),
+        ))
     }
 
     fn block_hash(&mut self, number: U256) -> Option<H256> {
         println!("blockhash {}", number);
 
-        Some(H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap())
+        Some(
+            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap(),
+        )
     }
 
     fn balance(&mut self, address: H160) -> Option<(U256, bool)> {
@@ -92,12 +98,16 @@ impl Host for FuzzHost {
         println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
-            None => Some((Bytecode::new(), true))
+            None => Some((Bytecode::new(), true)),
         }
     }
 
     fn code_hash(&mut self, address: H160) -> Option<(H256, bool)> {
-        Some((H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap(), true))
+        Some((
+            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap(),
+            true,
+        ))
     }
 
     fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
@@ -105,36 +115,46 @@ impl Host for FuzzHost {
             println!("sload");
         }
         match self.data.get(&address) {
-            Some(account) =>
-                Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
-            None => Some((U256::zero(), true))
+            Some(account) => Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
+            None => Some((U256::zero(), true)),
         }
     }
 
-    fn sstore(&mut self, address: H160, index: U256, value: U256) -> Option<(U256, U256, U256, bool)> {
+    fn sstore(
+        &mut self,
+        address: H160,
+        index: U256,
+        value: U256,
+    ) -> Option<(U256, U256, U256, bool)> {
         // unsafe {
         //     // println!("sstore");
         // }
         match self.data.get_mut(&address) {
             Some(account) => account.insert(index, value),
-            None => None
+            None => None,
         };
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
-    fn log(&mut self, address: H160, topics: Vec<H256>, data: Bytes) {
-
-    }
+    fn log(&mut self, address: H160, topics: Vec<H256>, data: Bytes) {}
 
     fn selfdestruct(&mut self, address: H160, target: H160) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
     }
 
-    fn create<SPEC: Spec>(&mut self, inputs: &mut CreateInputs) -> (Return, Option<H160>, Gas, Bytes) {
+    fn create<SPEC: Spec>(
+        &mut self,
+        inputs: &mut CreateInputs,
+    ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
             println!("create");
         }
-        return (Continue, Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()), Gas::new(0), Bytes::new());
+        return (
+            Continue,
+            Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()),
+            Gas::new(0),
+            Bytes::new(),
+        );
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
@@ -171,21 +191,28 @@ impl EVMExecutor {
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         assert_eq!(r, Continue);
-        self.host.set_code(deployed_address, Bytecode::new_raw(
-            interp.return_value()).to_analysed::<LatestSpec>()
+        self.host.set_code(
+            deployed_address,
+            Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
         );
         deployed_address
     }
 
-    pub fn execute(&mut self,
-                   contract_address: H160,
-                   caller: H160,
-                   state: &VMState,
-                   data: Bytes) -> ExecutionResult {
+    pub fn execute(
+        &mut self,
+        contract_address: H160,
+        caller: H160,
+        state: &VMState,
+        data: Bytes,
+    ) -> ExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
             data,
-            self.host.code.get(&contract_address).expect("no code").clone(),
+            self.host
+                .code
+                .get(&contract_address)
+                .expect("no code")
+                .clone(),
             contract_address,
             caller,
             U256::from(0),

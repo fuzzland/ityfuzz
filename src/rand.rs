@@ -9,4 +9,3 @@ pub fn generate_random_address() -> H160 {
     println!("address: {}", address);
     address
 }
-
