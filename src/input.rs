@@ -35,7 +35,7 @@ impl std::fmt::Debug for VMInput {
 
 impl VMInputT for VMInput {
     fn to_bytes(&self) -> &Bytes {
-        self.data.to_bytes()
+        self.data.get().to_bytes()
     }
 
     fn get_caller(&self) -> H160 {
