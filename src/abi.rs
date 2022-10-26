@@ -1,9 +1,10 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use libafl::prelude::Prepend;
 use serde::{Deserialize, Serialize};
 
 // how can we deserialize this trait?
 pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize{
-    fn to_bytes(&self) -> &Bytes;
+    fn set_bytes(&mut self);
 }
 
 trait CloneABI {
@@ -48,6 +49,14 @@ impl Clone for Box<dyn ABI> {
 pub struct A256 {
     data: [u8; 32],
     data_len: usize,
+    bytes: Bytes,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ADynamic {
+    data: Vec<u8>,
+    multiplier: usize,
+    bytes: Bytes,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -55,34 +64,79 @@ pub struct AFixedArray {
     data: Vec<BoxedABI>,
     data_len: usize,
     dynamic: bool,
+    bytes: Bytes,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AArray {
     data: Vec<BoxedABI>,
     data_len: usize,
+    bytes: Bytes,
 }
 
 // FIXME: fix scope
+fn pad_bytes(bytes: &mut Bytes, len: usize) {
+    let padding = len - bytes.len();
+    if padding > 0 {
+        bytes.prepend(vec![0; padding].as_slice());
+    }
+}
+
 impl ABI for A256 {
-    fn to_bytes(&self) -> &Bytes {
-        return &Bytes::from(&self.data[..self.data_len]);
+    fn set_bytes(&mut self) {
+        unsafe {
+            let mut counter = 0;
+            let ptr = self.bytes.as_mut_ptr();
+            loop {
+                *ptr = if self.data_len < (32 - counter) { 0 } else {
+                    self.data[counter - (32 - self.data_len)]
+                };
+                counter += 1;
+                if counter == 32 { break }
+                ptr = ptr.add(1);
+            }
+        }
+    }
+}
+
+fn roundup(x: usize, multiplier: usize) -> usize {
+    (x + multiplier - 1) / multiplier * multiplier
+}
+
+fn set_size(bytes: *mut u8, len: usize) {
+    let mut rem: usize = len;
+    unsafe {
+        for i in 0..32 {
+            *bytes.add(31 - i) = (rem & 0xff) as u8;
+            rem >>= 8;
+        }
+    }
+}
+
+impl ABI for ADynamic {
+    fn set_bytes(&mut self) {
+        unsafe {
+            let new_len: usize = roundup(self.data.len(), self.multiplier);
+            self.bytes = Bytes::from(vec![0; new_len + 32]);
+            let ptr = self.bytes.as_mut_ptr();
+            set_size(ptr, self.data.len());
+            // set data
+            for i in 0..self.data.len() {
+                *ptr.add(i + 32) = self.data[i];
+            }
+        }
     }
 }
 
 // FIXME: fix scope
 impl ABI for AFixedArray {
-    fn to_bytes(&self) -> &Bytes {
-        let mut ret = BytesMut::new();
-        for i in 0..self.data_len {
-            ret.extend_from_slice(self.data[i].b.to_bytes());
-        }
-        return &ret.copy_to_bytes(ret.len());
+    fn set_bytes(&mut self) {
+        todo!()
     }
 }
 
 impl ABI for AArray {
-    fn to_bytes(&self) -> &Bytes {
+    fn set_bytes(&mut self) {
         todo!()
     }
 }
