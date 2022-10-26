@@ -73,7 +73,6 @@ pub struct ADynamic {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AArray {
     data: Vec<BoxedABI>,
-    data_len: usize,
     dynamic_size: bool,
     pub bytes: Bytes,
 }
@@ -212,6 +211,97 @@ impl ABI for AArray {
     fn get_bytes(&self) -> &Bytes {
         &self.bytes
     }
+}
+
+pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
+    let abi_name_str = abi_name.as_str();
+    if abi_name_str.starts_with("uint") {
+        let len = abi_name_str[4..].parse::<usize>().unwrap();
+        get_abi_type_basic("uint", len)
+    }
+    if abi_name_str.starts_with("int") {
+        let len = abi_name_str[3..].parse::<usize>().unwrap();
+        get_abi_type_basic("int", len)
+    }
+    if abi_name_str.starts_with("bytes") {
+        let len = abi_name_str[5..].parse::<usize>().unwrap();
+        get_abi_type_basic("bytes", len)
+    }
+    // tuple
+    if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
+        Box::new(AArray {
+            data: abi_name_str[1..abi_name_str.len() - 1]
+                .split(",")
+                .map(|x| get_abi_type(&String::from(x)))
+                .collect(),
+            dynamic_size: false,
+            bytes: Bytes::new(),
+        })
+    }
+    if abi_name_str.ends_with("[]") {
+        Box::new(AArray {
+            data: vec![BoxedABI{
+                b: get_abi_type(&String::from(abi_name_str[..abi_name_str.len() - 2]))
+            }; 1],
+            dynamic_size: true,
+            bytes: Bytes::new(),
+        })
+    } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
+        let mut split = abi_name_str.split('[' as u8);
+        let name = split.next().unwrap();
+        let len = split.next().unwrap().trim_end_matches(']').parse::<usize>().unwrap();
+        Box::new(AArray {
+            data: vec![BoxedABI{
+                b: get_abi_type(&String::from(name))
+            }; len],
+            dynamic_size: false,
+            bytes: Bytes::new(),
+        })
+    }
+    get_abi_type_basic(abi_name.as_str(), 0);
+    panic!("not implemented");
+}
+
+fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
+    match abi_name {
+        "uint" | "int" => Box::new(
+            A256 {
+                data: [0; 32],
+                data_len: abi_bs,
+                bytes: Bytes::new(),
+            }
+        ),
+        "address" => Box::new(
+            A256 {
+                data: [0; 32],
+                data_len: 20,
+                bytes: Bytes::new(),
+            }
+        ),
+        "bool" => Box::new(
+            A256 {
+                data: [0; 32],
+                data_len: 1,
+                bytes: Bytes::new(),
+            }
+        ),
+        "bytes" => Box::new(
+            ADynamic {
+                data: Vec::new(),
+                multiplier: 32,
+                bytes: Bytes::new(),
+            }
+        ),
+        "string" => Box::new(
+            ADynamic {
+                data: Vec::new(),
+                multiplier: 32,
+                bytes: Bytes::new(),
+            }
+        ),
+        _ => panic!("unsupported abi type"),
+    }
+
 }
 
 // test serialization and deserialization
