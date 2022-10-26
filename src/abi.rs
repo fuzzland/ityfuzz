@@ -3,7 +3,7 @@ use libafl::prelude::Prepend;
 use serde::{Deserialize, Serialize};
 
 // how can we deserialize this trait?
-pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize{
+pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize {
     fn set_bytes(&mut self);
 }
 
@@ -25,7 +25,7 @@ where
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BoxedABI {
     #[serde(with = "serde_traitobject")]
-    b: Box<dyn ABI>
+    b: Box<dyn ABI>,
 }
 
 impl BoxedABI {
@@ -39,7 +39,7 @@ impl BoxedABI {
 }
 
 impl Clone for Box<dyn ABI> {
-    fn clone(&self) ->  Box<dyn ABI> {
+    fn clone(&self) -> Box<dyn ABI> {
         self.clone_box()
     }
 }
@@ -88,11 +88,15 @@ impl ABI for A256 {
             let mut counter = 0;
             let ptr = self.bytes.as_mut_ptr();
             loop {
-                *ptr = if self.data_len < (32 - counter) { 0 } else {
+                *ptr = if self.data_len < (32 - counter) {
+                    0
+                } else {
                     self.data[counter - (32 - self.data_len)]
                 };
                 counter += 1;
-                if counter == 32 { break }
+                if counter == 32 {
+                    break;
+                }
                 ptr = ptr.add(1);
             }
         }
