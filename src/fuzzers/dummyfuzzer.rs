@@ -3,10 +3,9 @@ use std::{
     cell::RefCell,
     fs::{File, OpenOptions},
     io,
-    os::fd::{AsRawFd, FromRawFd},
     path::PathBuf,
 };
-
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use crate::{
     corpus::InMemoryItyCorpus,
     evm::{EVMExecutor, FuzzHost},
