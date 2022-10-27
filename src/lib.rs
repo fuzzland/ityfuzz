@@ -1,4 +1,5 @@
 mod abi;
+mod corpus;
 mod evm;
 mod executor;
 mod fuzzer;
