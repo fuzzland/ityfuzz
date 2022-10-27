@@ -179,6 +179,14 @@ pub struct ExecutionResult {
 }
 
 impl EVMExecutor {
+    pub fn new(FuzzHost: FuzzHost, contract_addresses: Vec<H160>, deployer: H160) -> Self {
+        Self {
+            host: FuzzHost,
+            contract_addresses,
+            deployer,
+        }
+    }
+
     pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> H160 {
         let deployed_address = rand::generate_random_address();
         let deployer = Contract::new::<LatestSpec>(

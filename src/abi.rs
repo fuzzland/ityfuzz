@@ -1,7 +1,13 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::{MutationResult, MutatorsTuple};
-use libafl::prelude::{Mutator, Prepend, tuple_list, BitFlipMutator, ByteFlipMutator, ByteIncMutator, ByteDecMutator, ByteNegMutator, ByteRandMutator, ByteAddMutator, WordAddMutator, DwordAddMutator, QwordAddMutator, ByteInterestingMutator, WordInterestingMutator, DwordInterestingMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesSetMutator, BytesRandSetMutator, BytesCopyMutator, BytesSwapMutator, State, HasConstLen};
+use libafl::prelude::{
+    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
+    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
+    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend,
+    QwordAddMutator, State, WordAddMutator, WordInterestingMutator,
+};
 use libafl::state::HasRand;
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -165,7 +171,6 @@ impl ABI for ADynamic {
     }
 }
 
-
 impl ABI for AArray {
     fn is_static(&self) -> bool {
         if self.dynamic_size {
@@ -304,12 +309,8 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
         "uint" | "int" => Box::new(A256 {
             data: vec![0; abi_bs],
         }),
-        "address" => Box::new(A256 {
-            data: vec![0; 20],
-        }),
-        "bool" => Box::new(A256 {
-            data: vec![0; 1],
-        }),
+        "address" => Box::new(A256 { data: vec![0; 20] }),
+        "bool" => Box::new(A256 { data: vec![0; 1] }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
             multiplier: 32,
@@ -327,5 +328,4 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
 fn test_int() {
     let abi = get_abi_type_boxed(&String::from("int8"));
     abi.get_bytes();
-
 }

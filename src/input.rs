@@ -2,6 +2,7 @@ use crate::abi::BoxedABI;
 use crate::{evm, VMState};
 use bytes::Bytes;
 use libafl::inputs::Input;
+use libafl::prelude::HasLen;
 use libafl::Error;
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,12 @@ pub struct VMInput {
     pub contract: H160,
     pub data: BoxedABI,
     pub state: VMState,
+}
+
+impl HasLen for VMInput {
+    fn len(&self) -> usize {
+        self.data.get_bytes().len()
+    }
 }
 
 impl std::fmt::Debug for VMInput {
@@ -76,7 +83,7 @@ impl Input for VMInput {
     }
 }
 
-// Input we saved in corpus, not real inputs
+// Input we saved in corpus, not real inputs to VM
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum CorpusInput {
     VMInput(VMInput),
