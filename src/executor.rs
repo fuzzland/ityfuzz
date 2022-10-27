@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 
 use libafl::executors::{Executor, ExitKind};
 use libafl::inputs::Input;
-use libafl::prelude::{tuple_list, HasObservers, ObserversTuple};
-use libafl::{observers, Error};
+use libafl::prelude::{HasObservers, ObserversTuple};
+use libafl::{Error};
 use std::fmt::Debug;
 
 use crate::input::VMInputT;

@@ -1,18 +1,16 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::iter::Map;
-use std::ops::Deref;
-use std::{str::FromStr, time::Instant};
+use std::{str::FromStr};
 
 use crate::rand;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
-use revm::AccountInfo;
 use revm::Return::Continue;
 use revm::{
-    db::BenchmarkDB, db::CacheDB, Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host,
-    Interpreter, LatestSpec, Return, SelfDestructResult, Spec, TransactTo,
+    Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host,
+    Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
 };
+use revm::db::BenchmarkDB;
+
 const MAP_SIZE: usize = 256;
 
 pub type VMState = HashMap<H160, HashMap<U256, U256>>;
