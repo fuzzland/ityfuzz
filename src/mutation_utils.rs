@@ -8,6 +8,7 @@ use libafl::prelude::{
     QwordAddMutator, WordAddMutator, WordInterestingMutator,
 };
 use libafl::state::{HasMaxSize, HasRand, State};
+use primitive_types::H160;
 use rand::random;
 
 pub fn byte_mutator<I, S>(state: &mut S, input: &mut I) -> MutationResult
