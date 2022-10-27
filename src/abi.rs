@@ -420,8 +420,14 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
 }
 
 // test serialization and deserialization
-#[test]
-fn test_int() {
-    let abi = get_abi_type_boxed(&String::from("int8"));
-    abi.get_bytes();
+
+mod tests {
+    use super::*;
+    use hex;
+    #[test]
+    fn test_int() {
+        let abi = get_abi_type_boxed(&String::from("int8"));
+        println!("abi: {:?}", hex::encode(abi.get_bytes()));
+    }
 }
+
