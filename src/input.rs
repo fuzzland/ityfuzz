@@ -86,8 +86,8 @@ impl Input for VMInput {
 // Input we saved in corpus, not real inputs to VM
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum CorpusInput {
-    VMInput(VMInput),
-    VMState(VMState),
+    VMInputT(VMInput),
+    VMStateT(VMState),
 }
 
 impl Input for CorpusInput {

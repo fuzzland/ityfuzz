@@ -196,7 +196,7 @@ impl EVMExecutor {
         );
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
-        assert_eq!(r, Continue);
+        assert_eq!(r, Return::Return);
         self.host.set_code(
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
