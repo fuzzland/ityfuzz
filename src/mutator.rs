@@ -1,5 +1,5 @@
 use crate::input::VMInputT;
-use crate::state::FuzzState;
+use crate::state::{FuzzState, InfantStateState};
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::{MutationResult, MutatorsTuple};
 use libafl::prelude::{
@@ -10,23 +10,30 @@ use libafl::prelude::{
     Mutator, Prepend, QwordAddMutator, Rand, State, WordAddMutator, WordInterestingMutator,
 };
 use libafl::Error;
+use libafl::schedulers::Scheduler;
 use primitive_types::H160;
 
 use crate::abi::{AArray, ADynamic, BoxedABI, A256};
 use crate::state::FuzzStateT;
 use rand::random;
 use serde::{Deserialize, Serialize};
+use crate::state_input::ItyVMState;
 
-pub struct FuzzMutator {}
+pub struct FuzzMutator<S> {
+    pub infant_scheduler: S,
+}
 
-impl FuzzMutator {
-    pub fn new() -> Self {
-        Self {}
+impl<SC> FuzzMutator<SC>
+where SC: Scheduler<ItyVMState, InfantStateState> {
+    pub fn new(infant_scheduler: SC) -> Self {
+        Self {
+            infant_scheduler,
+        }
     }
 }
 
-impl<I, S> Mutator<I, S> for FuzzMutator
-where
+impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
+    where
     I: VMInputT + Input,
     S: State + HasRand + FuzzStateT,
 {

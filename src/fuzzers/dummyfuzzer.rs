@@ -6,7 +6,7 @@ use crate::{
     input::{VMInput, VMInputT},
     mutator::FuzzMutator,
 };
-use libafl::prelude::{ShMemProvider, StdShMemProvider};
+use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
 use libafl::{
     prelude::{
         current_nanos, current_time, tuple_list, ConstFeedback, HitcountsMapObserver,
@@ -26,6 +26,7 @@ use std::{
     io,
     path::PathBuf,
 };
+use libafl::prelude::powersched::PowerSchedule;
 
 use crate::state::FuzzState;
 use nix::unistd::dup;
@@ -70,7 +71,9 @@ pub fn dummyfuzzer(
     };
 
     // TODO: Finish Mutator
-    let mutator = FuzzMutator::new();
+    let mutator = FuzzMutator::new(
+        PowerQueueScheduler::new(PowerSchedule::FAST),
+    );
 
     // TODO: Finish observer
     let edges = unsafe { &mut [0; 10] };
