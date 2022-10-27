@@ -9,33 +9,34 @@ use libafl::prelude::{
     BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasMaxSize, HasRand,
     Mutator, Prepend, QwordAddMutator, Rand, State, WordAddMutator, WordInterestingMutator,
 };
-use libafl::Error;
 use libafl::schedulers::Scheduler;
+use libafl::Error;
 use primitive_types::H160;
 
 use crate::abi::{AArray, ADynamic, BoxedABI, A256};
 use crate::state::FuzzStateT;
+use crate::state_input::ItyVMState;
 use rand::random;
 use serde::{Deserialize, Serialize};
-use crate::state_input::ItyVMState;
 
 pub struct FuzzMutator<S> {
     pub infant_scheduler: S,
 }
 
 impl<SC> FuzzMutator<SC>
-where SC: Scheduler<ItyVMState, InfantStateState> {
+where
+    SC: Scheduler<ItyVMState, InfantStateState>,
+{
     pub fn new(infant_scheduler: SC) -> Self {
-        Self {
-            infant_scheduler,
-        }
+        Self { infant_scheduler }
     }
 }
 
 impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
-    where
+where
     I: VMInputT + Input,
     S: State + HasRand + FuzzStateT,
+    SC: Scheduler<ItyVMState, InfantStateState>,
 {
     fn mutate(
         &mut self,
@@ -50,6 +51,8 @@ impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
             1 => {
                 // cross over infant state
                 // we need power schedule here for infant states
+                let ItyVMState(mutant) = state.get_infant_state(&self.infant_scheduler).unwrap().1;
+                input.set_state(&mutant);
             }
             _ => {
                 panic!("unreachable");

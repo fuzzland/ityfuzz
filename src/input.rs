@@ -16,6 +16,7 @@ pub trait VMInputT: Input {
     fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
     fn get_state_mut(&mut self) -> &mut VMState;
+    fn set_state(&mut self, state: &VMState);
     fn get_state(&self) -> &evm::VMState;
 }
 
@@ -67,6 +68,10 @@ impl VMInputT for VMInput {
 
     fn get_state_mut(&mut self) -> &mut VMState {
         &mut self.state
+    }
+
+    fn set_state(&mut self, state: &VMState) {
+        self.state = state.clone();
     }
 
     fn get_state(&self) -> &VMState {

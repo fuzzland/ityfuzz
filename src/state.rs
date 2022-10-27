@@ -22,10 +22,10 @@ use std::path::Path;
 // What are other metadata we need?
 // shou: may need intermediate info for future adding concolic execution
 pub trait FuzzStateT {
-    fn get_infant_state<SC>(&mut self, scheduler: SC) -> Option<(usize, ItyVMState)>
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
     where
         SC: Scheduler<ItyVMState, InfantStateState>;
-    fn add_infant_state<SC>(&mut self, scheduler: SC)
+    fn add_infant_state<SC>(&mut self, scheduler: &SC)
     where
         SC: Scheduler<ItyVMState, InfantStateState>;
 }
@@ -96,7 +96,7 @@ impl HasMetadata for InfantStateState {
 }
 
 impl FuzzStateT for FuzzState {
-    fn get_infant_state<SC>(&mut self, scheduler: SC) -> Option<(usize, ItyVMState)>
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
     where
         SC: Scheduler<ItyVMState, InfantStateState>,
     {
@@ -113,7 +113,7 @@ impl FuzzStateT for FuzzState {
         Some((idx, state.input().clone().unwrap()))
     }
 
-    fn add_infant_state<SC>(&mut self, scheduler: SC)
+    fn add_infant_state<SC>(&mut self, scheduler: &SC)
     where
         SC: Scheduler<ItyVMState, InfantStateState>,
     {
