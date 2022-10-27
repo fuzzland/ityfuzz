@@ -1,11 +1,3 @@
-use std::io::Write;
-use std::{
-    cell::RefCell,
-    fs::{File, OpenOptions},
-    io,
-    path::PathBuf,
-};
-use std::os::unix::io::{AsRawFd, FromRawFd};
 use crate::{
     corpus::InMemoryItyCorpus,
     evm::{EVMExecutor, FuzzHost},
@@ -25,6 +17,14 @@ use libafl::{
     stages::StdPowerMutationalStage,
     state::StdState,
     Error, Fuzzer,
+};
+use std::io::Write;
+use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::{
+    cell::RefCell,
+    fs::{File, OpenOptions},
+    io,
+    path::PathBuf,
 };
 
 use nix::unistd::dup;

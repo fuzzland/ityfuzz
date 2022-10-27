@@ -4,7 +4,7 @@ use libafl::prelude::{Corpus, InMemoryCorpus, Input, Testcase};
 use libafl::Error;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{CorpusInput};
+use crate::input::CorpusInput;
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "I: serde::de::DeserializeOwned")]

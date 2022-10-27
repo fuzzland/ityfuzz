@@ -1,16 +1,15 @@
-use std::any::Any;
-use std::fmt::Debug;
-use std::ops::DerefMut;
-use bytes::{Bytes};
+use crate::abi::ABILossyType::{TArray, TDynamic, T256};
+use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
+use bytes::Bytes;
 use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::{MutationResult};
-use libafl::prelude::{Mutator};
+use libafl::mutators::MutationResult;
+use libafl::prelude::Mutator;
 use libafl::state::{HasMaxSize, HasRand, State};
 use rand::random;
 use serde::{Deserialize, Serialize};
-use crate::abi::ABILossyType::{T256, TArray, TDynamic};
-use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
-
+use std::any::Any;
+use std::fmt::Debug;
+use std::ops::DerefMut;
 
 pub enum ABILossyType {
     T256,
@@ -88,8 +87,8 @@ impl BoxedABI {
 
 impl BoxedABI {
     pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State + HasRand + HasMaxSize
+    where
+        S: State + HasRand + HasMaxSize,
     {
         match self.get_type() {
             T256 => {
@@ -99,12 +98,22 @@ impl BoxedABI {
                 byte_mutator(state, a256)
             }
             TDynamic => {
-                let adyn = self.b.deref_mut().as_any().downcast_mut::<ADynamic>().unwrap();
+                let adyn = self
+                    .b
+                    .deref_mut()
+                    .as_any()
+                    .downcast_mut::<ADynamic>()
+                    .unwrap();
                 // self.b.downcast_ref::<A256>().unwrap().mutate(state);
                 byte_mutator_with_expansion(state, adyn)
             }
             TArray => {
-                let aarray = self.b.deref_mut().as_any().downcast_mut::<AArray>().unwrap();
+                let aarray = self
+                    .b
+                    .deref_mut()
+                    .as_any()
+                    .downcast_mut::<AArray>()
+                    .unwrap();
 
                 let data_len = aarray.data.len();
                 if data_len == 0 {
@@ -122,7 +131,6 @@ impl BoxedABI {
                     for _ in 0..random::<usize>() % state.max_size() {
                         aarray.data.push(aarray.data[0].clone());
                     }
-
                 } else {
                     let mut index: usize = random::<usize>() % data_len;
                     return aarray.data[index].mutate(state);
@@ -217,9 +225,10 @@ impl ABI for A256 {
         self
     }
 
-    fn get_type(&self) -> ABILossyType { T256 }
+    fn get_type(&self) -> ABILossyType {
+        T256
+    }
 }
-
 
 fn roundup(x: usize, multiplier: usize) -> usize {
     (x + multiplier - 1) / multiplier * multiplier
@@ -254,7 +263,9 @@ impl ABI for ADynamic {
         bytes
     }
 
-    fn get_type(&self) -> ABILossyType { TDynamic }
+    fn get_type(&self) -> ABILossyType {
+        TDynamic
+    }
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -329,7 +340,9 @@ impl ABI for AArray {
         bytes
     }
 
-    fn get_type(&self) -> ABILossyType { TArray }
+    fn get_type(&self) -> ABILossyType {
+        TArray
+    }
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -426,15 +439,18 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
 
 mod tests {
     use super::*;
-    use hex;
     use crate::state::FuzzState;
+    use hex;
 
     #[test]
     fn test_int() {
         let mut abi = get_abi_type_boxed(&String::from("int8"));
         let mut test_state = FuzzState::new();
         let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
-        println!("result: {:?} abi: {:?}", mutation_result, hex::encode(abi.get_bytes()));
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
     }
 }
-

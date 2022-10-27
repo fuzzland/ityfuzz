@@ -1,8 +1,8 @@
-use std::path::Path;
-use libafl::Error;
-use libafl::inputs::Input;
 use crate::VMState;
+use libafl::inputs::Input;
+use libafl::Error;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ItyVMState(VMState);
@@ -15,15 +15,15 @@ impl ItyVMState {
 
 impl Input for ItyVMState {
     fn to_file<P>(&self, path: P) -> Result<(), Error>
-        where
-            P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
     {
         todo!()
     }
 
     fn from_file<P>(path: P) -> Result<Self, Error>
-        where
-            P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
     {
         todo!()
     }
@@ -36,4 +36,3 @@ impl Input for ItyVMState {
         // todo!()
     }
 }
-

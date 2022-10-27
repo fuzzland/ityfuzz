@@ -1,14 +1,14 @@
-use std::cmp::max;
 use crate::evm::VMState;
 use crate::input::VMInput;
+use crate::state_input::ItyVMState;
 use libafl::corpus::InMemoryCorpus;
 use libafl::inputs::Input;
-use libafl::Error;
-use serde::{Deserialize, Serialize};
-use std::path::Path;
 use libafl::prelude::{current_nanos, StdRand};
 use libafl::state::{HasMaxSize, HasRand, State};
-use crate::state_input::ItyVMState;
+use libafl::Error;
+use serde::{Deserialize, Serialize};
+use std::cmp::max;
+use std::path::Path;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -54,6 +54,4 @@ impl HasRand for FuzzState {
     }
 }
 
-impl State for FuzzState {
-    
-}
+impl State for FuzzState {}
