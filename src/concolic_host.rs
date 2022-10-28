@@ -1,16 +1,18 @@
+use crate::evm::ExecutionResult;
+use bytes::Bytes;
+use primitive_types::{H160, H256, U256};
+use revm::db::BenchmarkDB;
+use revm::Return::Continue;
+use revm::{
+    Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
+    Spec,
+};
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
-use bytes::Bytes;
-use primitive_types::{H160, H256, U256};
-use revm::db::BenchmarkDB;
-use revm::{Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult, Spec};
-use revm::Return::Continue;
-use z3::{ast, ast::Ast, Config, Context, Solver};
 use z3::ast::{Bool, BV};
-use crate::evm::ExecutionResult;
-
+use z3::{ast, ast::Ast, Config, Context, Solver};
 
 pub struct ConcolicHost<'a> {
     env: Env,
@@ -51,7 +53,6 @@ impl<'a> ConcolicHost<'a> {
                 bv
             }
         }
-
     }
 
     pub unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<Option<BV>> {
@@ -59,57 +60,68 @@ impl<'a> ConcolicHost<'a> {
         match *interp.instruction_pointer {
             // ADD
             0x01 => {
-                vec![Some(self.get_bv_from_stack(0, interp).add(
-                    self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .add(self.get_bv_from_stack(1, interp)),
+                )]
             }
             // MUL
             0x02 => {
-                vec![Some(self.get_bv_from_stack(0, interp).mul(
-                    self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .mul(self.get_bv_from_stack(1, interp)),
+                )]
             }
             // SUB
             0x03 => {
-                vec![Some(self.get_bv_from_stack(0, interp).sub(
-                    self.get_bv_from_stack(1, interp))
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .sub(self.get_bv_from_stack(1, interp)),
                 )]
             }
             // DIV - is this signed?
             0x04 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvsdiv(
-                    &self.get_bv_from_stack(1, interp))
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvsdiv(&self.get_bv_from_stack(1, interp)),
                 )]
             }
             // SDIV
             0x05 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvsdiv(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvsdiv(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // MOD
             0x06 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvurem(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvurem(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // SMOD
             0x07 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvsrem(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvsrem(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // ADDMOD
             0x08 => {
-                vec![Some(self.get_bv_from_stack(0, interp).add(
-                    &self.get_bv_from_stack(1, interp)
-                ).bvsrem(&self.get_bv_from_stack(2, interp)))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .add(&self.get_bv_from_stack(1, interp))
+                        .bvsrem(&self.get_bv_from_stack(2, interp)),
+                )]
             }
             // MULMOD
             0x09 => {
-                vec![Some(self.get_bv_from_stack(0, interp).mul(
-                    &self.get_bv_from_stack(1, interp)
-                ).bvsrem(&self.get_bv_from_stack(2, interp)))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .mul(&self.get_bv_from_stack(1, interp))
+                        .bvsrem(&self.get_bv_from_stack(2, interp)),
+                )]
             }
             // EXP - we can't support, cuz z3 is bad at it
             0x0a => {
@@ -125,74 +137,81 @@ impl<'a> ConcolicHost<'a> {
             // LT
             0x10 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp).bvult(
-                        &self.get_bv_from_stack(1, interp)
-                    )._eq(&Bool::from_bool(&self.ctx, true))
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        .bvult(&self.get_bv_from_stack(1, interp))
+                        ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
             }
             // GT
             0x11 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp).bvugt(
-                        &self.get_bv_from_stack(1, interp)
-                    )._eq(&Bool::from_bool(&self.ctx, true))
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        .bvugt(&self.get_bv_from_stack(1, interp))
+                        ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
             }
             // SLT
             0x12 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp).bvslt(
-                        &self.get_bv_from_stack(1, interp)
-                    )._eq(&Bool::from_bool(&self.ctx, true))
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        .bvslt(&self.get_bv_from_stack(1, interp))
+                        ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
             }
             // SGT
             0x13 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp).bvsgt(
-                        &self.get_bv_from_stack(1, interp)
-                    )._eq(&Bool::from_bool(&self.ctx, true))
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        .bvsgt(&self.get_bv_from_stack(1, interp))
+                        ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
             }
             // EQ
             0x14 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp)._eq(
-                        &self.get_bv_from_stack(1, interp)
-                    )
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        ._eq(&self.get_bv_from_stack(1, interp)),
                 );
                 vec![None]
             }
             // ISZERO
             0x15 => {
                 self.solver.assert(
-                    &self.get_bv_from_stack(0, interp)._eq(
-                        &BV::from_u64(&self.ctx, 0, 256)
-                    )
+                    &self
+                        .get_bv_from_stack(0, interp)
+                        ._eq(&BV::from_u64(&self.ctx, 0, 256)),
                 );
                 vec![None]
             }
             // AND
             0x16 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvand(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvand(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // OR
             0x17 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvor(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvor(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // XOR
             0x18 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvxor(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvxor(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // NOT
             0x19 => {
@@ -205,21 +224,24 @@ impl<'a> ConcolicHost<'a> {
             }
             // SHL
             0x1b => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvshl(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvshl(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // SHR
             0x1c => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvlshr(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvlshr(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // SAR
             0x1d => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvashr(
-                    &self.get_bv_from_stack(1, interp)
-                ))]
+                vec![Some(
+                    self.get_bv_from_stack(0, interp)
+                        .bvashr(&self.get_bv_from_stack(1, interp)),
+                )]
             }
             // SHA3
             0x20 => {
@@ -253,32 +275,26 @@ impl<'a> ConcolicHost<'a> {
             // CALLDATASIZE
             0x36 => {
                 vec![None]
-
             }
             // CALLDATACOPY
             0x37 => {
                 vec![None]
-
             }
             // CODESIZE
             0x38 => {
                 vec![None]
-
             }
             // CODECOPY
             0x39 => {
                 vec![None]
-
             }
             // GASPRICE
             0x3a => {
                 vec![None]
-
             }
             // EXTCODESIZE
             0x3b => {
                 vec![None]
-
             }
             // EXTCODECOPY
             0x3c => {
@@ -287,102 +303,82 @@ impl<'a> ConcolicHost<'a> {
             // RETURNDATASIZE
             0x3d => {
                 vec![None]
-
             }
             // RETURNDATACOPY
             0x3e => {
                 vec![None]
-
             }
             // BLOCKHASH
             0x40 => {
                 vec![None]
-
             }
             // COINBASE
             0x41 => {
                 vec![None]
-
             }
             // TIMESTAMP
             0x42 => {
                 vec![None]
-
             }
             // NUMBER
             0x43 => {
                 vec![None]
-
             }
             // PREVRANDAO
             0x44 => {
                 vec![None]
-
             }
             // GASLIMIT
             0x45 => {
                 vec![None]
-
             }
             // CHAINID
             0x46 => {
                 vec![None]
-
             }
             // SELFBALANCE
             0x47 => {
                 vec![None]
-
             }
             // BASEFEE
             0x48 => {
                 vec![None]
-
             }
             // POP
             0x50 => {
                 vec![None]
-
             }
             // MLOAD
             0x51 => {
                 vec![None]
-
             }
             // MSTORE
             0x52 => {
                 vec![None]
-
             }
             // MSTORE8
             0x53 => {
                 vec![None]
-
             }
             // SLOAD
             0x54 => {
                 vec![None]
-
             }
             // SSTORE
             0x55 => {
                 vec![None]
-
             }
             // JUMP
             0x56 => {
                 vec![None]
-
             }
             // JUMPI
             0x57 => {
                 vec![None]
-
             }
 
             _ => {
                 vec![None]
-
             }
         }
         // bv.iter().for_each(|x| {
@@ -390,7 +386,7 @@ impl<'a> ConcolicHost<'a> {
         // });
     }
 
-    pub unsafe fn build_stack(&mut self,interp: &mut Interpreter) {
+    pub unsafe fn build_stack(&mut self, interp: &mut Interpreter) {
         for v in self.on_step(interp) {
             // self.symbolic_stack.push(v);
         }

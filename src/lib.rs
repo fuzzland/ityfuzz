@@ -1,6 +1,7 @@
 extern crate core;
 
 mod abi;
+mod concolic_host;
 mod corpus;
 mod evm;
 mod executor;
@@ -13,7 +14,6 @@ mod rand;
 mod state;
 mod state_input;
 mod types;
-mod concolic_host;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
