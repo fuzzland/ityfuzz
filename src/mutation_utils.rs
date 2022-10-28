@@ -5,7 +5,7 @@ use libafl::prelude::{
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
     BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend,
-    QwordAddMutator, WordAddMutator, WordInterestingMutator,
+    QwordAddMutator, WordAddMutator, WordInterestingMutator, StdScheduledMutator,
 };
 use libafl::state::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
@@ -34,9 +34,11 @@ where
         BytesRandSetMutator::new(),
         BytesSwapMutator::new(),
     );
-    mutations
-        .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
-        .unwrap()
+    let mut scheduled_mutator = StdScheduledMutator::new(mutations);
+    scheduled_mutator.mutate(state, input, 0).unwrap()
+    // mutations
+    //     .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
+    //     .unwrap()
 }
 
 pub fn byte_mutator_with_expansion<I, S>(state: &mut S, input: &mut I) -> MutationResult
@@ -66,7 +68,9 @@ where
         BytesCopyMutator::new(),
         BytesSwapMutator::new(),
     );
-    mutations
-        .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
-        .unwrap()
+    let mut scheduled_mutator = StdScheduledMutator::new(mutations);
+    scheduled_mutator.mutate(state, input, 0).unwrap()
+    // mutations
+    //     .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
+    //     .unwrap()
 }
