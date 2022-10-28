@@ -89,7 +89,7 @@ where
 mod tests {
     use super::*;
     use crate::abi::get_abi_type;
-    use crate::evm::FuzzHost;
+    use crate::evm::{FuzzHost, MAP_SIZE};
     use crate::input::VMInput;
     use crate::rand::generate_random_address;
     use crate::state::FuzzState;
@@ -141,6 +141,12 @@ mod tests {
                 .concat(),
             ),
         );
+        let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
+
+        for i in 0..MAP_SIZE {
+            know_map[i] = fuzz_executor.evm_executor.host.jmp_map[i];
+            fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+        }
         assert_eq!(execution_result_0.reverted, false);
 
         // process(5)
@@ -157,6 +163,18 @@ mod tests {
                 .concat(),
             ),
         );
+
+        // checking cmp map about coverage
+        let mut cov_changed = false;
+        for i in 0..MAP_SIZE {
+            let hit = fuzz_executor.evm_executor.host.jmp_map[i];
+            if hit != know_map[i] && hit != 0 {
+                println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
+                fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+                cov_changed = true;
+            }
+        }
+        assert_eq!(cov_changed, true);
         assert_eq!(execution_result_5.reverted, true);
     }
 }

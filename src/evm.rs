@@ -11,7 +11,7 @@ use revm::{
     SelfDestructResult, Spec,
 };
 
-const MAP_SIZE: usize = 256;
+pub const MAP_SIZE: usize = 256;
 
 pub type VMState = HashMap<H160, HashMap<U256, U256>>;
 
@@ -20,7 +20,7 @@ pub struct FuzzHost {
     env: Env,
     data: VMState,
     code: HashMap<H160, Bytecode>,
-    jmp_map: [u8; MAP_SIZE],
+    pub jmp_map: [u8; MAP_SIZE],
 }
 
 impl FuzzHost {
@@ -39,10 +39,11 @@ impl FuzzHost {
 }
 
 impl Host for FuzzHost {
-    const INSPECT: bool = false;
+    const INSPECT: bool = true;
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
         unsafe {
+            // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
                 0x57 => {
                     let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
@@ -50,7 +51,11 @@ impl Host for FuzzHost {
                     } else {
                         1
                     };
-                    self.jmp_map[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] += 1;
+                    self.jmp_map[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
+                        (self.jmp_map
+                            [(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE]
+                            + 1)
+                            % 255;
                 }
                 _ => {}
             }
@@ -165,7 +170,7 @@ impl Host for FuzzHost {
 
 #[derive(Debug, Clone)]
 pub struct EVMExecutor {
-    host: FuzzHost,
+    pub host: FuzzHost,
     contract_addresses: Vec<H160>,
     deployer: H160,
 }
