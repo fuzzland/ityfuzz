@@ -74,7 +74,6 @@ pub fn dummyfuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
-    // TODO: Finish Mutator
     let mutator = FuzzMutator::new(PowerQueueScheduler::new(PowerSchedule::FAST));
 
     let jmps = unsafe { &mut JMP_MAP };
@@ -87,8 +86,7 @@ pub fn dummyfuzzer(
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let mut state = FuzzState::new();
 
-    // TODO: currently Scheduler.next: () => usize, we might want to return something different
-    let scheduler = StdScheduler::new();
+    let scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(std_stage);
