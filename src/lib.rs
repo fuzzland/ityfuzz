@@ -7,15 +7,16 @@ mod evm;
 mod executor;
 mod fuzzer;
 mod fuzzers;
+mod infant_feedback;
 mod infant_state_stage;
 mod input;
 mod mutation_utils;
 mod mutator;
+mod oracle;
 mod rand;
 mod state;
 mod state_input;
 mod types;
-mod infant_feedback;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
