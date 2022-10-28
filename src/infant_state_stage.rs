@@ -4,17 +4,17 @@ use libafl::schedulers::Scheduler;
 use libafl::stages::Stage;
 use libafl::Error;
 
-pub struct InfantStateStage<SC> {
-    scheduler: SC,
+pub struct InfantStateStage<'a, SC> {
+    scheduler: &'a SC,
 }
 
-impl<SC> InfantStateStage<SC> {
-    pub fn new(scheduler: SC) -> Self {
+impl<'a, SC> InfantStateStage<'a, SC> {
+    pub fn new(scheduler: &'a SC) -> Self {
         Self { scheduler }
     }
 }
 
-impl<E, EM, S, Z, SC> Stage<E, EM, S, Z> for InfantStateStage<SC>
+impl<'a, E, EM, S, Z, SC> Stage<E, EM, S, Z> for InfantStateStage<'a, SC>
 where
     S: HasItyState + HasExecutionResult,
     SC: Scheduler<ItyVMState, InfantStateState>,
@@ -30,7 +30,7 @@ where
         // add the current VMState to the infant state corpus
         // TODO(shou): add feedback for infant state here
         let new_state = state.get_execution_result();
-        state.add_infant_state(&ItyVMState(new_state.new_state.clone()), &self.scheduler);
+        state.add_infant_state(&ItyVMState(new_state.new_state.clone()), self.scheduler);
         Ok(())
     }
 }
