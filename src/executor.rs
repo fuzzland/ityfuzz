@@ -11,6 +11,8 @@ use crate::input::VMInputT;
 use crate::state::HasExecutionResult;
 use crate::EVMExecutor;
 
+// TODO: in the future, we may need to add handlers?
+// handle timeout/crash of executing contract
 #[derive(Clone)]
 pub struct FuzzExecutor<I, S, OT>
 where

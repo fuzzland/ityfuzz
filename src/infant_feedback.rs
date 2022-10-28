@@ -6,21 +6,50 @@ use libafl::observers::ObserversTuple;
 use libafl::prelude::{Feedback, Named};
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
+use std::fmt::{Debug, Formatter};
 
-#[derive(Debug)]
-pub struct InfantFeedback {}
+use crate::evm::ExecutionResult;
+use crate::input::{VMInputT, VMInput};
+use crate::state::HasExecutionResult;
 
-impl Named for InfantFeedback {
+pub struct InfantFeedback<I>
+where I: VMInputT,
+{
+    oracle: fn(&I, &ExecutionResult) -> bool
+}
+
+impl<I> Debug for InfantFeedback<I>
+where I: VMInputT,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InfantFeedback")
+            // .field("oracle", &self.oracle)
+            .finish()
+    }
+}
+
+impl<I> Named for InfantFeedback<I>
+where I: VMInputT {
     fn name(&self) -> &str {
         "InfantFeedback"
     }
 }
 
-impl<I, S> Feedback<I, S> for InfantFeedback
-where
-    S: State + HasClientPerfMonitor,
-    I: Input,
+impl<I> InfantFeedback<I>
+where I: VMInputT
 {
+    pub fn new(oracle: fn(&I, &ExecutionResult) -> bool) -> Self {
+        Self { oracle }
+    }
+}
+
+impl<I, S> Feedback<I, S> for InfantFeedback<I>
+where
+    S: State + HasClientPerfMonitor + HasExecutionResult,
+    I: VMInputT,
+{
+    // since InfantFeedback is just a wrapper around one stateless oracle
+    // we don't need to do initialization
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
     }
@@ -37,7 +66,7 @@ where
         EM: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        todo!()
+        Ok((self.oracle)(input, state.get_execution_result()))
     }
 
     fn append_metadata(
@@ -45,10 +74,23 @@ where
         _state: &mut S,
         _testcase: &mut Testcase<I>,
     ) -> Result<(), Error> {
-        todo!()
+        Ok(())
     }
 
     fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
-        todo!()
+        Ok(())
     }
 }
+
+
+
+// Resulting state should not change
+fn oracle_same_state<I>(input: &I, result: &ExecutionResult) -> Result<bool, Error> where I: VMInputT {
+    Ok(input.get_state().eq(&result.new_state))
+}
+
+// Resulting state should be different
+fn oracle_diff_state<I>(input: &I, result: &ExecutionResult) -> Result<bool, Error> where I: VMInputT {
+    Ok(!input.get_state().eq(&result.new_state))
+}
+
