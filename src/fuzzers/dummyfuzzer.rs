@@ -6,7 +6,7 @@ use crate::{
     input::{VMInput, VMInputT},
     mutator::FuzzMutator,
 };
-use libafl::prelude::powersched::PowerSchedule;
+use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
 use libafl::{
     prelude::{
@@ -37,38 +37,44 @@ pub fn dummyfuzzer(
     objective_dir: PathBuf,
     logfile: PathBuf,
 ) -> Result<(), Error> {
-    let log = RefCell::new(
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&logfile)?,
-    );
 
-    let mut stdout_cpy = unsafe {
-        let new_fd = dup(io::stdout().as_raw_fd())?;
-        File::from_raw_fd(new_fd)
-    };
+    // Fuzzbench style, which requires a host and can have many fuzzing client
+    // let log = RefCell::new(
+    //     OpenOptions::new()
+    //         .append(true)
+    //         .create(true)
+    //         .open(&logfile)?,
+    // );
 
-    // TODO: display useful information of the current run
-    let monitor = SimpleMonitor::new(|s| {
-        writeln!(&mut stdout_cpy, "{}", s).unwrap();
-        writeln!(log.borrow_mut(), "{:?} {}", current_time(), s).unwrap();
-    });
+    // let mut stdout_cpy = unsafe {
+    //     let new_fd = dup(io::stdout().as_raw_fd())?;
+    //     File::from_raw_fd(new_fd)
+    // };
 
-    let mut shmem_provider = StdShMemProvider::new()?;
+    // // TODO: display useful information of the current run
+    // let monitor = SimpleMonitor::new(|s| {
+    //     writeln!(&mut stdout_cpy, "{}", s).unwrap();
+    //     writeln!(log.borrow_mut(), "{:?} {}", current_time(), s).unwrap();
+    // });
 
-    let (_, mut mgr) = match SimpleRestartingEventManager::launch(monitor, &mut shmem_provider) {
-        // The restarting state will spawn the same process again as child, then restarted it each time it crashes.
-        Ok(res) => res,
-        Err(err) => match err {
-            Error::ShuttingDown => {
-                return Ok(());
-            }
-            _ => {
-                panic!("Failed to setup the restarter: {}", err);
-            }
-        },
-    };
+    // let mut shmem_provider = StdShMemProvider::new()?;
+
+    // let (_, mut mgr) = match SimpleRestartingEventManager::launch(monitor, &mut shmem_provider) {
+    //     // The restarting state will spawn the same process again as child, then restarted it each time it crashes.
+    //     Ok(res) => res,
+    //     Err(err) => match err {
+    //         Error::ShuttingDown => {
+    //             return Ok(());
+    //         }
+    //         _ => {
+    //             panic!("Failed to setup the restarter: {}", err);
+    //         }
+    //     },
+    // };
+
+
+    let monitor = SimpleMonitor::new(|s| println!("{}", s));
+    let mut mgr = SimpleEventManager::new(monitor);
 
     // TODO: Finish Mutator
     let mutator = FuzzMutator::new(PowerQueueScheduler::new(PowerSchedule::FAST));
