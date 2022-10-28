@@ -1,11 +1,15 @@
 use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
+use crate::rand::generate_random_address;
 use crate::state_input::ItyVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::powersched::PowerSchedule;
-use libafl::prelude::{current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Rand, Scheduler, SerdeAnyMap, StdRand};
+use libafl::prelude::{
+    current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Rand, Scheduler, SerdeAnyMap,
+    StdRand,
+};
 use libafl::schedulers::PowerQueueScheduler;
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -13,11 +17,10 @@ use libafl::state::{
 };
 use libafl::Error;
 use nix::libc::stat;
+use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
-use primitive_types::H160;
-use crate::rand::generate_random_address;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -152,9 +155,7 @@ impl HasItyState for FuzzState {
     }
 
     fn get_rand_caller(&mut self) -> H160 {
-        self.default_callers[
-            self.rand_generator.below(self.default_callers.len() as u64) as usize
-        ]
+        self.default_callers[self.rand_generator.below(self.default_callers.len() as u64) as usize]
     }
 }
 

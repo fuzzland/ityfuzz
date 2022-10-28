@@ -1,10 +1,11 @@
 use crate::{
     input::VMInputT,
-    state::{HasItyState, HasInfantStateState},
+    state::{HasInfantStateState, HasItyState},
     state_input::ItyVMState,
 };
 use std::marker::PhantomData;
 
+use crate::state::HasExecutionResult;
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -18,7 +19,6 @@ use libafl::{
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
-use crate::state::HasExecutionResult;
 
 #[derive(Debug)]
 pub struct ItyFuzzer<CS, F, I, OF, S, OT>
@@ -89,7 +89,12 @@ where
     EM: EventManager<E, I, S, Self>,
     I: VMInputT,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I> + HasInfantStateState + HasItyState + HasExecutionResult,
+    S: HasClientPerfMonitor
+        + HasCorpus<I>
+        + HasSolutions<I>
+        + HasInfantStateState
+        + HasItyState
+        + HasExecutionResult,
 {
     fn evaluate_input_events(
         &mut self,
