@@ -98,6 +98,8 @@ pub fn dummyfuzzer(
         EVMExecutor::new(FuzzHost::new(), Vec::new(), H160::zero()),
         tuple_list!(jmp_observer),
     );
+    
+    let oracle_executor = executor.clone();
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 
