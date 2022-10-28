@@ -14,19 +14,19 @@ use std::str::FromStr;
 use z3::ast::{Bool, BV};
 use z3::{ast, ast::Ast, Config, Context, Solver};
 
-pub struct ConcolicHost {
+pub struct ConcolicHost<'a> {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
     code: HashMap<H160, Bytecode>,
-    solver: Solver<'static>,
+    solver: Solver<'a>,
     ctx: Context,
-    symbolic_stack: Vec<Option<BV<'static>>>,
-    shadow_inputs: Option<BV<'static>>,
+    symbolic_stack: Vec<Option<BV<'a>>>,
+    shadow_inputs: Option<BV<'a>>,
     bits: u32,
 }
 
-impl ConcolicHost {
-    pub fn new(solver: Solver<'static>, ctx: Context, bytes: u32) -> Self {
+impl<'a> ConcolicHost<'a> {
+    pub fn new(solver: Solver<'a>, ctx: Context, bytes: u32) -> Self {
         Self {
             env: Env::default(),
             data: HashMap::new(),
@@ -39,7 +39,7 @@ impl ConcolicHost {
         }
     }
 
-    pub fn set_shadow_inputs(&'static mut self) {
+    pub fn set_shadow_inputs(&'a mut self) {
         self.shadow_inputs = Some(BV::new_const(&self.ctx, "shadow_inputs", self.bits));
     }
 
@@ -47,21 +47,25 @@ impl ConcolicHost {
     //
     // }
 
-    pub unsafe fn on_step(&'static mut self, interp: &mut Interpreter) {
+    pub unsafe fn on_step(&'a mut self, interp: &mut Interpreter) {
         // println!("{}", *interp.instruction_pointer);
-
+        macro_rules! bv_from_u256 {
+            ($val:expr) => {{
+                let u64x4 = $val.0;
+                let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[3], 64));
+                bv
+            }};
+        }
         macro_rules! stack_bv {
             ($idx:expr) => {{
                 match self.symbolic_stack[$idx].borrow() {
                     Some(bv) => bv.clone(),
                     None => {
                         let u256 = interp.stack.peek($idx).expect("stack underflow");
-                        let u64x4 = u256.0;
-                        let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
-                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
-                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
-                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[3], 64));
-                        bv
+                        bv_from_u256!(u256)
                     }
                 }
             }};
@@ -348,15 +352,18 @@ impl ConcolicHost {
             }
             // PUSH
             0x60..=0x7f => {
+                // push n bytes into stack
                 let n = (*interp.instruction_pointer) - 0x60 + 1;
-                let mut data = vec![];
-                for i in 0..n {
-                    data.push(
-                        interp.contract().bytecode.bytecode()
-                            [interp.program_counter() + i as usize + 1],
-                    );
-                }
+                // let mut data = vec![];
+                // for i in 0..n {
+                // data.push(
+                //     interp.contract().bytecode.bytecode()
+                //         [interp.program_counter() + i as usize + 1],
+                // );
+                // }
+
                 vec![
+
                     //todo!
                 ]
             }
@@ -386,26 +393,17 @@ impl ConcolicHost {
         for v in bv {
             self.symbolic_stack.push(v.clone());
         }
-        // // bv.iter().for_each(|x| {
-        // //     self.symbolic_stack.push(x.clone());
-        // // });
-        // self;
     }
-
-    // pub unsafe fn build_stack(&'a mut self, interp: &mut Interpreter) {
-    //     for v in self.on_step(interp) {
-    //         self.symbolic_stack.push(v.clone());
-    //     }
-    // }
 }
 
-impl Host for ConcolicHost {
+impl<'a> ConcolicHost<'a> {
     const INSPECT: bool = true;
-    type DB = BenchmarkDB;
+    // type DB = BenchmarkDB;
 
-    fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
+    fn step(&'a mut self, interp: &mut Interpreter, is_static: bool) -> Return {
         unsafe {
-            // self.on_step(interp);
+            // self.symbolic_stack.push(Some(BV::from_u64(&self.ctx, 1, 2)))
+            self.on_step(interp);
         }
 
         return Continue;

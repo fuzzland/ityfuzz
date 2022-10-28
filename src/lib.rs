@@ -1,7 +1,7 @@
 extern crate core;
 
 mod abi;
-mod concolic_host;
+mod concolic;
 mod corpus;
 mod evm;
 mod executor;
