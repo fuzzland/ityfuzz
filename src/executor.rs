@@ -105,6 +105,7 @@ mod tests {
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
     use libafl::state::State;
     use revm::Bytecode;
+    use crate::evm::JMP_MAP;
 
     #[test]
     fn test_fuzz_executor() {
@@ -150,8 +151,8 @@ mod tests {
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
         for i in 0..MAP_SIZE {
-            know_map[i] = fuzz_executor.evm_executor.host.jmp_map[i];
-            fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+            know_map[i] = unsafe { JMP_MAP[i] };
+            unsafe {JMP_MAP[i] = 0 };
         }
         assert_eq!(execution_result_0.reverted, false);
 
@@ -174,10 +175,10 @@ mod tests {
         // checking cmp map about coverage
         let mut cov_changed = false;
         for i in 0..MAP_SIZE {
-            let hit = fuzz_executor.evm_executor.host.jmp_map[i];
+            let hit = unsafe{ JMP_MAP[i] };
             if hit != know_map[i] && hit != 0 {
                 println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
-                fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+                unsafe{ JMP_MAP[i] = 0 };
                 cov_changed = true;
             }
         }

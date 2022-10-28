@@ -19,12 +19,14 @@ pub const MAP_SIZE: usize = 256;
 
 pub type VMState = HashMap<H160, HashMap<U256, U256>>;
 
+pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+pub use jmp_map as JMP_MAP;
+
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
     env: Env,
     data: VMState,
     code: HashMap<H160, Bytecode>,
-    pub jmp_map: [u8; MAP_SIZE],
 }
 
 impl FuzzHost {
@@ -33,16 +35,6 @@ impl FuzzHost {
             env: Env::default(),
             data: VMState::new(),
             code: HashMap::new(),
-            jmp_map: [0; MAP_SIZE],
-        }
-    }
-
-    pub fn new_with_jump_map(jmp_map: &mut [u8; MAP_SIZE]) -> Self {
-        Self {
-            env: Env::default(),
-            data: VMState::new(),
-            code: HashMap::new(),
-            jmp_map: *jmp_map,
         }
     }
 
@@ -64,8 +56,8 @@ impl Host for FuzzHost {
                     } else {
                         1
                     };
-                    self.jmp_map[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
-                        (self.jmp_map
+                    JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
+                        (JMP_MAP
                             [(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE]
                             + 1)
                             % 255;
