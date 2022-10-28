@@ -32,6 +32,6 @@ impl<'a, I, S> OracleCtx<'a, I, S> {
 }
 
 trait Oracle<I, S> {
-    fn pre_condition(&self, ctx: &OracleCtx<I, S>) -> bool;
-    fn oracle(&self, ctx: &OracleCtx<I, S>) -> bool;
+    fn pre_condition(&self, ctx: &OracleCtx<I, S>, stage: u64) -> u64;
+    fn oracle(&self, ctx: &OracleCtx<I, S>, stage: u64) -> bool;
 }
