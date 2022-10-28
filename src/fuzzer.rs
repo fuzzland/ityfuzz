@@ -1,6 +1,6 @@
 use crate::{
     input::VMInputT,
-    state::{FuzzStateT, HasInfantStateState},
+    state::{HasItyState, HasInfantStateState},
     state_input::ItyVMState,
 };
 use std::marker::PhantomData;
@@ -18,6 +18,7 @@ use libafl::{
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
+use crate::state::HasExecutionResult;
 
 #[derive(Debug)]
 pub struct ItyFuzzer<CS, F, I, OF, S, OT>
@@ -88,7 +89,7 @@ where
     EM: EventManager<E, I, S, Self>,
     I: VMInputT,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I> + HasInfantStateState,
+    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I> + HasInfantStateState + HasItyState + HasExecutionResult,
 {
     fn evaluate_input_events(
         &mut self,
@@ -144,14 +145,6 @@ where
                 self.feedback.append_metadata(state, &mut testcase)?;
                 let idx = state.corpus_mut().add(testcase)?;
                 self.scheduler.on_add(state, idx)?;
-
-                // add the current VMState to the infant state corpus
-                state
-                    .get_infant_state_state()
-                    .corpus_mut()
-                    .add(Testcase::new(ItyVMState(input.get_state().clone())))?;
-                // FIXME:
-                // add current scheduler metadata
 
                 if send_events {
                     // TODO set None for fast targets

@@ -14,7 +14,7 @@ use libafl::Error;
 use primitive_types::H160;
 
 use crate::abi::{AArray, ADynamic, BoxedABI, A256};
-use crate::state::FuzzStateT;
+use crate::state::HasItyState;
 use crate::state_input::ItyVMState;
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ where
 impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
 where
     I: VMInputT + Input,
-    S: State + HasRand + HasMaxSize + FuzzStateT,
+    S: State + HasRand + HasMaxSize + HasItyState,
     SC: Scheduler<ItyVMState, InfantStateState>,
 {
     fn mutate(
