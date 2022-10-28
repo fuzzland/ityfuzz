@@ -5,9 +5,7 @@ use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::powersched::PowerSchedule;
-use libafl::prelude::{
-    current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Scheduler, SerdeAnyMap, StdRand,
-};
+use libafl::prelude::{current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Rand, Scheduler, SerdeAnyMap, StdRand};
 use libafl::schedulers::PowerQueueScheduler;
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -18,6 +16,8 @@ use nix::libc::stat;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
+use primitive_types::H160;
+use crate::rand::generate_random_address;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -29,6 +29,7 @@ pub trait FuzzStateT {
     fn add_infant_state<SC>(&mut self, scheduler: &SC)
     where
         SC: Scheduler<ItyVMState, InfantStateState>;
+    fn get_rand_caller(&mut self) -> H160;
 }
 
 pub trait HasInfantStateState {
@@ -49,6 +50,7 @@ pub struct FuzzState {
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
     execution_result: ExecutionResult,
+    default_callers: Vec<H160>,
     pub rand_generator: StdRand,
     pub max_size: usize,
 }
@@ -63,8 +65,15 @@ impl FuzzState {
             metadata: Default::default(),
             named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
+            default_callers: vec![],
             rand_generator: StdRand::with_seed(current_nanos()),
             max_size: 1500,
+        }
+    }
+
+    pub fn setup_default_callers(&mut self, amount: usize) {
+        for _ in 0..amount {
+            self.default_callers.push(generate_random_address());
         }
     }
 }
@@ -140,6 +149,12 @@ impl FuzzStateT for FuzzState {
         scheduler
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
+    }
+
+    fn get_rand_caller(&mut self) -> H160 {
+        self.default_callers[
+            self.rand_generator.below(self.default_callers.len() as u64) as usize
+        ]
     }
 }
 

@@ -47,6 +47,11 @@ where
         match state.rand_mut().below(10) {
             0 => {
                 // mutate the caller
+                let caller = state.get_rand_caller();
+                if caller == input.get_caller() {
+                    return Ok(MutationResult::Skipped);
+                }
+                input.set_caller(caller);
             }
             1 => {
                 // cross over infant state
