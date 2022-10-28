@@ -15,6 +15,7 @@ mod rand;
 mod state;
 mod state_input;
 mod types;
+mod infant_feedback;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
