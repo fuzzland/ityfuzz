@@ -10,7 +10,7 @@ use revm::{
     Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return,
     SelfDestructResult, Spec,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 const MAP_SIZE: usize = 256;
 
@@ -171,7 +171,7 @@ pub struct EVMExecutor {
     deployer: H160,
 }
 
-#[derive( Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutionResult {
     pub output: Bytes,
     pub reverted: bool,
@@ -180,7 +180,11 @@ pub struct ExecutionResult {
 
 impl ExecutionResult {
     pub fn empty_result() -> Self {
-        Self { output:Bytes::new(), reverted: false, new_state: VMState::new()}
+        Self {
+            output: Bytes::new(),
+            reverted: false,
+            new_state: VMState::new(),
+        }
     }
 }
 

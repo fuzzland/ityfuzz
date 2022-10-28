@@ -8,8 +8,8 @@ use libafl::Error;
 use std::fmt::Debug;
 
 use crate::input::VMInputT;
-use crate::EVMExecutor;
 use crate::state::HasExecutionResult;
+use crate::EVMExecutor;
 
 #[derive(Clone)]
 pub struct FuzzExecutor<I, S, OT>
@@ -53,7 +53,7 @@ impl<EM, I, S, Z, OT> Executor<EM, I, S, Z> for FuzzExecutor<I, S, OT>
 where
     I: VMInputT + Input,
     OT: ObserversTuple<I, S>,
-    S: HasExecutionResult
+    S: HasExecutionResult,
 {
     fn run_target(
         &mut self,
