@@ -1,6 +1,6 @@
-use std::borrow::BorrowMut;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
@@ -8,10 +8,11 @@ use revm::db::BenchmarkDB;
 use revm::{Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult, Spec};
 use revm::Return::Continue;
 use z3::{ast, ast::Ast, Config, Context, Solver};
-use z3::ast::BV;
+use z3::ast::{Bool, BV};
+use crate::evm::ExecutionResult;
 
 
-pub struct FuzzHost<'a> {
+pub struct ConcolicHost<'a> {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
     code: HashMap<H160, Bytecode>,
@@ -20,11 +21,8 @@ pub struct FuzzHost<'a> {
     symbolic_stack: Vec<Option<z3::ast::BV<'a>>>,
 }
 
-impl<'a> FuzzHost<'a> {
-    pub fn new() -> Self {
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let solver = Solver::new(&ctx);
+impl<'a> ConcolicHost<'a> {
+    pub fn new(solver: Solver<'a>, ctx: Context) -> Self {
         Self {
             env: Env::default(),
             data: HashMap::new(),
@@ -35,235 +33,379 @@ impl<'a> FuzzHost<'a> {
         }
     }
 
-    pub fn get_bv_from_stack(&self, index: usize, interp: &mut Interpreter) -> &mut BV<'a> {
-        match self.symbolic_stack[index].borrow_mut() {
-            Some(bv) => bv,
+    pub fn get_solver_mut(&mut self) -> &mut Solver<'a> {
+        self.solver.borrow_mut()
+    }
+
+    pub fn get_bv_from_stack(&self, index: usize, interp: &mut Interpreter) -> BV {
+        match self.symbolic_stack[index].borrow() {
+            Some(bv) => bv.clone(),
             None => {
                 let u256 = interp.stack.peek(index).expect("stack underflow");
                 let u64x4 = u256.0;
-                let bv = self.ctx.bv_val(u64x4[0], 64);
-                let bv = bv.concat(&self.ctx.bv_val(u64x4[1], 64));
-                let bv = bv.concat(&self.ctx.bv_val(u64x4[2], 64));
-                let bv = bv.concat(&self.ctx.bv_val(u64x4[3], 64));
+
+                let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
+                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[3], 64));
                 bv
             }
         }
 
     }
+
+    pub unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<Option<BV>> {
+        // println!("{}", *interp.instruction_pointer);
+        match *interp.instruction_pointer {
+            // ADD
+            0x01 => {
+                vec![Some(self.get_bv_from_stack(0, interp).add(
+                    self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // MUL
+            0x02 => {
+                vec![Some(self.get_bv_from_stack(0, interp).mul(
+                    self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // SUB
+            0x03 => {
+                vec![Some(self.get_bv_from_stack(0, interp).sub(
+                    self.get_bv_from_stack(1, interp))
+                )]
+            }
+            // DIV - is this signed?
+            0x04 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvsdiv(
+                    &self.get_bv_from_stack(1, interp))
+                )]
+            }
+            // SDIV
+            0x05 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvsdiv(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // MOD
+            0x06 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvurem(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // SMOD
+            0x07 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvsrem(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // ADDMOD
+            0x08 => {
+                vec![Some(self.get_bv_from_stack(0, interp).add(
+                    &self.get_bv_from_stack(1, interp)
+                ).bvsrem(&self.get_bv_from_stack(2, interp)))]
+            }
+            // MULMOD
+            0x09 => {
+                vec![Some(self.get_bv_from_stack(0, interp).mul(
+                    &self.get_bv_from_stack(1, interp)
+                ).bvsrem(&self.get_bv_from_stack(2, interp)))]
+            }
+            // EXP - we can't support, cuz z3 is bad at it
+            0x0a => {
+                vec![None]
+            }
+            // SIGNEXTEND - need to check
+            0x0b => {
+                // let bv = self.get_bv_from_stack(0, interp);
+                // let bv = bv.bvshl(&self.ctx.bv_val(248, 256));
+                // let bv = bv.bvashr(&self.ctx.bv_val(248, 256));
+                vec![None]
+            }
+            // LT
+            0x10 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp).bvult(
+                        &self.get_bv_from_stack(1, interp)
+                    )._eq(&Bool::from_bool(&self.ctx, true))
+                );
+                vec![None]
+            }
+            // GT
+            0x11 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp).bvugt(
+                        &self.get_bv_from_stack(1, interp)
+                    )._eq(&Bool::from_bool(&self.ctx, true))
+                );
+                vec![None]
+            }
+            // SLT
+            0x12 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp).bvslt(
+                        &self.get_bv_from_stack(1, interp)
+                    )._eq(&Bool::from_bool(&self.ctx, true))
+                );
+                vec![None]
+            }
+            // SGT
+            0x13 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp).bvsgt(
+                        &self.get_bv_from_stack(1, interp)
+                    )._eq(&Bool::from_bool(&self.ctx, true))
+                );
+                vec![None]
+            }
+            // EQ
+            0x14 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp)._eq(
+                        &self.get_bv_from_stack(1, interp)
+                    )
+                );
+                vec![None]
+            }
+            // ISZERO
+            0x15 => {
+                self.solver.assert(
+                    &self.get_bv_from_stack(0, interp)._eq(
+                        &BV::from_u64(&self.ctx, 0, 256)
+                    )
+                );
+                vec![None]
+            }
+            // AND
+            0x16 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvand(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // OR
+            0x17 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvor(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // XOR
+            0x18 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvxor(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // NOT
+            0x19 => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvnot())]
+            }
+            // BYTE
+            0x1a => {
+                // wtf is this
+                vec![None]
+            }
+            // SHL
+            0x1b => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvshl(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // SHR
+            0x1c => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvlshr(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // SAR
+            0x1d => {
+                vec![Some(self.get_bv_from_stack(0, interp).bvashr(
+                    &self.get_bv_from_stack(1, interp)
+                ))]
+            }
+            // SHA3
+            0x20 => {
+                // TODO
+                vec![None]
+            }
+            // ADDRESS
+            0x30 => {
+                vec![None]
+            }
+            // BALANCE
+            0x31 => {
+                vec![None]
+            }
+            // ORIGIN
+            0x32 => {
+                vec![None]
+            }
+            // CALLER
+            0x33 => {
+                vec![None]
+            }
+            // CALLVALUE
+            0x34 => {
+                vec![None]
+            }
+            // CALLDATALOAD
+            0x35 => {
+                vec![None]
+            }
+            // CALLDATASIZE
+            0x36 => {
+                vec![None]
+
+            }
+            // CALLDATACOPY
+            0x37 => {
+                vec![None]
+
+            }
+            // CODESIZE
+            0x38 => {
+                vec![None]
+
+            }
+            // CODECOPY
+            0x39 => {
+                vec![None]
+
+            }
+            // GASPRICE
+            0x3a => {
+                vec![None]
+
+            }
+            // EXTCODESIZE
+            0x3b => {
+                vec![None]
+
+            }
+            // EXTCODECOPY
+            0x3c => {
+                vec![None]
+            }
+            // RETURNDATASIZE
+            0x3d => {
+                vec![None]
+
+            }
+            // RETURNDATACOPY
+            0x3e => {
+                vec![None]
+
+            }
+            // BLOCKHASH
+            0x40 => {
+                vec![None]
+
+            }
+            // COINBASE
+            0x41 => {
+                vec![None]
+
+            }
+            // TIMESTAMP
+            0x42 => {
+                vec![None]
+
+            }
+            // NUMBER
+            0x43 => {
+                vec![None]
+
+            }
+            // PREVRANDAO
+            0x44 => {
+                vec![None]
+
+            }
+            // GASLIMIT
+            0x45 => {
+                vec![None]
+
+            }
+            // CHAINID
+            0x46 => {
+                vec![None]
+
+            }
+            // SELFBALANCE
+            0x47 => {
+                vec![None]
+
+            }
+            // BASEFEE
+            0x48 => {
+                vec![None]
+
+            }
+            // POP
+            0x50 => {
+                vec![None]
+
+            }
+            // MLOAD
+            0x51 => {
+                vec![None]
+
+            }
+            // MSTORE
+            0x52 => {
+                vec![None]
+
+            }
+            // MSTORE8
+            0x53 => {
+                vec![None]
+
+            }
+            // SLOAD
+            0x54 => {
+                vec![None]
+
+            }
+            // SSTORE
+            0x55 => {
+                vec![None]
+
+            }
+            // JUMP
+            0x56 => {
+                vec![None]
+
+            }
+            // JUMPI
+            0x57 => {
+                vec![None]
+
+            }
+
+            _ => {
+                vec![None]
+
+            }
+        }
+        // bv.iter().for_each(|x| {
+        //     self.symbolic_stack.push(x.clone());
+        // });
+    }
+
+    pub unsafe fn build_stack(&mut self,interp: &mut Interpreter) {
+        for v in self.on_step(interp) {
+            // self.symbolic_stack.push(v);
+        }
+    }
 }
 
-impl Host for FuzzHost {
+impl<'a> Host for ConcolicHost<'a> {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
 
     fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
         unsafe {
-            // println!("{}", *interp.instruction_pointer);
-            let bv = match *interp.instruction_pointer {
-                // ADD
-                0x01 => {
-                    Some(self.get_bv_from_stack(0, interp).add(
-                            self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // MUL
-                0x02 => {
-                    Some(self.get_bv_from_stack(0, interp).mul(
-                            self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SUB
-                0x03 => {
-                    Some(self.get_bv_from_stack(0, interp) -
-                            self.get_bv_from_stack(1, interp))
-                }
-                // DIV
-                0x04 => {
-                    Some(self.get_bv_from_stack(0, interp) /
-                            self.get_bv_from_stack(1, interp))
-                }
-                // SDIV
-                0x05 => {
-                    Some(self.get_bv_from_stack(0, interp).bvsdiv(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // MOD
-                0x06 => {
-                    Some(self.get_bv_from_stack(0, interp).bvurem(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SMOD
-                0x07 => {
-                    Some(self.get_bv_from_stack(0, interp).bvsrem(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // ADDMOD
-                0x08 => {
-                    Some(self.get_bv_from_stack(0, interp).add(
-                        &self.get_bv_from_stack(1, interp)
-                    ).bvsrem(&self.get_bv_from_stack(2, interp)))
-                }
-                // MULMOD
-                0x09 => {
-                    Some(self.get_bv_from_stack(0, interp).mul(
-                        &self.get_bv_from_stack(1, interp)
-                    ).bvsrem(&self.get_bv_from_stack(2, interp)))
-                }
-                // EXP - we can't support, cuz z3 is bad at it
-                0x0a => {
-                    // self.get_bv_from_stack(0, interp)(
-                    //     &self.get_bv_from_stack(1, interp)
-                    // )
-                    None
-                }
-                // SIGNEXTEND - need to check
-                0x0b => {
-                    let bv = self.get_bv_from_stack(0, interp);
-                    let bv = bv.bvshl(&self.ctx.bv_val(248, 256));
-                    let bv = bv.bvashr(&self.ctx.bv_val(248, 256));
-                    Some(bv)
-                }
-                // LT
-                0x10 => {
-                    Some(self.get_bv_from_stack(0, interp).bvult(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // GT
-                0x11 => {
-                    Some(self.get_bv_from_stack(0, interp).bvugt(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SLT
-                0x12 => {
-                    Some(self.get_bv_from_stack(0, interp).bvslt(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SGT
-                0x13 => {
-                    Some(self.get_bv_from_stack(0, interp).bvsgt(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // EQ
-                0x14 => {
-                    Some(self.get_bv_from_stack(0, interp).eq(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // ISZERO
-                0x15 => {
-                    Some(self.get_bv_from_stack(0, interp).eq(
-                        &self.ctx.bv_val(0, 256)
-                    ))
-                }
-                // AND
-                0x16 => {
-                    Some(self.get_bv_from_stack(0, interp).bvand(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // OR
-                0x17 => {
-                    Some(self.get_bv_from_stack(0, interp).bvor(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // XOR
-                0x18 => {
-                    Some(self.get_bv_from_stack(0, interp).bvxor(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // NOT
-                0x19 => {
-                    Some(self.get_bv_from_stack(0, interp).bvnot())
-                }
-                // BYTE
-                0x1a => {
-                    // wtf is this
-                }
-                // SHL
-                0x1b => {
-                    Some(self.get_bv_from_stack(0, interp).bvshl(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SHR
-                0x1c => {
-                    Some(self.get_bv_from_stack(0, interp).bvlshr(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SAR
-                0x1d => {
-                    Some(self.get_bv_from_stack(0, interp).bvashr(
-                        &self.get_bv_from_stack(1, interp)
-                    ))
-                }
-                // SHA3
-                0x20 => {
-                    // TODO
-                    None
-                }
-                // ADDRESS
-                0x30 => {
-                    None
-                }
-                // BALANCE
-                0x31 => {
-                    None
-                }
-                // ORIGIN
-                0x32 => {
-                    None
-                }
-                // CALLER
-                0x33 => {
-                    None
-                }
-                // CALLVALUE
-                0x34 => {
-                    None
-                }
-                // CALLDATALOAD
-                0x35 => {
-                    None
-                }
-                // CALLDATASIZE
-                0x36 => {
-                    None
-                }
-                // CALLDATACOPY
-                0x37 => {
-                    None
-                }
-                // CODESIZE
-                0x38 => {
-                    None
-                }
-                // CODECOPY
-                0x39 => {
-                    None
-                }
-                // GASPRICE
-                0x3a => {
-                    None
-                }
-                // EXTCODESIZE
-                0x3b => {
-                    None
-                }
-
-
-                _ => {}
-            }
+            // self.build_stack(interp);
         }
+
         return Continue;
     }
 
