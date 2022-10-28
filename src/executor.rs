@@ -17,7 +17,7 @@ where
     I: VMInputT,
     OT: ObserversTuple<I, S>,
 {
-    pub evm_executor: EVMExecutor,
+    pub evm_executor: EVMExecutor<I, S>,
     observers: OT,
     phantom: PhantomData<(I, S)>,
 }
@@ -29,7 +29,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzExecutor")
-            .field("evm_executor", &self.evm_executor)
+            // .field("evm_executor", &self.evm_executor)
             .field("observers", &self.observers)
             .finish()
     }
@@ -40,7 +40,7 @@ where
     I: VMInputT,
     OT: ObserversTuple<I, S>,
 {
-    pub fn new(evm_executor: EVMExecutor, observers: OT) -> Self {
+    pub fn new(evm_executor: EVMExecutor<I, S>, observers: OT) -> Self {
         Self {
             evm_executor,
             observers,
@@ -67,6 +67,7 @@ where
             input.get_caller(),
             input.get_state(),
             input.to_bytes().clone(),
+            &mut self.observers,
         );
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
@@ -108,7 +109,7 @@ mod tests {
     #[test]
     fn test_fuzz_executor() {
         let evm_executor = EVMExecutor::new(FuzzHost::new(), vec![], generate_random_address());
-        let observers = tuple_list!();
+        let mut observers = tuple_list!();
         let mut fuzz_executor: FuzzExecutor<VMInput, FuzzState, ()> =
             FuzzExecutor::new(evm_executor, observers);
         let mut vm_state = VMState::new();
@@ -144,6 +145,7 @@ mod tests {
                 ]
                 .concat(),
             ),
+            &mut observers,
         );
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
@@ -166,6 +168,7 @@ mod tests {
                 ]
                 .concat(),
             ),
+            &mut observers,
         );
 
         // checking cmp map about coverage

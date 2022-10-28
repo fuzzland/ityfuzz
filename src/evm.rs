@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::str::FromStr;
 
+use crate::input::VMInputT;
 use crate::rand;
 use bytes::Bytes;
+use libafl::prelude::ObserversTuple;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 use revm::Return::Continue;
@@ -28,9 +31,18 @@ impl FuzzHost {
     pub fn new() -> Self {
         Self {
             env: Env::default(),
-            data: HashMap::new(),
+            data: VMState::new(),
             code: HashMap::new(),
             jmp_map: [0; MAP_SIZE],
+        }
+    }
+
+    pub fn new_with_jump_map(jmp_map: &mut [u8; MAP_SIZE]) -> Self {
+        Self {
+            env: Env::default(),
+            data: VMState::new(),
+            code: HashMap::new(),
+            jmp_map: *jmp_map,
         }
     }
 
@@ -170,10 +182,11 @@ impl Host for FuzzHost {
 }
 
 #[derive(Debug, Clone)]
-pub struct EVMExecutor {
+pub struct EVMExecutor<I, S> {
     pub host: FuzzHost,
     contract_addresses: Vec<H160>,
     deployer: H160,
+    phandom: PhantomData<(I, S)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -193,12 +206,13 @@ impl ExecutionResult {
     }
 }
 
-impl EVMExecutor {
+impl<I, S> EVMExecutor<I, S> {
     pub fn new(FuzzHost: FuzzHost, contract_addresses: Vec<H160>, deployer: H160) -> Self {
         Self {
             host: FuzzHost,
             contract_addresses,
             deployer,
+            phandom: PhantomData::default(),
         }
     }
 
@@ -221,13 +235,17 @@ impl EVMExecutor {
         deployed_address
     }
 
-    pub fn execute(
+    pub fn execute<OT>(
         &mut self,
         contract_address: H160,
         caller: H160,
         state: &VMState,
         data: Bytes,
-    ) -> ExecutionResult {
+        observers: &mut OT,
+    ) -> ExecutionResult
+    where
+        OT: ObserversTuple<I, S>,
+    {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
             data,

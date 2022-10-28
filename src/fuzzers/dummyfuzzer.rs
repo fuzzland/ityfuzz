@@ -37,7 +37,6 @@ pub fn dummyfuzzer(
     objective_dir: PathBuf,
     logfile: PathBuf,
 ) -> Result<(), Error> {
-
     // Fuzzbench style, which requires a host and can have many fuzzing client
     // let log = RefCell::new(
     //     OpenOptions::new()
@@ -71,7 +70,6 @@ pub fn dummyfuzzer(
     //         }
     //     },
     // };
-
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
