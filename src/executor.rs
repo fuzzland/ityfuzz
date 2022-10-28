@@ -94,6 +94,7 @@ where
 mod tests {
     use super::*;
     use crate::abi::get_abi_type;
+    use crate::evm::JMP_MAP;
     use crate::evm::{FuzzHost, MAP_SIZE};
     use crate::input::VMInput;
     use crate::rand::generate_random_address;
@@ -105,7 +106,6 @@ mod tests {
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
     use libafl::state::State;
     use revm::Bytecode;
-    use crate::evm::JMP_MAP;
 
     #[test]
     fn test_fuzz_executor() {
@@ -152,7 +152,7 @@ mod tests {
 
         for i in 0..MAP_SIZE {
             know_map[i] = unsafe { JMP_MAP[i] };
-            unsafe {JMP_MAP[i] = 0 };
+            unsafe { JMP_MAP[i] = 0 };
         }
         assert_eq!(execution_result_0.reverted, false);
 
@@ -175,10 +175,10 @@ mod tests {
         // checking cmp map about coverage
         let mut cov_changed = false;
         for i in 0..MAP_SIZE {
-            let hit = unsafe{ JMP_MAP[i] };
+            let hit = unsafe { JMP_MAP[i] };
             if hit != know_map[i] && hit != 0 {
                 println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
-                unsafe{ JMP_MAP[i] = 0 };
+                unsafe { JMP_MAP[i] = 0 };
                 cov_changed = true;
             }
         }
