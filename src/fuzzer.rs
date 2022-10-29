@@ -1,7 +1,7 @@
 use crate::{
     input::VMInputT,
     state::{HasInfantStateState, HasItyState},
-    state_input::ItyVMState,
+    state_input::StagedVMState,
 };
 use std::marker::PhantomData;
 

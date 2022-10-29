@@ -1,7 +1,7 @@
 use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
 use crate::rand::generate_random_address;
-use crate::state_input::ItyVMState;
+use crate::state_input::StagedVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
@@ -26,12 +26,12 @@ use std::path::Path;
 // What are other metadata we need?
 // shou: may need intermediate info for future adding concolic execution
 pub trait HasItyState {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
     where
-        SC: Scheduler<ItyVMState, InfantStateState>;
-    fn add_infant_state<SC>(&mut self, state: &ItyVMState, scheduler: &SC)
+        SC: Scheduler<StagedVMState, InfantStateState>;
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
     where
-        SC: Scheduler<ItyVMState, InfantStateState>;
+        SC: Scheduler<StagedVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
 }
 
@@ -41,6 +41,7 @@ pub trait HasInfantStateState {
 
 pub trait HasExecutionResult {
     fn get_execution_result(&self) -> &ExecutionResult;
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult;
     fn set_execution_result(&mut self, res: ExecutionResult);
 }
 
@@ -84,7 +85,7 @@ impl FuzzState {
 // shou: To use power schedule, we need to make it as a state lol, i'll submit a pr to libafl
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InfantStateState {
-    pub infant_state: InMemoryCorpus<ItyVMState>,
+    pub infant_state: InMemoryCorpus<StagedVMState>,
     metadata: SerdeAnyMap,
 }
 
@@ -99,14 +100,14 @@ impl InfantStateState {
 
 impl State for InfantStateState {}
 
-impl HasCorpus<ItyVMState> for InfantStateState {
-    type Corpus = InMemoryCorpus<ItyVMState>;
+impl HasCorpus<StagedVMState> for InfantStateState {
+    type Corpus = InMemoryCorpus<StagedVMState>;
 
-    fn corpus(&self) -> &InMemoryCorpus<ItyVMState> {
+    fn corpus(&self) -> &InMemoryCorpus<StagedVMState> {
         &self.infant_state
     }
 
-    fn corpus_mut(&mut self) -> &mut InMemoryCorpus<ItyVMState> {
+    fn corpus_mut(&mut self) -> &mut InMemoryCorpus<StagedVMState> {
         &mut self.infant_state
     }
 }
@@ -122,9 +123,9 @@ impl HasMetadata for InfantStateState {
 }
 
 impl HasItyState for FuzzState {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
     where
-        SC: Scheduler<ItyVMState, InfantStateState>,
+        SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -139,9 +140,9 @@ impl HasItyState for FuzzState {
         Some((idx, state.input().clone().unwrap()))
     }
 
-    fn add_infant_state<SC>(&mut self, state: &ItyVMState, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
     where
-        SC: Scheduler<ItyVMState, InfantStateState>,
+        SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = self
             .infant_states_state
@@ -248,6 +249,10 @@ impl HasExecutionResult for FuzzState {
 
     fn set_execution_result(&mut self, res: ExecutionResult) {
         self.execution_result = res
+    }
+
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult {
+        &mut self.execution_result
     }
 }
 

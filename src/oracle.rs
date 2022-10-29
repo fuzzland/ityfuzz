@@ -61,14 +61,14 @@ pub trait Oracle<I, S>
 where
     I: VMInputT,
 {
-    fn pre_condition(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> u64;
+    fn transition(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> u64;
     fn oracle(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> bool;
 }
 
 struct NoOracle {}
 
 impl Oracle<VMInput, VMState> for NoOracle {
-    fn pre_condition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
+    fn transition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
         0
     }
 
@@ -98,7 +98,7 @@ impl IERC20Oracle {
 }
 
 impl Oracle<VMInput, VMState> for IERC20Oracle {
-    fn pre_condition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
+    fn transition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
     }
 

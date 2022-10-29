@@ -1,5 +1,6 @@
 use crate::abi::BoxedABI;
 use crate::state::FuzzState;
+use crate::state_input::StagedVMState;
 use crate::{evm, VMState};
 use bytes::Bytes;
 use libafl::inputs::Input;
@@ -21,8 +22,10 @@ pub trait VMInputT: Input {
     fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
     fn get_state_mut(&mut self) -> &mut VMState;
-    fn set_state(&mut self, state: &VMState);
+    fn set_state(&mut self, state: VMState);
     fn get_state(&self) -> &evm::VMState;
+    fn set_staged_state(&mut self, state: StagedVMState);
+    fn get_staged_state(&self) -> &StagedVMState;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -30,7 +33,7 @@ pub struct VMInput {
     pub caller: H160,
     pub contract: H160,
     pub data: BoxedABI,
-    pub state: VMState,
+    pub sstate: StagedVMState,
 }
 
 impl HasLen for VMInput {
@@ -45,7 +48,7 @@ impl std::fmt::Debug for VMInput {
             .field("caller", &self.caller)
             .field("contract", &self.contract)
             // .field("data", &self.data)
-            .field("state", &self.state)
+            .field("state", &self.sstate)
             .finish()
     }
 }
@@ -83,15 +86,23 @@ impl VMInputT for VMInput {
     }
 
     fn get_state_mut(&mut self) -> &mut VMState {
-        &mut self.state
+        &mut self.sstate.state
     }
 
-    fn set_state(&mut self, state: &VMState) {
-        self.state = state.clone();
+    fn set_state(&mut self, state: VMState) {
+        self.sstate = self.sstate.with_state(state);
     }
 
     fn get_state(&self) -> &VMState {
-        &self.state
+        &self.sstate.state
+    }
+
+    fn set_staged_state(&mut self, state: StagedVMState) {
+        self.sstate = state;
+    }
+
+    fn get_staged_state(&self) -> &StagedVMState {
+        &self.sstate
     }
 }
 

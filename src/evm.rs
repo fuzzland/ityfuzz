@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use crate::input::VMInputT;
 use crate::rand;
+use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::ObserversTuple;
 use primitive_types::{H160, H256, U256};
@@ -183,7 +184,7 @@ pub struct EVMExecutor<I, S> {
 pub struct ExecutionResult {
     pub output: Bytes,
     pub reverted: bool,
-    pub new_state: VMState,
+    pub new_state: StagedVMState,
 }
 
 impl ExecutionResult {
@@ -191,7 +192,7 @@ impl ExecutionResult {
         Self {
             output: Bytes::new(),
             reverted: false,
-            new_state: VMState::new(),
+            new_state: StagedVMState::new_uninitialized(),
         }
     }
 }
@@ -253,7 +254,7 @@ impl<I, S> EVMExecutor<I, S> {
         return ExecutionResult {
             output: interp.return_value(),
             reverted: r != Return::Return,
-            new_state: self.host.data.clone(),
+            new_state: StagedVMState::new_with_state(self.host.data.clone()),
         };
     }
 }

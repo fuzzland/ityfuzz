@@ -4,8 +4,6 @@ use libafl::prelude::{Corpus, InMemoryCorpus, Input, Testcase};
 use libafl::Error;
 use serde::{Deserialize, Serialize};
 
-use crate::input::CorpusInput;
-
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "I: serde::de::DeserializeOwned")]
 pub struct InMemoryItyCorpus<I>
@@ -64,10 +62,4 @@ where
     fn is_empty(&self) -> bool {
         self.txn_corpus.is_empty() && self.infant_states.is_empty()
     }
-}
-
-#[test]
-fn test_in_memory_ity_corpus() {
-    let mut corpus = InMemoryItyCorpus::<CorpusInput>::default();
-    assert!(corpus.is_empty());
 }

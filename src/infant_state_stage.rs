@@ -1,5 +1,5 @@
 use crate::state::{HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState};
-use crate::state_input::ItyVMState;
+use crate::state_input::StagedVMState;
 use libafl::schedulers::Scheduler;
 use libafl::stages::Stage;
 use libafl::Error;
@@ -17,7 +17,7 @@ impl<'a, SC> InfantStateStage<'a, SC> {
 impl<'a, E, EM, S, Z, SC> Stage<E, EM, S, Z> for InfantStateStage<'a, SC>
 where
     S: HasItyState + HasExecutionResult,
-    SC: Scheduler<ItyVMState, InfantStateState>,
+    SC: Scheduler<StagedVMState, InfantStateState>,
 {
     fn perform(
         &mut self,
@@ -30,7 +30,7 @@ where
         // add the current VMState to the infant state corpus
         // TODO(shou): add feedback for infant state here
         let new_state = state.get_execution_result();
-        state.add_infant_state(&ItyVMState(new_state.new_state.clone()), self.scheduler);
+        state.add_infant_state(&new_state.new_state.clone(), self.scheduler);
         Ok(())
     }
 }
