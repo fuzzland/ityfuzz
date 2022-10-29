@@ -25,6 +25,7 @@ use revm::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
+use crate::contract_utils::ContractInfo;
 
 const ACCOUNT_AMT: u8 = 10;
 
@@ -63,18 +64,6 @@ pub struct FuzzState {
     default_callers: Vec<H160>,
     pub rand_generator: StdRand,
     pub max_size: usize,
-}
-
-pub struct ABIConfig {
-    abi: String,
-    function: [u8; 4],
-}
-
-pub struct ContractInfo {
-    name: String,
-    abi: Vec<ABIConfig>,
-    code: Vec<u8>,
-    constructor_args: Vec<u8>,
 }
 
 impl FuzzState {

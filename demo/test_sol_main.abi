@@ -1,0 +1,1 @@
+[{"inputs":[],"name":"oracle_harness","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint8","name":"a","type":"uint8"}],"name":"process","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"nonpayable","type":"function"}]
