@@ -53,11 +53,15 @@ where
 pub struct BoxedABI {
     #[serde(with = "serde_traitobject")]
     b: Box<dyn ABI>,
+    function: [u8; 4],
 }
 
 impl BoxedABI {
     pub fn new(b: Box<dyn ABI>) -> Self {
-        Self { b }
+        Self {
+            b,
+            function: [0; 4],
+        }
     }
 
     pub fn get(&self) -> &Box<dyn ABI> {
@@ -69,7 +73,7 @@ impl BoxedABI {
     }
 
     pub fn get_bytes(&self) -> Bytes {
-        Bytes::from(self.b.get_bytes())
+        Bytes::from([Vec::from(self.function), self.b.get_bytes()].concat())
     }
 
     pub fn get_bytes_vec(&self) -> Vec<u8> {
@@ -82,6 +86,10 @@ impl BoxedABI {
 
     pub fn get_type(&self) -> ABILossyType {
         self.b.get_type()
+    }
+
+    pub fn set_func(&mut self, function: [u8; 4]) {
+        self.function = function;
     }
 }
 
@@ -352,6 +360,7 @@ impl ABI for AArray {
 pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
     return BoxedABI {
         b: get_abi_type(abi_name),
+        function: [0; 4],
     };
 }
 
@@ -364,6 +373,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
                 .split(",")
                 .map(|x| BoxedABI {
                     b: get_abi_type(&String::from(x)),
+                    function: [0; 4],
                 })
                 .collect(),
             dynamic_size: false,
@@ -373,7 +383,8 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string())
+                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string()),
+                    function: [0; 4]
                 };
                 1
             ],
@@ -382,11 +393,18 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
         let mut split = abi_name_str.rsplit_once('[').unwrap();
         let name = split.0;
-        let len = split.1.split(']').next().unwrap().parse::<usize>().expect("invalid array length");
+        let len = split
+            .1
+            .split(']')
+            .next()
+            .unwrap()
+            .parse::<usize>()
+            .expect("invalid array length");
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(&String::from(name))
+                    b: get_abi_type(&String::from(name)),
+                    function: [0; 4]
                 };
                 len
             ],
@@ -427,7 +445,7 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
             } else {
                 panic!("unknown abi type {}", abi_name);
             }
-        },
+        }
     }
 }
 
