@@ -357,21 +357,6 @@ pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
 
 pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
-    if abi_name_str.starts_with("uint") {
-        let len = abi_name_str[4..].parse::<usize>().unwrap();
-        assert!(len % 8 == 0 && len >= 8);
-        return get_abi_type_basic("uint", len / 8);
-    }
-    if abi_name_str.starts_with("int") {
-        let len = abi_name_str[3..].parse::<usize>().unwrap();
-        assert!(len % 8 == 0 && len >= 8);
-        return get_abi_type_basic("int", len / 8);
-    }
-    if abi_name_str.starts_with("bytes") {
-        let len = abi_name_str[5..].parse::<usize>().unwrap();
-        assert!(len % 8 == 0 && len >= 8);
-        return get_abi_type_basic("bytes", len / 8);
-    }
     // tuple
     if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
         return Box::new(AArray {
@@ -395,14 +380,9 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
             dynamic_size: true,
         });
     } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
-        let mut split = abi_name_str.split('[');
-        let name = split.next().unwrap();
-        let len = split
-            .next()
-            .unwrap()
-            .trim_end_matches(']')
-            .parse::<usize>()
-            .unwrap();
+        let mut split = abi_name_str.rsplit_once('[').unwrap();
+        let name = split.0;
+        let len = split.1.split(']').next().unwrap().parse::<usize>().expect("invalid array length");
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
@@ -431,7 +411,23 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
             data: Vec::new(),
             multiplier: 32,
         }),
-        _ => panic!("unsupported abi type"),
+        _ => {
+            if abi_name.starts_with("uint") {
+                let len = abi_name[4..].parse::<usize>().unwrap();
+                assert!(len % 8 == 0 && len >= 8);
+                return get_abi_type_basic("uint", len / 8);
+            } else if abi_name.starts_with("int") {
+                let len = abi_name[3..].parse::<usize>().unwrap();
+                assert!(len % 8 == 0 && len >= 8);
+                return get_abi_type_basic("int", len / 8);
+            } else if abi_name.starts_with("bytes") {
+                let len = abi_name[5..].parse::<usize>().unwrap();
+                assert!(len % 8 == 0 && len >= 8);
+                return get_abi_type_basic("bytes", len / 8);
+            } else {
+                panic!("unknown abi type {}", abi_name);
+            }
+        },
     }
 }
 
@@ -445,6 +441,114 @@ mod tests {
     #[test]
     fn test_int() {
         let mut abi = get_abi_type_boxed(&String::from("int8"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_int256() {
+        let mut abi = get_abi_type_boxed(&String::from("int256"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_dynamic() {
+        let mut abi = get_abi_type_boxed(&String::from("string"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_tuple_static() {
+        let mut abi = get_abi_type_boxed(&String::from("(uint256,uint256)"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_tuple_dynamic() {
+        let mut abi = get_abi_type_boxed(&String::from("(string)"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_tuple_mixed() {
+        let mut abi = get_abi_type_boxed(&String::from("(string,uint256)"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_array_static() {
+        let mut abi = get_abi_type_boxed(&String::from("uint256[2]"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_array_dynamic() {
+        let mut abi = get_abi_type_boxed(&String::from("bytes[2]"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_array_mixed() {
+        let mut abi = get_abi_type_boxed(&String::from("uint256[2][3]"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_array_dyn() {
+        let mut abi = get_abi_type_boxed(&String::from("uint256[][]"));
         let mut test_state = FuzzState::new();
         let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
         println!(
