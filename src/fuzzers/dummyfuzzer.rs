@@ -28,6 +28,7 @@ use std::{
     path::PathBuf,
 };
 
+use crate::contract_utils::ContractLoader;
 use crate::infant_state_stage::InfantStateStage;
 use crate::rand::generate_random_address;
 use crate::state::FuzzState;
@@ -48,6 +49,7 @@ pub fn dummyfuzzer(
     corpus_dir: PathBuf,
     objective_dir: PathBuf,
     logfile: PathBuf,
+    contracts_glob: &String,
 ) -> Result<(), Error> {
     // Fuzzbench style, which requires a host and can have many fuzzing client
     // let log = RefCell::new(
@@ -112,8 +114,8 @@ pub fn dummyfuzzer(
 
     let oracle_executor = executor.clone();
 
-    // TODO(shou): parse abi and initialize corpus
-    // state.initialize()
+    let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
+    state.initialize(contract_info, &mut executor.evm_executor);
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 

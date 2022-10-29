@@ -1,4 +1,5 @@
 use crate::abi::get_abi_type_boxed;
+use crate::contract_utils::ContractInfo;
 use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
 use crate::rand::generate_random_address;
@@ -25,7 +26,6 @@ use revm::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
-use crate::contract_utils::ContractInfo;
 
 const ACCOUNT_AMT: u8 = 10;
 
