@@ -30,7 +30,6 @@ enum ConcolicOp {
     OR,
     XOR,
     NOT,
-    NONE,
     SHL,
     SHR,
     SAR,
@@ -72,16 +71,19 @@ macro_rules! box_bv {
         })
     };
 }
-impl BVBox {
-    pub fn new() -> Self {
-        BVBox {
-            lhs: None,
-            rhs: None,
-            concrete: None,
-            op: ConcolicOp::NONE,
-        }
-    }
 
+macro_rules! bv_from_u256 {
+    ($val:expr, $ctx:expr) => {{
+        let u64x4 = $val.0;
+        let bv = BV::from_u64(&$ctx, u64x4[0], 64);
+        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
+        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[2], 64));
+        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[3], 64));
+        bv
+    }};
+}
+
+impl BVBox {
     pub fn new_input() -> Self {
         BVBox {
             lhs: None,
@@ -152,7 +154,12 @@ impl BVBox {
         box_bv!(self, rhs, ConcolicOp::XOR)
     }
     pub fn bvnot(self) -> Box<BVBox> {
-        box_bv!(self, Box::new(BVBox::new()), ConcolicOp::NOT)
+        Box::new(BVBox {
+            lhs: Some(Box::new(self)),
+            rhs: None,
+            concrete: None,
+            op: ConcolicOp::NOT,
+        })
     }
     pub fn bvshl(self, rhs: Box<BVBox>) -> Box<BVBox> {
         box_bv!(self, rhs, ConcolicOp::SHL)
@@ -203,27 +210,103 @@ impl BVBox {
     }
 }
 
+pub struct Solving<'a> {
+    input: &'a BV<'a>,
+    balance: &'a BV<'a>,
+    calldatavalue: &'a BV<'a>,
+    solver: &'a Solver<'a>,
+}
+
+impl<'a> Solving<'a> {
+    fn new(
+        input: &'a BV<'a>,
+        balance: &'a BV<'a>,
+        calldatavalue: &'a BV<'a>,
+        solver: &'a Solver<'a>,
+    ) -> Self {
+        Solving {
+            input,
+            balance,
+            calldatavalue,
+            solver,
+        }
+    }
+}
+
+impl<'a> Solving<'a> {
+    pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
+        macro_rules! binop {
+            ($lhs:expr, $rhs:expr, $op:ident) => {
+                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
+                    .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx))
+            };
+        }
+        match bv.op {
+            ConcolicOp::U256 => {
+                bv_from_u256!(bv.concrete.unwrap(), ctx)
+            }
+            ConcolicOp::ADD => {
+                binop!(bv.lhs, bv.rhs, bvadd)
+            }
+            ConcolicOp::DIV => {
+                binop!(bv.lhs, bv.rhs, bvudiv)
+            }
+            ConcolicOp::MUL => {
+                binop!(bv.lhs, bv.rhs, bvmul)
+            }
+            ConcolicOp::SUB => {
+                binop!(bv.lhs, bv.rhs, bvsub)
+            }
+            ConcolicOp::SDIV => {
+                binop!(bv.lhs, bv.rhs, bvsdiv)
+            }
+            ConcolicOp::SMOD => {
+                binop!(bv.lhs, bv.rhs, bvsmod)
+            }
+            ConcolicOp::UREM => {
+                binop!(bv.lhs, bv.rhs, bvurem)
+            }
+            ConcolicOp::SREM => {
+                binop!(bv.lhs, bv.rhs, bvsrem)
+            }
+            ConcolicOp::AND => {
+                binop!(bv.lhs, bv.rhs, bvand)
+            }
+            ConcolicOp::OR => {
+                binop!(bv.lhs, bv.rhs, bvor)
+            }
+            ConcolicOp::XOR => {
+                binop!(bv.lhs, bv.rhs, bvxor)
+            }
+            ConcolicOp::NOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).bvnot(),
+            ConcolicOp::SHL => {
+                binop!(bv.lhs, bv.rhs, bvshl)
+            }
+            ConcolicOp::SHR => {
+                binop!(bv.lhs, bv.rhs, bvlshr)
+            }
+            ConcolicOp::SAR => {
+                binop!(bv.lhs, bv.rhs, bvashr)
+            }
+            ConcolicOp::INPUT => self.input.clone(),
+            ConcolicOp::SLICEDINPUT => {
+                let idx = bv.concrete.unwrap().0[0] as u32;
+                self.input.extract(idx * 8 + 32, idx * 8)
+            }
+            ConcolicOp::BALANCE => self.balance.clone(),
+            ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
+        }
+    }
+}
+
 pub struct ConcolicHost {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
     code: HashMap<H160, Bytecode>,
-    // solver: Solver<'a>,
-    // ctx: &'static mut Context,
     symbolic_stack: Vec<Option<Box<BVBox>>>,
     shadow_inputs: Option<BVBox>,
     constraints: Vec<Constraint>,
     bits: u32,
-}
-
-macro_rules! bv_from_u256 {
-    ($val:expr, $ctx:expr) => {{
-        let u64x4 = $val.0;
-        let bv = BV::from_u64(&ctx, u64x4[0], 64);
-        let bv = bv.concat(&BV::from_u64(&ctx, u64x4[1], 64));
-        let bv = bv.concat(&BV::from_u64(&ctx, u64x4[2], 64));
-        let bv = bv.concat(&BV::from_u64(&ctx, u64x4[3], 64));
-        bv
-    }};
 }
 
 impl ConcolicHost {
@@ -399,9 +482,6 @@ impl ConcolicHost {
             }
             // CALLDATALOAD
             0x35 => {
-                // TODO(@shangying): can you please help me with this?
-                // basically, we need to get a new sub-BV from shadow input, which starts from
-                // `interp.stack.peek(0).unwrap().0[0] * 8` to that + 32 * 8 (32 bytes)
                 vec![Some(Box::new(BVBox::new_sliced_input(
                     interp.stack.peek(0).unwrap(),
                 )))]
@@ -539,7 +619,6 @@ impl ConcolicHost {
                 // }
 
                 vec![
-
                     //todo!
                 ]
             }
@@ -561,13 +640,32 @@ impl ConcolicHost {
             0xa0..=0xa4 => {
                 vec![]
             }
-
             _ => {
                 vec![]
             }
         };
         for v in bv {
             self.symbolic_stack.push(v);
+        }
+    }
+
+    pub fn solve(&self) {
+        let context = Context::new(&Config::default());
+        let mut solver = Solver::new(&context);
+        let input = BV::new_const(&context, "input", self.bits);
+        let callvalue = BV::new_const(&context, "callvalue", 256);
+        let balance = BV::new_const(&context, "balance", 256);
+
+        let mut solving = Solving::new(&input, &balance, &callvalue, &solver);
+        for cons in &self.constraints {
+            let bv: BV = solving.generate_z3_bv(&cons.lhs, &context);
+            solver.assert(&match cons.op {
+                ConstraintOp::GT => bv.bvugt(&solving.generate_z3_bv(&cons.rhs, &context)),
+                ConstraintOp::SGT => bv.bvsgt(&solving.generate_z3_bv(&cons.rhs, &context)),
+                ConstraintOp::EQ => bv._eq(&solving.generate_z3_bv(&cons.rhs, &context)),
+                ConstraintOp::LT => bv.bvult(&solving.generate_z3_bv(&cons.rhs, &context)),
+                ConstraintOp::SLT => bv.bvslt(&solving.generate_z3_bv(&cons.rhs, &context)),
+            });
         }
     }
 }
@@ -579,10 +677,8 @@ impl Host for ConcolicHost {
 
     fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
         unsafe {
-            // self.symbolic_stack.push(Some(BV::from_u64(&self.ctx, 1, 2)))
-            // self.on_step(interp);
+            self.on_step(interp);
         }
-
         return Continue;
     }
 
