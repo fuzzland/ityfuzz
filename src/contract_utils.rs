@@ -100,7 +100,11 @@ impl ContractLoader {
             }
         }
         return Self {
-            contracts: vec![result],
+            contracts: if result.code.len() > 0 {
+                vec![result]
+            } else {
+                vec![]
+            },
         };
     }
 
@@ -126,16 +130,18 @@ impl ContractLoader {
             }
         }
 
-        ContractLoader {
-            contracts: prefix_file_count
-                .iter()
-                .filter(|(_, v)| **v == 2)
-                .map(|(k, _)| {
-                    Self::from_prefix((k.to_owned() + &String::from('*')).as_str()).contracts[0]
-                        .clone()
-                })
-                .collect(),
+        let mut contracts: Vec<ContractInfo> = vec![];
+        for (prefix, count) in prefix_file_count {
+            if count == 2 {
+                for contract in
+                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str()).contracts
+                {
+                    contracts.push(contract);
+                }
+            }
         }
+
+        ContractLoader { contracts }
     }
 }
 
@@ -145,6 +151,13 @@ mod tests {
     #[test]
     fn test_load() {
         let loader = ContractLoader::from_glob("demo/*");
-        println!("{:?}", loader.contracts[0]);
+        println!(
+            "{:?}",
+            loader
+                .contracts
+                .iter()
+                .map(|x| x.name.clone())
+                .collect::<Vec<String>>()
+        );
     }
 }
