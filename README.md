@@ -5,13 +5,21 @@ Fast hybrid fuzzer for EVM, MoveVM, etc.
 ### Building
 ```bash
 cd cli/
-cargo build --release
+cargo make --makefile cargo-make.toml build-cli
 ```
 
 ### Run
 ```bash
-./cli --contract-glob './demo/*'
+cd cli/
+cargo make --makefile cargo-make.toml run
 ```
+or
+```bash
+# if cli binary exists
+cd cli/
+./cli --contract-glob '../demo/*'
+```
+
 
 ### Z3 Installation (macOS)
 ```bash
