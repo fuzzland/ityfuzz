@@ -33,7 +33,7 @@ use std::{
 };
 
 use crate::contract_utils::{ContractLoader, set_hash};
-use crate::feedback::OracleFeedback;
+use crate::feedback::{InfantFeedback, OracleFeedback};
 use crate::infant_state_stage::InfantStateStage;
 use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
 use crate::rand::generate_random_address;
@@ -133,12 +133,15 @@ pub fn dummyfuzzer(
     let mut harness_hash: [u8; 4] = [0; 4];
     set_hash(harness_code, &mut harness_hash);
     println!("{:?}", harness_hash);
-    let objective = OracleFeedback::new(FunctionHarnessOracle::new_no_condition(
+    let oracle = FunctionHarnessOracle::new_no_condition(
         H160::zero(),
         Vec::from(harness_hash)
-    ), executor.evm_executor.clone());
+    );
+    let objective = OracleFeedback::new(&oracle, executor.evm_executor.clone());
 
-    let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
+    let infant_feedback = InfantFeedback::new(&oracle, executor.evm_executor.clone());
+
+    let mut fuzzer = ItyFuzzer::new(scheduler, &infant_scheduler, feedback, infant_feedback, objective);
 
     fuzzer
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)

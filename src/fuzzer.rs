@@ -1,6 +1,6 @@
 use crate::{
     input::VMInputT,
-    state::{HasInfantStateState, HasItyState},
+    state::{HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
 use std::marker::PhantomData;
@@ -21,32 +21,40 @@ use libafl::{
 };
 
 #[derive(Debug)]
-pub struct ItyFuzzer<CS, F, I, OF, S, OT>
+pub struct ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
+    IS: Scheduler<StagedVMState, InfantStateState>,
     F: Feedback<I, S>,
+    IF: Feedback<I, S>,
     I: VMInputT,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
 {
     scheduler: CS,
     feedback: F,
+    infant_feedback: IF,
+    infant_scheduler: &'a IS,
     objective: OF,
     phantom: PhantomData<(I, S, OT)>,
 }
 
-impl<CS, F, I, OF, S, OT> ItyFuzzer<CS, F, I, OF, S, OT>
+impl<'a, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
+    IS: Scheduler<StagedVMState, InfantStateState>,
     F: Feedback<I, S>,
+    IF: Feedback<I, S>,
     I: VMInputT,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
 {
-    pub fn new(scheduler: CS, feedback: F, objective: OF) -> Self {
+    pub fn new(scheduler: CS, infant_scheduler: &'a IS, feedback: F, infant_feedback: IF, objective: OF) -> Self {
         Self {
             scheduler,
             feedback,
+            infant_feedback,
+            infant_scheduler,
             objective,
             phantom: PhantomData,
         }
@@ -55,11 +63,13 @@ where
 
 // implement fuzzer trait for ItyFuzzer
 // Seems that we can get rid of this impl and just use StdFuzzer?
-impl<CS, E, EM, F, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST> for ItyFuzzer<CS, F, I, OF, S, OT>
+impl<'a, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST> for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
+    IS: Scheduler<StagedVMState, InfantStateState>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
+    IF: Feedback<I, S>,
     I: VMInputT,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor + HasExecutions + HasMetadata,
@@ -82,10 +92,12 @@ where
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<E, EM, I, S, CS, F, OF, OT> Evaluator<E, EM, I, S> for ItyFuzzer<CS, F, I, OF, S, OT>
+impl<'a, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S> for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
+    IS: Scheduler<StagedVMState, InfantStateState>,
     F: Feedback<I, S>,
+    IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
     OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
     EM: EventManager<E, I, S, Self>,
@@ -124,6 +136,13 @@ where
         let is_solution = self
             .objective
             .is_interesting(state, manager, &input, observers, &exitkind)?;
+
+        let is_infant_interesting = self.infant_feedback.is_interesting(state, manager, &input, observers, &exitkind)?;
+
+        if is_infant_interesting {
+            let new_state = state.get_execution_result();
+            state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
+        }
 
         let mut res = ExecuteInputResult::None;
         if is_solution {
