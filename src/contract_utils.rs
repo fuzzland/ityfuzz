@@ -61,9 +61,7 @@ impl ContractLoader {
                     function: [0; 4],
                     is_static: abi["stateMutability"].as_str().unwrap() == "view",
                 };
-                let function_to_hash= format!("{}({})",
-                                 name,
-                                 abi_name.join(","));
+                let function_to_hash = format!("{}({})", name, abi_name.join(","));
                 set_hash(function_to_hash.as_str(), &mut abi_config.function);
                 abi_config
             })

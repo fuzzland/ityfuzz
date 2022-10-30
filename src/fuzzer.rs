@@ -49,7 +49,13 @@ where
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
 {
-    pub fn new(scheduler: CS, infant_scheduler: &'a IS, feedback: F, infant_feedback: IF, objective: OF) -> Self {
+    pub fn new(
+        scheduler: CS,
+        infant_scheduler: &'a IS,
+        feedback: F,
+        infant_feedback: IF,
+        objective: OF,
+    ) -> Self {
         Self {
             scheduler,
             feedback,
@@ -63,7 +69,8 @@ where
 
 // implement fuzzer trait for ItyFuzzer
 // Seems that we can get rid of this impl and just use StdFuzzer?
-impl<'a, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST> for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
+    for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState, InfantStateState>,
@@ -92,7 +99,8 @@ where
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<'a, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S> for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
+    for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState, InfantStateState>,
@@ -137,7 +145,9 @@ where
         let observers = executor.observers();
 
         // get new stage first
-        let is_infant_interesting = self.infant_feedback.is_interesting(state, manager, &input, observers, &exitkind)?;
+        let is_infant_interesting = self
+            .infant_feedback
+            .is_interesting(state, manager, &input, observers, &exitkind)?;
         if is_infant_interesting {
             let new_state = state.get_execution_result();
             state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
@@ -146,7 +156,6 @@ where
         let is_solution = self
             .objective
             .is_interesting(state, manager, &input, observers, &exitkind)?;
-
 
         let mut res = ExecuteInputResult::None;
         if is_solution {
