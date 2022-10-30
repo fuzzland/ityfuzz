@@ -100,19 +100,19 @@ where
     }
 
     fn fuzz_loop(
-            &mut self,
-            stages: &mut ST,
-            executor: &mut E,
-            state: &mut S,
-            manager: &mut EM,
-        ) -> Result<usize, Error> {
-            let mut last = current_time();
-            // now report stats to manager every 0.1 sec
-            let monitor_timeout = STATS_TIMEOUT_DEFAULT;
-            loop {
-                self.fuzz_one(stages, executor, state, manager)?;
-                last = manager.maybe_report_progress(state, last, monitor_timeout)?;
-            }
+        &mut self,
+        stages: &mut ST,
+        executor: &mut E,
+        state: &mut S,
+        manager: &mut EM,
+    ) -> Result<usize, Error> {
+        let mut last = current_time();
+        // now report stats to manager every 0.1 sec
+        let monitor_timeout = STATS_TIMEOUT_DEFAULT;
+        loop {
+            self.fuzz_one(stages, executor, state, manager)?;
+            last = manager.maybe_report_progress(state, last, monitor_timeout)?;
+        }
     }
 }
 

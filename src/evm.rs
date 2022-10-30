@@ -21,8 +21,8 @@ pub const MAP_SIZE: usize = 256;
 pub type VMState = HashMap<H160, HashMap<U256, U256>>;
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
-pub use jmp_map as JMP_MAP;
 use crate::state::{FuzzState, HasHashToAddress};
+pub use jmp_map as JMP_MAP;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
@@ -43,7 +43,9 @@ impl FuzzHost {
     }
 
     pub fn initalize<S>(&mut self, state: &S)
-    where S: HasHashToAddress{
+    where
+        S: HasHashToAddress,
+    {
         self.hash_to_address = state.get_hash_to_address().clone();
     }
 
@@ -88,7 +90,7 @@ impl Host for FuzzHost {
     fn load_account(&mut self, address: H160) -> Option<(bool, bool)> {
         Some((
             true,
-            true // self.data.contains_key(&address) || self.code.contains_key(&address),
+            true, // self.data.contains_key(&address) || self.code.contains_key(&address),
         ))
     }
 
@@ -172,10 +174,18 @@ impl Host for FuzzHost {
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
         if ACTIVE_MATCH_EXT_CALL == true {
-            let contract_loc = self.hash_to_address.get(input.input.slice(0..4).to_vec().as_slice()).unwrap();
+            let contract_loc = self
+                .hash_to_address
+                .get(input.input.slice(0..4).to_vec().as_slice())
+                .unwrap();
             let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(input.input.clone(), self.code.get(contract_loc).unwrap().clone(), &input.context),
-                1e10 as u64);
+                Contract::new_with_context::<LatestSpec>(
+                    input.input.clone(),
+                    self.code.get(contract_loc).unwrap().clone(),
+                    &input.context,
+                ),
+                1e10 as u64,
+            );
             let ret = interp.run::<FuzzHost, LatestSpec>(self);
             return (ret, Gas::new(0), interp.return_value());
         }
@@ -184,8 +194,13 @@ impl Host for FuzzHost {
         match self.code.get(&input.contract) {
             Some(code) => {
                 let mut interp = Interpreter::new::<LatestSpec>(
-                    Contract::new_with_context::<LatestSpec>(input.input.clone(), code.clone(), &input.context),
-                    1e10 as u64);
+                    Contract::new_with_context::<LatestSpec>(
+                        input.input.clone(),
+                        code.clone(),
+                        &input.context,
+                    ),
+                    1e10 as u64,
+                );
                 let ret = interp.run::<FuzzHost, LatestSpec>(self);
                 return (ret, Gas::new(0), interp.return_value());
             }
