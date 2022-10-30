@@ -9,14 +9,13 @@ cargo make --makefile cargo-make.toml build-cli
 ```
 
 ### Run
-```bash
+<!-- ```bash
 cd cli/
 cargo make --makefile cargo-make.toml run
 ```
-or
+or -->
 ```bash
 # if cli binary exists
-cd cli/
 ./cli --contract-glob '../demo/*'
 ```
 
