@@ -6,7 +6,7 @@ use crate::{
     input::{VMInput, VMInputT},
     mutator::FuzzMutator,
 };
-use libafl::prelude::{powersched::PowerSchedule, MapFeedback, SimpleEventManager, ObserversTuple};
+use libafl::prelude::{powersched::PowerSchedule, MapFeedback, SimpleEventManager, ObserversTuple, QueueScheduler};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
 use libafl::{
     prelude::{
@@ -27,6 +27,7 @@ use std::{
     io,
     path::PathBuf,
 };
+use libafl::feedbacks::Feedback;
 use libafl::stages::CalibrationStage;
 
 use crate::contract_utils::ContractLoader;
@@ -91,14 +92,11 @@ pub fn dummyfuzzer(
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let mut infant_scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
+    let mut infant_scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
     // TODO: implement OracleFeedback
-    // let feedback = feedback_or!(coverage_feedback, OracleCoverageFeedback::new());
-    // let mut objective = ConstFeedback::new(false);
-    // let mut feedback = ConstFeedback::new(false);
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let calibration = CalibrationStage::new(&feedback);
     let mut state = FuzzState::new();
@@ -125,6 +123,7 @@ pub fn dummyfuzzer(
 
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
     state.initialize(contract_info, &mut executor.evm_executor, &mut scheduler, &infant_scheduler);
+    feedback.init_state(&mut state).expect("Failed to init state");
 
     // now evm executor is ready, we can clone it
     let objective = OracleFeedback::new(NoOracle{}, executor.evm_executor.clone());
