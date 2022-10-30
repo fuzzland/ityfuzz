@@ -1,23 +1,23 @@
 extern crate core;
 
-mod abi;
-mod concolic;
-mod contract_utils;
-mod corpus;
-mod evm;
-mod executor;
-mod feedback;
-mod fuzzer;
-mod fuzzers;
-mod infant_state_stage;
-mod input;
-mod mutation_utils;
-mod mutator;
-mod oracle;
-mod rand;
-mod state;
-mod state_input;
-mod types;
+pub mod abi;
+pub mod concolic;
+pub mod contract_utils;
+pub mod corpus;
+pub mod evm;
+pub mod executor;
+pub mod feedback;
+pub mod fuzzer;
+pub mod fuzzers;
+pub mod infant_state_stage;
+pub mod input;
+pub mod mutation_utils;
+pub mod mutator;
+pub mod oracle;
+pub mod rand;
+pub mod state;
+pub mod state_input;
+pub mod types;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
@@ -34,12 +34,3 @@ use libafl::inputs::Input;
 use serde::{Deserialize, Serialize};
 
 use crate::evm::{EVMExecutor, VMState};
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use revm::AccountInfo;
-
-    #[test]
-    fn it_works() {}
-}

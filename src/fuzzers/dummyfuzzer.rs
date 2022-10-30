@@ -32,10 +32,10 @@ use std::{
     path::PathBuf,
 };
 
-use crate::contract_utils::ContractLoader;
+use crate::contract_utils::{ContractLoader, set_hash};
 use crate::feedback::OracleFeedback;
 use crate::infant_state_stage::InfantStateStage;
-use crate::oracle::{IERC20Oracle, NoOracle};
+use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
 use crate::rand::generate_random_address;
 use crate::state::FuzzState;
 use nix::unistd::dup;
@@ -129,26 +129,18 @@ pub fn dummyfuzzer(
         .expect("Failed to init state");
 
     // now evm executor is ready, we can clone it
-    let objective = OracleFeedback::new(NoOracle {}, executor.evm_executor.clone());
+    let harness_code = "oracle_harness()";
+    let mut harness_hash: [u8; 4] = [0; 4];
+    set_hash(harness_code, &mut harness_hash);
+    println!("{:?}", harness_hash);
+    let objective = OracleFeedback::new(FunctionHarnessOracle::new_no_condition(
+        H160::zero(),
+        Vec::from(harness_hash)
+    ), executor.evm_executor.clone());
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 
     fuzzer
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
         .expect("Fuzzing failed");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dummy_fuzzer() {
-        dummyfuzzer(
-            PathBuf::from("./tmp/corpus"),
-            PathBuf::from("./tmp/objective"),
-            PathBuf::from("./tmp/log"),
-            &String::from("./demo/*"),
-        );
-    }
 }

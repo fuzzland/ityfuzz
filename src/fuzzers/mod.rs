@@ -1,1 +1,1 @@
-mod dummyfuzzer;
+pub mod dummyfuzzer;
