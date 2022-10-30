@@ -130,12 +130,15 @@ impl Host for FuzzHost {
         index: U256,
         value: U256,
     ) -> Option<(U256, U256, U256, bool)> {
-        // unsafe {
-        //     // println!("sstore");
-        // }
         match self.data.get_mut(&address) {
-            Some(account) => account.insert(index, value),
-            None => None,
+            Some(account) => {
+                account.insert(index, value);
+            },
+            None => {
+                let mut account = HashMap::new();
+                account.insert(index, value);
+                self.data.insert(address, account);
+            },
         };
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }

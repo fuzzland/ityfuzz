@@ -59,7 +59,7 @@ impl ContractLoader {
                 let mut abi_config = ABIConfig {
                     abi: format!("({})", abi_name.join(",")),
                     function: [0; 4],
-                    is_static: abi["stateMutability"].as_str().unwrap() != "view",
+                    is_static: abi["stateMutability"].as_str().unwrap() == "view",
                 };
                 let function_to_hash= format!("{}({})",
                                  name,
@@ -147,8 +147,6 @@ mod tests {
     #[test]
     fn test_load() {
         let loader = ContractLoader::from_glob("demo/*");
-        println!("{:?}", loader.contracts[0].abi.iter().map(
-            |x| {hex::encode(x.function)}
-        ).collect::<String>());
+        println!("{:?}", loader.contracts[0]);
     }
 }

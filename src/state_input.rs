@@ -22,9 +22,9 @@ impl StagedVMState {
 
     pub fn new_with_state(state: VMState) -> Self {
         Self {
-            state: VMState::new(),
+            state,
             stage: 0,
-            initialized: false,
+            initialized: true,
         }
     }
 
