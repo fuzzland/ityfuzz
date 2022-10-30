@@ -73,7 +73,7 @@ where
         manager: &mut EM,
     ) -> Result<usize, libafl::Error> {
         let idx = self.scheduler.next(state)?;
-        stages.perform_all(self, executor, state, manager, idx)?;
+        stages.perform_all(self, executor, state, manager, idx).expect("perform_all failed");
         manager.process(self, state, executor)?;
         Ok(idx)
     }

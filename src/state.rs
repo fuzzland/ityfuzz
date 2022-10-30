@@ -26,6 +26,7 @@ use revm::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
+use std::time::Duration;
 
 const ACCOUNT_AMT: u8 = 10;
 
@@ -86,16 +87,24 @@ impl FuzzState {
         &mut self,
         contracts: Vec<ContractInfo>,
         executor: &mut EVMExecutor<I, S>,
-    ) {
+        scheduler: &dyn Scheduler<I, FuzzState>,
+        infant_scheduler: &dyn Scheduler<I, FuzzState>,
+    )
+        where I: Input
+    {
         self.setup_default_callers(ACCOUNT_AMT as usize);
-        self.initialize_corpus(contracts, executor);
+        self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
     }
 
     pub fn initialize_corpus<I, S>(
         &mut self,
         contracts: Vec<ContractInfo>,
         executor: &mut EVMExecutor<I, S>,
-    ) {
+        scheduler: &dyn Scheduler<I, FuzzState>,
+        infant_scheduler: &dyn Scheduler<I, FuzzState>,
+    )
+    where I: Input
+    {
         for contract in contracts {
             let deployed_address = executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
@@ -108,13 +117,22 @@ impl FuzzState {
                     caller: self.get_rand_caller(),
                     contract: deployed_address,
                     data: abi_instance,
-                    sstate: StagedVMState::new(executor.host.data.clone(), 0),
+                    sstate: StagedVMState::new_uninitialized(),
                 };
-                self.txn_corpus
-                    .add(Testcase::new(input))
+                let mut tc = Testcase::new(input);
+                tc.set_exec_time(Duration::from_secs(0));
+                let idx = self.txn_corpus
+                    .add(tc)
                     .expect("failed to add");
+                scheduler.on_add(self, idx).expect("failed to call scheduler on_add");
             }
         }
+        let mut tc = Testcase::new(
+            StagedVMState::new(executor.host.data.clone(), 0),
+        );
+        tc.set_exec_time(Duration::from_secs(0));
+        let idx = self.infant_states_state.corpus_mut().add(tc).expect("failed to add");
+        infant_scheduler.on_add(self, idx).expect("failed to call infant scheduler on_add");
     }
 
     pub fn setup_default_callers(&mut self, amount: usize) {
@@ -191,7 +209,6 @@ impl HasItyState for FuzzState {
             .corpus_mut()
             .add(Testcase::new(state.clone()))
             .expect("Failed to add new infant state");
-        // FIXME: This mixes the corpus and infant state
         scheduler
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
