@@ -124,6 +124,7 @@ pub fn dummyfuzzer(
         &mut scheduler,
         &infant_scheduler,
     );
+    executor.evm_executor.host.initalize(&mut state);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");

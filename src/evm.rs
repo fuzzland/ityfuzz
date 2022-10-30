@@ -9,7 +9,7 @@ use bytes::Bytes;
 use libafl::prelude::ObserversTuple;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
-use revm::Return::Continue;
+use revm::Return::{Continue, Revert};
 use revm::{
     Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return,
     SelfDestructResult, Spec,
@@ -22,12 +22,14 @@ pub type VMState = HashMap<H160, HashMap<U256, U256>>;
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 pub use jmp_map as JMP_MAP;
+use crate::state::{FuzzState, HasHashToAddress};
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
     env: Env,
     pub data: VMState,
     code: HashMap<H160, Bytecode>,
+    hash_to_address: HashMap<[u8; 4], H160>,
 }
 
 impl FuzzHost {
@@ -36,13 +38,21 @@ impl FuzzHost {
             env: Env::default(),
             data: VMState::new(),
             code: HashMap::new(),
+            hash_to_address: HashMap::new(),
         }
+    }
+
+    pub fn initalize<S>(&mut self, state: &S)
+    where S: HasHashToAddress{
+        self.hash_to_address = state.get_hash_to_address().clone();
     }
 
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
         self.code.insert(address, code.to_analysed::<LatestSpec>());
     }
 }
+
+const ACTIVE_MATCH_EXT_CALL: bool = true;
 
 impl Host for FuzzHost {
     const INSPECT: bool = true;
@@ -76,13 +86,9 @@ impl Host for FuzzHost {
     }
 
     fn load_account(&mut self, address: H160) -> Option<(bool, bool)> {
-        // todo: exist second param
-        unsafe {
-            println!("load account {}", address);
-        }
         Some((
             true,
-            self.data.contains_key(&address) || self.code.contains_key(&address),
+            true // self.data.contains_key(&address) || self.code.contains_key(&address),
         ))
     }
 
@@ -165,9 +171,29 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
-        unsafe {
-            println!("call");
+        if ACTIVE_MATCH_EXT_CALL == true {
+            let contract_loc = self.hash_to_address.get(input.input.slice(0..4).to_vec().as_slice()).unwrap();
+            let mut interp = Interpreter::new::<LatestSpec>(
+                Contract::new_with_context::<LatestSpec>(input.input.clone(), self.code.get(contract_loc).unwrap().clone(), &input.context),
+                1e10 as u64);
+            let ret = interp.run::<FuzzHost, LatestSpec>(self);
+            return (ret, Gas::new(0), interp.return_value());
         }
+
+        // default behavior
+        match self.code.get(&input.contract) {
+            Some(code) => {
+                let mut interp = Interpreter::new::<LatestSpec>(
+                    Contract::new_with_context::<LatestSpec>(input.input.clone(), code.clone(), &input.context),
+                    1e10 as u64);
+                let ret = interp.run::<FuzzHost, LatestSpec>(self);
+                return (ret, Gas::new(0), interp.return_value());
+            }
+            None => {
+                return (Revert, Gas::new(0), Bytes::new());
+            }
+        }
+
         return (Continue, Gas::new(0), Bytes::new());
     }
 }
