@@ -1,8 +1,8 @@
 use std::path::PathBuf;
-use ityfuzz::fuzzers::dummyfuzzer;
+use ityfuzz::fuzzers::basic_fuzzer;
 
 fn main() {
-    dummyfuzzer::dummyfuzzer(
+    basic_fuzzer::dummyfuzzer(
         PathBuf::from("./tmp/corpus"),
         PathBuf::from("./tmp/objective"),
         PathBuf::from("./tmp/log"),
