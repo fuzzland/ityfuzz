@@ -111,6 +111,9 @@ impl FuzzState {
                 Bytes::from(contract.constructor_args),
             );
             for abi in contract.abi {
+                if abi.is_static {
+                    continue;
+                }
                 let mut abi_instance = get_abi_type_boxed(&abi.abi);
                 abi_instance.set_func(abi.function);
                 let mut input = VMInput {
