@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -23,7 +23,7 @@ pub struct VMState {
     state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // For next execution, this needs to be
-    pub post_execution: Option<usize>
+    pub post_execution: Option<(Vec<U256>, usize)>
 }
 
 impl VMState {
@@ -53,11 +53,13 @@ pub use jmp_map as JMP_MAP;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
-    env: Env,
     pub data: VMState,
+    // these are internal to the host
+    env: Env,
     code: HashMap<H160, Bytecode>,
     hash_to_address: HashMap<[u8; 4], H160>,
     _pc: usize,
+    pc_to_addresses: HashMap<usize, HashSet<H160>>,
 }
 
 // hack: I don't want to change evm internal to add a new type of return
@@ -66,15 +68,18 @@ const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = true;
 const CONTROL_LEAK_DETECTION: bool = true;
 
+// if a PC transfers control to >10 addresses, we consider call at this PC to be unbounded
+const CONTROL_LEAK_THRESHOLD: usize = 10;
 
 impl FuzzHost {
     pub fn new() -> Self {
         Self {
-            env: Env::default(),
             data: VMState::new(),
+            env: Env::default(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
             _pc: 0,
+            pc_to_addresses: HashMap::new(),
         }
     }
 
@@ -210,6 +215,17 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+        if CONTROL_LEAK_DETECTION {
+            assert!(self._pc != 0);
+            if !self.pc_to_addresses.contains_key(&self._pc) {
+                self.pc_to_addresses.insert(self._pc, HashSet::new());
+            }
+            if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
+                return (ControlLeak, Gas::new(0), Bytes::new());
+            }
+            self.pc_to_addresses.get_mut(&self._pc).unwrap().insert(input.contract);
+        }
+
         if ACTIVE_MATCH_EXT_CALL == true {
             let contract_loc = self
                 .hash_to_address
@@ -225,10 +241,6 @@ impl Host for FuzzHost {
             );
             let ret = interp.run::<FuzzHost, LatestSpec>(self);
             return (ret, Gas::new(0), interp.return_value());
-        }
-
-        if CONTROL_LEAK_DETECTION {
-            return (ControlLeak, Gas::new(0), interp.return_value());
         }
 
         // default behavior
@@ -333,7 +345,8 @@ impl<I, S> EVMExecutor<I, S> {
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         match r {
             ControlLeak => {
-                self.host.data.post_execution = Some(interp.program_counter());
+                self.host.data.post_execution = Some((
+                    interp.stack.data().clone(), interp.program_counter()));
             }
             _ => {}
         }
