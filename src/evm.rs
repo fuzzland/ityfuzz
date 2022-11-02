@@ -23,14 +23,14 @@ pub struct VMState {
     state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // For next execution, this needs to be
-    pub post_execution: Option<(Vec<U256>, usize)>
+    pub post_execution: Vec<(Vec<U256>, usize)>
 }
 
 impl VMState {
     pub(crate) fn new() -> Self {
         Self {
             state: HashMap::new(),
-            post_execution: None,
+            post_execution: vec![],
         }
     }
 
@@ -280,6 +280,15 @@ pub struct ExecutionResult {
     pub new_state: StagedVMState,
 }
 
+#[derive(Clone, Debug)]
+pub struct IntermediateExecutionResult {
+    pub output: Bytes,
+    pub new_state: VMState,
+    pub pc: usize,
+    pub ret: Return,
+    pub stack: Vec<U256>,
+}
+
 impl ExecutionResult {
     pub fn empty_result() -> Self {
         Self {
@@ -290,13 +299,57 @@ impl ExecutionResult {
     }
 }
 
-impl<I, S> EVMExecutor<I, S> {
+impl<I, S> EVMExecutor<I, S>
+where I: VMInputT {
     pub fn new(FuzzHost: FuzzHost, deployer: H160) -> Self {
         Self {
             host: FuzzHost,
             deployer,
             phandom: PhantomData,
         }
+    }
+
+    pub fn finish_execution(&mut self, result: &ExecutionResult, input: &I) -> ExecutionResult {
+        let mut new_state = result.new_state.state.clone();
+        let mut last_output = result.output.clone();
+        for post_exec in result.new_state.state.post_execution.clone() {
+            let mut recovering_stack = post_exec.0;
+            // we need push the output of CALL instruction
+            recovering_stack.push(U256::from(1));
+            let r = self.execute_from_pc(
+                input.get_contract(),
+                input.get_caller(),
+                &new_state,
+                input.to_bytes(),
+                // todo(@shou !important) do we need to increase pc?
+                Some((recovering_stack, post_exec.1 + 1)),
+            );
+            last_output = r.output;
+            if r.ret == Return::Return {
+                continue;
+            }
+            // todo(@shou) what if control leak inside the call?
+            if r.ret != Return::Return || r.ret != Return::Stop {
+                return ExecutionResult {
+                    output: last_output,
+                    reverted: true,
+                    new_state: StagedVMState {
+                        state: new_state,
+                        stage: result.new_state.stage,
+                        initialized: result.new_state.initialized,
+                    },
+                };
+            }
+        }
+        return ExecutionResult {
+            output: last_output,
+            reverted: false,
+            new_state: StagedVMState {
+                state: new_state,
+                stage: result.new_state.stage,
+                initialized: result.new_state.initialized,
+            },
+        };
     }
 
     pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> H160 {
@@ -329,6 +382,29 @@ impl<I, S> EVMExecutor<I, S> {
     where
         OT: ObserversTuple<I, S>,
     {
+        let r = self.execute_from_pc(contract_address, caller, state, data, None);
+        match r.ret {
+            ControlLeak => {
+                self.host.data.post_execution.push((r.stack, r.pc));
+            }
+            _ => {}
+        }
+        return ExecutionResult {
+            output: r.output,
+            reverted: r.ret != Return::Return,
+            new_state: StagedVMState::new_with_state(r.new_state),
+        };
+    }
+
+    pub fn execute_from_pc(
+        &mut self,
+        contract_address: H160,
+        caller: H160,
+        state: &VMState,
+        data: Bytes,
+        post_exec: Option<(Vec<U256>, usize)>,
+    ) -> IntermediateExecutionResult
+    {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
             data,
@@ -341,19 +417,32 @@ impl<I, S> EVMExecutor<I, S> {
             caller,
             U256::from(0),
         );
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
-        match r {
-            ControlLeak => {
-                self.host.data.post_execution = Some((
-                    interp.stack.data().clone(), interp.program_counter()));
+        let mut new_bytecode: Option<*const u8> = None;
+        let mut new_pc: Option<usize> = None;
+        let mut new_stack: Option<Vec<U256>> = None;
+        if post_exec.is_some() {
+            unsafe {
+                new_pc = Some(post_exec.as_ref().unwrap().1);
+                new_bytecode = Some(call.bytecode.as_ptr().add(new_pc.unwrap()));
+                new_stack = Some(post_exec.unwrap().0);
             }
-            _ => {}
         }
-        return ExecutionResult {
+        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+        if new_stack.is_some() {
+            unsafe {
+                for v in new_stack.unwrap() {
+                    interp.stack.push(v);
+                }
+                interp.instruction_pointer = new_bytecode.unwrap();
+            }
+        }
+        let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        IntermediateExecutionResult {
             output: interp.return_value(),
-            reverted: r != Return::Return,
-            new_state: StagedVMState::new_with_state(self.host.data.clone()),
-        };
+            new_state: self.host.data.clone(),
+            pc: interp.program_counter(),
+            ret: r,
+            stack: interp.stack.data().clone(),
+        }
     }
 }

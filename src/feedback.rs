@@ -89,9 +89,13 @@ where
         if state.get_execution_result().reverted {
             return Ok(false);
         }
+        // finish executing pre state and post state
+        let post_execution = self.executor.finish_execution(state.get_execution_result(), input);
+
         let mut oracle_ctx = OracleCtx::new(
+            // todo(@shou): we should get a previous state, not incomplete state!
             input.get_state(),
-            &state.get_execution_result().new_state.state,
+            &post_execution.new_state.state,
             &mut self.executor,
             input,
         );
