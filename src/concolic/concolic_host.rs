@@ -281,6 +281,29 @@ impl<'a> Solving<'a> {
     }
 }
 
+// Note: To model concolic memory, we need to remember previous constraints as well.
+// when solving a constraint involving persistant memory, if the persistant memory is not
+// depenent on other non-persitent variables, this means that the persistant memory change
+// might not be feasible, because the persistant memory cannot change it self.
+// Example:
+//     // in this case, even if we get the constraints for the memory element m[0]
+//     // we cannot solve it (invert it), because the memory element is cannot change
+//     // it self.
+//     m = [0, 0, 0, 0]
+//     fn f(a):
+//         if m[0] == 0:
+//             do something
+//         else:
+//             bug
+//     // in this case, we can actually solve for m[0]!=0, becuase the memeory element
+//     // is dependent on the input a.
+//     fn g(a):
+//         m[0] = a
+//         if m[0] == 0:
+//             do something
+//         else:
+//             bug
+
 pub struct ConcolicHost {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
@@ -679,18 +702,10 @@ impl ConcolicHost {
             // PUSH
             0x60..=0x7f => {
                 // push n bytes into stack
-                let n = (*interp.instruction_pointer) - 0x60 + 1;
-                let mut data = vec![];
-                for i in 0..n {
-                    data.push(
-                        interp.contract().bytecode.bytecode()
-                            [interp.program_counter() + i as usize + 1],
-                    );
-                }
-
-                vec![
-                    //todo!
-                ]
+                // Concolic push n bytes is equivalent to concrete push, because the bytes
+                // being pushed are always concrete, we can just push None to the stack
+                // and 'fallthrough' to concrete values later
+                vec![None]
             }
             // DUP
             0x80..=0x8f => {
