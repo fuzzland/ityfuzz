@@ -680,18 +680,10 @@ impl ConcolicHost {
             // PUSH
             0x60..=0x7f => {
                 // push n bytes into stack
-                let n = (*interp.instruction_pointer) - 0x60 + 1;
-                let mut data = vec![];
-                for i in 0..n {
-                    data.push(
-                        interp.contract().bytecode.bytecode()
-                            [interp.program_counter() + i as usize + 1],
-                    );
-                }
-
-                vec![
-                    //todo!
-                ]
+                // Concolic push n bytes is equivalent to concrete push, because the bytes
+                // being pushed are always concrete, we can just push None to the stack
+                // and 'fallthrough' to concrete values later
+                vec![None]
             }
             // DUP
             0x80..=0x8f => {
