@@ -15,7 +15,8 @@ use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
-// TODO: add hash table for stages
+const MAP_SIZE: usize = 2000;
+
 pub struct InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
@@ -23,6 +24,7 @@ where
 {
     oracle: &'a O,
     executor: EVMExecutor<I, S>,
+    map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S)>,
 }
 
@@ -57,6 +59,7 @@ where
         Self {
             oracle,
             executor,
+            map: [false; MAP_SIZE],
             phantom: PhantomData,
         }
     }
@@ -72,7 +75,6 @@ where
         todo!()
     }
 
-    // TODO: fix stage and pre_condition
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
@@ -85,13 +87,20 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        // finish executing pre state and post state
+        let post_execution = self
+            .executor
+            .finish_execution(state.get_execution_result(), input);
+
         // reverted states should be discarded as they are infeasible
-        if state.get_execution_result().reverted {
+        if post_execution.reverted {
             return Ok(false);
         }
+
         let mut oracle_ctx = OracleCtx::new(
+            // todo(@shou): we should get a previous state, not incomplete state!
             input.get_state(),
-            &state.get_execution_result().new_state.state,
+            &post_execution.new_state.state,
             &mut self.executor,
             input,
         );
@@ -102,6 +111,12 @@ where
                 .get_execution_result_mut()
                 .new_state
                 .update_stage(new_stage);
+        }
+
+        // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
+        let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAP_SIZE;
+        if !self.map[slot] {
+            self.map[slot] = true;
             return Ok(true);
         }
         return Ok(false);
