@@ -25,7 +25,7 @@ where
 {
     oracle: &'a O,
     executor: EVMExecutor<I, S>,
-    map: [u64; MAX_SIZE],
+    map: [bool; MAX_SIZE],
     phantom: PhantomData<(I, S)>,
 }
 
@@ -60,7 +60,7 @@ where
         Self {
             oracle,
             executor,
-            map: [0; MAX_SIZE],
+            map: [false; MAX_SIZE],
             phantom: PhantomData,
         }
     }
@@ -117,8 +117,8 @@ where
 
         // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
         let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAX_SIZE;
-        if self.map[slot] == 0 {
-            self.map[slot] = 1;
+        if !self.map[slot] {
+            self.map[slot] = true;
             return Ok(true);
         }
         return Ok(false);
