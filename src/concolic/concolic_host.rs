@@ -305,7 +305,6 @@ impl ConcolicHost {
     }
 
     pub unsafe fn on_step(&mut self, interp: &mut Interpreter) {
-
         macro_rules! stack_bv {
             ($idx:expr) => {{
                 let real_loc_sym = self.symbolic_stack.len() - 1 - $idx;
@@ -731,11 +730,21 @@ impl ConcolicHost {
         for cons in &self.constraints {
             let bv: BV = solving.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
-                ConcolicOp::GT => bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
-                ConcolicOp::SGT => bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
-                ConcolicOp::EQ => bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
-                ConcolicOp::LT => bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
-                ConcolicOp::SLT => bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                ConcolicOp::GT => {
+                    bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SGT => {
+                    bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::EQ => {
+                    bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::LT => {
+                    bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SLT => {
+                    bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
             });
         }

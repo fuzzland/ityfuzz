@@ -23,7 +23,7 @@ pub struct VMState {
     state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // For next execution, this needs to be
-    pub post_execution: Vec<(Vec<U256>, usize)>
+    pub post_execution: Vec<(Vec<U256>, usize)>,
 }
 
 impl VMState {
@@ -223,7 +223,10 @@ impl Host for FuzzHost {
             if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
-            self.pc_to_addresses.get_mut(&self._pc).unwrap().insert(input.contract);
+            self.pc_to_addresses
+                .get_mut(&self._pc)
+                .unwrap()
+                .insert(input.contract);
         }
 
         if ACTIVE_MATCH_EXT_CALL == true {
@@ -300,7 +303,9 @@ impl ExecutionResult {
 }
 
 impl<I, S> EVMExecutor<I, S>
-where I: VMInputT {
+where
+    I: VMInputT,
+{
     pub fn new(FuzzHost: FuzzHost, deployer: H160) -> Self {
         Self {
             host: FuzzHost,
@@ -403,8 +408,7 @@ where I: VMInputT {
         state: &VMState,
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
-    ) -> IntermediateExecutionResult
-    {
+    ) -> IntermediateExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
             data,

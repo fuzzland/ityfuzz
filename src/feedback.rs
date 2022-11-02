@@ -90,7 +90,9 @@ where
             return Ok(false);
         }
         // finish executing pre state and post state
-        let post_execution = self.executor.finish_execution(state.get_execution_result(), input);
+        let post_execution = self
+            .executor
+            .finish_execution(state.get_execution_result(), input);
 
         let mut oracle_ctx = OracleCtx::new(
             // todo(@shou): we should get a previous state, not incomplete state!
