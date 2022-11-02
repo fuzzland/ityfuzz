@@ -22,7 +22,7 @@ pub const MAP_SIZE: usize = 256;
 pub struct VMState {
     state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
-    // For next execution, this needs to be
+    // More than one when the control is leaked again with the call based on the incomplete state
     pub post_execution: Vec<(Vec<U256>, usize)>,
 }
 
@@ -318,6 +318,11 @@ where
         let mut new_state = result.new_state.state.clone();
         let mut last_output = result.output.clone();
         for post_exec in result.new_state.state.post_execution.clone() {
+            // there are two cases
+            // / 1. the post_exec finishes
+            // / 2. the post_exec leads to a new control leak (i.e., there are more than 1
+            //      control leak in this function)
+
             let mut recovering_stack = post_exec.0;
             // we need push the output of CALL instruction
             recovering_stack.push(U256::from(1));
@@ -333,7 +338,9 @@ where
             if r.ret == Return::Return {
                 continue;
             }
-            // todo(@shou) what if control leak inside the call?
+            if r.ret == ControlLeak {
+                panic!("more than one reentrancy in a function! not supported yet");
+            }
             if r.ret != Return::Return || r.ret != Return::Stop {
                 return ExecutionResult {
                     output: last_output,
