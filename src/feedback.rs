@@ -7,15 +7,15 @@ use libafl::prelude::{Executor, Feedback, Named};
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use std::fmt::{Debug, Formatter};
+use std::iter::Map;
 use std::marker::PhantomData;
 
-use crate::evm::{EVMExecutor, ExecutionResult};
+use crate::evm::{EVMExecutor, ExecutionResult, MAP_SIZE};
 use crate::executor::FuzzExecutor;
 use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
-const MAP_SIZE: usize = 2000;
 
 pub struct InfantFeedback<'a, I, S, O>
 where
@@ -228,12 +228,87 @@ where
     }
 }
 
-// // Resulting state should not change
-// fn oracle_same_state<I>(input: &I, result: &ExecutionResult) -> Result<bool, Error> where I: VMInputT {
-//     Ok(input.get_state().eq(&result.new_state))
-// }
+/// DataflowFeedback is a feedback that uses dataflow analysis to determine
+/// whether a state is interesting or not.
+/// Logic: Maintains read and write map, if a write map idx is true in the read map,
+/// and that item is greater than what we have, then the state is interesting.
 
-// // Resulting state should be different
-// fn oracle_diff_state<I>(input: &I, result: &ExecutionResult) -> Result<bool, Error> where I: VMInputT {
-//     Ok(!input.get_state().eq(&result.new_state))
-// }
+pub struct DataflowFeedback<'a>
+{
+    global_write_map: [u8; MAP_SIZE],
+    read_map: &'a mut [bool],
+    write_map: &'a mut [u8]
+}
+
+impl<'a> Debug for DataflowFeedback<'a>
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DataflowFeedback")
+            // .field("oracle", &self.oracle)
+            .finish()
+    }
+}
+
+impl<'a> Named for DataflowFeedback<'a>
+{
+    fn name(&self) -> &str {
+        "DataflowFeedback"
+    }
+}
+
+impl<'a> DataflowFeedback<'a>
+{
+    pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
+        Self {
+            global_write_map: [0; MAP_SIZE],
+            read_map,
+            write_map
+        }
+    }
+}
+
+impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
+    where
+        S: State + HasClientPerfMonitor + HasExecutionResult,
+        I: VMInputT,
+{
+    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn is_interesting<EMI, OT>(
+        &mut self,
+        state: &mut S,
+        manager: &mut EMI,
+        input: &I,
+        observers: &OT,
+        exit_kind: &ExitKind,
+    ) -> Result<bool, Error>
+        where
+            EMI: EventFirer<I>,
+            OT: ObserversTuple<I, S>,
+    {
+        for i in 0..MAP_SIZE {
+            if self.read_map[i] && (self.global_write_map[i] < self.write_map[i]) {
+                self.global_write_map[i] = self.write_map[i];
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+
+    fn append_metadata(
+        &mut self,
+        _state: &mut S,
+        _testcase: &mut Testcase<I>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+
+
