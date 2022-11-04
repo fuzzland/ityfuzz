@@ -3,7 +3,6 @@ extern crate core;
 pub mod abi;
 pub mod concolic;
 pub mod contract_utils;
-pub mod corpus;
 pub mod evm;
 pub mod executor;
 pub mod feedback;
