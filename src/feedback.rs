@@ -3,18 +3,20 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Executor, Feedback, HasCorpus, Named};
+use libafl::prelude::{Executor, Feedback, HasCorpus, HasMetadata, HasRand, Named};
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use primitive_types::U256;
 use std::fmt::{Debug, Formatter};
 use std::iter::Map;
 use std::marker::PhantomData;
+use libafl::schedulers::Scheduler;
 
 use crate::evm::{EVMExecutor, ExecutionResult, MAP_SIZE};
 use crate::executor::FuzzExecutor;
 use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
+use crate::scheduler::HasVote;
 use crate::state::{FuzzState, HasExecutionResult};
 
 pub struct InfantFeedback<'a, I, S, O>
@@ -312,40 +314,49 @@ where
 }
 
 #[cfg(feature = "cmp")]
-pub struct CmpFeedback<'a> {
+pub struct CmpFeedback<'a, SC, I, S> {
     min_map: [U256; MAP_SIZE],
     current_map: &'a mut [U256],
+    scheduler: &'a mut SC,
+    phantm: PhantomData<(I, S)>,
 }
 
 #[cfg(feature = "cmp")]
-impl<'a> CmpFeedback<'a> {
-    fn new(current_map: &'a mut [U256]) -> Self {
+impl<'a, SC, I, S> CmpFeedback<'a, SC, I, S>
+where
+    I: Input,
+    S: State + HasCorpus<I> + HasRand + HasMetadata,
+    SC: Scheduler<I, S> + HasVote<I, S> {
+    pub(crate) fn new(current_map: &'a mut [U256], scheduler: &'a mut SC) -> Self {
         Self {
             min_map: [U256::MAX; MAP_SIZE],
             current_map,
+            scheduler,
+            phantm: Default::default()
         }
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a> Named for CmpFeedback<'a> {
+impl<'a, SC, I, S> Named for CmpFeedback<'a, SC, I, S> {
     fn name(&self) -> &str {
         "CmpFeedback"
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a> Debug for CmpFeedback<'a> {
+impl<'a, SC, I, S> Debug for CmpFeedback<'a, SC, I, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CmpFeedback").finish()
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, I, S> Feedback<I, S> for CmpFeedback<'a>
+impl<'a, I, S, SC> Feedback<I, S> for CmpFeedback<'a, SC, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult,
+    S: State + HasCorpus<I> + HasRand + HasMetadata + HasClientPerfMonitor,
     I: Input,
+    SC: Scheduler<I, S> + HasVote<I, S>,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
