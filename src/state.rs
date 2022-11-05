@@ -100,7 +100,7 @@ impl FuzzState {
         contracts: Vec<ContractInfo>,
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
-        infant_scheduler: &dyn Scheduler<I, FuzzState>,
+        infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
     ) where
         I: Input + VMInputT,
     {
@@ -113,7 +113,7 @@ impl FuzzState {
         contracts: Vec<ContractInfo>,
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
-        infant_scheduler: &dyn Scheduler<I, FuzzState>,
+        infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
     ) where
         I: Input + VMInputT,
     {
@@ -151,7 +151,7 @@ impl FuzzState {
             .add(tc)
             .expect("failed to add");
         infant_scheduler
-            .on_add(self, idx)
+            .on_add(&mut self.infant_states_state, idx)
             .expect("failed to call infant scheduler on_add");
     }
 
