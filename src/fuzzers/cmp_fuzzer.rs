@@ -53,12 +53,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn cmp_fuzzer(
-    corpus_dir: PathBuf,
-    objective_dir: PathBuf,
-    logfile: PathBuf,
-    contracts_glob: &String,
-) {
+pub fn cmp_fuzzer(contracts_glob: &String) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let mut infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
@@ -67,7 +62,6 @@ pub fn cmp_fuzzer(
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
-    // TODO: implement OracleFeedback
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let calibration = CalibrationStage::new(&feedback);
     let mut state = FuzzState::new();
@@ -78,13 +72,9 @@ pub fn cmp_fuzzer(
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
-
-    // TODO: Fill EVMExecutor with real data?
     let evm_executor: EVMExecutor<VMInput, FuzzState> =
         EVMExecutor::new(FuzzHost::new(), generate_random_address());
-
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
-
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
     state.initialize(
         contract_info,

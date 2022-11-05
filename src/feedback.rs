@@ -383,7 +383,8 @@ where
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
-        Ok(interesting)
+        // this should always be true because we cannot predict whether current state is interesting
+        Ok(true)
     }
 
     fn append_metadata(
