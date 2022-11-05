@@ -60,7 +60,10 @@ pub trait HasExecutionResult {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FuzzState {
     infant_states_state: InfantStateState,
+    #[cfg(not(feature = "evaluation"))]
     txn_corpus: InMemoryCorpus<VMInput>,
+    #[cfg(feature = "evaluation")]
+    txn_corpus: OnDiskCorpus<VMInput>,
     solutions: OnDiskCorpus<VMInput>,
     executions: usize,
     metadata: SerdeAnyMap,
@@ -76,7 +79,10 @@ impl FuzzState {
     pub fn new() -> Self {
         Self {
             infant_states_state: InfantStateState::new(),
+            #[cfg(not(feature = "evaluation"))]
             txn_corpus: InMemoryCorpus::new(),
+            #[cfg(feature = "evaluation")]
+            txn_corpus: OnDiskCorpus::new(Path::new("corpus")).unwrap(),
             solutions: OnDiskCorpus::new(Path::new("solutions")).unwrap(),
             executions: 0,
             metadata: Default::default(),
@@ -288,13 +294,16 @@ impl HasMetadata for FuzzState {
 }
 
 impl HasCorpus<VMInput> for FuzzState {
+    #[cfg(not(feature = "evaluation"))]
     type Corpus = InMemoryCorpus<VMInput>;
+    #[cfg(feature = "evaluation")]
+    type Corpus = OnDiskCorpus<VMInput>;
 
-    fn corpus(&self) -> &InMemoryCorpus<VMInput> {
+    fn corpus(&self) -> &Self::Corpus {
         &self.txn_corpus
     }
 
-    fn corpus_mut(&mut self) -> &mut InMemoryCorpus<VMInput> {
+    fn corpus_mut(&mut self) -> &mut Self::Corpus {
         &mut self.txn_corpus
     }
 }
