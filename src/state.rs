@@ -134,7 +134,7 @@ impl FuzzState {
                     contract: deployed_address,
                     data: abi_instance,
                     sstate: StagedVMState::new_uninitialized(),
-                    sstate_idx: 0
+                    sstate_idx: 0,
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -176,7 +176,7 @@ impl InfantStateState {
         Self {
             infant_state: InMemoryCorpus::new(),
             metadata: SerdeAnyMap::new(),
-            rand_generator: Default::default()
+            rand_generator: Default::default(),
         }
     }
 }

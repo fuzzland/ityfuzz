@@ -4,13 +4,13 @@ use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
 use libafl::prelude::{Executor, Feedback, HasCorpus, HasMetadata, HasRand, Named};
+use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use primitive_types::U256;
 use std::fmt::{Debug, Formatter};
 use std::iter::Map;
 use std::marker::PhantomData;
-use libafl::schedulers::Scheduler;
 
 use crate::evm::{EVMExecutor, ExecutionResult, MAP_SIZE};
 use crate::executor::FuzzExecutor;
@@ -324,7 +324,8 @@ pub struct CmpFeedback<'a, SC> {
 #[cfg(feature = "cmp")]
 impl<'a, SC> CmpFeedback<'a, SC>
 where
-    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState> {
+    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState>,
+{
     pub(crate) fn new(current_map: &'a mut [U256], scheduler: &'a SC) -> Self {
         Self {
             min_map: [U256::MAX; MAP_SIZE],
@@ -379,7 +380,8 @@ where
             }
         }
         if interesting {
-            self.scheduler.vote(state.get_infant_state_state(), input.get_state_idx());
+            self.scheduler
+                .vote(state.get_infant_state_state(), input.get_state_idx());
         }
         Ok(interesting)
     }

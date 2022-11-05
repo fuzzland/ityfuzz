@@ -32,16 +32,16 @@ use std::{
 };
 
 use crate::contract_utils::{set_hash, ContractLoader};
+use crate::evm::CMP_MAP;
 use crate::feedback::{CmpFeedback, InfantFeedback, OracleFeedback};
 use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
 use crate::rand::generate_random_address;
+use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
+use crate::state_input::StagedVMState;
 use nix::unistd::dup;
 use primitive_types::H160;
 use revm::EVM;
-use crate::evm::CMP_MAP;
-use crate::scheduler::SortedDroppingScheduler;
-use crate::state_input::StagedVMState;
 
 struct ABIConfig {
     abi: String,
@@ -61,7 +61,8 @@ pub fn cmp_fuzzer(
 ) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let mut infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> = SortedDroppingScheduler::new();
+    let mut infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
+        SortedDroppingScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
