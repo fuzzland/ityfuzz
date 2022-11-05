@@ -231,13 +231,14 @@ where
 /// whether a state is interesting or not.
 /// Logic: Maintains read and write map, if a write map idx is true in the read map,
 /// and that item is greater than what we have, then the state is interesting.
-
+#[cfg(feature = "dataflow")]
 pub struct DataflowFeedback<'a> {
     global_write_map: [u8; MAP_SIZE],
     read_map: &'a mut [bool],
     write_map: &'a mut [u8],
 }
 
+#[cfg(feature = "dataflow")]
 impl<'a> Debug for DataflowFeedback<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataflowFeedback")
@@ -246,12 +247,14 @@ impl<'a> Debug for DataflowFeedback<'a> {
     }
 }
 
+#[cfg(feature = "dataflow")]
 impl<'a> Named for DataflowFeedback<'a> {
     fn name(&self) -> &str {
         "DataflowFeedback"
     }
 }
 
+#[cfg(feature = "dataflow")]
 impl<'a> DataflowFeedback<'a> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
@@ -262,6 +265,7 @@ impl<'a> DataflowFeedback<'a> {
     }
 }
 
+#[cfg(feature = "dataflow")]
 impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult,

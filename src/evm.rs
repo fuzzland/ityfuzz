@@ -141,6 +141,7 @@ impl Host for FuzzHost {
                     }
                 }
 
+                #[cfg(feature = "dataflow")]
                 0x55 => {
                     // SSTORE
                     let mut key = interp.stack.peek(0).expect("stack underflow");
@@ -148,6 +149,7 @@ impl Host for FuzzHost {
                     WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
                 }
 
+                #[cfg(feature = "dataflow")]
                 0x54 => {
                     // SLOAD
                     let mut key = interp.stack.peek(0).expect("stack underflow");
