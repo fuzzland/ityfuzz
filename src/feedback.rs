@@ -17,7 +17,8 @@ use crate::executor::FuzzExecutor;
 use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::scheduler::HasVote;
-use crate::state::{FuzzState, HasExecutionResult};
+use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState, InfantStateState};
+use crate::state_input::StagedVMState;
 
 pub struct InfantFeedback<'a, I, S, O>
 where
@@ -314,65 +315,61 @@ where
 }
 
 #[cfg(feature = "cmp")]
-pub struct CmpFeedback<'a, SC, I, S> {
+pub struct CmpFeedback<'a, SC> {
     min_map: [U256; MAP_SIZE],
     current_map: &'a mut [U256],
-    scheduler: &'a mut SC,
-    phantm: PhantomData<(I, S)>,
+    scheduler: &'a SC,
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC, I, S> CmpFeedback<'a, SC, I, S>
+impl<'a, SC> CmpFeedback<'a, SC>
 where
-    I: Input,
-    S: State + HasCorpus<I> + HasRand + HasMetadata,
-    SC: Scheduler<I, S> + HasVote<I, S> {
-    pub(crate) fn new(current_map: &'a mut [U256], scheduler: &'a mut SC) -> Self {
+    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState> {
+    pub(crate) fn new(current_map: &'a mut [U256], scheduler: &'a SC) -> Self {
         Self {
             min_map: [U256::MAX; MAP_SIZE],
             current_map,
             scheduler,
-            phantm: Default::default()
         }
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC, I, S> Named for CmpFeedback<'a, SC, I, S> {
+impl<'a, SC> Named for CmpFeedback<'a, SC> {
     fn name(&self) -> &str {
         "CmpFeedback"
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC, I, S> Debug for CmpFeedback<'a, SC, I, S> {
+impl<'a, SC> Debug for CmpFeedback<'a, SC> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CmpFeedback").finish()
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, I, S, SC> Feedback<I, S> for CmpFeedback<'a, SC, I, S>
+impl<'a, I0, S0, SC> Feedback<I0, S0> for CmpFeedback<'a, SC>
 where
-    S: State + HasCorpus<I> + HasRand + HasMetadata + HasClientPerfMonitor,
-    I: Input,
-    SC: Scheduler<I, S> + HasVote<I, S>,
+    S0: State + HasClientPerfMonitor + HasInfantStateState,
+    I0: Input + VMInputT,
+    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState>,
 {
-    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
+    fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())
     }
 
     fn is_interesting<EMI, OT>(
         &mut self,
-        state: &mut S,
+        state: &mut S0,
         manager: &mut EMI,
-        input: &I,
+        input: &I0,
         observers: &OT,
         exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EMI: EventFirer<I>,
-        OT: ObserversTuple<I, S>,
+        EMI: EventFirer<I0>,
+        OT: ObserversTuple<I0, S0>,
     {
         let mut interesting = false;
         for i in 0..MAP_SIZE {
@@ -381,18 +378,21 @@ where
                 interesting = true;
             }
         }
+        if interesting {
+            self.scheduler.vote(state.get_infant_state_state(), input.get_state_idx());
+        }
         Ok(interesting)
     }
 
     fn append_metadata(
         &mut self,
-        _state: &mut S,
-        _testcase: &mut Testcase<I>,
+        _state: &mut S0,
+        _testcase: &mut Testcase<I0>,
     ) -> Result<(), Error> {
         Ok(())
     }
 
-    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
+    fn discard_metadata(&mut self, _state: &mut S0, _input: &I0) -> Result<(), Error> {
         Ok(())
     }
 }

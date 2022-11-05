@@ -45,8 +45,8 @@ where
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
         if !input.get_staged_state().initialized {
-            let concrete = state.get_infant_state(self.infant_scheduler).unwrap().1;
-            input.set_staged_state(concrete);
+            let concrete = state.get_infant_state(self.infant_scheduler).unwrap();
+            input.set_staged_state(concrete.1, concrete.0);
         }
         match state.rand_mut().below(10) {
             0 => {
@@ -60,8 +60,8 @@ where
             1 => {
                 // cross over infant state
                 // we need power schedule here for infant states
-                let mutant = state.get_infant_state(self.infant_scheduler).unwrap().1;
-                input.set_staged_state(mutant);
+                let mutant = state.get_infant_state(self.infant_scheduler).unwrap();
+                input.set_staged_state(mutant.1, mutant.0);
             }
             _ => {
                 input.mutate(state);
