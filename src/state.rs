@@ -1,6 +1,7 @@
 use crate::abi::get_abi_type_boxed;
 use crate::contract_utils::ContractInfo;
 use crate::evm::{ExecutionResult, VMState};
+use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{VMInput, VMInputT};
 use crate::rand::generate_random_address;
 use crate::state_input::StagedVMState;
@@ -27,7 +28,6 @@ use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
 use std::time::Duration;
-use crate::indexed_corpus::IndexedInMemoryCorpus;
 
 const ACCOUNT_AMT: u8 = 10;
 
