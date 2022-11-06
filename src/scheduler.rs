@@ -106,26 +106,18 @@ where
         if corpus_size == 0 {
             Err(Error::empty("No entries in corpus".to_owned()))
         } else {
-            // todo(shou): O(n) prob sampling - let's treat it as sorting :)
-            // let mut k: usize = 0;
-            // randomly get one key from votes_and_visits
-            // let keys = data.votes_and_visits.keys().collect::<Vec<_>>();
-            // let mut k: usize = state.rand_mut().below(keys.len() as u64) as usize;
-            let mut final_idx: usize = data.votes_and_visits.keys().last().unwrap().clone();
+            // get idx from votes_and_visits with lowest visits using a linear search
+            let mut min_visits = std::usize::MAX;
+            let mut min_idx = 0;
             for (idx, (_, visits)) in data.votes_and_visits.iter() {
-                // k += *visits;
-                // if k as f64 > threshold {
-                //     final_idx = *idx;
-                //     break;
-                // }
-                if *visits < 2 {
-                    final_idx = *idx;
-                    break;
+                if *visits < min_visits {
+                    min_visits = *visits;
+                    min_idx = *idx;
                 }
             }
-            data.votes_and_visits.get_mut(&final_idx).unwrap().1 += 1;
+            data.votes_and_visits.get_mut(&min_idx).unwrap().1 += 1;
             data.visits_total += 1;
-            Ok(final_idx)
+            Ok(min_idx)
         }
     }
 }
