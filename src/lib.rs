@@ -17,6 +17,7 @@ pub mod scheduler;
 pub mod state;
 pub mod state_input;
 pub mod types;
+pub mod indexed_corpus;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;

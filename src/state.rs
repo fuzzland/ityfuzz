@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
 use std::time::Duration;
+use crate::indexed_corpus::IndexedInMemoryCorpus;
 
 const ACCOUNT_AMT: u8 = 10;
 
@@ -166,7 +167,7 @@ impl FuzzState {
 // shou: To use power schedule, we need to make it as a state lol, i'll submit a pr to libafl
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InfantStateState {
-    pub infant_state: InMemoryCorpus<StagedVMState>,
+    pub infant_state: IndexedInMemoryCorpus<StagedVMState>,
     metadata: SerdeAnyMap,
     pub rand_generator: StdRand,
 }
@@ -174,7 +175,7 @@ pub struct InfantStateState {
 impl InfantStateState {
     pub fn new() -> Self {
         Self {
-            infant_state: InMemoryCorpus::new(),
+            infant_state: IndexedInMemoryCorpus::new(),
             metadata: SerdeAnyMap::new(),
             rand_generator: Default::default(),
         }
@@ -190,13 +191,13 @@ impl HasHashToAddress for FuzzState {
 impl State for InfantStateState {}
 
 impl HasCorpus<StagedVMState> for InfantStateState {
-    type Corpus = InMemoryCorpus<StagedVMState>;
+    type Corpus = IndexedInMemoryCorpus<StagedVMState>;
 
-    fn corpus(&self) -> &InMemoryCorpus<StagedVMState> {
+    fn corpus(&self) -> &IndexedInMemoryCorpus<StagedVMState> {
         &self.infant_state
     }
 
-    fn corpus_mut(&mut self) -> &mut InMemoryCorpus<StagedVMState> {
+    fn corpus_mut(&mut self) -> &mut IndexedInMemoryCorpus<StagedVMState> {
         &mut self.infant_state
     }
 }
