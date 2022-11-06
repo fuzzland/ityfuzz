@@ -120,7 +120,7 @@ pub fn basic_fuzzer(
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        false
+        false,
     );
     executor.evm_executor.host.initalize(&mut state);
     feedback

@@ -312,9 +312,7 @@ impl Host for FuzzHost {
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
-        let contract_loc_option = self
-            .hash_to_address
-            .get(hash.as_slice());
+        let contract_loc_option = self.hash_to_address.get(hash.as_slice());
 
         if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
             assert!(self._pc != 0);
@@ -516,7 +514,15 @@ where
         #[cfg(feature = "record_instruction_coverage")]
         {
             if random::<i32>() % 1000 == 0 {
-                println!("coverage: {} out of {:?}", self.host.pc_coverage.len(), self.host.code.iter().map(|x| EVMExecutor::<I, S>::count_instructions(x.1)).collect::<Vec<usize>>());
+                println!(
+                    "coverage: {} out of {:?}",
+                    self.host.pc_coverage.len(),
+                    self.host
+                        .code
+                        .iter()
+                        .map(|x| EVMExecutor::<I, S>::count_instructions(x.1))
+                        .collect::<Vec<usize>>()
+                );
             }
         }
         return ExecutionResult {
