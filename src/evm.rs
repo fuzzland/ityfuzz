@@ -26,6 +26,7 @@ pub static mut write_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 // cmp
 pub static mut cmp_map: [U256; MAP_SIZE] = [U256::max_value(); MAP_SIZE];
+pub static mut state_change: bool = false;
 
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
@@ -147,12 +148,16 @@ impl Host for FuzzHost {
                     }
                 }
 
-                #[cfg(feature = "dataflow")]
+                #[cfg(any(feature = "dataflow", feature = "cmp"))]
                 0x55 => {
                     // SSTORE
-                    let mut key = interp.stack.peek(0).expect("stack underflow");
-                    let value = interp.stack.peek(1).expect("stack underflow");
-                    WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
+                    #[cfg(feature = "dataflow")]
+                    {
+                        let mut key = interp.stack.peek(0).expect("stack underflow");
+                        let value = interp.stack.peek(1).expect("stack underflow");
+                        WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
+                    }
+                    state_change = true;
                 }
 
                 #[cfg(feature = "dataflow")]
@@ -521,6 +526,9 @@ where
                 }
                 interp.instruction_pointer = new_bytecode.unwrap();
             }
+        }
+        unsafe {
+            state_change = true;
         }
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         IntermediateExecutionResult {

@@ -12,7 +12,7 @@ use std::fmt::{Debug, Formatter};
 use std::iter::Map;
 use std::marker::PhantomData;
 
-use crate::evm::{EVMExecutor, ExecutionResult, MAP_SIZE};
+use crate::evm::{state_change, EVMExecutor, ExecutionResult, MAP_SIZE};
 use crate::executor::FuzzExecutor;
 use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
@@ -352,7 +352,7 @@ impl<'a, SC> Debug for CmpFeedback<'a, SC> {
 #[cfg(feature = "cmp")]
 impl<'a, I0, S0, SC> Feedback<I0, S0> for CmpFeedback<'a, SC>
 where
-    S0: State + HasClientPerfMonitor + HasInfantStateState,
+    S0: State + HasClientPerfMonitor + HasInfantStateState + HasExecutionResult,
     I0: Input + VMInputT,
     SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState>,
 {
@@ -383,8 +383,13 @@ where
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
-        // this should always be true because we cannot predict whether current state is interesting
-        Ok(true)
+
+        unsafe {
+            if state_change {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn append_metadata(
