@@ -2,37 +2,29 @@ use crate::{
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    input::{VMInput},
+    input::VMInput,
     mutator::FuzzMutator,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{
-    powersched::PowerSchedule, SimpleEventManager,
-};
+use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::CalibrationStage;
 use libafl::{
-    prelude::{
-        tuple_list, MaxMapFeedback, SimpleMonitor,
-        StdMapObserver,
-    },
-    stages::StdPowerMutationalStage, Fuzzer,
+    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
+    stages::StdPowerMutationalStage,
+    Fuzzer,
 };
-
-
-
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::evm::CMP_MAP;
 use crate::feedback::{CmpFeedback, OracleFeedback};
-use crate::oracle::{FunctionHarnessOracle};
+use crate::oracle::FunctionHarnessOracle;
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
 use primitive_types::H160;
-
 
 struct ABIConfig {
     abi: String,
@@ -44,7 +36,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn cmp_fuzzer(contracts_glob: &String) {
+pub fn cmp_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
@@ -66,7 +58,11 @@ pub fn cmp_fuzzer(contracts_glob: &String) {
     let deployer = generate_random_address();
     let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
-    let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
+    let contract_info = if let Some(target_contract) = target_contract {
+        ContractLoader::from_glob_target(contracts_glob, &target_contract).contracts
+    } else {
+        ContractLoader::from_glob(contracts_glob).contracts
+    };
     state.initialize(
         contract_info,
         &mut executor.evm_executor,

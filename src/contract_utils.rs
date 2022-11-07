@@ -150,6 +150,18 @@ impl ContractLoader {
 
         ContractLoader { contracts }
     }
+
+    pub fn from_glob_target(p: &str, target: &str) -> Self {
+        let prefix = Path::new(p).join(target);
+        let abi_path = prefix.with_extension("abi");
+        let bin_path = prefix.with_extension("bin");
+
+        if !(abi_path.exists() && bin_path.exists()) {
+            panic!("ABI or BIN file not found for {}", target);
+        }
+
+        Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
+    }
 }
 
 mod tests {
