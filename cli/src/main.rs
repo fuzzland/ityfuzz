@@ -10,6 +10,8 @@ struct Args {
     /// Glob pattern to find contracts
     #[arg(short, long)]
     contract_glob: String,
+    // target single contract -- Optional
+    #[arg(short, long)]
     target_contract: Option<String>,
 }
 

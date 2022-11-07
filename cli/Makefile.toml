@@ -1,27 +1,37 @@
-[tasks.clean_bin]
-command = "rm"
-args = ["./cli"]
-
 [tasks.clean_cargo]
 command = "cargo"
 args = ["clean"]
 
 [tasks.clean]
-dependencies = ["clean_bin", "clean_cargo"]
+dependencies = ["clean_cargo"]
 
-[tasks.compile]
+[tasks.compile-release]
 command = "cargo"
 args = ["build", "--release"]
 
-[tasks.copy]
+[tasks.copy-release]
 command = "cp"
 args = ["target/release/cli", "./cli"]
 
+[tasks.compile-debug]
+command = "cargo"
+args = ["build"]
+
+[tasks.copy-debug]
+command = "cp"
+args = ["target/debug/cli", "./cli-debug"]
+
+[tasks.build-cli-clean]
+dependencies = [ "clean", "compile-release", "copy-release"]
+
 [tasks.build-cli]
-dependencies = [ "clean", "compile", "copy"]
+dependencies = [ "compile-release", "copy-release" ]
+
+[tasks.debug-clean]
+dependencies = [ "clean", "compile-debug", "copy-debug"]
 
 [tasks.debug]
-dependencies = [ "compile", "copy" ]
+dependencies = [ "compile-debug", "copy-debug" ]
 
 [tasks.run]
 command = "./cli"
