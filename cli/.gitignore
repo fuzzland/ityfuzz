@@ -3,3 +3,4 @@ Cargo.lock
 cli
 solutions
 corpus
+log*
