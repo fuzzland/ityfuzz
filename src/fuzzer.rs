@@ -19,6 +19,7 @@ use libafl::{
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
+use rand::random;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -176,6 +177,13 @@ where
         if is_infant_interesting {
             let new_state = state.get_execution_result();
             state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
+        }
+
+        #[cfg(feature = "evaluation")]
+        {
+            if random::<i32>() % 10000 == 0 {
+                println!("Infant corpus size: {}", state.get_infant_state_state().infant_state.count());
+            }
         }
 
         let is_solution = self
