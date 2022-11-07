@@ -8,14 +8,21 @@ use std::io::Read;
 use std::path::Path;
 extern crate crypto;
 
+use crate::abi::get_abi_type_boxed_with_address;
+use crate::rand_utils::{generate_random_address, fixed_address};
+
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
+
+// to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
+pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
 
 #[derive(Debug, Clone)]
 pub struct ABIConfig {
     pub abi: String,
     pub function: [u8; 4],
     pub is_static: bool,
+    pub is_constructor: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -45,25 +52,36 @@ impl ContractLoader {
             .expect("failed to read abi file");
         let json: Vec<Value> = serde_json::from_str(&data).expect("failed to parse abi file");
         json.iter()
-            .filter(|x| x["type"] == "function")
-            .map(|abi| {
-                let name = abi["name"].as_str().expect("failed to parse abi name");
-                let mut abi_name: Vec<String> = vec![];
-                abi["inputs"]
-                    .as_array()
-                    .expect("failed to parse abi inputs")
-                    .iter()
-                    .for_each(|input| {
-                        abi_name.push(input["type"].as_str().unwrap().to_string());
-                    });
-                let mut abi_config = ABIConfig {
-                    abi: format!("({})", abi_name.join(",")),
-                    function: [0; 4],
-                    is_static: abi["stateMutability"].as_str().unwrap() == "view",
-                };
-                let function_to_hash = format!("{}({})", name, abi_name.join(","));
-                set_hash(function_to_hash.as_str(), &mut abi_config.function);
-                abi_config
+            .flat_map(|abi| {
+                if abi["type"] == "function" || abi["type"] == "constructor" {
+                    let name = if abi["type"] == "function" {
+                        abi["name"].as_str().expect("failed to parse abi name")
+                    } else {
+                        "constructor"
+                    };
+                    let mut abi_name: Vec<String> = vec![];
+                    abi["inputs"]
+                        .as_array()
+                        .expect("failed to parse abi inputs")
+                        .iter()
+                        .for_each(|input| {
+                            abi_name.push(input["type"].as_str().unwrap().to_string());
+                        });
+                    let mut abi_config = ABIConfig {
+                        abi: format!("({})", abi_name.join(",")),
+                        function: [0; 4],
+                        is_static: abi["stateMutability"].as_str().unwrap() == "view",
+                        is_constructor: abi["type"] == "constructor",
+                    };
+                    let function_to_hash = format!("{}({})", name, abi_name.join(","));
+                    // print name and abi_name
+                    println!("{}({})", name, abi_name.join(","));
+
+                    set_hash(function_to_hash.as_str(), &mut abi_config.function);
+                    Some(abi_config)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -89,6 +107,7 @@ impl ContractLoader {
                     if path.to_str().unwrap().ends_with(".abi") {
                         // this is an ABI file
                         result.abi = Self::parse_abi(&path);
+                        // println!("ABI: {:?}", result.abi);
                     } else if path.to_str().unwrap().ends_with(".bin") {
                         // this is an BIN file
                         result.code = Self::parse_contract_code(&path);
@@ -98,6 +117,24 @@ impl ContractLoader {
                 }
                 Err(e) => println!("{:?}", e),
             }
+        }
+
+        if let Some(abi) = result.abi.iter().find(|abi| abi.is_constructor) {
+            let mut abi_instance = get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
+            abi_instance.set_func(abi.function);
+            // since this is constructor args, we ingore the function hash
+            // Note (Shangyin): this may still non-deployable, need futher improvement
+            // (The check may fail)
+
+            let mut random_bytes = vec![0u8; abi_instance.get().get_bytes().len()];
+            for i in 0..random_bytes.len() {
+                random_bytes[i] = rand::random();
+            }
+            print!("Random bytes {:?}", random_bytes);
+            // result.constructor_args = random_bytes;
+            result.constructor_args = abi_instance.get().get_bytes();
+            // println!("Constructor args: {:?}", result.constructor_args);
+            result.code.extend(result.constructor_args.clone());
         }
         return Self {
             contracts: if result.code.len() > 0 {
