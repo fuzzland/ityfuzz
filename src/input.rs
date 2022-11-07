@@ -8,13 +8,14 @@ use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
 
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
+use crate::state::HasItyState;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize;
+        S: State + HasRand + HasMaxSize + HasItyState;
     fn get_caller_mut(&mut self) -> &mut H160;
     fn get_caller(&self) -> H160;
     fn set_caller(&mut self, caller: H160);
@@ -61,7 +62,7 @@ impl VMInputT for VMInput {
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize,
+        S: State + HasRand + HasMaxSize + HasItyState,
     {
         self.data.mutate(state)
     }

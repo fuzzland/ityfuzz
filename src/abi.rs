@@ -3,7 +3,7 @@ use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use bytes::Bytes;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::Mutator;
+use libafl::prelude::{Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
 use rand::random;
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::DerefMut;
+use crate::state::HasItyState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -99,15 +100,25 @@ impl BoxedABI {
 impl BoxedABI {
     pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize,
+        S: State + HasRand + HasMaxSize + HasItyState,
     {
         match self.get_type() {
-            TEmpty => MutationResult::Mutated,
+            TEmpty => MutationResult::Skipped,
             T256 => {
                 let v = self.b.deref_mut().as_any();
                 let a256 = v.downcast_mut::<A256>().unwrap();
-                // self.b.downcast_ref::<A256>().unwrap().mutate(state);
-                byte_mutator(state, a256)
+                if a256.is_address {
+                    if state.rand_mut().below(100) < 90 {
+                        let new_caller = state.get_rand_caller();
+                        a256.data = new_caller.0.to_vec();
+                    } else {
+                        a256.data = [0; 20].to_vec();
+                    }
+
+                    MutationResult::Mutated
+                } else {
+                    byte_mutator(state, a256)
+                }
             }
             TDynamic => {
                 let adyn = self
@@ -132,20 +143,32 @@ impl BoxedABI {
                     return MutationResult::Skipped;
                 }
                 if aarray.dynamic_size {
-                    if (random::<u8>() % 2) == 0 {
-                        let index: usize = random::<usize>() % data_len;
+                    if (state.rand_mut().next() % 2) == 0 {
+                        let index: usize = state.rand_mut().next() as usize % data_len;
                         let result = aarray.data[index].mutate(state);
                         return result;
                     }
 
                     // increase size
                     // let base_type = &;
-                    for _ in 0..random::<usize>() % state.max_size() {
+                    for _ in 0..state.rand_mut().next() as usize % state.max_size() {
                         aarray.data.push(aarray.data[0].clone());
                     }
                 } else {
-                    let index: usize = random::<usize>() % data_len;
-                    return aarray.data[index].mutate(state);
+                    if state.rand_mut().below(100) < 80 {
+                        // havoc
+                        let mut result: MutationResult = MutationResult::Skipped;
+                        for _ in 0..state.rand_mut().below((data_len + 1) as u64) {
+                            let index: usize = state.rand_mut().next() as usize % data_len;
+                            if aarray.data[index].mutate(state) == MutationResult::Mutated {
+                                result = MutationResult::Mutated;
+                            }
+                        }
+                        return result;
+                    } else {
+                        let index: usize = state.rand_mut().next() as usize % data_len;
+                        return aarray.data[index].mutate(state);
+                    }
                 }
                 MutationResult::Mutated
             }
@@ -190,6 +213,7 @@ impl ABI for AEmpty {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct A256 {
     data: Vec<u8>,
+    pub is_address: bool,
 }
 
 impl Input for A256 {
@@ -459,9 +483,10 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize, with_address: &Option<Vec<u
     match abi_name {
         "uint" | "int" => Box::new(A256 {
             data: vec![0; abi_bs],
+            is_address: false,
         }),
-        "address" => Box::new(A256 { data: with_address.to_owned().unwrap_or(vec![0; 20]) }),
-        "bool" => Box::new(A256 { data: vec![0; 1] }),
+        "address" => Box::new(A256 { data: with_address.to_owned().unwrap_or(vec![0; 20]), is_address: true }),
+        "bool" => Box::new(A256 { data: vec![0; 1], is_address: false }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
             multiplier: 32,
