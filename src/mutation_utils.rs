@@ -1,15 +1,13 @@
 use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::{MutationResult};
+use libafl::mutators::MutationResult;
 use libafl::prelude::{
     tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator,
-    QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator, QwordAddMutator,
+    StdScheduledMutator, WordAddMutator, WordInterestingMutator,
 };
 use libafl::state::{HasMaxSize, HasRand, State};
-
-
 
 pub fn byte_mutator<I, S>(state: &mut S, input: &mut I) -> MutationResult
 where

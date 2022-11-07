@@ -3,7 +3,6 @@ use libafl::inputs::Input;
 
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StagedVMState {
     pub state: VMState,
