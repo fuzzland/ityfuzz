@@ -108,6 +108,13 @@ impl ContractLoader {
         };
     }
 
+    // This function loads constructs Contract infos from path p
+    // The organization of directory p should be
+    // p
+    // |- contract1.abi
+    // |- contract1.bin
+    // |- contract2.abi
+    // |- contract2.bin
     pub fn from_glob(p: &str) -> Self {
         let mut prefix_file_count: HashMap<String, u8> = HashMap::new();
         for i in glob(p).expect("not such folder") {
