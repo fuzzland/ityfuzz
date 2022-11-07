@@ -808,13 +808,13 @@ impl Host for ConcolicHost {
     }
 
     fn balance(&mut self, _address: H160) -> Option<(U256, bool)> {
-        println!("balance");
+        // println!("balance");
 
         Some((U256::max_value(), true))
     }
 
     fn code(&mut self, address: H160) -> Option<(Bytecode, bool)> {
-        println!("code");
+        // println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
             None => Some((Bytecode::new(), true)),

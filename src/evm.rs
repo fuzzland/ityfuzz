@@ -77,7 +77,9 @@ pub struct FuzzHost {
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     #[cfg(feature = "record_instruction_coverage")]
-    pub pc_coverage: HashSet<(H160, usize)>,
+    pub pc_coverage: HashMap<H160, HashSet<usize>>,
+    #[cfg(feature = "record_instruction_coverage")]
+    pub total_instr: HashMap<H160, usize>,
 }
 
 // hack: I don't want to change evm internal to add a new type of return
@@ -100,6 +102,8 @@ impl FuzzHost {
             pc_to_addresses: HashMap::new(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
+            #[cfg(feature = "record_instruction_coverage")]
+            total_instr: Default::default(),
         }
     }
 
@@ -141,7 +145,7 @@ impl Host for FuzzHost {
         {
             let address = interp.contract.address;
             let pc = interp.program_counter().clone();
-            self.pc_coverage.insert((address, pc));
+            self.pc_coverage.entry(address).or_default().insert(pc);
         }
         unsafe {
             // println!("{}", *interp.instruction_pointer);
@@ -241,13 +245,13 @@ impl Host for FuzzHost {
     }
 
     fn balance(&mut self, _address: H160) -> Option<(U256, bool)> {
-        println!("balance");
+        // println!("balance");
 
         Some((U256::max_value(), true))
     }
 
     fn code(&mut self, address: H160) -> Option<(Bytecode, bool)> {
-        println!("code");
+        // println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
             None => Some((Bytecode::new(), true)),
@@ -479,6 +483,12 @@ where
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
         );
+        self.host.total_instr.insert(
+            deployed_address,
+            EVMExecutor::<I, S>::count_instructions(
+                &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
+            ),
+        );
         Some(deployed_address)
     }
 
@@ -517,15 +527,28 @@ where
         }
         #[cfg(feature = "record_instruction_coverage")]
         {
-            if random::<i32>() % 1000 == 0 {
+            if random::<i32>() % 10000 == 0 {
                 println!(
                     "coverage: {} out of {:?}",
-                    self.host.pc_coverage.len(),
+                    self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
+                        if self.host.total_instr.contains_key(x.0) {
+                            x.1.len()
+                        } else {
+                            0
+                        }
+                    }),
                     self.host
-                        .code
-                        .iter()
-                        .map(|x| EVMExecutor::<I, S>::count_instructions(x.1))
-                        .collect::<Vec<usize>>()
+                        .total_instr
+                        .keys()
+                        .map(|k| (
+                            self.host
+                                .pc_coverage
+                                .get(k)
+                                .unwrap_or(&Default::default())
+                                .len(),
+                            self.host.total_instr.get(k).unwrap()
+                        ))
+                        .collect::<Vec<_>>()
                 );
             }
         }
