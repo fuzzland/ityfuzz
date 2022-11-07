@@ -1,23 +1,20 @@
 use crate::input::VMInputT;
-use crate::state::{FuzzState, InfantStateState};
-use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::{MutationResult, MutatorsTuple};
+use crate::state::{InfantStateState};
+use libafl::inputs::{Input};
+use libafl::mutators::{MutationResult};
 use libafl::prelude::{
-    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
-    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
-    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasMaxSize, HasRand,
-    Mutator, Prepend, QwordAddMutator, Rand, State, WordAddMutator, WordInterestingMutator,
+    HasMaxSize, HasRand,
+    Mutator, Rand, State,
 };
 use libafl::schedulers::Scheduler;
 use libafl::Error;
-use primitive_types::H160;
 
-use crate::abi::{AArray, ADynamic, BoxedABI, A256};
+
+
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
-use rand::random;
-use serde::{Deserialize, Serialize};
+
+
 
 pub struct FuzzMutator<'a, S> {
     pub infant_scheduler: &'a S,
@@ -42,7 +39,7 @@ where
         &mut self,
         state: &mut S,
         input: &mut I,
-        stage_idx: i32,
+        _stage_idx: i32,
     ) -> Result<MutationResult, Error> {
         if !input.get_staged_state().initialized {
             let concrete = state.get_infant_state(self.infant_scheduler).unwrap();

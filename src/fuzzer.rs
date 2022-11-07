@@ -10,8 +10,7 @@ use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
     prelude::{
-        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
-        Input, ObserversTuple, Testcase,
+        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers, ObserversTuple, Testcase,
     },
     schedulers::Scheduler,
     stages::StagesTuple,
@@ -257,10 +256,10 @@ where
 
     fn add_input(
         &mut self,
-        state: &mut S,
-        executor: &mut E,
-        manager: &mut EM,
-        input: I,
+        _state: &mut S,
+        _executor: &mut E,
+        _manager: &mut EM,
+        _input: I,
     ) -> Result<usize, libafl::Error> {
         todo!()
     }

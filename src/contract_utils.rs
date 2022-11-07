@@ -1,9 +1,9 @@
 use glob::glob;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fmt::format;
+
 use std::fs::File;
-use std::hash::Hash;
+
 use std::io::Read;
 use std::path::Path;
 extern crate crypto;

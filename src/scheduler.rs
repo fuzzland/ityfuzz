@@ -62,12 +62,12 @@ where
         let mut to_remove: Vec<usize> = vec![];
         {
             let corpus_size = state.corpus().count();
-            let corpus_mut = state.corpus_mut();
+            let _corpus_mut = state.corpus_mut();
             let data = state.metadata().get::<VoteData>().unwrap();
             if corpus_size > DROP_THRESHOLD {
                 // get top 100 entries sorted by votes (descending)
                 let mut sorted: Vec<_> = data.votes_and_visits.iter().collect();
-                sorted.sort_by(|(idx_1, (votes1, visits1)), (idx_2, (votes2, visits2))| {
+                sorted.sort_by(|(_idx_1, (votes1, visits1)), (_idx_2, (votes2, visits2))| {
                     let score_1 = (*votes1 as f64) / (*visits1 as f64);
                     let score_2 = (*votes2 as f64) / (*visits2 as f64);
                     score_1.partial_cmp(&score_2).unwrap()
@@ -100,7 +100,7 @@ where
 
     fn next(&self, state: &mut S) -> Result<usize, Error> {
         let corpus_size = state.corpus().count();
-        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
+        let _threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
             * state.metadata().get::<VoteData>().unwrap().visits_total as f64;
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         if corpus_size == 0 {
@@ -128,8 +128,8 @@ where
     I: Input,
 {
     fn vote(&self, state: &mut S, idx: usize) {
-        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        let (votes, visits) = data
+        let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        let (votes, _visits) = data
             .votes_and_visits
             .get_mut(&idx)
             .expect("scheduler metadata malformed");

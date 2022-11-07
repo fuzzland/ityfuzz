@@ -59,9 +59,9 @@ where
 {
     fn run_target(
         &mut self,
-        fuzzer: &mut Z,
+        _fuzzer: &mut Z,
         state: &mut S,
-        mgr: &mut EM,
+        _mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
         let res = self.evm_executor.execute(

@@ -85,7 +85,7 @@ pub struct IERC20Oracle {
     balance_of: Vec<u8>,
 }
 
-pub fn dummy_precondition(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64 {
+pub fn dummy_precondition(_ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> u64 {
     99
 }
 

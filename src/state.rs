@@ -1,31 +1,31 @@
 use crate::abi::get_abi_type_boxed;
 use crate::contract_utils::ContractInfo;
-use crate::evm::{ExecutionResult, VMState};
+use crate::evm::{ExecutionResult};
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{VMInput, VMInputT};
 use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
 use bytes::Bytes;
-use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
+use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
-use libafl::prelude::powersched::PowerSchedule;
+
 use libafl::prelude::{
-    current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Rand, Scheduler, SerdeAnyMap,
+    current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, Scheduler, SerdeAnyMap,
     StdRand,
 };
-use libafl::schedulers::PowerQueueScheduler;
+
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
     HasSolutions, State,
 };
-use libafl::Error;
-use nix::libc::stat;
+
+
 use primitive_types::H160;
 use revm::Bytecode;
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
+
 use std::path::Path;
 use std::time::Duration;
 
@@ -142,7 +142,7 @@ impl FuzzState {
                 }
                 let mut abi_instance = get_abi_type_boxed(&abi.abi);
                 abi_instance.set_func(abi.function);
-                let mut input = VMInput {
+                let input = VMInput {
                     caller: self.get_rand_caller(),
                     contract: deployed_address,
                     data: abi_instance,
@@ -244,7 +244,7 @@ impl HasItyState for FuzzState {
         let idx = scheduler
             .next(&mut self.infant_states_state)
             .expect("no more infant state");
-        let mut state = self
+        let state = self
             .infant_states_state
             .corpus()
             .get(idx)

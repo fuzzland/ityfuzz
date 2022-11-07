@@ -2,43 +2,36 @@ use crate::{
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    input::{VMInput, VMInputT},
+    input::{VMInput},
     mutator::FuzzMutator,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{
-    powersched::PowerSchedule, MapFeedback, ObserversTuple, QueueScheduler, SimpleEventManager,
+    powersched::PowerSchedule, QueueScheduler, SimpleEventManager,
 };
-use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
+use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::CalibrationStage;
 use libafl::{
     prelude::{
-        current_nanos, current_time, tuple_list, ConstFeedback, HitcountsMapObserver,
-        InMemoryCorpus, MaxMapFeedback, OnDiskCorpus, SimpleMonitor, SimpleRestartingEventManager,
-        StdMapObserver, StdRand,
+        tuple_list, MaxMapFeedback, SimpleMonitor,
+        StdMapObserver,
     },
-    schedulers::StdScheduler,
-    stages::StdPowerMutationalStage,
-    state::StdState,
-    Error, Fuzzer,
+    stages::StdPowerMutationalStage, Fuzzer,
 };
-use std::io::Write;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+
+
 use std::{
-    cell::RefCell,
-    fs::{File, OpenOptions},
-    io,
     path::PathBuf,
 };
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::feedback::{InfantFeedback, OracleFeedback};
-use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
+use crate::oracle::{FunctionHarnessOracle};
 use crate::rand_utils::generate_random_address;
 use crate::state::FuzzState;
-use nix::unistd::dup;
+
 use primitive_types::H160;
-use revm::EVM;
+
 
 struct ABIConfig {
     abi: String,
@@ -51,9 +44,9 @@ struct ContractInfo {
 }
 
 pub fn basic_fuzzer(
-    corpus_dir: PathBuf,
-    objective_dir: PathBuf,
-    logfile: PathBuf,
+    _corpus_dir: PathBuf,
+    _objective_dir: PathBuf,
+    _logfile: PathBuf,
     contracts_glob: &String,
 ) {
     // Fuzzbench style, which requires a host and can have many fuzzing client
@@ -92,7 +85,7 @@ pub fn basic_fuzzer(
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let mut infant_scheduler = QueueScheduler::new();
+    let infant_scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
