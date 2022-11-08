@@ -6,6 +6,8 @@ use std::fs::File;
 
 use std::io::Read;
 use std::path::Path;
+use primitive_types::H160;
+
 extern crate crypto;
 
 use crate::abi::get_abi_type_boxed_with_address;
@@ -31,6 +33,7 @@ pub struct ContractInfo {
     pub abi: Vec<ABIConfig>,
     pub code: Vec<u8>,
     pub constructor_args: Vec<u8>,
+    pub deployed_address: H160,
 }
 
 #[derive(Debug, Clone)]
@@ -86,11 +89,11 @@ impl ContractLoader {
             .collect()
     }
 
-    fn parse_contract_code(path: &Path) -> Vec<u8> {
+    fn parse_hex_file(path: &Path) -> Vec<u8> {
         let mut file = File::open(path).unwrap();
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
-        hex::decode(data).expect("Failed to decode contract code")
+        hex::decode(data).expect("Failed to parse hex file")
     }
 
     pub fn from_prefix(prefix: &str) -> Self {
@@ -99,6 +102,7 @@ impl ContractLoader {
             abi: vec![],
             code: vec![],
             constructor_args: vec![], // todo: fill this
+            deployed_address: generate_random_address()
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {
@@ -110,7 +114,10 @@ impl ContractLoader {
                         // println!("ABI: {:?}", result.abi);
                     } else if path.to_str().unwrap().ends_with(".bin") {
                         // this is an BIN file
-                        result.code = Self::parse_contract_code(&path);
+                        result.code = Self::parse_hex_file(&path);
+                    } else if path.to_str().unwrap().ends_with(".address") {
+                        // this is deployed address
+                        result.deployed_address.0.clone_from_slice(Self::parse_hex_file(&path).as_slice());
                     } else {
                         println!("Found unknown file: {:?}", path.display())
                     }

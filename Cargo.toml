@@ -16,6 +16,8 @@ default = ["cmp", "dataflow", "evaluation", "deployer_is_attacker", "record_inst
 cmp = []
 dataflow = []
 evaluation = []
+ondisk_corpus = []
+# need to turn off when running DV contracts
 deployer_is_attacker = []
 record_instruction_coverage = []
 

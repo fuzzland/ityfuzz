@@ -59,7 +59,7 @@ where
 
         {
             let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-            data.votes_and_visits.insert(idx, (1, 3));
+            data.votes_and_visits.insert(idx, (3, 1));
             data.visits_total += 1;
             data.votes_total += 3;
             data.sorted_votes.push(idx);
@@ -111,6 +111,7 @@ where
         let corpus_size = state.corpus().count();
         let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
             * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
+
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         if corpus_size == 0 {
             Err(Error::empty("No entries in corpus".to_owned()))
