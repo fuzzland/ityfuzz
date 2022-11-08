@@ -27,6 +27,8 @@ pub trait VMInputT: Input {
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;
+    fn get_txn_value(&self) -> usize;
+    fn set_txn_value(&mut self, v: usize);
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -36,6 +38,7 @@ pub struct VMInput {
     pub data: BoxedABI,
     pub sstate: StagedVMState,
     pub sstate_idx: usize,
+    pub txn_value: usize,
 }
 
 impl HasLen for VMInput {
@@ -110,6 +113,14 @@ impl VMInputT for VMInput {
 
     fn get_staged_state(&self) -> &StagedVMState {
         &self.sstate
+    }
+
+    fn get_txn_value(&self) -> usize {
+        self.txn_value
+    }
+
+    fn set_txn_value(&mut self, v: usize) {
+        self.txn_value = v;
     }
 }
 
