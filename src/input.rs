@@ -35,7 +35,7 @@ pub trait VMInputT: Input {
 pub struct VMInput {
     pub caller: H160,
     pub contract: H160,
-    pub data: BoxedABI,
+    pub data: Option<BoxedABI>,
     pub sstate: StagedVMState,
     pub sstate_idx: usize,
     pub txn_value: usize,
@@ -43,7 +43,10 @@ pub struct VMInput {
 
 impl HasLen for VMInput {
     fn len(&self) -> usize {
-        self.data.get_bytes().len()
+        match self.data {
+            Some(ref d) => d.get_bytes().len(),
+            None => 0,
+        }
     }
 }
 
@@ -60,14 +63,24 @@ impl std::fmt::Debug for VMInput {
 
 impl VMInputT for VMInput {
     fn to_bytes(&self) -> Bytes {
-        self.data.get_bytes()
+        match self.data {
+            Some(ref d) => d.get_bytes(),
+            None => Bytes::new(),
+        }
     }
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State + HasRand + HasMaxSize + HasItyState,
     {
-        self.data.mutate(state)
+        match self.data {
+            Some(ref mut data) => {
+                data.mutate(state)
+            }
+            None => {
+                MutationResult::Skipped
+            }
+        }
     }
 
     fn get_caller_mut(&mut self) -> &mut H160 {

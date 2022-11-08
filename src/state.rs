@@ -157,10 +157,27 @@ impl FuzzState {
                 let input = VMInput {
                     caller: self.get_rand_caller(),
                     contract: deployed_address,
-                    data: abi_instance,
+                    data: Some(abi_instance),
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
                     txn_value: 0
+                };
+                let mut tc = Testcase::new(input);
+                tc.set_exec_time(Duration::from_secs(0));
+                let idx = self.txn_corpus.add(tc).expect("failed to add");
+                scheduler
+                    .on_add(self, idx)
+                    .expect("failed to call scheduler on_add");
+            }
+            // add transfer txn
+            {
+                let input = VMInput {
+                    caller: self.get_rand_caller(),
+                    contract: deployed_address,
+                    data: None,
+                    sstate: StagedVMState::new_uninitialized(),
+                    sstate_idx: 0,
+                    txn_value: 1
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));

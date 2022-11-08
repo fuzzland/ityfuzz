@@ -69,6 +69,7 @@ where
             input.get_caller(),
             input.get_state(),
             input.to_bytes().clone(),
+            input.get_txn_value(),
             &mut self.observers,
         );
         // the execution result is added to the fuzzer state
@@ -151,6 +152,7 @@ mod tests {
                 ]
                 .concat(),
             ),
+            0,
             &mut observers,
         );
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
@@ -174,6 +176,7 @@ mod tests {
                 ]
                 .concat(),
             ),
+            0,
             &mut observers,
         );
 

@@ -54,6 +54,13 @@ where
                     let mutant = state.get_infant_state(self.infant_scheduler).unwrap();
                     input.set_staged_state(mutant.1, mutant.0);
                 }
+                2 => {
+                    if state.rand_mut().next() % 2 == 0 {
+                        input.set_txn_value(state.rand_mut().next() as usize);
+                    } else {
+                        input.set_txn_value(0);
+                    }
+                }
                 _ => {
                     input.mutate(state);
                 }
