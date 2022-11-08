@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
@@ -34,7 +35,9 @@ impl<I, S> SortedDroppingScheduler<I, S> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct VoteData {
     pub votes_and_visits: HashMap<usize, (usize, usize)>,
+    pub sorted_votes: Vec<usize>,
     pub visits_total: usize,
+    pub votes_total: usize,
 }
 
 impl_serdeany!(VoteData);
@@ -48,14 +51,18 @@ where
         if !state.has_metadata::<VoteData>() {
             state.metadata_mut().insert(VoteData {
                 votes_and_visits: HashMap::new(),
+                sorted_votes: vec![],
                 visits_total: 1,
+                votes_total: 1,
             });
         }
 
         {
             let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-            data.votes_and_visits.insert(idx, (0, data.visits_total / (data.votes_and_visits.len() + 1)));
+            data.votes_and_visits.insert(idx, (1, 3));
             data.visits_total += 1;
+            data.votes_total += 3;
+            data.sorted_votes.push(idx);
         }
 
         // this is costly, but we have to do it to keep the corpus not increasing indefinitely
@@ -93,31 +100,36 @@ where
         _testcase: &Option<Testcase<I>>,
     ) -> Result<(), Error> {
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        data.votes_total -= data.votes_and_visits.get(&idx).unwrap().0;
         data.visits_total -= data.votes_and_visits.get(&idx).unwrap().1;
         data.votes_and_visits.remove(&idx);
+        data.sorted_votes.retain(|x| *x != idx);
         Ok(())
     }
 
     fn next(&self, state: &mut S) -> Result<usize, Error> {
         let corpus_size = state.corpus().count();
-        let _threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
-            * state.metadata().get::<VoteData>().unwrap().visits_total as f64;
+        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
+            * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         if corpus_size == 0 {
             Err(Error::empty("No entries in corpus".to_owned()))
         } else {
-            // get idx from votes_and_visits with lowest visits using a linear search
-            let mut min_visits = std::usize::MAX;
-            let mut min_idx = 0;
-            for (idx, (_, visits)) in data.votes_and_visits.iter() {
-                if *visits < min_visits {
-                    min_visits = *visits;
-                    min_idx = *idx;
+            // probablistic sampling from votes and visits (weighted by votes)
+            let mut idx = *data.sorted_votes.last().unwrap();
+
+            let mut s: f64 = 0.0;
+            for i in data.sorted_votes.clone() {
+                s += data.votes_and_visits.get(&i).unwrap().0 as f64;
+                if s > threshold {
+                    idx = i;
+                    break;
                 }
             }
-            data.votes_and_visits.get_mut(&min_idx).unwrap().1 += 1;
+
+            data.votes_and_visits.get_mut(&idx).unwrap().1 += 1;
             data.visits_total += 1;
-            Ok(min_idx)
+            Ok(idx)
         }
     }
 }
@@ -129,10 +141,26 @@ where
 {
     fn vote(&self, state: &mut S, idx: usize) {
         let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        let (votes, _visits) = data
-            .votes_and_visits
-            .get_mut(&idx)
-            .expect("scheduler metadata malformed");
-        *votes += 1;
+        {
+            data.votes_total += 1;
+        }
+
+        {
+            let (votes, _visits) = data
+                .votes_and_visits
+                .get_mut(&idx)
+                .expect("scheduler metadata malformed");
+            *votes += 1;
+            println!("Voted for {}", idx);
+        }
+
+        // resort the sorted_votes vector with respect to votes and visits
+        {
+            data.sorted_votes.sort_by(|x, y| {
+                let (votes_x, _) = data.votes_and_visits.get(x).unwrap();
+                let (votes_y, _) = data.votes_and_visits.get(y).unwrap();
+                votes_y.cmp(votes_x)
+            });
+        }
     }
 }

@@ -13,7 +13,7 @@ use std::fmt::{Debug, Formatter};
 
 use std::marker::PhantomData;
 
-use crate::evm::{state_change, EVMExecutor, MAP_SIZE};
+use crate::evm::{state_change, EVMExecutor, MAP_SIZE, READ_MAP, WRITE_MAP, JMP_MAP};
 
 use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};
@@ -336,6 +336,7 @@ where
 pub struct CmpFeedback<'a, SC> {
     min_map: [U256; MAP_SIZE],
     current_map: &'a mut [U256],
+    known_jmp_map: [u8; MAP_SIZE],
     known_states: HashSet<u64>,
     scheduler: &'a SC,
 }
@@ -349,6 +350,7 @@ where
         Self {
             min_map: [U256::MAX; MAP_SIZE],
             current_map,
+            known_jmp_map: [0; MAP_SIZE],
             known_states: Default::default(),
             scheduler,
         }
@@ -392,17 +394,30 @@ where
         EMI: EventFirer<I0>,
         OT: ObserversTuple<I0, S0>,
     {
-        let mut interesting = false;
+        let mut cmp_interesting = false;
+        let mut cov_interesting = false;
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {
                 self.min_map[i] = self.current_map[i];
-                interesting = true;
+                cmp_interesting = true;
             }
+            // unsafe {
+            //     if self.known_jmp_map[i] < JMP_MAP[i] {
+            //         self.known_jmp_map[i] = JMP_MAP[i];
+            //         cov_interesting = true;
+            //     }
+            // }
         }
-        if interesting {
+        if cmp_interesting {
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
+
+        if cov_interesting {
+            self.scheduler
+                .vote(state.get_infant_state_state(), input.get_state_idx());
+        }
+
 
         unsafe {
             if state_change {
@@ -410,8 +425,20 @@ where
                 if self.known_states.contains(&hash) {
                     return Ok(false);
                 }
-                self.known_states.insert(hash);
-                return Ok(true);
+                let mut df_interesting = false;
+                for i in 0..MAP_SIZE {
+                    if READ_MAP[i] && WRITE_MAP[i] != 0 {
+                        df_interesting = true;
+                        break;
+                    }
+                }
+                for i in 0..MAP_SIZE {
+                    WRITE_MAP[i] = 0;
+                }
+                if df_interesting {
+                    self.known_states.insert(hash);
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
