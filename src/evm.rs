@@ -312,7 +312,7 @@ impl Host for FuzzHost {
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
         if _topics.len() == 1 {
-            println!("log, {:?} - {:?}", hex::encode(_data), _topics);
+            // println!("log, {:?} - {:?}", hex::encode(_data), _topics);
         }
     }
 
@@ -503,12 +503,16 @@ where
         );
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        #[cfg(feature = "evaluation")]
+        {
+            self.host.pc_coverage = Default::default();
+        }
         if r != Return::Return {
             println!("deploy failed: {:?}", r);
             return None;
         }
         assert_eq!(r, Return::Return);
-        // println!("contract = {:?}", hex::encode(interp.return_value()));
+        println!("contract = {:?}", hex::encode(interp.return_value()));
         self.host.set_code(
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
@@ -567,7 +571,7 @@ where
                     "coverage: {} out of {:?}",
                     self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
                         if self.host.total_instr.contains_key(x.0) {
-                            // println!("{:?}", x.1);
+                            println!("{:?}", x.1);
                             x.1.len()
                         } else {
                             0

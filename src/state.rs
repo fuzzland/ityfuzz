@@ -26,6 +26,7 @@ use std::path::Path;
 use std::time::Duration;
 
 const ACCOUNT_AMT: u8 = 2;
+const CONTRACT_AMT: u8 = 2;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -111,6 +112,7 @@ impl FuzzState {
         I: Input + VMInputT,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
+        self.setup_contract_callers(CONTRACT_AMT as usize, executor);
         self.initialize_corpus(
             contracts,
             executor,
@@ -202,6 +204,14 @@ impl FuzzState {
     pub fn setup_default_callers(&mut self, amount: usize) {
         for _ in 0..amount {
             self.default_callers.push(generate_random_address());
+        }
+    }
+
+    pub fn setup_contract_callers<I, S>(&mut self, amount: usize, executor: &mut EVMExecutor<I, S>) {
+        for _ in 0..amount {
+            let address = generate_random_address();
+            self.default_callers.push(address);
+            executor.host.set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
         }
     }
 }
