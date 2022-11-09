@@ -138,6 +138,33 @@ impl FuzzHost {
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
         self.code.insert(address, code.to_analysed::<LatestSpec>());
     }
+
+    #[cfg(feature = "record_instruction_coverage")]
+    fn record_instruction_coverage(&mut self) {
+                println!(
+                    "coverage: {} out of {:?}",
+                    self.pc_coverage.iter().fold(0, |acc, x| acc + {
+                        if self.total_instr.contains_key(x.0) {
+                            println!("{:?}", x.1);
+                            x.1.len()
+                        } else {
+                            0
+                        }
+                    }),
+                    self
+                        .total_instr
+                        .keys()
+                        .map(|k| (
+                            self
+                                .pc_coverage
+                                .get(k)
+                                .unwrap_or(&Default::default())
+                                .len(),
+                            self.total_instr.get(k).unwrap()
+                        ))
+                        .collect::<Vec<_>>()
+                );
+        }
 }
 
 macro_rules! process_rw_key {
@@ -345,7 +372,11 @@ impl Host for FuzzHost {
     }
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
+
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
+            #[cfg(feature = "record_instruction_coverage")]
+            self.record_instruction_coverage();
+            println!("shit");
             panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
         }
     }
@@ -582,6 +613,7 @@ where
     }
 
     pub fn count_instructions(bytecode: &Bytecode) -> usize {
+        // println!("bytecode = {:?}", bytecode.len());
         let mut count: usize = 0;
         let mut i = 0;
         let bytes = bytecode.bytes();
@@ -596,7 +628,8 @@ where
                 i += op as usize - 0x5f;
             }
         }
-        println!("complete bytes: {:?}", complete_bytes);
+        // println!("count = {:?}", count);
+        // println!("complete bytes: {:?}", complete_bytes);
         count
     }
 
@@ -620,32 +653,8 @@ where
             _ => {}
         }
         #[cfg(feature = "record_instruction_coverage")]
-        {
-            if random::<i32>() % 10000 == 0 {
-                println!(
-                    "coverage: {} out of {:?}",
-                    self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
-                        if self.host.total_instr.contains_key(x.0) {
-                            // println!("{:?}", x.1);
-                            x.1.len()
-                        } else {
-                            0
-                        }
-                    }),
-                    self.host
-                        .total_instr
-                        .keys()
-                        .map(|k| (
-                            self.host
-                                .pc_coverage
-                                .get(k)
-                                .unwrap_or(&Default::default())
-                                .len(),
-                            self.host.total_instr.get(k).unwrap()
-                        ))
-                        .collect::<Vec<_>>()
-                );
-            }
+        if random::<i32>() % 10000 == 0 {
+            self.host.record_instruction_coverage();
         }
         return ExecutionResult {
             output: r.output,
