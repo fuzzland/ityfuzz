@@ -223,7 +223,11 @@ impl Host for FuzzHost {
                     // LT, SLT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 > v2 { (v1 - v2) % (U256::max_value() - 1) + 1 } else { U256::zero() };
+                    let abs_diff = if v1 >= v2 {
+                        if v1 - v2 != U256::zero() {
+                            (v1 - v2)
+                        } else { U256::from(1) }
+                    } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -235,7 +239,23 @@ impl Host for FuzzHost {
                     // GT, SGT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 < v2 { (v2 - v1) % (U256::max_value() - 1) + 1 } else { U256::zero() };
+                    let abs_diff = if v1 <= v2 {
+                        if v2 - v1 != U256::zero() {
+                            (v2 - v1)
+                        } else { U256::from(1) }
+                    } else { U256::zero() };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
+
+                #[cfg(feature = "cmp")]
+                0x14 => {
+                    // EQ
+                    let v1 = interp.stack.peek(0).expect("stack underflow");
+                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let abs_diff = if v1 < v2 { (v2 - v1) % (U256::max_value() - 1) + 1 } else { (v1 - v2) % (U256::max_value() - 1) + 1 };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
