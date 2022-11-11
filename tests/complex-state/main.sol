@@ -2,21 +2,44 @@
 pragma solidity ^0.8.15;
 
 contract main {
-    uint256 v;
+    // Public variables of the token
+    uint8 public decimals;
+//    // 18 decimals is the strongly suggested default, avoid changing it
+//
+//    // This creates an array with all balances
+    mapping (address => uint256) public balanceOf;
+    mapping (address => mapping (address => uint256)) public allowance;
 
-    // solution: a = 1
-    function process(uint256 a) public returns (string memory){
-        require(a < 2, "2");
-        v += 1;
-        return 'Hello Contracts';
+    /**
+     * Constrctor function
+     *
+     * Initializes contract with initial supply tokens to the creator of the contract
+     */
+    constructor() {
+//        totalSupply = 1000000000 * 10 ** uint256(18);  // Update total supply with the decimal amount
+//        balanceOf[msg.sender] = totalSupply;                // Give the creator all initial tokens
+//        name = "s";                                   // Set the name for display purposes
+//        symbol = "s";                               // Set the symbol for display purposes
     }
 
-    function goal() public returns (uint256) {
-        require(v > 10, "2");
-        return v;
-    }
 
-    function oracle_harness() public view returns (bool) {
-        return v > 10;
+    /**
+     * Set allowance for other address
+     *
+     * Allows `_spender` to spend no more than `_value` tokens in your behalf
+     *
+     * @param _spender The address authorized to spend
+     * @param _value the max amount they can spend
+     */
+    function approve(address _spender, uint256 _value) public
+    returns (bool success) {
+//        bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
+//        assembly {
+//            let p := add(msize(), 0x20)
+//            mstore(p, t2)
+//            log1(p, 0x20, 0x133337)
+//        }
+        allowance[msg.sender][_spender] = _value;
+        return true;
     }
 }

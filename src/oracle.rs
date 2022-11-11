@@ -43,6 +43,7 @@ where
             address,
             &mut self.pre_state,
             data,
+            0,
             &mut tuple_list!(),
         )
     }
@@ -53,6 +54,7 @@ where
             address,
             &mut self.post_state,
             data,
+            0,
             &mut tuple_list!(),
         )
     }

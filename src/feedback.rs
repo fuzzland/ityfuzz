@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use libafl::corpus::Testcase;
 use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
@@ -12,7 +13,7 @@ use std::fmt::{Debug, Formatter};
 
 use std::marker::PhantomData;
 
-use crate::evm::{state_change, EVMExecutor, MAP_SIZE};
+use crate::evm::{state_change, EVMExecutor, MAP_SIZE, READ_MAP, WRITE_MAP, JMP_MAP};
 
 use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};
@@ -237,7 +238,7 @@ where
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
 pub struct DataflowFeedback<'a> {
-    global_write_map: [u8; MAP_SIZE],
+    global_write_map: [[bool; 4]; MAP_SIZE],
     read_map: &'a mut [bool],
     write_map: &'a mut [u8],
 }
@@ -262,7 +263,7 @@ impl<'a> Named for DataflowFeedback<'a> {
 impl<'a> DataflowFeedback<'a> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
-            global_write_map: [0; MAP_SIZE],
+            global_write_map: [[false; 4]; MAP_SIZE],
             read_map,
             write_map,
         }
@@ -292,11 +293,28 @@ where
         OT: ObserversTuple<I, S>,
     {
         let mut interesting = false;
+        let mut seq: usize = 0;
         for i in 0..MAP_SIZE {
-            if self.read_map[i] && (self.global_write_map[i] < self.write_map[i]) {
-                self.global_write_map[i] = self.write_map[i];
-                interesting = true;
+            if self.read_map[i] && self.write_map[i] != 0 {
+                seq += i;
+                let category = if self.write_map[i] < (2 << 2) {
+                    0
+                } else if self.write_map[i] < (2 << 4) {
+                    1
+                } else if self.write_map[i] < (2 << 6) {
+                    2
+                } else {
+                    3
+                };
+                if !self.global_write_map[seq % MAP_SIZE][category] {
+                    // println!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
+                    interesting = true;
+                    self.global_write_map[seq % MAP_SIZE][category] = true;
+                }
             }
+        }
+        for i in 0..MAP_SIZE {
+            self.write_map[i] = 0;
         }
         return Ok(interesting);
     }
@@ -318,6 +336,8 @@ where
 pub struct CmpFeedback<'a, SC> {
     min_map: [U256; MAP_SIZE],
     current_map: &'a mut [U256],
+    known_jmp_map: [u8; MAP_SIZE],
+    known_states: HashSet<u64>,
     scheduler: &'a SC,
 }
 
@@ -330,6 +350,8 @@ where
         Self {
             min_map: [U256::MAX; MAP_SIZE],
             current_map,
+            known_jmp_map: [0; MAP_SIZE],
+            known_states: Default::default(),
             scheduler,
         }
     }
@@ -372,21 +394,51 @@ where
         EMI: EventFirer<I0>,
         OT: ObserversTuple<I0, S0>,
     {
-        let mut interesting = false;
+        let mut cmp_interesting = false;
+        let mut cov_interesting = false;
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {
                 self.min_map[i] = self.current_map[i];
-                interesting = true;
+                cmp_interesting = true;
             }
+            // unsafe {
+            //     if self.known_jmp_map[i] < JMP_MAP[i] {
+            //         self.known_jmp_map[i] = JMP_MAP[i];
+            //         cov_interesting = true;
+            //     }
+            // }
         }
-        if interesting {
+        if cmp_interesting {
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
 
+        if cov_interesting {
+            self.scheduler
+                .vote(state.get_infant_state_state(), input.get_state_idx());
+        }
+
+
         unsafe {
             if state_change {
-                return Ok(true);
+                let hash = input.get_state().get_hash();
+                if self.known_states.contains(&hash) {
+                    return Ok(false);
+                }
+                let mut df_interesting = false;
+                for i in 0..MAP_SIZE {
+                    if READ_MAP[i] && WRITE_MAP[i] != 0 {
+                        df_interesting = true;
+                        break;
+                    }
+                }
+                for i in 0..MAP_SIZE {
+                    WRITE_MAP[i] = 0;
+                }
+                if df_interesting {
+                    self.known_states.insert(hash);
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
