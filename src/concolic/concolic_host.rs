@@ -13,8 +13,10 @@ use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::middleware::Middleware;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
     U256,
     ADD,
@@ -44,7 +46,7 @@ enum ConcolicOp {
     SGT,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BVBox {
     lhs: Option<Box<BVBox>>,
     rhs: Option<Box<BVBox>>,
@@ -305,10 +307,8 @@ impl<'a> Solving<'a> {
 
 // Q: Why do we need to make persistent memory symbolic?
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicHost {
-    env: Env,
-    data: HashMap<H160, HashMap<U256, U256>>,
-    code: HashMap<H160, Bytecode>,
     symbolic_stack: Vec<Option<Box<BVBox>>>,
     shadow_inputs: Option<BVBox>,
     constraints: Vec<Box<BVBox>>,
@@ -318,9 +318,6 @@ pub struct ConcolicHost {
 impl ConcolicHost {
     pub fn new(bytes: u32) -> Self {
         Self {
-            env: Env::default(),
-            data: HashMap::new(),
-            code: HashMap::new(),
             symbolic_stack: Vec::new(),
             shadow_inputs: Some(BVBox::new_input()),
             constraints: vec![],
@@ -328,7 +325,41 @@ impl ConcolicHost {
         }
     }
 
-    pub unsafe fn on_step(&mut self, interp: &mut Interpreter) {
+    pub fn solve(&self) {
+        let context = Context::new(&Config::default());
+        let solver = Solver::new(&context);
+        let input = BV::new_const(&context, "input", self.bits);
+        let callvalue = BV::new_const(&context, "callvalue", 256);
+        let balance = BV::new_const(&context, "balance", 256);
+
+        let mut solving = Solving::new(&input, &balance, &callvalue, &solver);
+        for cons in &self.constraints {
+            let bv: BV = solving.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
+            solver.assert(&match cons.op {
+                ConcolicOp::GT => {
+                    bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SGT => {
+                    bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::EQ => {
+                    bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::LT => {
+                    bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SLT => {
+                    bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                _ => panic!("{:?} not implemented for constraint solving", cons.op),
+            });
+        }
+    }
+}
+
+impl Middleware for ConcolicHost {
+
+    unsafe fn on_step(&mut self, interp: &mut Interpreter) {
         macro_rules! stack_bv {
             ($idx:expr) => {{
                 let real_loc_sym = self.symbolic_stack.len() - 1 - $idx;
@@ -733,153 +764,5 @@ impl ConcolicHost {
         for v in bv {
             self.symbolic_stack.push(v);
         }
-    }
-
-    pub fn solve(&self) {
-        let context = Context::new(&Config::default());
-        let solver = Solver::new(&context);
-        let input = BV::new_const(&context, "input", self.bits);
-        let callvalue = BV::new_const(&context, "callvalue", 256);
-        let balance = BV::new_const(&context, "balance", 256);
-
-        let mut solving = Solving::new(&input, &balance, &callvalue, &solver);
-        for cons in &self.constraints {
-            let bv: BV = solving.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
-            solver.assert(&match cons.op {
-                ConcolicOp::GT => {
-                    bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::SGT => {
-                    bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::EQ => {
-                    bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::LT => {
-                    bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::SLT => {
-                    bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                _ => panic!("{:?} not implemented for constraint solving", cons.op),
-            });
-        }
-    }
-}
-
-impl Host for ConcolicHost {
-    const INSPECT: bool = true;
-    type DB = BenchmarkDB;
-    // type DB = BenchmarkDB;
-
-    fn step(&mut self, interp: &mut Interpreter, _is_static: bool) -> Return {
-        unsafe {
-            self.on_step(interp);
-        }
-        return Continue;
-    }
-
-    fn step_end(&mut self, _interp: &mut Interpreter, _is_static: bool, _ret: Return) -> Return {
-        return Continue;
-    }
-
-    fn env(&mut self) -> &mut Env {
-        return &mut self.env;
-    }
-
-    fn load_account(&mut self, address: H160) -> Option<(bool, bool)> {
-        // todo: exist second param
-        unsafe {
-            println!("load account {}", address);
-        }
-        Some((
-            true,
-            self.data.contains_key(&address) || self.code.contains_key(&address),
-        ))
-    }
-
-    fn block_hash(&mut self, number: U256) -> Option<H256> {
-        println!("blockhash {}", number);
-
-        Some(
-            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
-        )
-    }
-
-    fn balance(&mut self, _address: H160) -> Option<(U256, bool)> {
-        // println!("balance");
-
-        Some((U256::max_value(), true))
-    }
-
-    fn code(&mut self, address: H160) -> Option<(Bytecode, bool)> {
-        // println!("code");
-        match self.code.get(&address) {
-            Some(code) => Some((code.clone(), true)),
-            None => Some((Bytecode::new(), true)),
-        }
-    }
-
-    fn code_hash(&mut self, _address: H160) -> Option<(H256, bool)> {
-        Some((
-            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
-            true,
-        ))
-    }
-
-    fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
-        unsafe {
-            println!("sload");
-        }
-        match self.data.get(&address) {
-            Some(account) => Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
-            None => Some((U256::zero(), true)),
-        }
-    }
-
-    fn sstore(
-        &mut self,
-        address: H160,
-        index: U256,
-        value: U256,
-    ) -> Option<(U256, U256, U256, bool)> {
-        // unsafe {
-        //     // println!("sstore");
-        // }
-        match self.data.get_mut(&address) {
-            Some(account) => account.insert(index, value),
-            None => None,
-        };
-        Some((U256::from(0), U256::from(0), U256::from(0), true))
-    }
-
-    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {}
-
-    fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {
-        return Some(SelfDestructResult::default());
-    }
-
-    fn create<SPEC: Spec>(
-        &mut self,
-        _inputs: &mut CreateInputs,
-    ) -> (Return, Option<H160>, Gas, Bytes) {
-        unsafe {
-            println!("create");
-        }
-        return (
-            Continue,
-            Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()),
-            Gas::new(0),
-            Bytes::new(),
-        );
-    }
-
-    fn call<SPEC: Spec>(&mut self, _input: &mut CallInputs) -> (Return, Gas, Bytes) {
-        unsafe {
-            println!("call");
-        }
-        return (Continue, Gas::new(0), Bytes::new());
     }
 }

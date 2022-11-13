@@ -84,8 +84,9 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+use crate::middleware::Middleware;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct FuzzHost {
     pub data: VMState,
     // these are internal to the host
@@ -95,10 +96,31 @@ pub struct FuzzHost {
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
+    middlewares: Vec<Box<dyn Middleware>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub total_instr: HashMap<H160, usize>,
+}
+
+// all clones would not include middlewares
+impl Clone for FuzzHost {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            env: self.env.clone(),
+            code: self.code.clone(),
+            hash_to_address: self.hash_to_address.clone(),
+            _pc: self._pc,
+            pc_to_addresses: self.pc_to_addresses.clone(),
+            pc_to_call_hash: self.pc_to_call_hash.clone(),
+            middlewares: vec![],
+            #[cfg(feature = "record_instruction_coverage")]
+            pc_coverage: self.pc_coverage.clone(),
+            #[cfg(feature = "record_instruction_coverage")]
+            total_instr: self.total_instr.clone(),
+        }
+    }
 }
 
 // hack: I don't want to change evm internal to add a new type of return
@@ -121,6 +143,7 @@ impl FuzzHost {
             _pc: 0,
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
+            middlewares: vec![],
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -195,7 +218,10 @@ impl Host for FuzzHost {
             let pc = interp.program_counter().clone();
             self.pc_coverage.entry(address).or_default().insert(pc);
         }
+
+
         unsafe {
+            self.middlewares.iter_mut().for_each(|m| m.on_step(interp));
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
                 0x57 => {
