@@ -1,9 +1,9 @@
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 
-use std::i64::MAX;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::i64::MAX;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -48,7 +48,7 @@ impl VMState {
     pub fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
         for i in self.state.iter().sorted_by_key(|k| k.0) {
-            i.0.0.hash(&mut s);
+            i.0 .0.hash(&mut s);
             for j in i.1.iter() {
                 j.0.hash(&mut s);
                 j.1.hash(&mut s);
@@ -79,12 +79,12 @@ impl VMState {
     }
 }
 
+use crate::middleware::Middleware;
 use crate::state::HasHashToAddress;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::middleware::Middleware;
 
 #[derive(Debug)]
 pub struct FuzzHost {
@@ -164,30 +164,25 @@ impl FuzzHost {
 
     #[cfg(feature = "record_instruction_coverage")]
     fn record_instruction_coverage(&mut self) {
-                println!(
-                    "coverage: {} out of {:?}",
-                    self.pc_coverage.iter().fold(0, |acc, x| acc + {
-                        if self.total_instr.contains_key(x.0) {
-                            println!("{:?}", x.1);
-                            x.1.len()
-                        } else {
-                            0
-                        }
-                    }),
-                    self
-                        .total_instr
-                        .keys()
-                        .map(|k| (
-                            self
-                                .pc_coverage
-                                .get(k)
-                                .unwrap_or(&Default::default())
-                                .len(),
-                            self.total_instr.get(k).unwrap()
-                        ))
-                        .collect::<Vec<_>>()
-                );
-        }
+        println!(
+            "coverage: {} out of {:?}",
+            self.pc_coverage.iter().fold(0, |acc, x| acc + {
+                if self.total_instr.contains_key(x.0) {
+                    println!("{:?}", x.1);
+                    x.1.len()
+                } else {
+                    0
+                }
+            }),
+            self.total_instr
+                .keys()
+                .map(|k| (
+                    self.pc_coverage.get(k).unwrap_or(&Default::default()).len(),
+                    self.total_instr.get(k).unwrap()
+                ))
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 macro_rules! process_rw_key {
@@ -218,7 +213,6 @@ impl Host for FuzzHost {
             let pc = interp.program_counter().clone();
             self.pc_coverage.entry(address).or_default().insert(pc);
         }
-
 
         unsafe {
             self.middlewares.iter_mut().for_each(|m| m.on_step(interp));
@@ -280,8 +274,12 @@ impl Host for FuzzHost {
                     let abs_diff = if v1 >= v2 {
                         if v1 - v2 != U256::zero() {
                             (v1 - v2)
-                        } else { U256::from(1) }
-                    } else { U256::zero() };
+                        } else {
+                            U256::from(1)
+                        }
+                    } else {
+                        U256::zero()
+                    };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -296,8 +294,12 @@ impl Host for FuzzHost {
                     let abs_diff = if v1 <= v2 {
                         if v2 - v1 != U256::zero() {
                             (v2 - v1)
-                        } else { U256::from(1) }
-                    } else { U256::zero() };
+                        } else {
+                            U256::from(1)
+                        }
+                    } else {
+                        U256::zero()
+                    };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -309,7 +311,11 @@ impl Host for FuzzHost {
                     // EQ
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 < v2 { (v2 - v1) % (U256::max_value() - 1) + 1 } else { (v1 - v2) % (U256::max_value() - 1) + 1 };
+                    let abs_diff = if v1 < v2 {
+                        (v2 - v1) % (U256::max_value() - 1) + 1
+                    } else {
+                        (v1 - v2) % (U256::max_value() - 1) + 1
+                    };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -398,7 +404,6 @@ impl Host for FuzzHost {
     }
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
-
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
             #[cfg(feature = "record_instruction_coverage")]
             self.record_instruction_coverage();
@@ -435,8 +440,13 @@ impl Host for FuzzHost {
         if !self.pc_to_call_hash.contains_key(&self._pc) {
             self.pc_to_call_hash.insert(self._pc, HashSet::new());
         }
-        self.pc_to_call_hash.get_mut(&self._pc).unwrap().insert(hash.to_vec());
-        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD && input_seq.len() >= 4 {
+        self.pc_to_call_hash
+            .get_mut(&self._pc)
+            .unwrap()
+            .insert(hash.to_vec());
+        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD
+            && input_seq.len() >= 4
+        {
             // random sample a key from hash_to_address
             let mut keys: Vec<&[u8; 4]> = self.hash_to_address.keys().collect();
             let selected_key = keys[hash.iter().map(|x| (*x) as usize).sum::<usize>() % keys.len()];
@@ -573,7 +583,7 @@ where
                 // todo(@shou !important) do we need to increase pc?
                 Some((recovering_stack, post_exec.1 + 1)),
                 // todo(@shou !important) whats value
-                0
+                0,
             );
             last_output = r.output;
             if r.ret == Return::Return {
@@ -605,7 +615,12 @@ where
         };
     }
 
-    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes, deployed_address: H160) -> Option<H160> {
+    pub fn deploy(
+        &mut self,
+        code: Bytecode,
+        constructor_args: Bytes,
+        deployed_address: H160,
+    ) -> Option<H160> {
         let deployer = Contract::new::<LatestSpec>(
             constructor_args,
             code,
@@ -696,7 +711,7 @@ where
         state: &VMState,
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
-        value: usize
+        value: usize,
     ) -> IntermediateExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(

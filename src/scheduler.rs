@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
@@ -6,6 +5,7 @@ use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use libafl::{impl_serdeany, Error};
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 pub trait HasVote<I, S>
 where

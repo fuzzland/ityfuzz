@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use libafl::corpus::Testcase;
 use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
@@ -9,11 +8,12 @@ use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use primitive_types::U256;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 
 use std::marker::PhantomData;
 
-use crate::evm::{state_change, EVMExecutor, MAP_SIZE, READ_MAP, WRITE_MAP, JMP_MAP};
+use crate::evm::{state_change, EVMExecutor, JMP_MAP, MAP_SIZE, READ_MAP, WRITE_MAP};
 
 use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};
@@ -417,7 +417,6 @@ where
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
-
 
         unsafe {
             if state_change {

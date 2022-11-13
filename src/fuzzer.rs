@@ -182,7 +182,10 @@ where
         #[cfg(feature = "evaluation")]
         {
             if random::<i32>() % 10000 == 0 {
-                println!("Infant corpus size: {}", state.get_infant_state_state().infant_state.count());
+                println!(
+                    "Infant corpus size: {}",
+                    state.get_infant_state_state().infant_state.count()
+                );
             }
         }
 

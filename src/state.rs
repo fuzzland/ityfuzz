@@ -11,7 +11,10 @@ use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::RandomSeed;
-use libafl::prelude::{current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap, StdRand};
+use libafl::prelude::{
+    current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
+    StdRand,
+};
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -33,11 +36,11 @@ const CONTRACT_AMT: u8 = 2;
 // shou: may need intermediate info for future adding concolic execution
 pub trait HasItyState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-        where
-            SC: Scheduler<StagedVMState, InfantStateState>;
+    where
+        SC: Scheduler<StagedVMState, InfantStateState>;
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-        where
-            SC: Scheduler<StagedVMState, InfantStateState>;
+    where
+        SC: Scheduler<StagedVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
 }
 
@@ -137,7 +140,7 @@ impl FuzzState {
             let deployed_address = match executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
                 Bytes::from(contract.constructor_args),
-                generate_random_address()
+                generate_random_address(),
             ) {
                 Some(addr) => addr,
                 None => {
@@ -163,7 +166,7 @@ impl FuzzState {
                     data: Some(abi_instance),
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: 0
+                    txn_value: 0,
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -180,7 +183,7 @@ impl FuzzState {
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: 1
+                    txn_value: 1,
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -208,11 +211,17 @@ impl FuzzState {
         }
     }
 
-    pub fn setup_contract_callers<I, S>(&mut self, amount: usize, executor: &mut EVMExecutor<I, S>) {
+    pub fn setup_contract_callers<I, S>(
+        &mut self,
+        amount: usize,
+        executor: &mut EVMExecutor<I, S>,
+    ) {
         for _ in 0..amount {
             let address = generate_random_address();
             self.default_callers.push(address);
-            executor.host.set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
+            executor
+                .host
+                .set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
         }
     }
 }
@@ -279,8 +288,8 @@ impl HasRand for InfantStateState {
 
 impl HasItyState for FuzzState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-        where
-            SC: Scheduler<StagedVMState, InfantStateState>,
+    where
+        SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -296,8 +305,8 @@ impl HasItyState for FuzzState {
     }
 
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-        where
-            SC: Scheduler<StagedVMState, InfantStateState>,
+    where
+        SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = self
             .infant_states_state

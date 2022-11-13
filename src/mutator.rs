@@ -65,7 +65,6 @@ where
                     input.mutate(state);
                 }
             }
-
         }
         return Ok(MutationResult::Mutated);
     }

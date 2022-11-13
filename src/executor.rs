@@ -132,7 +132,7 @@ mod tests {
             .deploy(
                 Bytecode::new_raw(Bytes::from(deployment_bytecode)),
                 Bytes::from(vec![]),
-                generate_random_address()
+                generate_random_address(),
             )
             .unwrap();
 

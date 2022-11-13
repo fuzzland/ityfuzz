@@ -2,19 +2,19 @@ use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 
+use crate::middleware::Middleware;
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
     Spec,
 };
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::middleware::Middleware;
-use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
@@ -358,7 +358,6 @@ impl ConcolicHost {
 }
 
 impl Middleware for ConcolicHost {
-
     unsafe fn on_step(&mut self, interp: &mut Interpreter) {
         macro_rules! stack_bv {
             ($idx:expr) => {{
