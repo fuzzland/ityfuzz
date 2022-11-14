@@ -1,17 +1,15 @@
+use crate::evm::FuzzHost;
+use primitive_types::{H160, U256};
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
 use std::fmt::Debug;
-use primitive_types::{H160, U256};
-use crate::evm::FuzzHost;
-
 
 #[derive(Clone, Debug)]
 pub enum MiddlewareOp {
     UpdateSlot(H160, U256, U256),
     UpdateCode(H160, Bytecode),
 }
-
 
 impl MiddlewareOp {
     pub fn execute(&self, host: &mut FuzzHost) {
@@ -26,7 +24,6 @@ impl MiddlewareOp {
     }
 }
 
-pub trait Middleware: Debug
-{
+pub trait Middleware: Debug {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp>;
 }

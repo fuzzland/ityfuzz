@@ -1,14 +1,14 @@
-use std::collections::HashSet;
-use std::fmt::{Debug, Formatter};
+use crate::evm::FuzzHost;
+use crate::middleware::MiddlewareOp::{UpdateCode, UpdateSlot};
+use crate::middleware::{Middleware, MiddlewareOp};
+use crate::onchain::endpoints::OnChainConfig;
+use crate::types::convert_u256_to_h160;
 use libafl::prelude::MutationResult;
 use primitive_types::{H160, H256, U256};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize, Serializer};
-use crate::evm::FuzzHost;
-use crate::middleware::{Middleware, MiddlewareOp};
-use crate::middleware::MiddlewareOp::{UpdateCode, UpdateSlot};
-use crate::onchain::endpoints::OnChainConfig;
-use crate::types::convert_u256_to_h160;
+use std::collections::HashSet;
+use std::fmt::{Debug, Formatter};
 
 #[derive(Clone, Debug)]
 pub struct OnChain {
@@ -37,13 +37,11 @@ impl Middleware for OnChain {
                     return vec![];
                 } else {
                     self.loaded_data.insert((address, slot_idx));
-                    return vec![
-                        UpdateSlot(
-                            address,
-                            slot_idx,
-                            self.endpoint.get_contract_slot(address, slot_idx)
-                        )
-                    ];
+                    return vec![UpdateSlot(
+                        address,
+                        slot_idx,
+                        self.endpoint.get_contract_slot(address, slot_idx),
+                    )];
                 }
             }
 
@@ -54,15 +52,15 @@ impl Middleware for OnChain {
                     return vec![];
                 } else {
                     self.loaded_code.insert(address_h160);
-                    return vec![
-                        UpdateCode(
-                            address_h160,
-                            self.endpoint.get_contract_code(address_h160)
-                        )
-                    ];
+                    return vec![UpdateCode(
+                        address_h160,
+                        self.endpoint.get_contract_code(address_h160),
+                    )];
                 }
             }
-            _ => { return vec![]; }
+            _ => {
+                return vec![];
+            }
         }
     }
 }
