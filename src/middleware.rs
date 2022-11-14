@@ -1,10 +1,32 @@
-use revm::Interpreter;
+use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
 use std::fmt::Debug;
+use primitive_types::{H160, U256};
+use crate::evm::FuzzHost;
 
-pub trait Middleware:
-    Debug + serde_traitobject::Serialize + serde_traitobject::Deserialize
+
+#[derive(Clone, Debug)]
+pub enum MiddlewareOp {
+    UpdateSlot(H160, U256, U256),
+    UpdateCode(H160, Bytecode),
+}
+
+
+impl MiddlewareOp {
+    pub fn execute(&self, host: &mut FuzzHost) {
+        match self {
+            MiddlewareOp::UpdateSlot(addr, slot, val) => {
+                host.data.get_mut(&addr).unwrap().insert(*slot, *val);
+            }
+            MiddlewareOp::UpdateCode(addr, code) => {
+                host.set_code(*addr, code.clone());
+            }
+        }
+    }
+}
+
+pub trait Middleware: Debug
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter);
+    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp>;
 }

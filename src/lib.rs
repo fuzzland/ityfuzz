@@ -19,5 +19,6 @@ pub mod scheduler;
 pub mod state;
 pub mod state_input;
 pub mod types;
+pub mod onchain;
 
 use crate::evm::{EVMExecutor, VMState};

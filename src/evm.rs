@@ -66,15 +66,15 @@ impl VMState {
         }
     }
 
-    fn get(&self, address: &H160) -> Option<&HashMap<U256, U256>> {
+    pub fn get(&self, address: &H160) -> Option<&HashMap<U256, U256>> {
         self.state.get(address)
     }
 
-    fn get_mut(&mut self, address: &H160) -> Option<&mut HashMap<U256, U256>> {
+    pub fn get_mut(&mut self, address: &H160) -> Option<&mut HashMap<U256, U256>> {
         self.state.get_mut(address)
     }
 
-    fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
+    pub fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
         self.state.insert(address, storage);
     }
 }
@@ -215,7 +215,12 @@ impl Host for FuzzHost {
         }
 
         unsafe {
-            self.middlewares.iter_mut().for_each(|m| m.on_step(interp));
+            let all_mutation_ops = self.middlewares.iter_mut().map(|m| m.on_step(interp)).collect::<Vec<_>>();
+            all_mutation_ops.iter().for_each(
+                |ops| {
+                    ops.iter().for_each(|op| {op.execute(self);})
+                }
+            );
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
                 0x57 => {

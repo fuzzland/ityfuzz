@@ -2,7 +2,7 @@ use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 
-use crate::middleware::Middleware;
+use crate::middleware::{Middleware, MiddlewareOp};
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -358,7 +358,7 @@ impl ConcolicHost {
 }
 
 impl Middleware for ConcolicHost {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
         macro_rules! stack_bv {
             ($idx:expr) => {{
                 let real_loc_sym = self.symbolic_stack.len() - 1 - $idx;
@@ -763,5 +763,6 @@ impl Middleware for ConcolicHost {
         for v in bv {
             self.symbolic_stack.push(v);
         }
+        vec![]
     }
 }
