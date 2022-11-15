@@ -17,6 +17,9 @@ pub struct OnChainConfig {
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
     pub block_number: String,
+
+    pub etherscan_api_key: Vec<String>,
+    pub etherscan_base: String,
 }
 
 impl OnChainConfig {
@@ -33,6 +36,55 @@ impl OnChainConfig {
             } else {
                 format!("0x{:x}", block_number)
             },
+            etherscan_api_key: vec![],
+            etherscan_base: "https://api.bscscan.com/api".to_string(),
+        }
+    }
+
+    pub fn add_etherscan_api_key(&mut self, key: String) {
+        self.etherscan_api_key.push(key);
+    }
+
+    pub fn fetch_abi(&self, address: H160) -> Option<String> {
+        let endpoint = format!(
+            "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
+            self.etherscan_base,
+            address,
+            if self.etherscan_api_key.len() > 0 {
+                self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()]
+                    .clone()
+            } else {
+                "".to_string()
+            }
+        );
+        match self.client.get(endpoint.clone()).send() {
+            Ok(resp) => {
+                // println!("{:?}", resp.text());
+                let resp = resp.text();
+                match resp {
+                    Ok(resp) => {
+                        // println!("{:?}", resp);
+                        let json: Value =
+                            serde_json::from_str(&resp).expect("failed to parse API result");
+                        let result: String = json["result"]
+                            .as_str()
+                            .expect("failed to parse abi string")
+                            .to_string();
+                        if result == "Contract source code not verified" {
+                            return None;
+                        }
+                        return Some(result);
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        return None;
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                return None;
+            }
         }
     }
 
@@ -142,6 +194,15 @@ mod tests {
             H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
             U256::from(3),
         );
+        println!("{:?}", v)
+    }
+
+    #[test]
+    fn test_fetch_abi() {
+        let mut config =
+            OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+        let v =
+            config.fetch_abi(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
     }
 }
