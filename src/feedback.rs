@@ -5,7 +5,7 @@ use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
 use libafl::prelude::{Feedback, Named};
 use libafl::schedulers::Scheduler;
-use libafl::state::{HasClientPerfMonitor, State};
+use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
 use primitive_types::U256;
 use std::collections::{HashMap, HashSet};
@@ -21,7 +21,7 @@ use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
 use crate::state_input::StagedVMState;
 
-pub struct InfantFeedback<'a, I, S, O>
+pub struct InfantFeedback<'a, I, S: 'static, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -71,7 +71,7 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for InfantFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult,
+    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I>,
     I: VMInputT,
     O: Oracle<I, S>,
 {
@@ -139,7 +139,7 @@ where
     }
 }
 
-pub struct OracleFeedback<'a, I, S, O>
+pub struct OracleFeedback<'a, I, S: 'static, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -187,7 +187,7 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult,
+    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I>,
     I: VMInputT,
     O: Oracle<I, S>,
 {
