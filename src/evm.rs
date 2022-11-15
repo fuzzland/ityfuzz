@@ -135,6 +135,10 @@ const CONTROL_LEAK_THRESHOLD: usize = 1;
 
 impl FuzzHost {
     pub fn new() -> Self {
+        return FuzzHost::with_middlewares(vec![]);
+    }
+
+    pub fn with_middlewares(middlewares: Vec<Box<dyn Middleware>>) -> Self {
         Self {
             data: VMState::new(),
             env: Env::default(),
@@ -143,7 +147,7 @@ impl FuzzHost {
             _pc: 0,
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
-            middlewares: vec![],
+            middlewares,
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]

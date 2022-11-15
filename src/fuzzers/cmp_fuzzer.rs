@@ -28,6 +28,9 @@ use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
+use crate::config::Config;
+use crate::middleware::Middleware;
+use crate::onchain::onchain::OnChain;
 use primitive_types::H160;
 
 struct ABIConfig {
@@ -40,7 +43,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn cmp_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
+pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
@@ -60,15 +63,19 @@ pub fn cmp_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
-    let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), deployer);
-    let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
-    let contract_info = if let Some(target_contract) = target_contract {
-        ContractLoader::from_glob_target(contracts_glob, &target_contract).contracts
-    } else {
-        ContractLoader::from_glob(contracts_glob).contracts
+    let middlewares: Vec<Box<dyn Middleware>> = match config.onchain {
+        Some(onchain) => {
+            vec![Box::new(OnChain::new(onchain))]
+        }
+        None => {
+            vec![]
+        }
     };
+    let evm_executor: EVMExecutor<VMInput, FuzzState> =
+        EVMExecutor::new(FuzzHost::with_middlewares(middlewares), deployer);
+    let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     state.initialize(
-        contract_info,
+        config.contract_info,
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
