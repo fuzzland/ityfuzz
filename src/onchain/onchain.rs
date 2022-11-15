@@ -7,13 +7,16 @@ use libafl::prelude::MutationResult;
 use primitive_types::{H160, H256, U256};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize, Serializer};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
+
+const UNBOUND_THRESHOLD: usize = 5;
 
 #[derive(Clone, Debug)]
 pub struct OnChain {
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
+    pub calls: HashMap<(H160, usize), usize>,
     pub endpoint: OnChainConfig,
 }
 
@@ -22,6 +25,7 @@ impl OnChain {
         Self {
             loaded_data: Default::default(),
             loaded_code: Default::default(),
+            calls: Default::default(),
             endpoint,
         }
     }
@@ -46,6 +50,19 @@ impl Middleware for OnChain {
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {
+                let pc = interp.program_counter();
+                let calls_data = self.calls.get_mut(&(interp.contract.address, pc));
+                match calls_data {
+                    None => {
+                        self.calls.insert((interp.contract.address, pc), 1);
+                    }
+                    Some(v) => {
+                        if *v > UNBOUND_THRESHOLD {
+                            return vec![];
+                        }
+                        *v += 1;
+                    }
+                }
                 let address = interp.stack.peek(1).unwrap();
                 let address_h160 = convert_u256_to_h160(address);
                 if self.loaded_code.contains(&address_h160) {
