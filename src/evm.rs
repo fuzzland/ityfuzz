@@ -81,7 +81,7 @@ impl VMState {
     }
 }
 
-use crate::middleware::Middleware;
+use crate::middleware::{Middleware, MiddlewareOp};
 use crate::state::{FuzzState, HasHashToAddress};
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
@@ -99,6 +99,7 @@ pub struct FuzzHost {
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     middlewares: Vec<Box<dyn Middleware>>,
+    pub middlewares_deferred_actions: Vec<MiddlewareOp>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -117,6 +118,7 @@ impl Clone for FuzzHost {
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             middlewares: vec![],
+            middlewares_deferred_actions: vec![],
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: self.pc_coverage.clone(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -150,6 +152,7 @@ impl FuzzHost {
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
             middlewares,
+            middlewares_deferred_actions: vec![],
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -158,8 +161,8 @@ impl FuzzHost {
     }
 
     pub fn initialize<S>(&mut self, state: &S)
-        where
-            S: HasHashToAddress
+    where
+        S: HasHashToAddress,
     {
         self.hash_to_address = state.get_hash_to_address().clone();
     }
@@ -569,7 +572,7 @@ impl ExecutionResult {
 impl<I, S> EVMExecutor<I, S>
 where
     I: VMInputT,
-    S: HasCorpus<I>
+    S: HasCorpus<I>,
 {
     pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
         Self {
@@ -600,7 +603,7 @@ where
                 Some((recovering_stack, post_exec.1 + 1)),
                 // todo(@shou !important) whats value
                 0,
-                None
+                None,
             );
             last_output = r.output;
             if r.ret == Return::Return {
@@ -704,9 +707,7 @@ where
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(
-            contract_address, caller, vm_state, data, None, value, state
-        );
+        let r = self.execute_from_pc(contract_address, caller, vm_state, data, None, value, state);
         match r.ret {
             ControlLeak => {
                 self.host.data.post_execution.push((r.stack, r.pc));
