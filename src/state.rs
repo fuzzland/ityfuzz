@@ -15,6 +15,7 @@ use libafl::prelude::{
     current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
     StdRand,
 };
+use std::collections::{HashMap, HashSet};
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -51,7 +52,7 @@ pub trait HasInfantStateState {
 }
 
 pub trait HasHashToAddress {
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], H160>;
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
 }
 
 pub trait HasExecutionResult {
@@ -75,7 +76,7 @@ pub struct FuzzState {
     default_callers: Vec<H160>,
     pub rand_generator: RomuDuoJrRand,
     pub max_size: usize,
-    pub hash_to_address: std::collections::HashMap<[u8; 4], H160>,
+    pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
 }
 
 impl FuzzState {
@@ -156,7 +157,19 @@ impl FuzzState {
                 if abi.is_constructor {
                     continue;
                 }
-                self.hash_to_address.insert(abi.function, deployed_address);
+
+                match self
+                    .hash_to_address
+                    .get_mut(abi.function.clone().as_slice())
+                {
+                    Some(addrs) => {
+                        addrs.insert(deployed_address);
+                    }
+                    None => {
+                        self.hash_to_address
+                            .insert(abi.function.clone(), HashSet::from([deployed_address]));
+                    }
+                }
                 if abi.is_static && !include_static {
                     continue;
                 }
@@ -247,7 +260,7 @@ impl InfantStateState {
 }
 
 impl HasHashToAddress for FuzzState {
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], H160> {
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
         &self.hash_to_address
     }
 }
