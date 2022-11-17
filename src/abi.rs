@@ -99,7 +99,7 @@ impl BoxedABI {
     }
 
     pub fn to_string(&self) -> String {
-        self.b.to_string()
+        format!("{}{}", hex::encode(self.function), self.b.to_string())
     }
 }
 

@@ -5,6 +5,7 @@ use crate::{
 };
 use std::{marker::PhantomData, time::Duration};
 
+use crate::config::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
 use libafl::{
     fuzzer::Fuzzer,
@@ -177,16 +178,6 @@ where
         if is_infant_interesting {
             let new_state = state.get_execution_result();
             state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
-        }
-
-        #[cfg(feature = "evaluation")]
-        {
-            if random::<i32>() % 10000 == 0 {
-                println!(
-                    "Infant corpus size: {}",
-                    state.get_infant_state_state().infant_state.count()
-                );
-            }
         }
 
         let is_solution = self

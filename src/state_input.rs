@@ -2,17 +2,29 @@ use crate::VMState;
 use bytes::Bytes;
 use libafl::inputs::Input;
 use primitive_types::H160;
+use std::fmt::Debug;
 
 use crate::abi::BoxedABI;
 use crate::input::{VMInput, VMInputT};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn {
     pub caller: H160,
     pub contract: H160,
     pub data: Option<BoxedABI>,
     pub txn_value: usize,
+}
+
+impl Debug for BasicTxn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BasicTxn")
+            .field("caller", &self.caller)
+            .field("contract", &self.contract)
+            .field("data", &self.data.as_ref().unwrap().to_string())
+            .field("txn_value", &self.txn_value)
+            .finish()
+    }
 }
 
 pub fn build_basic_txn<I>(v: &I) -> BasicTxn
