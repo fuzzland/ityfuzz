@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
+import "../../solidity_utils/lib.sol";
+
 
 interface Someone {
     function something() external;
@@ -26,8 +28,8 @@ contract main {
     }
 
     function b() public {
-        if (is_success > 150) {
-            panic!();
+        if (is_success == 10) {
+            bug();
         }
     }
 }
