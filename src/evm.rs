@@ -681,12 +681,15 @@ where
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
         );
-        self.host.total_instr.insert(
-            deployed_address,
-            EVMExecutor::<I, S>::count_instructions(
-                &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
-            ),
-        );
+        #[cfg(feature = "evaluation")]
+        {
+            self.host.total_instr.insert(
+                deployed_address,
+                EVMExecutor::<I, S>::count_instructions(
+                    &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
+                ),
+            );
+        }
         Some(deployed_address)
     }
 
