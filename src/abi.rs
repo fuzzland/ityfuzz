@@ -10,8 +10,9 @@ use primitive_types::H160;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::fmt::Debug;
-use std::ops::DerefMut;
+use std::fmt::{Debug, Formatter, Write};
+use std::ops::{Deref, DerefMut};
+use itertools::Itertools;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -26,6 +27,7 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn is_static(&self) -> bool;
     fn get_bytes(&self) -> Vec<u8>;
     fn get_type(&self) -> ABILossyType;
+    fn to_string(&self) -> String;
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
@@ -94,6 +96,10 @@ impl BoxedABI {
 
     pub fn set_func(&mut self, function: [u8; 4]) {
         self.function = function;
+    }
+
+    pub fn to_string(&self) -> String {
+        self.b.to_string()
     }
 }
 
@@ -204,6 +210,10 @@ impl ABI for AEmpty {
         TEmpty
     }
 
+    fn to_string(&self) -> String {
+        "".to_string()
+    }
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
@@ -214,6 +224,15 @@ impl ABI for AEmpty {
 pub struct A256 {
     data: Vec<u8>,
     pub is_address: bool,
+}
+
+fn vec_to_hex(v: &Vec<u8>) -> String {
+    let mut s = String::new();
+    s.push_str("0x");
+    for i in v {
+        s.push_str(&format!("{:02x}", i));
+    }
+    s
 }
 
 impl Input for A256 {
@@ -291,6 +310,10 @@ impl ABI for A256 {
     fn get_type(&self) -> ABILossyType {
         T256
     }
+
+    fn to_string(&self) -> String {
+        vec_to_hex(&self.data)
+    }
 }
 
 fn roundup(x: usize, multiplier: usize) -> usize {
@@ -328,6 +351,10 @@ impl ABI for ADynamic {
 
     fn get_type(&self) -> ABILossyType {
         TDynamic
+    }
+
+    fn to_string(&self) -> String {
+        vec_to_hex(&self.data)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -405,6 +432,10 @@ impl ABI for AArray {
 
     fn get_type(&self) -> ABILossyType {
         TArray
+    }
+
+    fn to_string(&self) -> String {
+        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(","))
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
