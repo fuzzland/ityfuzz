@@ -1,12 +1,11 @@
-use bytes::Bytes;
 use crate::VMState;
+use bytes::Bytes;
 use libafl::inputs::Input;
 use primitive_types::H160;
 
-use serde::{Deserialize, Serialize};
 use crate::abi::BoxedABI;
 use crate::input::{VMInput, VMInputT};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BasicTxn {
@@ -17,7 +16,9 @@ pub struct BasicTxn {
 }
 
 pub fn build_basic_txn<I>(v: &I) -> BasicTxn
-where I: VMInputT {
+where
+    I: VMInputT,
+{
     BasicTxn {
         caller: v.get_caller(),
         contract: v.get_contract(),

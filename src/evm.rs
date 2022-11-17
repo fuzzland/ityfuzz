@@ -630,7 +630,7 @@ where
                     output: last_output,
                     reverted: true,
                     // we dont need to init because this reverts and is discarded anyways
-                    new_state: StagedVMState::new_uninitialized()
+                    new_state: StagedVMState::new_uninitialized(),
                 };
             }
         }
