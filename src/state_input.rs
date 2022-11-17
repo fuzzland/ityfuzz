@@ -1,13 +1,58 @@
+use bytes::Bytes;
 use crate::VMState;
 use libafl::inputs::Input;
+use primitive_types::H160;
 
 use serde::{Deserialize, Serialize};
+use crate::abi::BoxedABI;
+use crate::input::{VMInput, VMInputT};
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BasicTxn {
+    pub caller: H160,
+    pub contract: H160,
+    pub data: Option<BoxedABI>,
+    pub txn_value: usize,
+}
+
+pub fn build_basic_txn<I>(v: &I) -> BasicTxn
+where I: VMInputT {
+    BasicTxn {
+        caller: v.get_caller(),
+        contract: v.get_contract(),
+        data: v.get_abi_cloned(),
+        txn_value: v.get_txn_value(),
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TxnTrace {
+    pub transactions: Vec<BasicTxn>,
+    pub from_idx: usize,
+}
+
+impl TxnTrace {
+    fn new() -> Self {
+        Self {
+            transactions: Vec::new(),
+            from_idx: 0,
+        }
+    }
+}
+
+impl Default for TxnTrace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StagedVMState {
     pub state: VMState,
     pub stage: u64,
     pub initialized: bool,
+    pub trace: TxnTrace,
 }
 
 impl StagedVMState {
@@ -16,6 +61,7 @@ impl StagedVMState {
             state,
             stage,
             initialized: true,
+            trace: TxnTrace::new(),
         }
     }
 
@@ -24,6 +70,7 @@ impl StagedVMState {
             state,
             stage: 0,
             initialized: true,
+            trace: TxnTrace::new(),
         }
     }
 
@@ -32,22 +79,7 @@ impl StagedVMState {
             state: VMState::new(),
             stage: 0,
             initialized: false,
-        }
-    }
-
-    pub fn with_stage(&self, stage: u64) -> Self {
-        Self {
-            state: self.state.clone(),
-            stage,
-            initialized: true,
-        }
-    }
-
-    pub fn with_state(&self, state: VMState) -> Self {
-        Self {
-            state,
-            stage: self.stage,
-            initialized: self.initialized,
+            trace: TxnTrace::new(),
         }
     }
 

@@ -629,11 +629,8 @@ where
                 return ExecutionResult {
                     output: last_output,
                     reverted: true,
-                    new_state: StagedVMState {
-                        state: new_state,
-                        stage: result.new_state.stage,
-                        initialized: result.new_state.initialized,
-                    },
+                    // we dont need to init because this reverts and is discarded anyways
+                    new_state: StagedVMState::new_uninitialized()
                 };
             }
         }
@@ -644,6 +641,7 @@ where
                 state: new_state,
                 stage: result.new_state.stage,
                 initialized: result.new_state.initialized,
+                trace: result.new_state.trace.clone(),
             },
         };
     }
