@@ -1,27 +1,29 @@
-use std::any::Any;
 use crate::evm::FuzzHost;
+use crate::input::{VMInput, VMInputT};
 use crate::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::onchain::endpoints::OnChainConfig;
+use crate::state::HasItyState;
 use crate::types::convert_u256_to_h160;
+use libafl::corpus::{Corpus, Testcase};
 use libafl::prelude::{HasCorpus, Input, MutationResult};
+use libafl::schedulers::Scheduler;
+use libafl::state::State;
 use primitive_types::{H160, H256, U256};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize, Serializer};
+use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
-use libafl::corpus::{Corpus, Testcase};
-use libafl::schedulers::Scheduler;
-use libafl::state::State;
-use crate::input::{VMInput, VMInputT};
-use crate::state::HasItyState;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
 pub struct OnChain<I, S>
-where I: Input + VMInputT,
-S: State{
+where
+    I: Input + VMInputT,
+    S: State,
+{
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
     pub calls: HashMap<(H160, usize), usize>,
@@ -29,9 +31,11 @@ S: State{
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
 }
 
-impl<I, S> Clone for  OnChain<I, S>
-where I: Input + VMInputT,
-S: State{
+impl<I, S> Clone for OnChain<I, S>
+where
+    I: Input + VMInputT,
+    S: State,
+{
     fn clone(&self) -> Self {
         Self {
             loaded_data: self.loaded_data.clone(),
@@ -44,8 +48,10 @@ S: State{
 }
 
 impl<I, S> Debug for OnChain<I, S>
-where I: Input + VMInputT,
-S: State{
+where
+    I: Input + VMInputT,
+    S: State,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OnChain")
             .field("loaded_data", &self.loaded_data)
@@ -56,10 +62,15 @@ S: State{
     }
 }
 
-impl<I, S> OnChain<I, S> where I: Input + VMInputT,
-                               S: State{
+impl<I, S> OnChain<I, S>
+where
+    I: Input + VMInputT,
+    S: State,
+{
     pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC) -> Self
-    where SC: Scheduler<I, S> + 'static {
+    where
+        SC: Scheduler<I, S> + 'static,
+    {
         Self {
             loaded_data: Default::default(),
             loaded_code: Default::default(),
@@ -70,8 +81,11 @@ impl<I, S> OnChain<I, S> where I: Input + VMInputT,
     }
 }
 
-impl<I, S> Middleware for OnChain<I, S> where I: Input + VMInputT + 'static,
-                                              S: State + std::fmt::Debug + 'static {
+impl<I, S> Middleware for OnChain<I, S>
+where
+    I: Input + VMInputT + 'static,
+    S: State + std::fmt::Debug + 'static,
+{
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
         match *interp.instruction_pointer {
             0x54 => {
@@ -123,7 +137,6 @@ impl<I, S> Middleware for OnChain<I, S> where I: Input + VMInputT + 'static,
         }
     }
 
-
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::OnChain
     }
@@ -133,13 +146,18 @@ impl<I, S> Middleware for OnChain<I, S> where I: Input + VMInputT + 'static,
     }
 }
 
-impl<I, S> CanHandleDeferredActions<S> for OnChain<I, S> where I: Input + VMInputT,
-                                                      S: State + HasCorpus<I> + HasItyState {
+impl<I, S> CanHandleDeferredActions<S> for OnChain<I, S>
+where
+    I: Input + VMInputT,
+    S: State + HasCorpus<I> + HasItyState,
+{
     fn handle_deferred_actions(&self, op: &MiddlewareOp, state: &mut S) {
         match op {
             MiddlewareOp::AddCorpus(.., input) => {
                 let idx = state.add_vm_input(input.clone());
-                self.scheduler.as_ref().expect("Scheduler not set")
+                self.scheduler
+                    .as_ref()
+                    .expect("Scheduler not set")
                     .on_add(state, idx)
                     .expect("failed to call scheduler on_add");
             }

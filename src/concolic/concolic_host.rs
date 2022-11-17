@@ -1,8 +1,9 @@
-use std::any::Any;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
+use std::any::Any;
 
+use crate::middleware::MiddlewareType::Concolic;
 use crate::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use revm::Return::Continue;
 use revm::{
@@ -16,7 +17,6 @@ use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::middleware::MiddlewareType::Concolic;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {

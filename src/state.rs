@@ -114,8 +114,8 @@ impl FuzzState {
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
         include_static: bool,
     ) where
-        I: Input + VMInputT+ 'static,
-        S: State + HasCorpus<I> + HasItyState+ 'static,
+        I: Input + VMInputT + 'static,
+        S: State + HasCorpus<I> + HasItyState + 'static,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.setup_contract_callers(CONTRACT_AMT as usize, executor);
@@ -136,8 +136,8 @@ impl FuzzState {
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
         include_static: bool,
     ) where
-        I: Input + VMInputT+ 'static,
-        S: State + HasCorpus<I> + HasItyState+ 'static,
+        I: Input + VMInputT + 'static,
+        S: State + HasCorpus<I> + HasItyState + 'static,
     {
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
