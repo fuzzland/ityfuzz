@@ -18,7 +18,7 @@ use crate::evm::{state_change, EVMExecutor, JMP_MAP, MAP_SIZE, READ_MAP, WRITE_M
 use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};
 use crate::scheduler::HasVote;
-use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
+use crate::state::{HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState};
 use crate::state_input::StagedVMState;
 
 pub struct InfantFeedback<'a, I, S: 'static, O>
@@ -71,8 +71,8 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for InfantFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I>,
-    I: VMInputT,
+    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasItyState,
+    I: Input + VMInputT + 'static,
     O: Oracle<I, S>,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
@@ -187,8 +187,8 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I>,
-    I: VMInputT,
+    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasItyState + 'static,
+    I: VMInputT+ 'static,
     O: Oracle<I, S>,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle

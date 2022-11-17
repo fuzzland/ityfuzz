@@ -63,16 +63,19 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
-    let middlewares: Vec<Box<dyn Middleware>> = match config.onchain {
+    let mut fuzz_host = FuzzHost::new();
+    match config.onchain {
         Some(onchain) => {
-            vec![Box::new(OnChain::new(onchain))]
+            fuzz_host.add_middlewares(Box::new(
+                OnChain::<VMInput, FuzzState>::new(
+                    // scheduler can be cloned because it never uses &mut self
+                    onchain, scheduler.clone())
+            ));
         }
-        None => {
-            vec![]
-        }
+        None => {}
     };
     let evm_executor: EVMExecutor<VMInput, FuzzState> =
-        EVMExecutor::new(FuzzHost::with_middlewares(middlewares), deployer);
+        EVMExecutor::new(fuzz_host, deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     state.initialize(
         config.contract_info,
@@ -93,6 +96,8 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let mut harness_hash: [u8; 4] = [0; 4];
     set_hash(harness_code, &mut harness_hash);
     let oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
+
+    // clone disables middleware for evm
     let objective = OracleFeedback::new(&oracle, executor.evm_executor.clone());
 
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler);

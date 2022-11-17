@@ -6,9 +6,10 @@ use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasObservers, ObserversTuple};
 use libafl::Error;
 use std::fmt::Debug;
+use libafl::state::State;
 
 use crate::input::VMInputT;
-use crate::state::HasExecutionResult;
+use crate::state::{HasExecutionResult, HasItyState};
 use crate::EVMExecutor;
 
 // TODO: in the future, we may need to add handlers?
@@ -53,9 +54,9 @@ where
 
 impl<EM, I, S, Z, OT> Executor<EM, I, S, Z> for FuzzExecutor<I, S, OT>
 where
-    I: VMInputT + Input,
+    I: VMInputT + Input + 'static,
     OT: ObserversTuple<I, S>,
-    S: HasExecutionResult + HasCorpus<I>,
+    S: State + HasExecutionResult + HasCorpus<I> + HasItyState + 'static,
 {
     fn run_target(
         &mut self,

@@ -1,10 +1,11 @@
 use crate::evm::ExecutionResult;
 use crate::input::{VMInput, VMInputT};
-use crate::state::FuzzState;
+use crate::state::{FuzzState, HasItyState};
 use crate::{EVMExecutor, VMState};
 use bytes::Bytes;
 use hex;
 use libafl::prelude::{tuple_list, HasCorpus, SerdeAnyMap};
+use libafl::state::State;
 use primitive_types::H160;
 
 pub struct OracleCtx<'a, I, S: 'static>
@@ -20,8 +21,8 @@ where
 
 impl<'a, I, S> OracleCtx<'a, I, S>
 where
-    I: VMInputT,
-    S: HasCorpus<I>,
+    I: VMInputT + 'static,
+    S: State + HasCorpus<I> + HasItyState,
 {
     pub fn new(
         pre_state: &'a VMState,
