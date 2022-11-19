@@ -11,7 +11,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 use std::time::Duration;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
     OnChain,
     Concolic,
@@ -73,5 +73,6 @@ pub trait CanHandleDeferredActions<S> {
 pub trait Middleware: Debug {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp>;
     fn get_type(&self) -> MiddlewareType;
+    fn box_clone(&self) -> Box<dyn Middleware>;
     fn as_any(&mut self) -> &mut (dyn Any + 'static);
 }

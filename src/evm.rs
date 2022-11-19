@@ -106,7 +106,12 @@ pub struct FuzzHost {
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     middlewares_enabled: bool,
+    // middleware sets are available empty middlewares for each type
+    middleware_sets: HashMap<MiddlewareType, Box<dyn Middleware>>,
     middlewares: HashMap<MiddlewareType, Box<dyn Middleware>>,
+    // for some middlewares, it appears in the execution based on some probability
+    // see set_prob_middlewares for more details
+    middleware_probs: HashMap<MiddlewareType, f32>,
     pub middlewares_deferred_actions: HashMap<MiddlewareType, Vec<MiddlewareOp>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
@@ -126,8 +131,10 @@ impl Clone for FuzzHost {
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             middlewares_enabled: false,
+            middleware_sets: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
+            middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: self.pc_coverage.clone(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -157,8 +164,10 @@ impl FuzzHost {
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
             middlewares_enabled: false,
+            middleware_sets: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
+            middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -170,7 +179,27 @@ impl FuzzHost {
         self.middlewares_enabled = true;
         self.middlewares_deferred_actions
             .insert(middlewares.get_type(), vec![]);
-        self.middlewares.insert(middlewares.get_type(), middlewares);
+        self.middlewares.insert(middlewares.get_type(), middlewares.box_clone());
+        self.middleware_sets.insert(middlewares.get_type(), middlewares);
+    }
+
+    pub fn add_middlewares_with_prob(&mut self, middlewares: Box<dyn Middleware>, prob: f32) {
+        self.middlewares_enabled = true;
+        let middleware_type = middlewares.get_type();
+        self.add_middlewares(middlewares);
+        self.middleware_probs.insert(middleware_type, prob);
+    }
+
+    pub fn set_prob_middlewares(&mut self,) {
+        for (ty, prob) in &self.middleware_probs {
+            // random number between 0 and 1
+            let rand = rand::random::<f32>();
+            if rand < *prob {
+                self.middlewares.insert(*ty, self.middleware_sets[ty].box_clone());
+            } else {
+                self.middlewares.remove(ty);
+            }
+        }
     }
 
     pub fn initialize<S>(&mut self, state: &S)
@@ -799,6 +828,9 @@ where
             state_change = false;
         }
 
+        // setup available middlewares
+
+
         // cleanup the deferred actions map
         if self.host.middlewares_enabled {
             self.host
@@ -809,6 +841,8 @@ where
                 });
         }
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+
+        // For each middleware, execute the deferred actions
         if self.host.middlewares_enabled {
             self.host
                 .middlewares_deferred_actions
