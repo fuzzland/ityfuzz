@@ -734,6 +734,17 @@ where
         Some(deployed_address)
     }
 
+    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
+        let bytecode = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+        self.host.set_code(address, bytecode.clone());
+        #[cfg(feature = "evaluation")]
+        {
+            self.host
+                .total_instr
+                .insert(address, EVMExecutor::<I, S>::count_instructions(&bytecode));
+        }
+    }
+
     pub fn count_instructions(bytecode: &Bytecode) -> usize {
         // println!("bytecode = {:?}", bytecode.len());
         let mut count: usize = 0;

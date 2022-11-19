@@ -33,6 +33,7 @@ pub struct ContractInfo {
     pub name: String,
     pub abi: Vec<ABIConfig>,
     pub code: Vec<u8>,
+    pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
     pub deployed_address: H160,
 }
@@ -106,6 +107,7 @@ impl ContractLoader {
             name: prefix.to_string(),
             abi: vec![],
             code: vec![],
+            is_code_deployed: false,
             constructor_args: vec![], // todo: fill this
             deployed_address: generate_random_address(),
         };
@@ -228,6 +230,7 @@ impl ContractLoader {
                 name: addr.to_string(),
                 abi: Self::parse_abi_str(&abi.unwrap()),
                 code: onchain.get_contract_code(addr).bytes().to_vec(),
+                is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
             };
