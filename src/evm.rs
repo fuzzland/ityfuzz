@@ -179,8 +179,10 @@ impl FuzzHost {
         self.middlewares_enabled = true;
         self.middlewares_deferred_actions
             .insert(middlewares.get_type(), vec![]);
-        self.middlewares.insert(middlewares.get_type(), middlewares.box_clone());
-        self.middleware_sets.insert(middlewares.get_type(), middlewares);
+        self.middlewares
+            .insert(middlewares.get_type(), middlewares.box_clone());
+        self.middleware_sets
+            .insert(middlewares.get_type(), middlewares);
     }
 
     pub fn add_middlewares_with_prob(&mut self, middlewares: Box<dyn Middleware>, prob: f32) {
@@ -190,12 +192,13 @@ impl FuzzHost {
         self.middleware_probs.insert(middleware_type, prob);
     }
 
-    pub fn set_prob_middlewares(&mut self,) {
+    pub fn set_prob_middlewares(&mut self) {
         for (ty, prob) in &self.middleware_probs {
             // random number between 0 and 1
             let rand = rand::random::<f32>();
             if rand < *prob {
-                self.middlewares.insert(*ty, self.middleware_sets[ty].box_clone());
+                self.middlewares
+                    .insert(*ty, self.middleware_sets[ty].box_clone());
             } else {
                 self.middlewares.remove(ty);
             }
@@ -829,7 +832,6 @@ where
         }
 
         // setup available middlewares
-
 
         // cleanup the deferred actions map
         if self.host.middlewares_enabled {
