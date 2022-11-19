@@ -24,6 +24,28 @@ pub struct OnChainConfig {
 
 impl OnChainConfig {
     pub fn new(endpoint_url: String, chain_id: u32, block_number: u64) -> Self {
+        Self::new_with_custom_etherscan(
+            endpoint_url,
+            chain_id,
+            block_number,
+            match chain_id {
+                1 => "https://api.etherscan.io/api",
+                56 => "https://api.bscscan.com/api",
+                137 => "https://api.polygonscan.com/api",
+                _ => {
+                    panic!("{}", format!("Unknown chain id: {}", chain_id));
+                }
+            }
+            .to_string(),
+        )
+    }
+
+    pub fn new_with_custom_etherscan(
+        endpoint_url: String,
+        chain_id: u32,
+        block_number: u64,
+        etherscan_base: String,
+    ) -> Self {
         Self {
             endpoint_url,
             // cache_len: 0,
@@ -37,7 +59,7 @@ impl OnChainConfig {
                 format!("0x{:x}", block_number)
             },
             etherscan_api_key: vec![],
-            etherscan_base: "https://api.bscscan.com/api".to_string(),
+            etherscan_base,
         }
     }
 
@@ -57,6 +79,7 @@ impl OnChainConfig {
                 "".to_string()
             }
         );
+        println!("fetching abi from {}", endpoint);
         match self.client.get(endpoint.clone()).send() {
             Ok(resp) => {
                 // println!("{:?}", resp.text());
