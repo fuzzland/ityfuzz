@@ -26,7 +26,7 @@ or -->
 ```bash
 # if cli binary exists
 cd ./cli/
-./cli --contract-glob '../tests/multi-contract/*'
+./cli -t '../tests/multi-contract/*'
 ```
 
 
