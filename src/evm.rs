@@ -796,6 +796,8 @@ where
         value: usize,
         mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
+        // setup available middlewares
+        self.host.set_prob_middlewares();
         self.host.data = vm_state.clone();
         let call = Contract::new::<LatestSpec>(
             data,
@@ -830,8 +832,6 @@ where
         unsafe {
             state_change = false;
         }
-
-        // setup available middlewares
 
         // cleanup the deferred actions map
         if self.host.middlewares_enabled {
