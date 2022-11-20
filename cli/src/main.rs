@@ -5,7 +5,7 @@ use ityfuzz::contract_utils::ContractLoader;
 use ityfuzz::fuzzers::basic_fuzzer;
 use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
 use ityfuzz::fuzzers::df_fuzzer::df_fuzzer;
-use ityfuzz::onchain::endpoints::OnChainConfig;
+use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
 use primitive_types::H160;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -34,17 +34,29 @@ struct Args {
     #[arg(short, long)]
     onchain: Option<bool>,
 
-    /// Onchain endpoint URL
+    /// Onchain - Chain type
+    #[arg(short, long)]
+    chain_type: Option<String>,
+
+    /// Onchain - Block number (default: 0)
+    #[arg(long)]
+    onchain_block_number: Option<u64>,
+
+    /// Onchain Customize - Endpoint URL
     #[arg(long)]
     onchain_url: Option<String>,
 
-    /// Onchain chain ID
+    /// Onchain Customize - Chain ID
     #[arg(long)]
     onchain_chain_id: Option<u32>,
 
-    /// Onchain block number
+    /// Onchain Customize - Block explorer URL
     #[arg(long)]
-    onchain_block_number: Option<u64>,
+    onchain_explorer_url: Option<String>,
+
+    /// Onchain Customize - Chain name (used as Moralis handle of chain)
+    #[arg(long)]
+    onchain_chain_name: Option<String>,
 }
 
 enum TargetType {
@@ -72,12 +84,24 @@ fn main() {
     };
 
     let onchain = if args.onchain.is_some() && args.onchain.unwrap() {
-        Some(OnChainConfig::new(
-            args.onchain_url
-                .unwrap_or("https://bsc-dataseed1.binance.org/".to_string()),
-            args.onchain_chain_id.unwrap_or(56),
-            args.onchain_block_number.unwrap_or(0),
-        ))
+
+        match args.chain_type {
+            Some(chain_str) => {
+                let chain = Chain::from_str(&chain_str);
+                let block_number = args.onchain_block_number.unwrap();
+                Some(OnChainConfig::new(chain, block_number))
+            },
+            None => {
+                Some(OnChainConfig::new_raw(
+                    args.onchain_url.expect("You need to either specify chain type or chain rpc"),
+                    args.onchain_chain_id.expect("You need to either specify chain type or chain id"),
+                    args.onchain_block_number.unwrap_or(0),
+                    args.onchain_explorer_url.expect("You need to either specify chain type or block explorer url"),
+                    args.onchain_chain_name.expect("You need to either specify chain type or chain name"),
+                ))
+            }
+        }
+
     } else {
         None
     };

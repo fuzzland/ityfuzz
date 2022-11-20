@@ -7,6 +7,45 @@ use std::collections::HashMap;
 use std::fmt::format;
 use std::str::FromStr;
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
+pub enum Chain {
+    ETH,
+    BSC,
+    POLYGON,
+    MUMBAI,
+}
+
+impl Chain {
+    pub fn from_str(s: &String) -> Self {
+        match s.as_str() {
+            "ETH" => Chain::ETH,
+            "BSC" => Chain::BSC,
+            "POLYGON" => Chain::POLYGON,
+            "MUMBAI" => Chain::MUMBAI,
+            _ => panic!("Unknown chain"),
+        }
+    }
+
+    pub fn get_chain_id(&self) -> u32 {
+        match self {
+            Chain::ETH => 1,
+            Chain::BSC => 56,
+            Chain::POLYGON => 137,
+            Chain::MUMBAI => 80001
+        }
+    }
+
+    pub fn to_lowercase(&self) -> String {
+        match self {
+            Chain::ETH => "eth",
+            Chain::BSC => "bsc",
+            Chain::POLYGON => "polygon",
+            Chain::MUMBAI => "mumbai"
+        }.to_string()
+    }
+
+}
+
 #[derive(Clone, Debug)]
 pub struct OnChainConfig {
     pub endpoint_url: String,
@@ -20,37 +59,36 @@ pub struct OnChainConfig {
 
     pub etherscan_api_key: Vec<String>,
     pub etherscan_base: String,
+
+    pub moralis_api_key: Vec<String>,
+    pub moralis_handle: String,
 }
 
 impl OnChainConfig {
-    pub fn new(endpoint_url: String, chain_id: u32, block_number: u64) -> Self {
-        Self::new_with_custom_etherscan(
-            endpoint_url,
-            chain_id,
+    pub fn new(chain: Chain, block_number: u64) -> Self {
+        Self::new_raw(
+            match chain {
+                Chain::ETH => "https://rpc.ankr.com/eth/",
+                Chain::BSC => "https://bsc-dataseed.binance.org/",
+                Chain::POLYGON => "https://polygon-rpc.com/",
+                Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
+            }.to_string(),
+            chain.get_chain_id(),
             block_number,
-            match chain_id {
-                1 => "https://api.etherscan.io/api",
-                56 => "https://api.bscscan.com/api",
-                137 => "https://api.polygonscan.com/api",
-                _ => {
-                    panic!("{}", format!("Unknown chain id: {}", chain_id));
-                }
-            }
-            .to_string(),
+            match chain {
+                Chain::ETH => "https://api.etherscan.io/api",
+                Chain::BSC => "https://api.bscscan.com/api",
+                Chain::POLYGON => "https://api.polygonscan.com/api",
+                Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
+            }.to_string(),
+            chain.to_lowercase()
         )
     }
 
-    pub fn new_with_custom_etherscan(
-        endpoint_url: String,
-        chain_id: u32,
-        block_number: u64,
-        etherscan_base: String,
-    ) -> Self {
+    pub fn new_raw(
+        endpoint_url: String, chain_id: u32, block_number: u64, etherscan_base: String, chain_name: String) -> Self {
         Self {
             endpoint_url,
-            // cache_len: 0,
-            // code_cache: Default::default(),
-            // slot_cache: Default::default(),
             client: reqwest::blocking::Client::new(),
             chain_id,
             block_number: if block_number == 0 {
@@ -59,12 +97,18 @@ impl OnChainConfig {
                 format!("0x{:x}", block_number)
             },
             etherscan_api_key: vec![],
+            moralis_api_key: vec![],
             etherscan_base,
+            moralis_handle: chain_name
         }
     }
 
     pub fn add_etherscan_api_key(&mut self, key: String) {
         self.etherscan_api_key.push(key);
+    }
+
+    pub fn add_moralis_api_key(&mut self, key: String) {
+        self.moralis_api_key.push(key);
     }
 
     pub fn fetch_abi(&self, address: H160) -> Option<String> {
@@ -82,31 +126,79 @@ impl OnChainConfig {
         println!("fetching abi from {}", endpoint);
         match self.client.get(endpoint.clone()).send() {
             Ok(resp) => {
-                // println!("{:?}", resp.text());
                 let resp = resp.text();
                 match resp {
                     Ok(resp) => {
-                        // println!("{:?}", resp);
-                        let json: Value =
-                            serde_json::from_str(&resp).expect("failed to parse API result");
-                        let result: String = json["result"]
-                            .as_str()
-                            .expect("failed to parse abi string")
-                            .to_string();
-                        if result == "Contract source code not verified" {
-                            return None;
+                        let json = serde_json::from_str::<Value>(&resp);
+                        match json {
+                            Ok(json) => {
+                                let result_parsed = json["result"].as_str();
+                                match result_parsed {
+                                    Some(result) => {
+                                        if result == "Contract source code not verified" {
+                                            None
+                                        } else {
+                                            Some(result.to_string())
+                                        }
+                                    }
+                                    _ => None,
+                                }
+                            }
+                            Err(_) => None,
                         }
-                        return Some(result);
                     }
                     Err(e) => {
                         println!("{:?}", e);
-                        return None;
+                        None
                     }
                 }
             }
             Err(e) => {
                 println!("Error: {}", e);
                 return None;
+            }
+        }
+    }
+
+    fn fetch_token_price(&self, token_address: H160) -> Option<f64> {
+        let endpoint = format!(
+            "https://deep-index.moralis.io/api/v2/erc20/0x{}/price?chain={}",
+            hex::encode(token_address),
+            self.moralis_handle
+        );
+        println!("fetching token price from {}", endpoint);
+        match self.client
+            .get(endpoint.clone())
+            .header("X-API-Key", if self.moralis_api_key.len() > 0 {
+                self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
+                    .clone()
+            } else {
+                "".to_string()
+            })
+            .send() {
+            Ok(resp) => {
+                let resp = resp.text();
+                match resp {
+                    Ok(resp) => {
+                        let json = serde_json::from_str::<Value>(&resp);
+                        if json.is_err() {
+                            return None;
+                        }
+                        let result = json.unwrap()["usdPrice"].as_f64();
+                        if result.is_none() {
+                            return None;
+                        }
+                        Some(result.unwrap())
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                None
             }
         }
     }
@@ -186,12 +278,13 @@ impl OnChainConfig {
 }
 
 mod tests {
+    use crate::onchain::endpoints::Chain::BSC;
     use super::*;
 
     #[test]
     fn test_onchain_config() {
         let mut config =
-            OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+            OnChainConfig::new(BSC, 0);
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
@@ -202,7 +295,7 @@ mod tests {
     #[test]
     fn test_get_contract_code() {
         let mut config =
-            OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+            OnChainConfig::new(BSC, 0);
         let v = config.get_contract_code(
             H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
         );
@@ -212,7 +305,7 @@ mod tests {
     #[test]
     fn test_get_contract_slot() {
         let mut config =
-            OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+            OnChainConfig::new(BSC, 0);
         let v = config.get_contract_slot(
             H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
             U256::from(3),
@@ -223,9 +316,19 @@ mod tests {
     #[test]
     fn test_fetch_abi() {
         let mut config =
-            OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+            OnChainConfig::new(BSC, 0);
         let v =
             config.fetch_abi(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
+        println!("{:?}", v)
+    }
+
+    #[test]
+    fn test_fetch_token_price() {
+        let mut config =
+            OnChainConfig::new(BSC, 0);
+        config.add_moralis_api_key("[API Key]".to_string());
+        let v =
+            config.fetch_token_price(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
     }
 }
