@@ -18,43 +18,43 @@ struct Args {
     #[arg(short, long)]
     target: String,
 
-    /// Target type (glob, address)
+    /// Target type (glob, address) (Default: Automatically infer from target)
     #[arg(long)]
     target_type: Option<String>,
 
-    /// target single contract -- Optional
+    /// target single contract (Default: None)
     #[arg(long)]
     target_contract: Option<String>,
 
-    /// Fuzzer type -- Optional
-    #[arg(short, long)]
-    fuzzer_type: Option<String>,
+    /// Fuzzer type
+    #[arg(short, long, default_value = "cmp")]
+    fuzzer_type: String,
 
     /// Enable onchain
-    #[arg(short, long)]
-    onchain: Option<bool>,
+    #[arg(short, long, default_value = "false")]
+    onchain: bool,
 
-    /// Onchain - Chain type
+    /// Onchain - Chain type (ETH, BSC, POLYGON, MUMBAI)
     #[arg(short, long)]
     chain_type: Option<String>,
 
-    /// Onchain - Block number (default: 0)
+    /// Onchain - Block number (Default: 0 / latest)
     #[arg(long)]
     onchain_block_number: Option<u64>,
 
-    /// Onchain Customize - Endpoint URL
+    /// Onchain Customize - Endpoint URL (Default: inferred from chain-type)
     #[arg(long)]
     onchain_url: Option<String>,
 
-    /// Onchain Customize - Chain ID
+    /// Onchain Customize - Chain ID (Default: inferred from chain-type)
     #[arg(long)]
     onchain_chain_id: Option<u32>,
 
-    /// Onchain Customize - Block explorer URL
+    /// Onchain Customize - Block explorer URL (Default: inferred from chain-type)
     #[arg(long)]
     onchain_explorer_url: Option<String>,
 
-    /// Onchain Customize - Chain name (used as Moralis handle of chain)
+    /// Onchain Customize - Chain name (used as Moralis handle of chain) (Default: inferred from chain-type)
     #[arg(long)]
     onchain_chain_name: Option<String>,
 }
@@ -83,11 +83,11 @@ fn main() {
         },
     };
 
-    let onchain = if args.onchain.is_some() && args.onchain.unwrap() {
+    let onchain = if args.onchain {
 
         match args.chain_type {
             Some(chain_str) => {
-                let chain = Chain::from_str(&chain_str);
+                let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
                 let block_number = args.onchain_block_number.unwrap();
                 Some(OnChainConfig::new(chain, block_number))
             },
@@ -107,7 +107,7 @@ fn main() {
     };
 
     let config = Config {
-        fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.unwrap_or("cmp".to_string()).as_str())
+        fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str())
             .expect("unknown fuzzer"),
         contract_info: match target_type {
             Glob => {
