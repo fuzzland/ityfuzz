@@ -1,7 +1,7 @@
 use crate::evm::FuzzHost;
 use crate::input::{VMInput, VMInputT};
+use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
-use libafl::prelude::HasCorpus;
 use libafl::state::State;
 use primitive_types::{H160, U256};
 use revm::{Bytecode, Interpreter};
@@ -15,6 +15,21 @@ use std::time::Duration;
 pub enum MiddlewareType {
     OnChain,
     Concolic,
+    Flashloan,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
+pub enum ExecutionStage {
+    Call,
+    Create,
+    Log,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CallMiddlewareReturn {
+    Continue,
+    ReturnRevert,
+    ReturnSuccess(Bytes),
 }
 
 #[derive(Clone, Debug)]
@@ -22,56 +37,40 @@ pub enum MiddlewareOp {
     UpdateSlot(MiddlewareType, H160, U256, U256),
     UpdateCode(MiddlewareType, H160, Bytecode),
     AddCorpus(MiddlewareType, VMInput),
+    Owed(MiddlewareType, usize),
+    Earned(MiddlewareType, usize),
+    MakeSubsequentCallSuccess(Bytes),
 }
 
 impl MiddlewareOp {
     pub fn execute(&self, host: &mut FuzzHost) {
         match self {
-            MiddlewareOp::UpdateSlot(.., addr, slot, val) => {
-                match host.data.get_mut(&addr) {
-                    Some(data) => {
-                        data.insert(*slot, *val);
-                    }
-                    None => {
-                        let mut data = std::collections::HashMap::new();
-                        data.insert(*slot, *val);
-                        host.data.insert(*addr, data);
-                    }
+            MiddlewareOp::UpdateSlot(.., addr, slot, val) => match host.data.get_mut(&addr) {
+                Some(data) => {
+                    data.insert(*slot, *val);
                 }
-            }
+                None => {
+                    let mut data = std::collections::HashMap::new();
+                    data.insert(*slot, *val);
+                    host.data.insert(*addr, data);
+                }
+            },
             MiddlewareOp::UpdateCode(.., addr, code) => {
                 host.set_code(*addr, code.clone());
             }
-            MiddlewareOp::AddCorpus(middleware, ..) => {
+            MiddlewareOp::AddCorpus(middleware, ..)
+            | MiddlewareOp::Owed(middleware, ..)
+            | MiddlewareOp::Earned(middleware, ..) => {
                 host.middlewares_deferred_actions
                     .get_mut(middleware)
                     .expect("Middleware not found")
                     .push(self.clone());
             }
+            MiddlewareOp::MakeSubsequentCallSuccess(data) => {
+                host.middlewares_latent_call_actions
+                    .push(CallMiddlewareReturn::ReturnSuccess(data.clone()));
+            }
         }
-    }
-
-    pub fn execute_with_state<I, S, M>(&self, host: &mut FuzzHost, state: &mut S, middleware: M)
-    where
-        I: VMInputT + From<VMInput>,
-        S: State + HasCorpus<I>,
-        M: Middleware + CanHandleDeferredActions<S>,
-    {
-        middleware.handle_deferred_actions(self, state);
-        // match self {
-        //     MiddlewareOp::AddCorpus(input, ..) => {
-        //         let mut tc = Testcase::new(input.clone());
-        //         tc.set_exec_time(Duration::from_secs(0));
-        //         let idx = state.corpus_mut().add(tc).expect("failed to add");
-        //         // todo: add to corpus
-        //         // scheduler
-        //         //     .on_add(self, idx)
-        //         //     .expect("failed to call scheduler on_add");
-        //     }
-        //     _ => {
-        //         panic!("MiddlewareOp::execute_with_state called with invalid op");
-        //     }
-        // }
     }
 }
 

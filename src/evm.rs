@@ -14,7 +14,7 @@ use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::powersched::PowerSchedule;
-use libafl::prelude::ObserversTuple;
+use libafl::prelude::{HasMetadata, ObserversTuple};
 use libafl::state::{HasCorpus, State};
 use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
@@ -87,7 +87,11 @@ impl VMState {
 }
 
 use crate::config::DEBUG_PRINT_PERCENT;
-use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::middleware::{
+    CallMiddlewareReturn, CanHandleDeferredActions, ExecutionStage, Middleware, MiddlewareOp,
+    MiddlewareType,
+};
+use crate::onchain::flashloan::Flashloan;
 use crate::onchain::onchain::OnChain;
 use crate::state::{FuzzState, HasHashToAddress, HasItyState};
 pub use cmp_map as CMP_MAP;
@@ -113,6 +117,7 @@ pub struct FuzzHost {
     // see set_prob_middlewares for more details
     middleware_probs: HashMap<MiddlewareType, f32>,
     pub middlewares_deferred_actions: HashMap<MiddlewareType, Vec<MiddlewareOp>>,
+    pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -139,6 +144,7 @@ impl Clone for FuzzHost {
             pc_coverage: self.pc_coverage.clone(),
             #[cfg(feature = "record_instruction_coverage")]
             total_instr: self.total_instr.clone(),
+            middlewares_latent_call_actions: vec![],
         }
     }
 }
@@ -172,6 +178,7 @@ impl FuzzHost {
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             total_instr: Default::default(),
+            middlewares_latent_call_actions: vec![],
         }
     }
 
@@ -496,6 +503,19 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+        for action in &self.middlewares_latent_call_actions {
+            match action {
+                CallMiddlewareReturn::Continue => {}
+                CallMiddlewareReturn::ReturnRevert => {
+                    return (Revert, Gas::new(0), Bytes::new());
+                }
+                CallMiddlewareReturn::ReturnSuccess(b) => {
+                    return (Continue, Gas::new(0), b.clone());
+                }
+            }
+        }
+        self.middlewares_latent_call_actions.clear();
+
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
 
@@ -628,7 +648,7 @@ impl ExecutionResult {
 impl<I, S> EVMExecutor<I, S>
 where
     I: VMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState + 'static,
+    S: State + HasCorpus<I> + HasItyState + HasMetadata + 'static,
 {
     pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
         Self {
@@ -857,24 +877,31 @@ where
 
         // For each middleware, execute the deferred actions
         if self.host.middlewares_enabled {
-            self.host
-                .middlewares_deferred_actions
-                .iter()
-                .for_each(|f| match f.0 {
-                    MiddlewareType::OnChain => {
+            self.host.middlewares_deferred_actions.iter().for_each(|f| {
+                macro_rules! define_deferred_handler {
+                    ($t:ty) => {
                         for op in f.1 {
                             self.host
                                 .middlewares
-                                .get_mut(&MiddlewareType::OnChain)
+                                .get_mut(f.0)
                                 .expect("middleware not found")
                                 .as_any()
-                                .downcast_mut::<OnChain<I, S>>()
+                                .downcast_mut::<$t>()
                                 .unwrap()
                                 .handle_deferred_actions(op, state.as_mut().unwrap());
                         }
+                    };
+                };
+                match f.0 {
+                    MiddlewareType::OnChain => {
+                        define_deferred_handler!(OnChain<I, S>)
+                    }
+                    MiddlewareType::Flashloan => {
+                        define_deferred_handler!(Flashloan<S>)
                     }
                     MiddlewareType::Concolic => {}
-                });
+                }
+            });
         }
         IntermediateExecutionResult {
             output: interp.return_value(),

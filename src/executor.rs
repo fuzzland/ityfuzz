@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use libafl::executors::{Executor, ExitKind};
 use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasObservers, ObserversTuple};
+use libafl::prelude::{HasCorpus, HasMetadata, HasObservers, ObserversTuple};
 use libafl::state::State;
 use libafl::Error;
 use std::fmt::Debug;
@@ -57,7 +57,7 @@ impl<EM, I, S, Z, OT> Executor<EM, I, S, Z> for FuzzExecutor<I, S, OT>
 where
     I: VMInputT + Input + 'static,
     OT: ObserversTuple<I, S>,
-    S: State + HasExecutionResult + HasCorpus<I> + HasItyState + 'static,
+    S: State + HasExecutionResult + HasCorpus<I> + HasItyState + HasMetadata + 'static,
 {
     fn run_target(
         &mut self,

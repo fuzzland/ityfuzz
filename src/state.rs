@@ -114,7 +114,7 @@ impl FuzzState {
         include_static: bool,
     ) where
         I: Input + VMInputT + 'static,
-        S: State + HasCorpus<I> + HasItyState + 'static,
+        S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.setup_contract_callers(CONTRACT_AMT as usize, executor);
@@ -136,7 +136,7 @@ impl FuzzState {
         include_static: bool,
     ) where
         I: Input + VMInputT + 'static,
-        S: State + HasCorpus<I> + HasItyState + 'static,
+        S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
     {
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
