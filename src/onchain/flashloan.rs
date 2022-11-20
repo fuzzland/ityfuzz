@@ -20,6 +20,22 @@ pub struct Flashloan<S> {
     phantom: PhantomData<S>,
 }
 
+pub struct FlashloanConfig {}
+
+impl FlashloanConfig {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl<S> Flashloan<S> {
+    pub fn new(f: &FlashloanConfig) -> Self {
+        Self {
+            phantom: PhantomData,
+        }
+    }
+}
+
 impl<S> Middleware for Flashloan<S>
 where
     S: State + Debug + Clone + 'static,

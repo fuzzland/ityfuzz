@@ -31,7 +31,7 @@ impl Chain {
             Chain::ETH => 1,
             Chain::BSC => 56,
             Chain::POLYGON => 137,
-            Chain::MUMBAI => 80001
+            Chain::MUMBAI => 80001,
         }
     }
 
@@ -40,10 +40,10 @@ impl Chain {
             Chain::ETH => "eth",
             Chain::BSC => "bsc",
             Chain::POLYGON => "polygon",
-            Chain::MUMBAI => "mumbai"
-        }.to_string()
+            Chain::MUMBAI => "mumbai",
+        }
+        .to_string()
     }
-
 }
 
 #[derive(Clone, Debug)]
@@ -72,7 +72,8 @@ impl OnChainConfig {
                 Chain::BSC => "https://bsc-dataseed.binance.org/",
                 Chain::POLYGON => "https://polygon-rpc.com/",
                 Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
-            }.to_string(),
+            }
+            .to_string(),
             chain.get_chain_id(),
             block_number,
             match chain {
@@ -80,13 +81,19 @@ impl OnChainConfig {
                 Chain::BSC => "https://api.bscscan.com/api",
                 Chain::POLYGON => "https://api.polygonscan.com/api",
                 Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
-            }.to_string(),
-            chain.to_lowercase()
+            }
+            .to_string(),
+            chain.to_lowercase(),
         )
     }
 
     pub fn new_raw(
-        endpoint_url: String, chain_id: u32, block_number: u64, etherscan_base: String, chain_name: String) -> Self {
+        endpoint_url: String,
+        chain_id: u32,
+        block_number: u64,
+        etherscan_base: String,
+        chain_name: String,
+    ) -> Self {
         Self {
             endpoint_url,
             client: reqwest::blocking::Client::new(),
@@ -99,7 +106,7 @@ impl OnChainConfig {
             etherscan_api_key: vec![],
             moralis_api_key: vec![],
             etherscan_base,
-            moralis_handle: chain_name
+            moralis_handle: chain_name,
         }
     }
 
@@ -167,15 +174,20 @@ impl OnChainConfig {
             self.moralis_handle
         );
         println!("fetching token price from {}", endpoint);
-        match self.client
+        match self
+            .client
             .get(endpoint.clone())
-            .header("X-API-Key", if self.moralis_api_key.len() > 0 {
-                self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
-                    .clone()
-            } else {
-                "".to_string()
-            })
-            .send() {
+            .header(
+                "X-API-Key",
+                if self.moralis_api_key.len() > 0 {
+                    self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
+                        .clone()
+                } else {
+                    "".to_string()
+                },
+            )
+            .send()
+        {
             Ok(resp) => {
                 let resp = resp.text();
                 match resp {
@@ -278,13 +290,12 @@ impl OnChainConfig {
 }
 
 mod tests {
-    use crate::onchain::endpoints::Chain::BSC;
     use super::*;
+    use crate::onchain::endpoints::Chain::BSC;
 
     #[test]
     fn test_onchain_config() {
-        let mut config =
-            OnChainConfig::new(BSC, 0);
+        let mut config = OnChainConfig::new(BSC, 0);
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
@@ -294,8 +305,7 @@ mod tests {
 
     #[test]
     fn test_get_contract_code() {
-        let mut config =
-            OnChainConfig::new(BSC, 0);
+        let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_code(
             H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
         );
@@ -304,8 +314,7 @@ mod tests {
 
     #[test]
     fn test_get_contract_slot() {
-        let mut config =
-            OnChainConfig::new(BSC, 0);
+        let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_slot(
             H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
             U256::from(3),
@@ -315,8 +324,7 @@ mod tests {
 
     #[test]
     fn test_fetch_abi() {
-        let mut config =
-            OnChainConfig::new(BSC, 0);
+        let mut config = OnChainConfig::new(BSC, 0);
         let v =
             config.fetch_abi(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
@@ -324,11 +332,11 @@ mod tests {
 
     #[test]
     fn test_fetch_token_price() {
-        let mut config =
-            OnChainConfig::new(BSC, 0);
+        let mut config = OnChainConfig::new(BSC, 0);
         config.add_moralis_api_key("[API Key]".to_string());
-        let v =
-            config.fetch_token_price(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
+        let v = config.fetch_token_price(
+            H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
+        );
         println!("{:?}", v)
     }
 }

@@ -30,6 +30,7 @@ use crate::state_input::StagedVMState;
 
 use crate::config::Config;
 use crate::middleware::Middleware;
+use crate::onchain::flashloan::Flashloan;
 use crate::onchain::onchain::OnChain;
 use primitive_types::H160;
 
@@ -71,6 +72,13 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
                 onchain,
                 scheduler.clone(),
             )));
+        }
+        None => {}
+    };
+
+    match config.flashloan {
+        Some(conf) => {
+            fuzz_host.add_middlewares(Box::new(Flashloan::<FuzzState>::new(&conf)));
         }
         None => {}
     };

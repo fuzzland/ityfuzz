@@ -1,5 +1,6 @@
 use crate::contract_utils::ContractInfo;
 use crate::onchain::endpoints::OnChainConfig;
+use crate::onchain::flashloan::FlashloanConfig;
 use crate::oracle::Oracle;
 
 pub const DEBUG_PRINT_PERCENT: usize = 8000;
@@ -23,6 +24,7 @@ impl FuzzerTypes {
 
 pub struct Config<'a, I, S> {
     pub onchain: Option<OnChainConfig>,
+    pub flashloan: Option<FlashloanConfig>,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Option<&'a dyn Oracle<I, S>>,

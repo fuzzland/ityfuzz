@@ -9,6 +9,7 @@ use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
 use primitive_types::H160;
 use std::path::PathBuf;
 use std::str::FromStr;
+use ityfuzz::onchain::flashloan::FlashloanConfig;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -27,7 +28,7 @@ struct Args {
     target_contract: Option<String>,
 
     /// Fuzzer type
-    #[arg(short, long, default_value = "cmp")]
+    #[arg(long, default_value = "cmp")]
     fuzzer_type: String,
 
     /// Enable onchain
@@ -57,6 +58,10 @@ struct Args {
     /// Onchain Customize - Chain name (used as Moralis handle of chain) (Default: inferred from chain-type)
     #[arg(long)]
     onchain_chain_name: Option<String>,
+
+    /// Enable flashloan
+    #[arg(short, long, default_value = "false")]
+    flashloan: bool,
 }
 
 enum TargetType {
@@ -134,6 +139,11 @@ fn main() {
         },
         onchain,
         oracle: None,
+        flashloan: if args.flashloan {
+            Some(FlashloanConfig::new())
+        } else {
+            None
+        }
     };
 
     match config.fuzzer_type {
