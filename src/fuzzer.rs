@@ -3,9 +3,11 @@ use crate::{
     state::{HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
+use std::ops::Deref;
 use std::{marker::PhantomData, time::Duration};
 
 use crate::config::DEBUG_PRINT_PERCENT;
+use crate::evm::RW_SKIPPER_PERCT_IDX;
 use crate::state::HasExecutionResult;
 use libafl::{
     fuzzer::Fuzzer,
@@ -164,18 +166,14 @@ where
             .post_exec_all(state, &input, &exitkind)?;
         mark_feature_time!(state, PerfFeature::PostExecObservers);
 
-        // todo(shou): may need to check about reverting here!
-        if state.get_execution_result().reverted {
-            return Ok((ExecuteInputResult::None, None));
-        }
-
         let observers = executor.observers();
+        let reverted = state.get_execution_result().reverted;
 
         // get new stage first
         let is_infant_interesting = self
             .infant_feedback
             .is_interesting(state, manager, &input, observers, &exitkind)?;
-        if is_infant_interesting {
+        if is_infant_interesting && !reverted {
             let new_state = state.get_execution_result();
             state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
         }
@@ -185,7 +183,7 @@ where
             .is_interesting(state, manager, &input, observers, &exitkind)?;
 
         let mut res = ExecuteInputResult::None;
-        if is_solution {
+        if is_solution && !reverted {
             res = ExecuteInputResult::Solution;
         } else {
             let is_corpus = self
@@ -193,6 +191,22 @@ where
                 .is_interesting(state, manager, &input, observers, &exitkind)?;
             if is_corpus {
                 res = ExecuteInputResult::Corpus;
+            }
+        }
+
+        #[cfg(feature = "print_corpus")]
+        {
+            if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
+                println!("============= Corpus =============");
+                for i in 0..state.corpus().count() {
+                    match state.corpus().get(i) {
+                        Ok(v) => {
+                            println!("{}", v.borrow().input().as_ref().unwrap().to_string());
+                        }
+                        _ => {}
+                    }
+                }
+                println!("==================================");
             }
         }
 

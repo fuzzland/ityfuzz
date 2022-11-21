@@ -149,32 +149,22 @@ impl BoxedABI {
                     return MutationResult::Skipped;
                 }
                 if aarray.dynamic_size {
-                    if (state.rand_mut().next() % 2) == 0 {
+                    if (state.rand_mut().below(100)) < 80 {
                         let index: usize = state.rand_mut().next() as usize % data_len;
                         let result = aarray.data[index].mutate(state);
                         return result;
                     }
 
                     // increase size
-                    // let base_type = &;
+                    if state.max_size() <= aarray.data.len() {
+                        return MutationResult::Skipped;
+                    }
                     for _ in 0..state.rand_mut().next() as usize % state.max_size() {
                         aarray.data.push(aarray.data[0].clone());
                     }
                 } else {
-                    if state.rand_mut().below(100) < 80 {
-                        // havoc
-                        let mut result: MutationResult = MutationResult::Skipped;
-                        for _ in 0..state.rand_mut().below((data_len + 1) as u64) {
-                            let index: usize = state.rand_mut().next() as usize % data_len;
-                            if aarray.data[index].mutate(state) == MutationResult::Mutated {
-                                result = MutationResult::Mutated;
-                            }
-                        }
-                        return result;
-                    } else {
-                        let index: usize = state.rand_mut().next() as usize % data_len;
-                        return aarray.data[index].mutate(state);
-                    }
+                    let index: usize = state.rand_mut().next() as usize % data_len;
+                    return aarray.data[index].mutate(state);
                 }
                 MutationResult::Mutated
             }
