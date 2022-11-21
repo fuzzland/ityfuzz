@@ -81,6 +81,5 @@ pub trait CanHandleDeferredActions<S> {
 pub trait Middleware: Debug {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp>;
     fn get_type(&self) -> MiddlewareType;
-    fn box_clone(&self) -> Box<dyn Middleware>;
     fn as_any(&mut self) -> &mut (dyn Any + 'static);
 }

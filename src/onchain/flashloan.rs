@@ -17,10 +17,10 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Flashloan<S> {
     phantom: PhantomData<S>,
-    oracle: Box<&'static dyn PriceOracle>,
+    oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
 }
 
@@ -37,7 +37,7 @@ impl<S> Flashloan<S> {
     pub fn new() -> Self {
         Self {
             phantom: PhantomData,
-            oracle: Box::new(&DummyPriceOracle {}),
+            oracle: Box::new(DummyPriceOracle {}),
             use_contract_value: false,
         }
     }
@@ -172,10 +172,6 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         return MiddlewareType::Flashloan;
-    }
-
-    fn box_clone(&self) -> Box<dyn Middleware> {
-        Box::new(self.clone())
     }
 
     fn as_any(&mut self) -> &mut (dyn Any + 'static) {
