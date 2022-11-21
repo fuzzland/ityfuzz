@@ -8,3 +8,12 @@ pub fn convert_u256_to_h160(v: U256) -> H160 {
     unsafe { v.to_big_endian(temp.as_bytes_mut()) };
     temp.into()
 }
+
+pub fn float_scale_to_u256(v: f64, decimals: u32) -> U256 {
+    // todo(@shou) make this sound
+    let mut temp = v;
+    for _ in 0..decimals {
+        temp *= 10.0;
+    }
+    return U256::from(temp as u64);
+}

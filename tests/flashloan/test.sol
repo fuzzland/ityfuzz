@@ -26,6 +26,8 @@ contract main {
         IERC20 deeper_token = IERC20(address(0xA0A2eE912CAF7921eaAbC866c6ef6FEc8f7E90A4));
         require(a < 2, "2");
         require(deeper_token.balanceOf(address(msg.sender)) > 0, "3");
+        deeper_token.transfer(address(msg.sender), 1);
+        bug();
         is_ok = 1;
         return 'Hello Contracts';
     }

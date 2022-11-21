@@ -77,8 +77,8 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     };
 
     match config.flashloan {
-        Some(conf) => {
-            fuzz_host.add_middlewares(Box::new(Flashloan::<FuzzState>::new(&conf)));
+        Some(flashloan) => {
+            fuzz_host.add_middlewares(Box::new(flashloan));
         }
         None => {}
     };

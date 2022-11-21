@@ -37,8 +37,8 @@ pub enum MiddlewareOp {
     UpdateSlot(MiddlewareType, H160, U256, U256),
     UpdateCode(MiddlewareType, H160, Bytecode),
     AddCorpus(MiddlewareType, VMInput),
-    Owed(MiddlewareType, usize),
-    Earned(MiddlewareType, usize),
+    Owed(MiddlewareType, U256),
+    Earned(MiddlewareType, U256),
     MakeSubsequentCallSuccess(Bytes),
 }
 
