@@ -1,7 +1,7 @@
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::config::{Config, FuzzerTypes};
-use ityfuzz::contract_utils::ContractLoader;
+use ityfuzz::contract_utils::{ContractLoader, set_hash};
 use ityfuzz::fuzzers::basic_fuzzer;
 use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
 use ityfuzz::fuzzers::df_fuzzer::df_fuzzer;
@@ -9,7 +9,11 @@ use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
 use primitive_types::H160;
 use std::path::PathBuf;
 use std::str::FromStr;
+use ityfuzz::input::VMInput;
+use ityfuzz::middleware::Middleware;
 use ityfuzz::onchain::flashloan::Flashloan;
+use ityfuzz::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan, Oracle};
+use ityfuzz::state::FuzzState;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -62,6 +66,10 @@ struct Args {
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
+
+    /// Enable ierc20 oracle
+    #[arg(short, long, default_value = "false")]
+    ierc20_oracle: bool,
 }
 
 enum TargetType {
@@ -88,6 +96,7 @@ fn main() {
         },
     };
 
+
     let onchain = if args.onchain {
 
         match args.chain_type {
@@ -110,6 +119,18 @@ fn main() {
     } else {
         None
     };
+
+    let mut flashloan_oracle = IERC20OracleFlashloan::new();
+    let harness_code = "oracle_harness()";
+    let mut harness_hash: [u8; 4] = [0; 4];
+    set_hash(harness_code, &mut harness_hash);
+    let mut function_oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
+
+
+    let mut oracles: Vec<Box<dyn Oracle<VMInput, FuzzState>>> = vec![];
+    if args.ierc20_oracle {
+        oracles.push(Box::new(flashloan_oracle));
+    }
 
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str())
@@ -138,7 +159,7 @@ fn main() {
             }
         },
         onchain,
-        oracle: None,
+        oracle: oracles,
         flashloan: if args.flashloan {
             Some(Flashloan::new())
         } else {

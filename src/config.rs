@@ -22,10 +22,10 @@ impl FuzzerTypes {
     }
 }
 
-pub struct Config<'a, I, S> {
+pub struct Config<I, S> {
     pub onchain: Option<OnChainConfig>,
     pub flashloan: Option<Flashloan<S>>,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
-    pub oracle: Option<&'a dyn Oracle<I, S>>,
+    pub oracle: Vec<Box<dyn Oracle<I, S>>>,
 }

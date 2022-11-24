@@ -1,4 +1,4 @@
-use crate::evm::FuzzHost;
+use crate::evm::{FuzzHost, IntermediateExecutionResult};
 use crate::input::{VMInput, VMInputT};
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
@@ -75,7 +75,12 @@ impl MiddlewareOp {
 }
 
 pub trait CanHandleDeferredActions<S> {
-    fn handle_deferred_actions(&self, op: &MiddlewareOp, state: &mut S);
+    fn handle_deferred_actions(
+        &self,
+        op: &MiddlewareOp,
+        state: &mut S,
+        result: &mut IntermediateExecutionResult,
+    );
 }
 
 pub trait Middleware: Debug {

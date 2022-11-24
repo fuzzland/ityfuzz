@@ -1,4 +1,4 @@
-use crate::evm::FuzzHost;
+use crate::evm::{FuzzHost, IntermediateExecutionResult};
 use crate::input::{VMInput, VMInputT};
 use crate::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
@@ -135,7 +135,12 @@ where
     I: Input + VMInputT,
     S: State + HasCorpus<I> + HasItyState,
 {
-    fn handle_deferred_actions(&self, op: &MiddlewareOp, state: &mut S) {
+    fn handle_deferred_actions(
+        &self,
+        op: &MiddlewareOp,
+        state: &mut S,
+        result: &mut IntermediateExecutionResult,
+    ) {
         match op {
             MiddlewareOp::AddCorpus(.., input) => {
                 let idx = state.add_vm_input(input.clone());

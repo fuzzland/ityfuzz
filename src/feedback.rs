@@ -21,21 +21,19 @@ use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState};
 use crate::state_input::StagedVMState;
 
-pub struct InfantFeedback<'a, I, S: 'static, O>
+pub struct InfantFeedback<'a, I, S: 'static>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
-    oracle: &'a O,
+    oracle: &'a Vec<Box<dyn Oracle<I, S>>>,
     executor: EVMExecutor<I, S>,
     map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S)>,
 }
 
-impl<'a, I, S, O> Debug for InfantFeedback<'a, I, S, O>
+impl<'a, I, S> Debug for InfantFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InfantFeedback")
@@ -44,22 +42,20 @@ where
     }
 }
 
-impl<'a, I, S, O> Named for InfantFeedback<'a, I, S, O>
+impl<'a, I, S> Named for InfantFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
     fn name(&self) -> &str {
         "InfantFeedback"
     }
 }
 
-impl<'a, I, S, O> InfantFeedback<'a, I, S, O>
+impl<'a, I, S> InfantFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
-    pub fn new(oracle: &'a O, executor: EVMExecutor<I, S>) -> Self {
+    pub fn new(oracle: &'a Vec<Box<dyn Oracle<I, S>>>, executor: EVMExecutor<I, S>) -> Self {
         Self {
             oracle,
             executor,
@@ -69,11 +65,10 @@ where
     }
 }
 
-impl<'a, I, S, O> Feedback<I, S> for InfantFeedback<'a, I, S, O>
+impl<'a, I, S> Feedback<I, S> for InfantFeedback<'a, I, S>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasMetadata + HasItyState,
     I: Input + VMInputT + 'static,
-    O: Oracle<I, S>,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
@@ -103,27 +98,37 @@ where
 
         let mut oracle_ctx = OracleCtx::new(
             // todo(@shou): we should get a previous state, not incomplete state!
+            state,
             input.get_state(),
             &post_execution.new_state.state,
             &mut self.executor,
             input,
         );
-        let original_stage = input.get_staged_state().stage;
-        let new_stage = self.oracle.transition(&mut oracle_ctx, original_stage);
-        if new_stage != original_stage {
-            state
-                .get_execution_result_mut()
-                .new_state
-                .update_stage(new_stage);
-        }
 
-        // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
-        let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAP_SIZE;
-        if !self.map[slot] {
-            self.map[slot] = true;
-            return Ok(true);
+        let mut new_stages = vec![];
+        let mut is_interesting = false;
+
+        for idx in 0..self.oracle.len() {
+            let original_stage = if idx >= input.get_staged_state().stage.len() {
+                0
+            } else {
+                input.get_staged_state().stage[idx]
+            };
+            let new_stage = self.oracle[idx].transition(&mut oracle_ctx, original_stage);
+            new_stages.push(new_stage);
+            // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
+            let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAP_SIZE;
+            if !self.map[slot] {
+                self.map[slot] = true;
+                is_interesting = true;
+            }
         }
-        return Ok(false);
+        state
+            .get_execution_result_mut()
+            .new_state
+            .update_stage(new_stages);
+
+        return Ok(is_interesting);
     }
 
     fn append_metadata(
@@ -139,20 +144,17 @@ where
     }
 }
 
-pub struct OracleFeedback<'a, I, S: 'static, O>
+pub struct OracleFeedback<'a, I, S: 'static>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
-    oracle: &'a O,
+    oracle: &'a Vec<Box<dyn Oracle<I, S>>>,
     executor: EVMExecutor<I, S>,
-    phantom: PhantomData<(I, S)>,
 }
 
-impl<'a, I, S, O> Debug for OracleFeedback<'a, I, S, O>
+impl<'a, I, S> Debug for OracleFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OracleFeedback")
@@ -161,31 +163,25 @@ where
     }
 }
 
-impl<'a, I, S, O> Named for OracleFeedback<'a, I, S, O>
+impl<'a, I, S> Named for OracleFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
     fn name(&self) -> &str {
         "OracleFeedback"
     }
 }
 
-impl<'a, I, S, O> OracleFeedback<'a, I, S, O>
+impl<'a, I, S> OracleFeedback<'a, I, S>
 where
     I: VMInputT,
-    O: Oracle<I, S>,
 {
-    pub fn new(oracle: &'a O, executor: EVMExecutor<I, S>) -> Self {
-        Self {
-            oracle,
-            executor,
-            phantom: PhantomData,
-        }
+    pub fn new(oracle: &'a Vec<Box<dyn Oracle<I, S>>>, executor: EVMExecutor<I, S>) -> Self {
+        Self { oracle, executor }
     }
 }
 
-impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
+impl<'a, I, S> Feedback<I, S> for OracleFeedback<'a, I, S>
 where
     S: State
         + HasClientPerfMonitor
@@ -195,7 +191,6 @@ where
         + HasItyState
         + 'static,
     I: VMInputT + 'static,
-    O: Oracle<I, S>,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
@@ -216,13 +211,20 @@ where
         OT: ObserversTuple<I, S>,
     {
         let mut oracle_ctx: OracleCtx<I, S> = OracleCtx::new(
+            state,
             input.get_state(),
             &state.get_execution_result().new_state.state,
             &mut self.executor,
             input,
         );
-        let old_stage = input.get_staged_state().stage;
-        Ok(self.oracle.oracle(&mut oracle_ctx, old_stage))
+        // todo(@shou): should it be new stage?
+        for idx in 0..self.oracle.len() {
+            let stage = input.get_staged_state().stage[0];
+            if self.oracle[idx].oracle(&mut oracle_ctx, stage) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn append_metadata(

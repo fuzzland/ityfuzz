@@ -22,7 +22,7 @@ use libafl::{
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::evm::CMP_MAP;
 use crate::feedback::{CmpFeedback, OracleFeedback};
-use crate::oracle::FunctionHarnessOracle;
+use crate::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan, Oracle};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
@@ -97,27 +97,21 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
-
-    // now evm executor is ready, we can clone it
-    let harness_code = "oracle_harness()";
-    let mut harness_hash: [u8; 4] = [0; 4];
-    set_hash(harness_code, &mut harness_hash);
-    let oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
-
-    // clone disables middleware for evm
-    let objective = OracleFeedback::new(&oracle, executor.evm_executor.clone());
-
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler);
 
-    let mut fuzzer = ItyFuzzer::new(
+    // now evm executor is ready, we can clone it
+
+    let oracles = config.oracle;
+
+    let objective = OracleFeedback::new(&oracles, executor.evm_executor.clone());
+
+    ItyFuzzer::new(
         scheduler,
         &infant_scheduler,
         feedback,
         infant_feedback,
         objective,
-    );
-
-    fuzzer
-        .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-        .expect("Fuzzing failed");
+    )
+    .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+    .expect("Fuzzing failed");
 }

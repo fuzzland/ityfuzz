@@ -3,8 +3,10 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
+use crate::evm::IntermediateExecutionResult;
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::state::HasItyState;
 use crate::types::{convert_u256_to_h160, float_scale_to_u256};
 use bytes::Bytes;
 use libafl::impl_serdeany;
@@ -189,23 +191,28 @@ impl_serdeany!(FlashloanData);
 
 impl<S> CanHandleDeferredActions<S> for Flashloan<S>
 where
-    S: HasMetadata,
+    S: HasItyState,
 {
-    fn handle_deferred_actions(&self, op: &MiddlewareOp, state: &mut S) {
+    fn handle_deferred_actions(
+        &self,
+        op: &MiddlewareOp,
+        state: &mut S,
+        result: &mut IntermediateExecutionResult,
+    ) {
         // todo(shou): move init to else where to avoid overhead
-        if !state.has_metadata::<FlashloanData>() {
-            state.add_metadata(FlashloanData {
+        if !result.new_state.has_metadata::<FlashloanData>() {
+            result.new_state.add_metadata(FlashloanData {
                 owed: U256::from(0),
                 earned: U256::from(0),
             });
         }
         match op {
             MiddlewareOp::Owed(.., amount) => {
-                let mut data = state.metadata_mut().get_mut::<FlashloanData>();
+                let mut data = result.new_state.metadata_mut().get_mut::<FlashloanData>();
                 data.as_mut().unwrap().owed += *amount;
             }
             MiddlewareOp::Earned(.., amount) => {
-                let mut data = state.metadata_mut().get_mut::<FlashloanData>();
+                let mut data = result.new_state.metadata_mut().get_mut::<FlashloanData>();
                 data.as_mut().unwrap().earned += *amount;
             }
             _ => {}

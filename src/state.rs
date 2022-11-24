@@ -214,7 +214,7 @@ impl FuzzState {
                     .expect("failed to call scheduler on_add");
             }
         }
-        let mut tc = Testcase::new(StagedVMState::new(executor.host.data.clone(), 0));
+        let mut tc = Testcase::new(StagedVMState::new_with_state(executor.host.data.clone()));
         tc.set_exec_time(Duration::from_secs(0));
         let idx = self
             .infant_states_state
