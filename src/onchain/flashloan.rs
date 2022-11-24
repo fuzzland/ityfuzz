@@ -131,10 +131,10 @@ where
             [0xa9, 0x05, 0x9c, 0xbb] => {
                 let dst = H160::from_slice(&data[16..36]);
                 let amount = U256::from_big_endian(&data[36..68]);
-                println!(
-                    "transfer from {:?} to {:?} amount {:?}",
-                    interp.contract.address, dst, amount
-                );
+                // println!(
+                //     "transfer from {:?} to {:?} amount {:?}",
+                //     interp.contract.address, dst, amount
+                // );
 
                 let make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
                     [vec![0x0; 31], vec![0x1]].concat(),
