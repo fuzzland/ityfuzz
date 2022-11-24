@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "evaluation", "deployer_is_attacker", "record_instruction_coverage"]
+default = ["cmp", "dataflow", "deployer_is_attacker"]
 cmp = []
 dataflow = []
 evaluation = []
@@ -20,6 +20,7 @@ ondisk_corpus = []
 # need to turn off when running DV contracts
 deployer_is_attacker = []
 record_instruction_coverage = []
+print_corpus = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
