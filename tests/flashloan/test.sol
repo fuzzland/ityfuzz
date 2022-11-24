@@ -27,7 +27,6 @@ contract main {
         require(a < 2, "2");
         require(deeper_token.balanceOf(address(msg.sender)) > 0, "3");
         deeper_token.transfer(address(msg.sender), 1);
-        bug();
         is_ok = 1;
         return 'Hello Contracts';
     }

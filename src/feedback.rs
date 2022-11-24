@@ -219,8 +219,12 @@ where
         );
         // todo(@shou): should it be new stage?
         for idx in 0..self.oracle.len() {
-            let stage = input.get_staged_state().stage[0];
-            if self.oracle[idx].oracle(&mut oracle_ctx, stage) {
+            let original_stage = if idx >= input.get_staged_state().stage.len() {
+                0
+            } else {
+                input.get_staged_state().stage[idx]
+            };
+            if self.oracle[idx].oracle(&mut oracle_ctx, original_stage) {
                 return Ok(true);
             }
         }

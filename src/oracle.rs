@@ -161,8 +161,10 @@ impl Oracle<VMInput, FuzzState> for IERC20OracleFlashloan {
 
     fn oracle(&self, ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> bool {
         // has balance increased?
-        let flashloan_info = ctx.post_state.metadata().get::<FlashloanData>().unwrap();
-        return flashloan_info.earned > flashloan_info.owed;
+        match ctx.post_state.metadata().get::<FlashloanData>() {
+            Some(flashloan_info) => flashloan_info.earned > flashloan_info.owed,
+            None => false,
+        }
     }
 }
 
