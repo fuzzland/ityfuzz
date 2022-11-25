@@ -49,6 +49,9 @@ Exact Exploit:
 
 Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s):
 ```bash
+# build contracts in tests/verilog-2/
+solc *.sol -o . --bin --abi --overwrite --base-path ../../
+# run fuzzer
 ./cli -f -t "./tests/verilog-2/*"
 ```
 
