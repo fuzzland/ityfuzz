@@ -49,7 +49,6 @@ Exact Exploit:
 
 Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s):
 ```bash
-```bash
 ./cli -f -t "./tests/verilog-2/*"
 ```
 
