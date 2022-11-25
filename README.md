@@ -42,7 +42,7 @@ Flashloan attack + Reentrancy. The target is to reach line 34 in `Bounty.sol`.
 Exact Exploit:
 ```
 0. Borrow k MATIC such that k > balance() / 10
-1. depositMATIC() with 1000 MATIC
+1. depositMATIC() with k MATIC
 2. redeem(k * 1e18) -- reentrancy contract --> getBounty()
 3. Return k MATIC
 ```
