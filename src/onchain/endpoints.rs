@@ -67,6 +67,11 @@ pub struct OnChainConfig {
 
     pub moralis_api_key: Vec<String>,
     pub moralis_handle: String,
+
+    slot_cache: HashMap<(H160, U256), U256>,
+    code_cache: HashMap<H160, Bytecode>,
+    price_cache: HashMap<H160, (f64, u32)>,
+    abi_cache: HashMap<H160, Option<String>>,
 }
 
 impl OnChainConfig {
@@ -112,6 +117,10 @@ impl OnChainConfig {
             moralis_api_key: vec![],
             etherscan_base,
             moralis_handle: chain_name,
+            slot_cache: Default::default(),
+            code_cache: Default::default(),
+            price_cache: Default::default(),
+            abi_cache: Default::default(),
         }
     }
 
@@ -123,7 +132,7 @@ impl OnChainConfig {
         self.moralis_api_key.push(key);
     }
 
-    pub fn fetch_abi(&self, address: H160) -> Option<String> {
+    pub fn fetch_abi_uncached(&self, address: H160) -> Option<String> {
         let endpoint = format!(
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
@@ -172,6 +181,15 @@ impl OnChainConfig {
         }
     }
 
+    pub fn fetch_abi(&mut self, address: H160) -> Option<String> {
+        if self.abi_cache.contains_key(&address) {
+            return self.abi_cache.get(&address).unwrap().clone();
+        }
+        let abi = self.fetch_abi_uncached(address);
+        self.abi_cache.insert(address, abi.clone());
+        abi
+    }
+
     fn _request(&self, method: String, params: String) -> Option<Value> {
         let data = format!(
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
@@ -206,7 +224,11 @@ impl OnChainConfig {
         }
     }
 
-    pub fn get_contract_code(&self, address: H160) -> Bytecode {
+    pub fn get_contract_code(&mut self, address: H160) -> Bytecode {
+        if self.code_cache.contains_key(&address) {
+            return self.code_cache[&address].clone();
+        }
+        println!("fetching code from {}", hex::encode(address));
         let mut params = String::from("[");
         params.push_str(&format!("\"0x{:x}\",", address));
         params.push_str(&format!("\"{}\"", self.block_number));
@@ -217,15 +239,22 @@ impl OnChainConfig {
                 let code = resp.as_str().unwrap();
                 let code = code.trim_start_matches("0x");
                 let code = hex::decode(code).unwrap();
-                return Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+                let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+                self.code_cache.insert(address, bytes.clone());
+                return bytes;
             }
             None => {
+                // todo(@shou): exponential backoff here
+                self.code_cache.insert(address, Bytecode::new());
                 return Bytecode::new();
             }
         }
     }
 
-    pub fn get_contract_slot(&self, address: H160, slot: U256) -> U256 {
+    pub fn get_contract_slot(&mut self, address: H160, slot: U256) -> U256 {
+        if self.slot_cache.contains_key(&(address, slot)) {
+            return self.slot_cache[&(address, slot)];
+        }
         let mut params = String::from("[");
         params.push_str(&format!("\"0x{:x}\",", address));
         params.push_str(&format!("\"0x{:x}\",", slot));
@@ -234,13 +263,15 @@ impl OnChainConfig {
         let resp = self._request("eth_getStorageAt".to_string(), params);
         match resp {
             Some(resp) => {
-                let slot = resp.as_str().unwrap();
-                let slot = slot.trim_start_matches("0x");
-                let slot = hex::decode(slot).unwrap();
-                return U256::from_big_endian(&slot);
+                let slot_data = resp.as_str().unwrap();
+                let slot_suffix = slot_data.trim_start_matches("0x");
+                let slot_value = U256::from_big_endian(&hex::decode(slot_suffix).unwrap());
+                self.slot_cache.insert((address, slot), slot_value);
+                return slot_value;
             }
             None => {
-                return U256::from(0);
+                self.slot_cache.insert((address, slot), U256::zero());
+                return U256::zero();
             }
         }
     }

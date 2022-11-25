@@ -1,11 +1,14 @@
 use crate::VMState;
 use bytes::Bytes;
+use libafl::corpus::Corpus;
 use libafl::inputs::Input;
+use libafl::prelude::HasCorpus;
 use primitive_types::H160;
 use std::fmt::Debug;
 
 use crate::abi::BoxedABI;
 use crate::input::{VMInput, VMInputT};
+use crate::state::HasInfantStateState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -35,7 +38,7 @@ where
         caller: v.get_caller(),
         contract: v.get_contract(),
         data: v.get_abi_cloned(),
-        txn_value: v.get_txn_value(),
+        txn_value: v.get_txn_value().unwrap_or(0),
     }
 }
 
@@ -52,8 +55,33 @@ impl TxnTrace {
             from_idx: 0,
         }
     }
-}
 
+    pub fn to_string<S>(trace: &TxnTrace, state: &mut S) -> String
+    where
+        S: HasInfantStateState,
+    {
+        if trace.from_idx == 0 {
+            return String::from("Begin\n");
+        }
+        let mut current_idx = trace.from_idx;
+        let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
+        if corpus_item.is_err() {
+            return String::from("Corpus returning error\n");
+        }
+        let testcase = corpus_item.unwrap().clone().into_inner();
+        let testcase_input = testcase.input();
+        if testcase_input.is_none() {
+            return String::from("[REDACTED]\n");
+        }
+
+        let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
+        for t in &trace.transactions {
+            s.push_str(format!("{:?}\n", t).as_str());
+            s.push_str("\n");
+        }
+        s
+    }
+}
 impl Default for TxnTrace {
     fn default() -> Self {
         Self::new()

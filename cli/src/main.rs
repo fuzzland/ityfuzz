@@ -1,19 +1,19 @@
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::config::{Config, FuzzerTypes};
-use ityfuzz::contract_utils::{ContractLoader, set_hash};
+use ityfuzz::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::fuzzers::basic_fuzzer;
 use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
 use ityfuzz::fuzzers::df_fuzzer::df_fuzzer;
-use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
-use primitive_types::H160;
-use std::path::PathBuf;
-use std::str::FromStr;
 use ityfuzz::input::VMInput;
 use ityfuzz::middleware::Middleware;
+use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::onchain::flashloan::Flashloan;
 use ityfuzz::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan, Oracle};
 use ityfuzz::state::FuzzState;
+use primitive_types::H160;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -63,6 +63,10 @@ struct Args {
     #[arg(long)]
     onchain_chain_name: Option<String>,
 
+    /// Onchain Etherscan API Key (Default: None)
+    #[arg(long)]
+    onchain_etherscan_api_key: Option<String>,
+
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
@@ -93,39 +97,46 @@ fn main() {
             } else {
                 Glob
             }
-        },
+        }
     };
 
-
-    let onchain = if args.onchain {
-
+    let mut onchain = if args.onchain {
         match args.chain_type {
             Some(chain_str) => {
                 let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
                 let block_number = args.onchain_block_number.unwrap();
                 Some(OnChainConfig::new(chain, block_number))
-            },
-            None => {
-                Some(OnChainConfig::new_raw(
-                    args.onchain_url.expect("You need to either specify chain type or chain rpc"),
-                    args.onchain_chain_id.expect("You need to either specify chain type or chain id"),
-                    args.onchain_block_number.unwrap_or(0),
-                    args.onchain_explorer_url.expect("You need to either specify chain type or block explorer url"),
-                    args.onchain_chain_name.expect("You need to either specify chain type or chain name"),
-                ))
             }
+            None => Some(OnChainConfig::new_raw(
+                args.onchain_url
+                    .expect("You need to either specify chain type or chain rpc"),
+                args.onchain_chain_id
+                    .expect("You need to either specify chain type or chain id"),
+                args.onchain_block_number.unwrap_or(0),
+                args.onchain_explorer_url
+                    .expect("You need to either specify chain type or block explorer url"),
+                args.onchain_chain_name
+                    .expect("You need to either specify chain type or chain name"),
+            )),
         }
-
     } else {
         None
     };
+
+    if onchain.is_some() && args.onchain_etherscan_api_key.is_some() {
+        onchain
+            .as_mut()
+            .unwrap()
+            .etherscan_api_key
+            .push(args.onchain_etherscan_api_key.unwrap());
+    }
 
     let mut flashloan_oracle = IERC20OracleFlashloan::new();
     let harness_code = "oracle_harness()";
     let mut harness_hash: [u8; 4] = [0; 4];
     set_hash(harness_code, &mut harness_hash);
-    let mut function_oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
-
+    let mut function_oracle =
+        FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<Box<dyn Oracle<VMInput, FuzzState>>> = vec![];
     if args.ierc20_oracle {
@@ -133,8 +144,7 @@ fn main() {
     }
 
     let config = Config {
-        fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str())
-            .expect("unknown fuzzer"),
+        fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: match target_type {
             Glob => {
                 if args.target_contract.is_none() {
@@ -152,7 +162,7 @@ fn main() {
                     panic!("Onchain is required for address target type");
                 }
                 ContractLoader::from_address(
-                    &onchain.as_ref().unwrap(),
+                    &mut onchain.as_mut().unwrap(),
                     vec![H160::from_str(args.target.as_str()).unwrap()],
                 )
                 .contracts
@@ -164,7 +174,7 @@ fn main() {
             Some(Flashloan::new())
         } else {
             None
-        }
+        },
     };
 
     match config.fuzzer_type {

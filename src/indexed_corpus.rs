@@ -62,7 +62,10 @@ where
     /// Get by id
     #[inline]
     fn get(&self, idx: usize) -> Result<&RefCell<Testcase<I>>, Error> {
-        Ok(&self.entries.get(&idx).unwrap())
+        match self.entries.get(&idx) {
+            Some(entry) => Ok(entry),
+            None => Err(Error::key_not_found(format!("Index {idx} out of bounds"))),
+        }
     }
 
     /// Current testcase scheduled

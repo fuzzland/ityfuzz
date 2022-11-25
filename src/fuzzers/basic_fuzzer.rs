@@ -101,7 +101,6 @@ pub fn basic_fuzzer(config: Config<VMInput, FuzzState>) {
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        false,
     );
     executor.evm_executor.host.initialize(&mut state);
     feedback

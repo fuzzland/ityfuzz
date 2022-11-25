@@ -173,17 +173,20 @@ where
 {
     fn vote(&self, state: &mut S, idx: usize) {
         let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        let increment = 1;
         {
-            data.votes_total += 1;
+            data.votes_total += increment;
         }
 
         {
-            let (votes, _visits) = data
-                .votes_and_visits
-                .get_mut(&idx)
-                .expect("scheduler metadata malformed");
-            *votes += 1;
-            println!("Voted for {}", idx);
+            let v = data.votes_and_visits.get_mut(&idx);
+            if v.is_some() {
+                let (votes, _visits) = v.expect("scheduler metadata malformed");
+                *votes += increment;
+                println!("Voted for {}", idx);
+            } else {
+                println!("scheduler metadata malformed");
+            }
         }
 
         // resort the sorted_votes vector with respect to votes and visits

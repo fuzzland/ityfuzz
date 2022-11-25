@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::i64::MAX;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
+use std::process::exit;
 use std::str::FromStr;
 
 use crate::input::{VMInput, VMInputT};
@@ -17,7 +18,7 @@ use libafl::prelude::powersched::PowerSchedule;
 use libafl::prelude::{HasMetadata, ObserversTuple, SerdeAnyMap};
 use libafl::state::{HasCorpus, State};
 use nix::libc::stat;
-use primitive_types::{H160, H256, U256};
+use primitive_types::{H160, H256, U256, U512};
 use rand::random;
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
@@ -106,6 +107,7 @@ use crate::middleware::{
 use crate::onchain::flashloan::Flashloan;
 use crate::onchain::onchain::OnChain;
 use crate::state::{FuzzState, HasHashToAddress, HasItyState};
+use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
@@ -134,6 +136,8 @@ pub struct FuzzHost {
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub total_instr: HashMap<H160, usize>,
+
+    pub origin: H160,
 }
 
 // all clones would not include middlewares and states
@@ -157,6 +161,7 @@ impl Clone for FuzzHost {
             #[cfg(feature = "record_instruction_coverage")]
             total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
+            origin: self.origin.clone(),
         }
     }
 }
@@ -164,7 +169,7 @@ impl Clone for FuzzHost {
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
 const ControlLeak: Return = Return::FatalExternalError;
-const ACTIVE_MATCH_EXT_CALL: bool = true;
+const ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 10;
 
@@ -191,6 +196,7 @@ impl FuzzHost {
             #[cfg(feature = "record_instruction_coverage")]
             total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
+            origin: Default::default(),
         }
     }
 
@@ -515,6 +521,9 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+        if self.origin == input.contract {
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
             match action {
@@ -573,6 +582,7 @@ impl Host for FuzzHost {
             }
 
             if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
+                // println!("control leak");
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             self.pc_to_addresses
@@ -819,10 +829,11 @@ where
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(contract_address, caller, vm_state, data, None, value, state);
+        let mut r =
+            self.execute_from_pc(contract_address, caller, vm_state, data, None, value, state);
         match r.ret {
             ControlLeak => {
-                self.host.data.post_execution.push((r.stack, r.pc));
+                r.new_state.post_execution.push((r.stack, r.pc));
             }
             _ => {}
         }
@@ -849,6 +860,7 @@ where
     ) -> IntermediateExecutionResult {
         // setup available middlewares
         self.host.set_prob_middlewares();
+        self.host.origin = caller;
         self.host.data = vm_state.clone();
         let call = Contract::new::<LatestSpec>(
             data,
@@ -903,6 +915,21 @@ where
             ret: r,
             stack: interp.stack.data().clone(),
         };
+        // hack to record txn value
+        if let Some(mid) = self.host.middlewares.get_mut(&MiddlewareType::Flashloan) {
+            mid.as_any()
+                .downcast_mut::<Flashloan<S>>()
+                .unwrap()
+                .handle_deferred_actions(
+                    &MiddlewareOp::Owed(
+                        MiddlewareType::Flashloan,
+                        U512::from(value) * float_scale_to_u512(1.0, 5),
+                    ),
+                    state.as_mut().unwrap(),
+                    &mut result,
+                )
+        }
+
         if self.host.middlewares_enabled {
             self.host.middlewares_deferred_actions.iter().for_each(|f| {
                 macro_rules! define_deferred_handler {

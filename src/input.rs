@@ -13,7 +13,12 @@ use serde::{Deserialize, Serialize};
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT:
-    Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize
+    Input
+    + Debug
+    + Clone
+    + serde_traitobject::Serialize
+    + serde_traitobject::Deserialize
+    + From<VMInput>
 {
     fn to_bytes(&self) -> Bytes;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
@@ -28,7 +33,7 @@ pub trait VMInputT:
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;
-    fn get_txn_value(&self) -> usize;
+    fn get_txn_value(&self) -> Option<usize>;
     fn set_txn_value(&mut self, v: usize);
     fn get_abi_cloned(&self) -> Option<BoxedABI>;
     fn to_string(&self) -> String;
@@ -41,7 +46,7 @@ pub struct VMInput {
     pub data: Option<BoxedABI>,
     pub sstate: StagedVMState,
     pub sstate_idx: usize,
-    pub txn_value: usize,
+    pub txn_value: Option<usize>,
 }
 
 impl HasLen for VMInput {
@@ -119,12 +124,12 @@ impl VMInputT for VMInput {
         &self.sstate
     }
 
-    fn get_txn_value(&self) -> usize {
+    fn get_txn_value(&self) -> Option<usize> {
         self.txn_value
     }
 
     fn set_txn_value(&mut self, v: usize) {
-        self.txn_value = v;
+        self.txn_value = Some(v);
     }
 
     fn get_abi_cloned(&self) -> Option<BoxedABI> {
@@ -132,10 +137,11 @@ impl VMInputT for VMInput {
     }
 
     fn to_string(&self) -> String {
-        match self.data {
+        let current_txn = match self.data {
             Some(ref d) => d.to_string(),
             None => String::new(),
-        }
+        };
+        format!("{:?}", self.sstate) + &current_txn
     }
 }
 
