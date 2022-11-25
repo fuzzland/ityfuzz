@@ -123,7 +123,7 @@ impl FuzzState {
         S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
-        self.setup_contract_callers(CONTRACT_AMT as usize, executor);
+        // self.setup_contract_callers(CONTRACT_AMT as usize, executor);
         self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
     }
 

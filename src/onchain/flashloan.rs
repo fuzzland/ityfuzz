@@ -85,7 +85,27 @@ where
                 return vec![];
             }
         };
+
+        let value_transfer = match *interp.instruction_pointer {
+            0xf1 | 0xf2 => {
+                interp.stack.peek(2).unwrap()
+            },
+            _ => { U256::zero() }
+        };
+
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
+
+        let value_transfer_ops = if value_transfer > U256::zero() {
+            if call_target == interp.contract.caller {
+                vec![MiddlewareOp::Earned(MiddlewareType::Flashloan, U512::from(
+                    value_transfer) * float_scale_to_u512(1.0, 5))]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
         let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
         let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
         if size < U256::from(4) {
@@ -128,7 +148,7 @@ where
                 }
             };
         }
-        match data[0..4] {
+        let erc20_ops = match data[0..4] {
             // balanceOf / approval
             [0x70, 0xa0, 0x82, 0x31] | [0x09, 0x5e, 0xa7, 0xb3] => {
                 vec![MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
@@ -197,7 +217,8 @@ where
             _ => {
                 vec![]
             }
-        }
+        };
+        [value_transfer_ops, erc20_ops].concat()
     }
 
     fn get_type(&self) -> MiddlewareType {
