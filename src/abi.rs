@@ -7,10 +7,11 @@ use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
-use primitive_types::H160;
+use primitive_types::{H160, U256};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
 use crate::evm::abi_max_size;
@@ -60,7 +61,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BoxedABI {
     #[serde(with = "serde_traitobject")]
-    b: Box<dyn ABI>,
+    pub b: Box<dyn ABI>,
     function: [u8; 4],
 }
 
@@ -153,6 +154,14 @@ where S: State + HasRand + HasItyState + HasMaxSize {
 
 impl BoxedABI {
     pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+        where
+            S: State + HasRand + HasMaxSize + HasItyState,
+    {
+        self.mutate_with_vm_slots(state, None)
+    }
+
+    pub fn mutate_with_vm_slots<S>(&mut self, state: &mut S, vm_slots: Option<HashMap<U256, U256>>)
+        -> MutationResult
     where
         S: State + HasRand + HasMaxSize + HasItyState,
     {
@@ -171,7 +180,7 @@ impl BoxedABI {
 
                     MutationResult::Mutated
                 } else {
-                    byte_mutator(state, a256)
+                    byte_mutator(state, a256, vm_slots)
                 }
             }
             TDynamic => {
@@ -182,7 +191,7 @@ impl BoxedABI {
                     .downcast_mut::<ADynamic>()
                     .unwrap();
                 // self.b.downcast_ref::<A256>().unwrap().mutate(state);
-                byte_mutator_with_expansion(state, adyn)
+                byte_mutator_with_expansion(state, adyn, vm_slots)
             }
             TArray => {
                 let aarray = self
@@ -199,7 +208,8 @@ impl BoxedABI {
                 if aarray.dynamic_size {
                     if (state.rand_mut().below(100)) < 80 {
                         let index: usize = state.rand_mut().next() as usize % data_len;
-                        let result = aarray.data[index].mutate(state);
+                        let result = aarray.data[index]
+                            .mutate_with_vm_slots(state, vm_slots);
                         return result;
                     }
 
@@ -212,7 +222,7 @@ impl BoxedABI {
                     }
                 } else {
                     let index: usize = state.rand_mut().next() as usize % data_len;
-                    return aarray.data[index].mutate(state);
+                    return aarray.data[index].mutate_with_vm_slots(state, vm_slots);
                 }
                 MutationResult::Mutated
             }
@@ -230,7 +240,7 @@ impl BoxedABI {
                         return MutationResult::Skipped;
                     }
                     if (state.rand_mut().below(100)) < 80 {
-                        a_unknown.concrete_type.mutate(state)
+                        a_unknown.concrete_type.mutate_with_vm_slots(state, vm_slots)
                     } else {
                         a_unknown.concrete_type = sample_abi(state, size);
                         MutationResult::Mutated
