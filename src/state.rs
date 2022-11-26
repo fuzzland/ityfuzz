@@ -170,6 +170,7 @@ impl FuzzState {
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
                     txn_value: Some(1),
+                    step: false,
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -352,6 +353,7 @@ impl HasItyState for FuzzState {
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
             txn_value: if abi.is_payable { Some(0) } else { None },
+            step: false,
         };
         let mut tc = Testcase::new(input);
         tc.set_exec_time(Duration::from_secs(0));

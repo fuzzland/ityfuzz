@@ -36,6 +36,8 @@ pub trait VMInputT:
     fn get_txn_value(&self) -> Option<usize>;
     fn set_txn_value(&mut self, v: usize);
     fn get_abi_cloned(&self) -> Option<BoxedABI>;
+    fn is_step(&self) -> bool;
+    fn set_step(&mut self, gate: bool);
     fn to_string(&self) -> String;
 }
 
@@ -47,6 +49,7 @@ pub struct VMInput {
     pub sstate: StagedVMState,
     pub sstate_idx: usize,
     pub txn_value: Option<usize>,
+    pub step: bool,
 }
 
 impl HasLen for VMInput {
@@ -134,6 +137,14 @@ impl VMInputT for VMInput {
 
     fn get_abi_cloned(&self) -> Option<BoxedABI> {
         self.data.clone()
+    }
+
+    fn is_step(&self) -> bool {
+        self.step
+    }
+
+    fn set_step(&mut self, gate: bool) {
+        self.step = gate;
     }
 
     fn to_string(&self) -> String {

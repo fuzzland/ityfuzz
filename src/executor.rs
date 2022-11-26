@@ -72,6 +72,7 @@ where
             input.get_state(),
             input.to_bytes().clone(),
             input.get_txn_value().unwrap_or(0),
+            false,
             &mut self.observers,
             Some(state),
         );
@@ -163,6 +164,7 @@ mod tests {
                 .concat(),
             ),
             0,
+            false,
             &mut observers,
             None,
         );
@@ -188,6 +190,7 @@ mod tests {
                 .concat(),
             ),
             0,
+            false,
             &mut observers,
             None,
         );

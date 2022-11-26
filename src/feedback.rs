@@ -86,21 +86,11 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        // finish executing pre state and post state
-        let post_execution = self
-            .executor
-            .finish_execution(state.get_execution_result(), input);
-
-        // reverted states should be discarded as they are infeasible
-        if post_execution.reverted {
-            return Ok(false);
-        }
-
         let mut oracle_ctx = OracleCtx::new(
             // todo(@shou): we should get a previous state, not incomplete state!
             state,
             input.get_state(),
-            &post_execution.new_state.state,
+            &state.get_execution_result().new_state.state,
             &mut self.executor,
             input,
         );
