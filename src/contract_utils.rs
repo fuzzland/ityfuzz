@@ -60,6 +60,25 @@ impl ContractLoader {
         return Self::parse_abi_str(&data);
     }
 
+    fn process_input(ty: String, input: &Value) -> String {
+        if let Some(slot) = input.get("components") {
+            if ty == "tuple" {
+                let v = slot.as_array().unwrap().iter()
+                    .map(|v| Self::process_input(
+                        v["type"].as_str().unwrap().to_string(), v))
+                    .collect::<Vec<String>>()
+                    .join(",");
+                return format!("({})", v);
+
+            } else if ty.ends_with("[]") {
+                return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
+            }
+            panic!("unknown type: {}", ty);
+        } else {
+            ty
+        }
+    }
+
     pub fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
         let json: Vec<Value> = serde_json::from_str(&data).expect("failed to parse abi file");
         json.iter()
@@ -76,7 +95,8 @@ impl ContractLoader {
                         .expect("failed to parse abi inputs")
                         .iter()
                         .for_each(|input| {
-                            abi_name.push(input["type"].as_str().unwrap().to_string());
+                            abi_name.push(Self::process_input(
+                                input["type"].as_str().unwrap().to_string(), input));
                         });
                     let mut abi_config = ABIConfig {
                         abi: format!("({})", abi_name.join(",")),
