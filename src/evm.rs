@@ -24,7 +24,10 @@ use primitive_types::{H160, H256, U256, U512};
 use rand::random;
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
-use revm::{Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
+use revm::{
+    Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host,
+    Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
+};
 use serde::__private::de::Borrowed;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
@@ -80,7 +83,6 @@ pub struct VMState {
     pub state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
-
     pub post_execution: Vec<PostExecutionCtx>,
     pub leaked_func_hash: Option<u64>,
     pub metadata: SerdeAnyMap,
@@ -449,14 +451,16 @@ impl Host for FuzzHost {
                     let offset_of_ret_size: usize = match *interp.instruction_pointer {
                         0xf1 | 0xf2 => 6,
                         0xf4 | 0xfa => 5,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     unsafe {
-                        ret_offset = interp.stack
+                        ret_offset = interp
+                            .stack
                             .peek(offset_of_ret_size - 1)
                             .expect("stack underflow")
                             .as_usize();
-                        ret_size = interp.stack
+                        ret_size = interp
+                            .stack
                             .peek(offset_of_ret_size)
                             .expect("stack underflow")
                             .as_usize();
@@ -610,7 +614,6 @@ impl Host for FuzzHost {
         if middleware_result.is_some() {
             return middleware_result.unwrap();
         }
-
 
         let mut input_seq = input.input.to_vec();
         // check whether the whole CALLDATAVALUE can be arbitrary
@@ -856,39 +859,48 @@ where
             // we need push the output of CALL instruction
             post_exec.stack.push(U256::one());
             post_exec.pc += 1;
-            self.execute_from_pc(&post_exec.get_call_ctx(),
-                                 &_vm_state, data,
-                                 Some(post_exec), state)
-
+            self.execute_from_pc(
+                &post_exec.get_call_ctx(),
+                &_vm_state,
+                data,
+                Some(post_exec),
+                state,
+            )
         } else {
             self.host.origin = caller;
-            self.execute_from_pc(&CallContext {
-                address: contract_address,
-                caller,
-                code_address: contract_address,
-                apparent_value: U256::from(value),
-                scheme: CallScheme::Call
-            }, &_vm_state, data, None, state)
+            self.execute_from_pc(
+                &CallContext {
+                    address: contract_address,
+                    caller,
+                    code_address: contract_address,
+                    apparent_value: U256::from(value),
+                    scheme: CallScheme::Call,
+                },
+                &_vm_state,
+                data,
+                None,
+                state,
+            )
         };
         match r.ret {
-            ControlLeak => {
-                unsafe {
-                    let global_ctx = global_call_context.clone().expect("global call context should be set");
-                    r.new_state.post_execution.push(PostExecutionCtx {
-                        stack: r.stack,
-                        pc: r.pc,
-                        output_offset: ret_offset,
-                        output_len: ret_size,
+            ControlLeak => unsafe {
+                let global_ctx = global_call_context
+                    .clone()
+                    .expect("global call context should be set");
+                r.new_state.post_execution.push(PostExecutionCtx {
+                    stack: r.stack,
+                    pc: r.pc,
+                    output_offset: ret_offset,
+                    output_len: ret_size,
 
-                        call_data: Default::default(),
+                    call_data: Default::default(),
 
-                        address: global_ctx.address,
-                        caller: global_ctx.caller,
-                        code_address: global_ctx.code_address,
-                        apparent_value: global_ctx.apparent_value
-                    });
-                }
-            }
+                    address: global_ctx.address,
+                    caller: global_ctx.caller,
+                    code_address: global_ctx.code_address,
+                    apparent_value: global_ctx.apparent_value,
+                });
+            },
             _ => {}
         }
         #[cfg(feature = "record_instruction_coverage")]
@@ -918,7 +930,8 @@ where
             global_call_context = Some(call_ctx.clone());
         }
 
-        let mut bytecode = self.host
+        let mut bytecode = self
+            .host
             .code
             .get(&call_ctx.code_address)
             .expect("no code")
@@ -930,7 +943,7 @@ where
                 let call = Contract::new_with_context::<LatestSpec>(
                     post_exec_ctx.call_data.clone(),
                     bytecode,
-                    call_ctx
+                    call_ctx,
                 );
                 let new_ip = call.bytecode.as_ptr().add(new_pc);
                 let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
@@ -938,16 +951,14 @@ where
                     interp.stack.push(v);
                 }
                 interp.instruction_pointer = new_ip;
-                interp.memory.set(post_exec_ctx.output_offset,
-                                  &data[..post_exec_ctx.output_len]);
+                interp.memory.set(
+                    post_exec_ctx.output_offset,
+                    &data[..post_exec_ctx.output_len],
+                );
                 interp
             }
         } else {
-            let call = Contract::new_with_context::<LatestSpec>(
-                data,
-                bytecode,
-                call_ctx
-            );
+            let call = Contract::new_with_context::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
         unsafe {
