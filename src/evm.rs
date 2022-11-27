@@ -64,6 +64,8 @@ pub struct PostExecutionCtx {
     pub caller: H160,
     pub code_address: H160,
     pub apparent_value: U256,
+
+    pub memory: Vec<u8>,
 }
 
 impl PostExecutionCtx {
@@ -91,6 +93,10 @@ pub struct VMState {
 impl VMState {
     pub fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
+        for i in self.post_execution.iter() {
+            i.pc.hash(&mut s);
+            i.stack.hash(&mut s);
+        }
         for i in self.state.iter().sorted_by_key(|k| k.0) {
             i.0 .0.hash(&mut s);
             for j in i.1.iter() {
@@ -459,6 +465,7 @@ impl Host for FuzzHost {
                             .peek(offset_of_ret_size - 1)
                             .expect("stack underflow")
                             .as_usize();
+                        // println!("ret_offset: {}", ret_offset);
                         ret_size = interp
                             .stack
                             .peek(offset_of_ret_size)
@@ -735,6 +742,7 @@ pub struct IntermediateExecutionResult {
     pub pc: usize,
     pub ret: Return,
     pub stack: Vec<U256>,
+    pub memory: Vec<u8>,
 }
 
 impl ExecutionResult {
@@ -744,6 +752,10 @@ impl ExecutionResult {
             reverted: false,
             new_state: StagedVMState::new_uninitialized(),
         }
+    }
+
+    pub fn get_post_execution(&self) -> &Vec<PostExecutionCtx> {
+        &self.new_state.state.post_execution
     }
 }
 
@@ -858,7 +870,7 @@ where
             self.host.origin = post_exec.caller;
             // we need push the output of CALL instruction
             post_exec.stack.push(U256::one());
-            post_exec.pc += 1;
+            // post_exec.pc += 1;
             self.execute_from_pc(
                 &post_exec.get_call_ctx(),
                 &_vm_state,
@@ -899,6 +911,8 @@ where
                     caller: global_ctx.caller,
                     code_address: global_ctx.code_address,
                     apparent_value: global_ctx.apparent_value,
+
+                    memory: r.memory,
                 });
             },
             _ => {}
@@ -951,11 +965,17 @@ where
                     interp.stack.push(v);
                 }
                 interp.instruction_pointer = new_ip;
-                interp.memory.resize(post_exec_ctx.output_offset + post_exec_ctx.output_len);
+                interp.memory.resize(max(
+                    post_exec_ctx.output_offset + post_exec_ctx.output_len,
+                    post_exec_ctx.memory.len(),
+                ));
+                interp.memory.set(0, &post_exec_ctx.memory);
+
                 interp.memory.set(
                     post_exec_ctx.output_offset,
-                    &data[..min(post_exec_ctx.output_len, data.len())],
+                    &data[4..min(post_exec_ctx.output_len + 4, data.len())],
                 );
+                interp.return_data_buffer = data;
                 interp
             }
         } else {
@@ -984,6 +1004,7 @@ where
             pc: interp.program_counter(),
             ret: r,
             stack: interp.stack.data().clone(),
+            memory: interp.memory.data().clone(),
         };
         // hack to record txn value
         if let Some(mid) = self.host.middlewares.get_mut(&MiddlewareType::Flashloan) {
