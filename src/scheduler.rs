@@ -173,7 +173,8 @@ where
 {
     fn vote(&self, state: &mut S, idx: usize) {
         let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        let increment = 1;
+        let increment = data.votes_total / data.votes_and_visits.len();
+        assert!(increment > 1);
         {
             data.votes_total += increment;
         }
