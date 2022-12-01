@@ -345,14 +345,20 @@ impl Host for FuzzHost {
             }
             // println!("{}", *interp.instruction_pointer);
             // println!("pc: {}", interp.program_counter());
+
+            macro_rules! fast_peek {
+                ($idx:expr) => {
+                    interp.stack.data()[interp.stack.len() - 1 - $idx]
+                };
+            }
             match *interp.instruction_pointer {
-                0xfd => {
-                    // println!("fd {}", interp.program_counter());
-                }
+                // 0xfd => {
+                //     // println!("fd {}", interp.program_counter());
+                // }
                 0x57 => {
                     // JUMPI
-                    let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
-                        interp.stack.peek(1).expect("stack underflow").as_u64()
+                    let jump_dest = if fast_peek!(0).is_zero() {
+                        fast_peek!(1).as_u64()
                     } else {
                         1
                     };
@@ -367,7 +373,7 @@ impl Host for FuzzHost {
                         if jump_dest != 1 {
                             CMP_MAP[idx] = U256::zero();
                         } else {
-                            CMP_MAP[idx] = U256::from(1);
+                            CMP_MAP[idx] = U256::one();
                         }
                     }
                 }
@@ -376,23 +382,20 @@ impl Host for FuzzHost {
                 0x55 => {
                     // SSTORE
                     #[cfg(feature = "dataflow")]
-                    let value = interp.stack.peek(1).expect("stack underflow");
+                    let value = fast_peek!(1);
                     {
-                        let mut key = interp.stack.peek(0).expect("stack underflow");
+                        let mut key = fast_peek!(0);
                         let v = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = v;
                     }
-                    let res = self.sload(
-                        interp.contract.address,
-                        interp.stack.peek(0).expect("stack underflow"),
-                    );
+                    let res = self.sload(interp.contract.address, fast_peek!(0));
                     state_change = res.expect("sload failed").0 != value;
                 }
 
                 #[cfg(feature = "dataflow")]
                 0x54 => {
                     // SLOAD
-                    let mut key = interp.stack.peek(0).expect("stack underflow");
+                    let mut key = fast_peek!(0);
                     READ_MAP[process_rw_key!(key)] = true;
                 }
 
@@ -400,8 +403,8 @@ impl Host for FuzzHost {
                 #[cfg(feature = "cmp")]
                 0x10 | 0x12 => {
                     // LT, SLT
-                    let v1 = interp.stack.peek(0).expect("stack underflow");
-                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
                     let abs_diff = if v1 >= v2 {
                         if v1 - v2 != U256::zero() {
                             (v1 - v2)
@@ -420,8 +423,8 @@ impl Host for FuzzHost {
                 #[cfg(feature = "cmp")]
                 0x11 | 0x13 => {
                     // GT, SGT
-                    let v1 = interp.stack.peek(0).expect("stack underflow");
-                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
                     let abs_diff = if v1 <= v2 {
                         if v2 - v1 != U256::zero() {
                             (v2 - v1)
@@ -440,8 +443,8 @@ impl Host for FuzzHost {
                 #[cfg(feature = "cmp")]
                 0x14 => {
                     // EQ
-                    let v1 = interp.stack.peek(0).expect("stack underflow");
-                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
                     let abs_diff = if v1 < v2 {
                         (v2 - v1) % (U256::max_value() - 1) + 1
                     } else {
@@ -460,17 +463,9 @@ impl Host for FuzzHost {
                         _ => unreachable!(),
                     };
                     unsafe {
-                        ret_offset = interp
-                            .stack
-                            .peek(offset_of_ret_size - 1)
-                            .expect("stack underflow")
-                            .as_usize();
+                        ret_offset = fast_peek!(offset_of_ret_size - 1).as_usize();
                         // println!("ret_offset: {}", ret_offset);
-                        ret_size = interp
-                            .stack
-                            .peek(offset_of_ret_size)
-                            .expect("stack underflow")
-                            .as_usize();
+                        ret_size = fast_peek!(offset_of_ret_size).as_usize();
                     }
                     self._pc = interp.program_counter();
                 }
@@ -596,7 +591,6 @@ impl Host for FuzzHost {
         }
 
         self.data.leaked_func_hash = None;
-
 
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
