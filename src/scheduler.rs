@@ -20,8 +20,8 @@ where
     fn vote(&self, state: &mut S, idx: usize);
 }
 
-pub const DROP_THRESHOLD: usize = 1000;
-pub const PRUNE_AMT: usize = 500;
+pub const DROP_THRESHOLD: usize = 500;
+pub const PRUNE_AMT: usize = 250;
 pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 pub const AMPLIFIER: usize = 10000;
 #[derive(Debug, Clone)]
@@ -113,10 +113,9 @@ where
     }
 
     fn next(&self, state: &mut S) -> Result<usize, Error> {
-        let corpus_size = state.corpus().count();
-
         #[cfg(feature = "print_corpus")]
         {
+            let corpus_size = state.corpus().count();
             let data = state.metadata().get::<VoteData>().unwrap();
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
                 println!(
@@ -144,25 +143,25 @@ where
             * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
 
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        if corpus_size == 0 {
-            Err(Error::empty("No entries in corpus".to_owned()))
-        } else {
-            // probablistic sampling from votes and visits (weighted by votes)
-            let mut idx = *data.sorted_votes.last().unwrap();
+        // probablistic sampling from votes and visits (weighted by votes)
+        let mut idx = usize::MAX;
 
-            let mut s: f64 = 0.0;
-            for i in data.sorted_votes.clone() {
-                s += data.votes_and_visits.get(&i).unwrap().0 as f64;
-                if s > threshold {
-                    idx = i;
-                    break;
-                }
+        let mut s: f64 = 0.0;
+        for i in &data.sorted_votes {
+            s += data.votes_and_visits.get(&i).unwrap().0 as f64;
+            if s > threshold {
+                idx = *i;
+                break;
             }
-
-            data.votes_and_visits.get_mut(&idx).unwrap().1 += 1;
-            data.visits_total += 1;
-            Ok(idx)
         }
+
+        if idx == usize::MAX {
+            idx = *data.sorted_votes.last().unwrap();
+        }
+
+        data.votes_and_visits.get_mut(&idx).unwrap().1 += 1;
+        data.visits_total += 1;
+        Ok(idx)
     }
 }
 
