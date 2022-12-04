@@ -63,15 +63,19 @@ impl ContractLoader {
     fn process_input(ty: String, input: &Value) -> String {
         if let Some(slot) = input.get("components") {
             if ty == "tuple" {
-                let v = slot.as_array().unwrap().iter()
-                    .map(|v| Self::process_input(
-                        v["type"].as_str().unwrap().to_string(), v))
+                let v = slot
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| Self::process_input(v["type"].as_str().unwrap().to_string(), v))
                     .collect::<Vec<String>>()
                     .join(",");
                 return format!("({})", v);
-
             } else if ty.ends_with("[]") {
-                return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
+                return format!(
+                    "{}[]",
+                    Self::process_input(ty[..ty.len() - 2].to_string(), input)
+                );
             }
             panic!("unknown type: {}", ty);
         } else {
@@ -96,7 +100,9 @@ impl ContractLoader {
                         .iter()
                         .for_each(|input| {
                             abi_name.push(Self::process_input(
-                                input["type"].as_str().unwrap().to_string(), input));
+                                input["type"].as_str().unwrap().to_string(),
+                                input,
+                            ));
                         });
                     let mut abi_config = ABIConfig {
                         abi: format!("({})", abi_name.join(",")),
