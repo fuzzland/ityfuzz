@@ -654,8 +654,7 @@ fn get_abi_type_basic(
                 return get_abi_type_basic("int", len / 8, with_address);
             } else if abi_name.starts_with("bytes") {
                 let len = abi_name[5..].parse::<usize>().unwrap();
-                assert!(len % 8 == 0 && len >= 8);
-                return get_abi_type_basic("bytes", len / 8, with_address);
+                return get_abi_type_basic("bytes", len, with_address);
             } else if abi_name.len() == 0 {
                 return Box::new(AEmpty {});
             } else {
