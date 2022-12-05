@@ -29,7 +29,8 @@ where
 {
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
-    pub calls: HashMap<(H160, usize), usize>,
+    pub calls: HashMap<(H160, usize), HashSet<H160>>,
+    pub locs: HashMap<(H160, usize), HashSet<U256>>,
     pub endpoint: OnChainConfig,
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
     pub blacklist: HashSet<H160>,
@@ -44,7 +45,6 @@ where
         f.debug_struct("OnChain")
             .field("loaded_data", &self.loaded_data)
             .field("loaded_code", &self.loaded_code)
-            .field("calls", &self.calls)
             .field("endpoint", &self.endpoint)
             .finish()
     }
@@ -63,6 +63,7 @@ where
             loaded_data: Default::default(),
             loaded_code: Default::default(),
             calls: Default::default(),
+            locs: Default::default(),
             endpoint,
             scheduler: Some(Box::new(scheduler)),
             blacklist: Default::default(),
@@ -80,6 +81,25 @@ where
     S: State + std::fmt::Debug + 'static,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
+        let pc = interp.program_counter();
+        macro_rules! force_cache {
+            ($ty: expr, $target: expr) => {
+                match $ty.get_mut(&(interp.contract.address, pc)) {
+                    None => {
+                        $ty.insert((interp.contract.address, pc), HashSet::from([$target]));
+                        false
+                    }
+                    Some(v) => {
+                        if v.len() > UNBOUND_THRESHOLD {
+                            true
+                        } else {
+                            v.insert($target);
+                            false
+                        }
+                    }
+                }
+            };
+        }
         match *interp.instruction_pointer {
             0x54 => {
                 let slot_idx = interp.stack.peek(0).unwrap();
@@ -88,37 +108,35 @@ where
                     MiddlewareType::OnChain,
                     address,
                     slot_idx,
-                    self.endpoint.get_contract_slot(address, slot_idx),
+                    self.endpoint.get_contract_slot(address, slot_idx, force_cache!(
+                        self.locs,
+                        slot_idx
+                    )),
                 )]
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {
-                let pc = interp.program_counter();
-                let calls_data = self.calls.get_mut(&(interp.contract.address, pc));
-                match calls_data {
-                    None => {
-                        self.calls.insert((interp.contract.address, pc), 1);
-                    }
-                    Some(v) => {
-                        if *v > UNBOUND_THRESHOLD {
-                            return vec![];
-                        }
-                        *v += 1;
-                    }
-                }
                 let address = interp.stack.peek(1).unwrap();
                 let address_h160 = convert_u256_to_h160(address);
-                let abi = if !self.loaded_code.contains(&address_h160) {
+                let force_cache = force_cache!(
+                    self.calls,
+                    address_h160
+                );
+
+                let code_update = UpdateCode(
+                    MiddlewareType::OnChain,
+                    address_h160,
+                    self.endpoint.get_contract_code(address_h160, force_cache),
+                );
+
+                let abi = if !self.loaded_code.contains(&address_h160) && !force_cache {
                     self.endpoint.fetch_abi(address_h160)
                 } else {
                     None
                 };
+
                 self.loaded_code.insert(address_h160);
-                let code_update = UpdateCode(
-                    MiddlewareType::OnChain,
-                    address_h160,
-                    self.endpoint.get_contract_code(address_h160),
-                );
+
                 match abi {
                     Some(abi_ins) => {
                         // AddCorpus(MiddlewareType::OnChain, )
@@ -177,7 +195,7 @@ where
                             sstate: StagedVMState::new_uninitialized(),
                             sstate_idx: 0,
                             txn_value: if abi.is_payable { Some(0) } else { None },
-                            step: false
+                            step: false,
                         };
                         let mut tc = Testcase::new(input) as Testcase<I>;
                         tc.set_exec_time(Duration::from_secs(0));

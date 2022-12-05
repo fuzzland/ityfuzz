@@ -259,7 +259,7 @@ impl ContractLoader {
             let mut contract = ContractInfo {
                 name: addr.to_string(),
                 abi: Self::parse_abi_str(&abi.unwrap()),
-                code: onchain.get_contract_code(addr).bytes().to_vec(),
+                code: onchain.get_contract_code(addr, false).bytes().to_vec(),
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
