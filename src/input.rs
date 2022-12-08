@@ -1,9 +1,10 @@
-use crate::abi::{ABILossyType, ADynamic, BoxedABI, A256};
+use crate::evm::abi::{ABILossyType, ADynamic, BoxedABI, A256};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::state_input::StagedVMState;
-use crate::{evm, VMState};
+use crate::evm::vm::VMState;
+use crate::evm::vm;
 use bytes::Bytes;
 use libafl::inputs::Input;
 use libafl::mutators::Mutator;
@@ -33,7 +34,7 @@ pub trait VMInputT:
     fn set_caller(&mut self, caller: H160);
     fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
-    fn get_state(&self) -> &evm::VMState;
+    fn get_state(&self) -> &VMState;
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;

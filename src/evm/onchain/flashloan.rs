@@ -3,9 +3,9 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::IntermediateExecutionResult;
-use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
-use crate::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::evm::vm::IntermediateExecutionResult;
+use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::oracle::Oracle;
 use crate::state::HasItyState;
 use crate::types::{convert_u256_to_h160, float_scale_to_u512};
@@ -51,7 +51,8 @@ impl<S> Flashloan<S> {
         Self {
             phantom: PhantomData,
             oracle,
-            use_contract_value: false,
+            use_contract_value: false
+            ,
         }
     }
 
@@ -91,6 +92,7 @@ where
             _ => U256::zero(),
         };
 
+        // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         let value_transfer_ops = if value_transfer > U256::zero() {

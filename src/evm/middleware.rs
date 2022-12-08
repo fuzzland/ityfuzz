@@ -1,4 +1,4 @@
-use crate::evm::{FuzzHost, IntermediateExecutionResult};
+use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::input::{VMInput, VMInputT};
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};

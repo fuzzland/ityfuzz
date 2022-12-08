@@ -13,7 +13,7 @@ use std::fmt::{Debug, Formatter};
 
 use std::marker::PhantomData;
 
-use crate::evm::{state_change, EVMExecutor, JMP_MAP, MAP_SIZE, READ_MAP, WRITE_MAP};
+use crate::evm::vm::{state_change, EVMExecutor, JMP_MAP, MAP_SIZE, READ_MAP, WRITE_MAP};
 
 use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};

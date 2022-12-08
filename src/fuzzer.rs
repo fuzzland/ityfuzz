@@ -7,8 +7,8 @@ use std::ops::Deref;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
-use crate::config::DEBUG_PRINT_PERCENT;
-use crate::evm::RW_SKIPPER_PERCT_IDX;
+use crate::evm::config::DEBUG_PRINT_PERCENT;
+use crate::evm::vm::RW_SKIPPER_PERCT_IDX;
 use crate::state::HasExecutionResult;
 use crate::state_input::TxnTrace;
 use libafl::{

@@ -78,7 +78,7 @@ impl OnChainConfig {
     pub fn new(chain: Chain, block_number: u64) -> Self {
         Self::new_raw(
             match chain {
-                Chain::ETH => "https://rpc.ankr.com/eth/",
+                Chain::ETH => "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657",
                 Chain::BSC => "https://bsc-dataseed.binance.org/",
                 Chain::POLYGON => "https://polygon-rpc.com/",
                 Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
@@ -359,7 +359,7 @@ impl PriceOracle for OnChainConfig {
 
 mod tests {
     use super::*;
-    use crate::onchain::endpoints::Chain::BSC;
+    use crate::evm::onchain::endpoints::Chain::BSC;
 
     #[test]
     fn test_onchain_config() {

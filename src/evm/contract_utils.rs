@@ -10,8 +10,8 @@ use std::path::Path;
 
 extern crate crypto;
 
-use crate::abi::get_abi_type_boxed_with_address;
-use crate::onchain::endpoints::OnChainConfig;
+use crate::evm::abi::get_abi_type_boxed_with_address;
+use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::rand_utils::{fixed_address, generate_random_address};
 
 use self::crypto::digest::Digest;

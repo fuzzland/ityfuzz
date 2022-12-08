@@ -1,5 +1,5 @@
 use crate::{
-    evm::{EVMExecutor, FuzzHost, JMP_MAP},
+    evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::VMInput,
@@ -17,13 +17,13 @@ use libafl::{
 
 use std::path::PathBuf;
 
-use crate::contract_utils::{set_hash, ContractLoader};
+use crate::evm::contract_utils::{set_hash, ContractLoader};
 use crate::feedback::{InfantFeedback, OracleFeedback};
 use crate::oracle::FunctionHarnessOracle;
 use crate::rand_utils::generate_random_address;
 use crate::state::FuzzState;
 
-use crate::config::Config;
+use crate::evm::config::Config;
 use primitive_types::H160;
 
 struct ABIConfig {

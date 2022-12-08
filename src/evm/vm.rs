@@ -141,13 +141,13 @@ impl HasMetadata for VMState {
     }
 }
 
-use crate::config::DEBUG_PRINT_PERCENT;
-use crate::middleware::{
+use crate::evm::config::DEBUG_PRINT_PERCENT;
+use crate::evm::middleware::{
     CallMiddlewareReturn, CanHandleDeferredActions, ExecutionStage, Middleware, MiddlewareOp,
     MiddlewareType,
 };
-use crate::onchain::flashloan::Flashloan;
-use crate::onchain::onchain::OnChain;
+use crate::evm::onchain::flashloan::Flashloan;
+use crate::evm::onchain::onchain::OnChain;
 use crate::state::{FuzzState, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;

@@ -1,5 +1,5 @@
-use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
-use crate::evm::{abi_max_size, MAP_SIZE};
+use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
+use crate::evm::vm::{abi_max_size, MAP_SIZE};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::HasItyState;
 use bytes::Bytes;

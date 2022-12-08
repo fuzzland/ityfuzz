@@ -1,4 +1,4 @@
-use crate::VMState;
+use crate::evm::vm::VMState;
 use bytes::Bytes;
 use libafl::corpus::Corpus;
 use libafl::inputs::Input;
@@ -6,7 +6,7 @@ use libafl::prelude::HasCorpus;
 use primitive_types::H160;
 use std::fmt::Debug;
 
-use crate::abi::BoxedABI;
+use crate::evm::abi::BoxedABI;
 use crate::input::{VMInput, VMInputT};
 use crate::state::HasInfantStateState;
 use serde::{Deserialize, Serialize};

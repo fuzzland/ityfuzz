@@ -3,8 +3,8 @@ use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 use std::any::Any;
 
-use crate::middleware::MiddlewareType::Concolic;
-use crate::middleware::{Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::middleware::MiddlewareType::Concolic;
+use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
