@@ -22,6 +22,7 @@ deployer_is_attacker = []
 record_instruction_coverage = []
 print_corpus = []
 fuzz_static = []
+downcast_unchecked = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

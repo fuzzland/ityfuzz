@@ -11,7 +11,7 @@ use std::ops::DerefMut;
 use std::process::exit;
 use std::str::FromStr;
 
-use crate::input::{VMInput, VMInputT};
+use crate::input::VMInputT;
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -31,8 +31,6 @@ use revm::{
 use serde::__private::de::Borrowed;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
-
-pub const MAP_SIZE: usize = 1024;
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 // dataflow
@@ -81,7 +79,7 @@ impl PostExecutionCtx {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct VMState {
+pub struct EVMState {
     pub state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
@@ -90,8 +88,19 @@ pub struct VMState {
     pub metadata: SerdeAnyMap,
 }
 
-impl VMState {
-    pub fn get_hash(&self) -> u64 {
+impl Default for EVMState {
+    fn default() -> Self {
+        Self {
+            state: HashMap::new(),
+            post_execution: Vec::new(),
+            leaked_func_hash: None,
+            metadata: SerdeAnyMap::new(),
+        }
+    }
+}
+
+impl VMStateT for EVMState {
+    fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
         for i in self.post_execution.iter() {
             i.pc.hash(&mut s);
@@ -106,9 +115,27 @@ impl VMState {
         }
         s.finish()
     }
+    fn has_post_execution(&self) -> bool {
+        self.post_execution.len() > 0
+    }
+
+    fn get_post_execution_needed_len(&self) -> usize {
+        self.post_execution.last().unwrap().output_len
+    }
+
+    fn get_post_execution_pc(&self) -> usize {
+        match self.post_execution.last() {
+            Some(i) => i.pc,
+            None => 0,
+        }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
-impl VMState {
+impl EVMState {
     pub(crate) fn new() -> Self {
         Self {
             state: HashMap::new(),
@@ -131,7 +158,7 @@ impl VMState {
     }
 }
 
-impl HasMetadata for VMState {
+impl HasMetadata for EVMState {
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
     }
@@ -141,14 +168,17 @@ impl HasMetadata for VMState {
     }
 }
 
-use crate::evm::config::DEBUG_PRINT_PERCENT;
 use crate::evm::middleware::{
     CallMiddlewareReturn, CanHandleDeferredActions, ExecutionStage, Middleware, MiddlewareOp,
     MiddlewareType,
 };
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
-use crate::state::{FuzzState, HasHashToAddress, HasItyState};
+use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
+use crate::generic_vm::vm_state::VMStateT;
+#[cfg(feature = "record_instruction_coverage")]
+use crate::r#const::DEBUG_PRINT_PERCENT;
+use crate::state::{FuzzState, HasCaller, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
@@ -157,7 +187,7 @@ pub use write_map as WRITE_MAP;
 
 #[derive(Debug)]
 pub struct FuzzHost {
-    pub data: VMState,
+    pub data: EVMState,
     // these are internal to the host
     env: Env,
     code: HashMap<H160, Bytecode>,
@@ -220,7 +250,7 @@ const CONTROL_LEAK_THRESHOLD: usize = 1;
 impl FuzzHost {
     pub fn new() -> Self {
         Self {
-            data: VMState::new(),
+            data: EVMState::new(),
             env: Env::default(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
@@ -718,47 +748,27 @@ impl Host for FuzzHost {
 }
 
 #[derive(Debug, Clone)]
-pub struct EVMExecutor<I, S> {
+pub struct EVMExecutor<I, S, VS> {
     pub host: FuzzHost,
     deployer: H160,
-    phandom: PhantomData<(I, S)>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ExecutionResult {
-    pub output: Bytes,
-    pub reverted: bool,
-    pub new_state: StagedVMState,
+    phandom: PhantomData<(I, S, VS)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct IntermediateExecutionResult {
     pub output: Bytes,
-    pub new_state: VMState,
+    pub new_state: EVMState,
     pub pc: usize,
     pub ret: Return,
     pub stack: Vec<U256>,
     pub memory: Vec<u8>,
 }
 
-impl ExecutionResult {
-    pub fn empty_result() -> Self {
-        Self {
-            output: Bytes::new(),
-            reverted: false,
-            new_state: StagedVMState::new_uninitialized(),
-        }
-    }
-
-    pub fn get_post_execution(&self) -> &Vec<PostExecutionCtx> {
-        &self.new_state.state.post_execution
-    }
-}
-
-impl<I, S> EVMExecutor<I, S>
+impl<VS, I, S> EVMExecutor<I, S, VS>
 where
-    I: VMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState + HasMetadata + 'static,
+    I: VMInputT<VS, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    VS: Default + VMStateT + 'static,
 {
     pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
         Self {
@@ -766,51 +776,6 @@ where
             deployer,
             phandom: PhantomData,
         }
-    }
-
-    pub fn deploy(
-        &mut self,
-        code: Bytecode,
-        constructor_args: Bytes,
-        deployed_address: H160,
-    ) -> Option<H160> {
-        let deployer = Contract::new::<LatestSpec>(
-            constructor_args,
-            code,
-            deployed_address,
-            self.deployer,
-            U256::from(0),
-        );
-        let middleware_status = self.host.middlewares_enabled;
-        // disable middleware for deployment
-        self.host.middlewares_enabled = false;
-        let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
-        self.host.middlewares_enabled = middleware_status;
-        let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
-        #[cfg(feature = "evaluation")]
-        {
-            self.host.pc_coverage = Default::default();
-        }
-        if r != Return::Return {
-            println!("deploy failed: {:?}", r);
-            return None;
-        }
-        assert_eq!(r, Return::Return);
-        println!("contract = {:?}", hex::encode(interp.return_value()));
-        self.host.set_code(
-            deployed_address,
-            Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
-        );
-        #[cfg(feature = "evaluation")]
-        {
-            self.host.total_instr.insert(
-                deployed_address,
-                EVMExecutor::<I, S>::count_instructions(
-                    &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
-                ),
-            );
-        }
-        Some(deployed_address)
     }
 
     pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
@@ -845,89 +810,10 @@ where
         count
     }
 
-    pub fn execute<OT>(
-        &mut self,
-        contract_address: H160,
-        caller: H160,
-        vm_state: &VMState,
-        data: Bytes,
-        value: usize,
-        is_step: bool,
-        _observers: &mut OT,
-        state: Option<&mut S>,
-    ) -> ExecutionResult
-    where
-        OT: ObserversTuple<I, S>,
-    {
-        let mut _vm_state = vm_state.clone();
-        // todo(@shou): is this correct?
-        let mut r = if is_step {
-            let mut post_exec = _vm_state.post_execution.pop().unwrap().clone();
-            self.host.origin = post_exec.caller;
-            // we need push the output of CALL instruction
-            post_exec.stack.push(U256::one());
-            // post_exec.pc += 1;
-            self.execute_from_pc(
-                &post_exec.get_call_ctx(),
-                &_vm_state,
-                data,
-                Some(post_exec),
-                state,
-            )
-        } else {
-            self.host.origin = caller;
-            self.execute_from_pc(
-                &CallContext {
-                    address: contract_address,
-                    caller,
-                    code_address: contract_address,
-                    apparent_value: U256::from(value),
-                    scheme: CallScheme::Call,
-                },
-                &_vm_state,
-                data,
-                None,
-                state,
-            )
-        };
-        match r.ret {
-            ControlLeak => unsafe {
-                let global_ctx = global_call_context
-                    .clone()
-                    .expect("global call context should be set");
-                r.new_state.post_execution.push(PostExecutionCtx {
-                    stack: r.stack,
-                    pc: r.pc,
-                    output_offset: ret_offset,
-                    output_len: ret_size,
-
-                    call_data: Default::default(),
-
-                    address: global_ctx.address,
-                    caller: global_ctx.caller,
-                    code_address: global_ctx.code_address,
-                    apparent_value: global_ctx.apparent_value,
-
-                    memory: r.memory,
-                });
-            },
-            _ => {}
-        }
-        #[cfg(feature = "record_instruction_coverage")]
-        if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-            self.host.record_instruction_coverage();
-        }
-        return ExecutionResult {
-            output: r.output,
-            reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
-            new_state: StagedVMState::new_with_state(r.new_state),
-        };
-    }
-
     pub fn execute_from_pc(
         &mut self,
         call_ctx: &CallContext,
-        vm_state: &VMState,
+        vm_state: &EVMState,
         data: Bytes,
         post_exec: Option<PostExecutionCtx>,
         mut state: Option<&mut S>,
@@ -1004,17 +890,18 @@ where
         };
         // hack to record txn value
         if let Some(mid) = self.host.middlewares.get_mut(&MiddlewareType::Flashloan) {
-            mid.as_any()
-                .downcast_mut::<Flashloan<S>>()
-                .unwrap()
-                .handle_deferred_actions(
-                    &MiddlewareOp::Owed(
-                        MiddlewareType::Flashloan,
-                        U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5),
-                    ),
-                    state.as_mut().unwrap(),
-                    &mut result,
-                )
+            unsafe {
+                mid.as_any()
+                    .downcast_mut_unchecked::<Flashloan<S>>()
+                    .handle_deferred_actions(
+                        &MiddlewareOp::Owed(
+                            MiddlewareType::Flashloan,
+                            U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5),
+                        ),
+                        state.as_mut().unwrap(),
+                        &mut result,
+                    )
+            }
         }
 
         if self.host.middlewares_enabled {
@@ -1027,23 +914,282 @@ where
                                 .get_mut(f.0)
                                 .expect("middleware not found")
                                 .as_any()
-                                .downcast_mut::<$t>()
-                                .unwrap()
+                                .downcast_mut_unchecked::<$t>()
                                 .handle_deferred_actions(op, state.as_mut().unwrap(), &mut result);
                         }
                     };
                 };
-                match f.0 {
-                    MiddlewareType::OnChain => {
-                        define_deferred_handler!(OnChain<I, S>)
+                unsafe {
+                    match f.0 {
+                        MiddlewareType::OnChain => {
+                            define_deferred_handler!(OnChain<VS, I, S>)
+                        }
+                        MiddlewareType::Flashloan => {
+                            define_deferred_handler!(Flashloan<S>)
+                        }
+                        MiddlewareType::Concolic => {}
                     }
-                    MiddlewareType::Flashloan => {
-                        define_deferred_handler!(Flashloan<S>)
-                    }
-                    MiddlewareType::Concolic => {}
                 }
             });
         }
         result
+    }
+}
+
+impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, U256, I, S> for EVMExecutor<I, S, VS>
+where
+    I: VMInputT<VS, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    VS: VMStateT + Default + 'static,
+{
+    fn deploy(
+        &mut self,
+        code: Bytecode,
+        constructor_args: Bytes,
+        deployed_address: H160,
+    ) -> Option<H160> {
+        let deployer = Contract::new::<LatestSpec>(
+            constructor_args,
+            code,
+            deployed_address,
+            self.deployer,
+            U256::from(0),
+        );
+        let middleware_status = self.host.middlewares_enabled;
+        // disable middleware for deployment
+        self.host.middlewares_enabled = false;
+        let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
+        self.host.middlewares_enabled = middleware_status;
+        let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        #[cfg(feature = "evaluation")]
+        {
+            self.host.pc_coverage = Default::default();
+        }
+        if r != Return::Return {
+            println!("deploy failed: {:?}", r);
+            return None;
+        }
+        assert_eq!(r, Return::Return);
+        println!("contract = {:?}", hex::encode(interp.return_value()));
+        self.host.set_code(
+            deployed_address,
+            Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
+        );
+        #[cfg(feature = "evaluation")]
+        {
+            self.host.total_instr.insert(
+                deployed_address,
+                EVMExecutor::<I, S, VS>::count_instructions(
+                    &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
+                ),
+            );
+        }
+        Some(deployed_address)
+    }
+
+    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<VS> {
+        let mut _vm_state = unsafe {
+            input
+                .get_state()
+                .as_any()
+                .downcast_ref_unchecked::<EVMState>()
+                .clone()
+        };
+        // todo(@shou): is this correct?
+        let is_step = input.is_step();
+        let caller = input.get_caller();
+        let data = Bytes::from(input.to_bytes());
+        let value = input.get_txn_value().unwrap_or(0);
+        let contract_address = input.get_contract();
+
+        let mut r = if is_step {
+            let mut post_exec = _vm_state.post_execution.pop().unwrap().clone();
+            self.host.origin = post_exec.caller;
+            // we need push the output of CALL instruction
+            post_exec.stack.push(U256::one());
+            // post_exec.pc += 1;
+            self.execute_from_pc(
+                &post_exec.get_call_ctx(),
+                &_vm_state,
+                data,
+                Some(post_exec),
+                state,
+            )
+        } else {
+            self.host.origin = caller;
+            self.execute_from_pc(
+                &CallContext {
+                    address: contract_address,
+                    caller,
+                    code_address: contract_address,
+                    apparent_value: U256::from(value),
+                    scheme: CallScheme::Call,
+                },
+                &_vm_state,
+                data,
+                None,
+                state,
+            )
+        };
+        match r.ret {
+            ControlLeak => unsafe {
+                let global_ctx = global_call_context
+                    .clone()
+                    .expect("global call context should be set");
+                r.new_state.post_execution.push(PostExecutionCtx {
+                    stack: r.stack,
+                    pc: r.pc,
+                    output_offset: ret_offset,
+                    output_len: ret_size,
+
+                    call_data: Default::default(),
+
+                    address: global_ctx.address,
+                    caller: global_ctx.caller,
+                    code_address: global_ctx.code_address,
+                    apparent_value: global_ctx.apparent_value,
+
+                    memory: r.memory,
+                });
+            },
+            _ => {}
+        }
+        #[cfg(feature = "record_instruction_coverage")]
+        if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
+            self.host.record_instruction_coverage();
+        }
+        return unsafe {
+            ExecutionResult {
+                output: r.output.to_vec(),
+                reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
+                new_state: StagedVMState::new_with_state(
+                    VMStateT::as_any(&mut r.new_state)
+                        .downcast_ref_unchecked::<VS>()
+                        .clone(),
+                ),
+            }
+        };
+    }
+
+    fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {
+        unsafe { &mut JMP_MAP }
+    }
+
+    fn get_read(&self) -> &'static mut [bool; MAP_SIZE] {
+        unsafe { &mut READ_MAP }
+    }
+
+    fn get_write(&self) -> &'static mut [u8; MAP_SIZE] {
+        unsafe { &mut WRITE_MAP }
+    }
+
+    fn get_cmp(&self) -> &'static mut [U256; MAP_SIZE] {
+        unsafe { &mut CMP_MAP }
+    }
+
+    fn state_changed(&self) -> bool {
+        unsafe { state_change }
+    }
+}
+
+mod tests {
+    use super::*;
+    use crate::evm::abi::get_abi_type;
+    use crate::evm::vm::EVMState;
+    use crate::evm::vm::{FuzzHost, JMP_MAP};
+    use crate::generic_vm::vm_executor::MAP_SIZE;
+    use crate::rand_utils::generate_random_address;
+    use crate::state::FuzzState;
+    use crate::state_input::StagedVMState;
+    use bytes::Bytes;
+    use libafl::observers::StdMapObserver;
+    use libafl::prelude::{tuple_list, HitcountsMapObserver};
+    use libafl::state::State;
+    use revm::Bytecode;
+
+    #[test]
+    fn test_fuzz_executor() {
+        let mut evm_executor = EVMExecutor::new(FuzzHost::new(), generate_random_address());
+        let mut observers = tuple_list!();
+        let mut vm_state = EVMState::new();
+
+        /*
+        contract main {
+            function process(uint8 a) public {
+                require(a < 2, "2");
+            }
+        }
+        */
+        let deployment_bytecode = hex::decode("608060405234801561001057600080fd5b506102ad806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c806390b6e33314610030575b600080fd5b61004a60048036038101906100459190610123565b610060565b60405161005791906101e9565b60405180910390f35b606060028260ff16106100a8576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161009f90610257565b60405180910390fd5b6040518060400160405280600f81526020017f48656c6c6f20436f6e74726163747300000000000000000000000000000000008152509050919050565b600080fd5b600060ff82169050919050565b610100816100ea565b811461010b57600080fd5b50565b60008135905061011d816100f7565b92915050565b600060208284031215610139576101386100e5565b5b60006101478482850161010e565b91505092915050565b600081519050919050565b600082825260208201905092915050565b60005b8381101561018a57808201518184015260208101905061016f565b83811115610199576000848401525b50505050565b6000601f19601f8301169050919050565b60006101bb82610150565b6101c5818561015b565b93506101d581856020860161016c565b6101de8161019f565b840191505092915050565b6000602082019050818103600083015261020381846101b0565b905092915050565b7f3200000000000000000000000000000000000000000000000000000000000000600082015250565b600061024160018361015b565b915061024c8261020b565b602082019050919050565b6000602082019050818103600083015261027081610234565b905091905056fea264697066735822122025c2570c6b62c0201c750ff809bdc45aad0eae99133699dec80912878b9cc33064736f6c634300080f0033").unwrap();
+
+        let deployment_loc = evm_executor
+            .deploy(
+                Bytecode::new_raw(Bytes::from(deployment_bytecode)),
+                Bytes::from(vec![]),
+                generate_random_address(),
+            )
+            .unwrap();
+
+        println!("deployed to address: {:?}", deployment_loc);
+
+        let function_hash = hex::decode("90b6e333").unwrap();
+
+        // process(0)
+        let execution_result_0 = evm_executor.execute(
+            deployment_loc,
+            generate_random_address(),
+            &vm_state,
+            Bytes::from(
+                [
+                    function_hash.clone(),
+                    hex::decode("0000000000000000000000000000000000000000000000000000000000000000")
+                        .unwrap(),
+                ]
+                .concat(),
+            ),
+            0,
+            false,
+            &mut observers,
+            None,
+        );
+        let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
+
+        for i in 0..MAP_SIZE {
+            know_map[i] = unsafe { JMP_MAP[i] };
+            unsafe { JMP_MAP[i] = 0 };
+        }
+        assert_eq!(execution_result_0.reverted, false);
+
+        // process(5)
+        let execution_result_5 = evm_executor.execute(
+            deployment_loc,
+            generate_random_address(),
+            &vm_state,
+            Bytes::from(
+                [
+                    function_hash.clone(),
+                    hex::decode("0000000000000000000000000000000000000000000000000000000000000005")
+                        .unwrap(),
+                ]
+                .concat(),
+            ),
+            0,
+            false,
+            &mut observers,
+            None,
+        );
+
+        // checking cmp map about coverage
+        let mut cov_changed = false;
+        for i in 0..MAP_SIZE {
+            let hit = unsafe { JMP_MAP[i] };
+            if hit != know_map[i] && hit != 0 {
+                println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
+                unsafe { JMP_MAP[i] = 0 };
+                cov_changed = true;
+            }
+        }
+        assert_eq!(cov_changed, true);
+        assert_eq!(execution_result_5.reverted, true);
     }
 }

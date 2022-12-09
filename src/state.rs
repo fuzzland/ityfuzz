@@ -1,12 +1,7 @@
-use crate::evm::abi::get_abi_type_boxed;
-use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::vm::ExecutionResult;
 use crate::indexed_corpus::IndexedInMemoryCorpus;
-use crate::input::{VMInput, VMInputT};
+use crate::input::VMInputT;
 use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
-use crate::evm::vm::EVMExecutor;
-use bytes::Bytes;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
@@ -23,70 +18,90 @@ use libafl::state::{
 };
 
 use primitive_types::H160;
-use revm::Bytecode;
 use serde::{Deserialize, Serialize};
 
+use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
+use crate::generic_vm::vm_state::VMStateT;
+use libafl::Error;
+use serde::de::DeserializeOwned;
 use std::path::Path;
 use std::time::Duration;
 
-const ACCOUNT_AMT: u8 = 2;
-const CONTRACT_AMT: u8 = 2;
+pub const ACCOUNT_AMT: u8 = 2;
+pub const CONTRACT_AMT: u8 = 2;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
 // shou: may need intermediate info for future adding concolic execution
-pub trait HasItyState {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
+pub trait HasItyState<VS>
+where
+    VS: Default + VMStateT,
+{
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState<VS>)>
     where
-        SC: Scheduler<StagedVMState, InfantStateState>;
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
+        SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>;
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<VS>, scheduler: &SC)
     where
-        SC: Scheduler<StagedVMState, InfantStateState>;
-    fn get_rand_caller(&mut self) -> H160;
-
-    fn add_vm_input(&mut self, input: VMInput) -> usize;
-    fn add_abi<I>(
-        &mut self,
-        abi: &ABIConfig,
-        scheduler: &dyn Scheduler<I, FuzzState>,
-        address: H160,
-    ) where
-        I: Input + VMInputT + 'static;
+        SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>;
 }
 
-pub trait HasInfantStateState {
-    fn get_infant_state_state(&mut self) -> &mut InfantStateState;
+pub trait HasCaller<Addr> {
+    fn get_rand_caller(&mut self) -> Addr;
+}
+
+pub trait HasInfantStateState<VS>
+where
+    VS: Default + VMStateT,
+{
+    fn get_infant_state_state(&mut self) -> &mut InfantStateState<VS>;
 }
 
 pub trait HasHashToAddress {
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
 }
 
-pub trait HasExecutionResult {
-    fn get_execution_result(&self) -> &ExecutionResult;
-    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult;
-    fn set_execution_result(&mut self, res: ExecutionResult);
+pub trait HasExecutionResult<VS>
+where
+    VS: Default + VMStateT,
+{
+    fn get_execution_result(&self) -> &ExecutionResult<VS>;
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<VS>;
+    fn set_execution_result(&mut self, res: ExecutionResult<VS>);
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FuzzState {
-    infant_states_state: InfantStateState,
+pub struct FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
+    #[serde(deserialize_with = "InfantStateState::deserialize")]
+    pub infant_states_state: InfantStateState<VS>,
     #[cfg(not(feature = "evaluation"))]
-    txn_corpus: InMemoryCorpus<VMInput>,
+    #[serde(deserialize_with = "InMemoryCorpus::deserialize")]
+    txn_corpus: InMemoryCorpus<VI>,
     #[cfg(feature = "evaluation")]
-    txn_corpus: OnDiskCorpus<VMInput>,
-    solutions: OnDiskCorpus<VMInput>,
+    #[serde(deserialize_with = "OnDiskCorpus::deserialize")]
+    txn_corpus: OnDiskCorpus<VI>,
+    #[serde(deserialize_with = "OnDiskCorpus::deserialize")]
+    solutions: OnDiskCorpus<VI>,
     executions: usize,
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
-    execution_result: ExecutionResult,
-    default_callers: Vec<H160>,
+    #[serde(deserialize_with = "ExecutionResult::deserialize")]
+    execution_result: ExecutionResult<VS>,
+    pub default_callers: Vec<Addr>,
     pub rand_generator: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
+    pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
 
-impl FuzzState {
+impl<VI, VS, Addr> FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT + 'static,
+    VI: VMInputT<VS, Addr> + Input,
+{
     pub fn new() -> Self {
         let seed = current_nanos();
         println!("Seed: {}", seed);
@@ -105,123 +120,47 @@ impl FuzzState {
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
             max_size: 20,
             hash_to_address: Default::default(),
+            phantom: Default::default()
         }
     }
 
-    pub fn add_deployer_to_callers(&mut self, deployer: H160) {
+    pub fn add_deployer_to_callers(&mut self, deployer: Addr) {
         self.default_callers.push(deployer);
     }
 
-    pub fn initialize<I, S>(
-        &mut self,
-        contracts: Vec<ContractInfo>,
-        executor: &mut EVMExecutor<I, S>,
-        scheduler: &dyn Scheduler<I, FuzzState>,
-        infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
-    ) where
-        I: Input + VMInputT + 'static,
-        S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
-    {
-        self.setup_default_callers(ACCOUNT_AMT as usize);
-        self.setup_contract_callers(CONTRACT_AMT as usize, executor);
-        self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
+    pub fn add_tx_to_corpus(&mut self, input: Testcase<VI>) -> Result<usize, Error> {
+        self.txn_corpus.add(input)
     }
+}
 
-    pub fn initialize_corpus<I, S>(
-        &mut self,
-        contracts: Vec<ContractInfo>,
-        executor: &mut EVMExecutor<I, S>,
-        scheduler: &dyn Scheduler<I, FuzzState>,
-        infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
-    ) where
-        I: Input + VMInputT + 'static,
-        S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
-    {
-        for contract in contracts {
-            println!("Deploying contract: {}", contract.name);
-            let deployed_address = if !contract.is_code_deployed {
-                match executor.deploy(
-                    Bytecode::new_raw(Bytes::from(contract.code)),
-                    Bytes::from(contract.constructor_args),
-                    contract.deployed_address,
-                ) {
-                    Some(addr) => addr,
-                    None => {
-                        println!("Failed to deploy contract: {}", contract.name);
-                        // we could also panic here
-                        continue;
-                    }
-                }
-            } else {
-                // directly set bytecode
-                executor.set_code(contract.deployed_address, contract.code);
-                contract.deployed_address
-            };
-
-            for abi in contract.abi {
-                self.add_abi(&abi, scheduler, deployed_address);
-            }
-            // add transfer txn
-            {
-                let input = VMInput {
-                    caller: self.get_rand_caller(),
-                    contract: deployed_address,
-                    data: None,
-                    sstate: StagedVMState::new_uninitialized(),
-                    sstate_idx: 0,
-                    txn_value: Some(1),
-                    step: false,
-                };
-                let mut tc = Testcase::new(input);
-                tc.set_exec_time(Duration::from_secs(0));
-                let idx = self.txn_corpus.add(tc).expect("failed to add");
-                scheduler
-                    .on_add(self, idx)
-                    .expect("failed to call scheduler on_add");
-            }
-        }
-        let mut tc = Testcase::new(StagedVMState::new_with_state(executor.host.data.clone()));
-        tc.set_exec_time(Duration::from_secs(0));
-        let idx = self
-            .infant_states_state
-            .corpus_mut()
-            .add(tc)
-            .expect("failed to add");
-        infant_scheduler
-            .on_add(&mut self.infant_states_state, idx)
-            .expect("failed to call infant scheduler on_add");
-    }
-
-    pub fn setup_default_callers(&mut self, amount: usize) {
-        for _ in 0..amount {
-            self.default_callers.push(generate_random_address());
-        }
-    }
-
-    pub fn setup_contract_callers<I, S>(
-        &mut self,
-        amount: usize,
-        executor: &mut EVMExecutor<I, S>,
-    ) {
-        for _ in 0..amount {
-            let address = generate_random_address();
-            self.default_callers.push(address);
-            executor
-                .host
-                .set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
-        }
+impl<VI, VS, Addr> HasCaller<Addr> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT + 'static,
+    VI: VMInputT<VS, Addr> + Input,
+    Addr: Clone,
+{
+    fn get_rand_caller(&mut self) -> Addr {
+        let idx = self.rand_generator.below(self.default_callers.len() as u64);
+        self.default_callers[idx as usize].clone()
     }
 }
 
 // shou: To use power schedule, we need to make it as a state lol, i'll submit a pr to libafl
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct InfantStateState {
-    pub infant_state: IndexedInMemoryCorpus<StagedVMState>,
+pub struct InfantStateState<VS>
+where
+    VS: Default + VMStateT,
+{
+    #[serde(deserialize_with = "IndexedInMemoryCorpus::deserialize")]
+    pub infant_state: IndexedInMemoryCorpus<StagedVMState<VS>>,
     metadata: SerdeAnyMap,
     pub rand_generator: StdRand,
 }
 
-impl InfantStateState {
+impl<VS> InfantStateState<VS>
+where
+    VS: Default + VMStateT,
+{
     pub fn new() -> Self {
         Self {
             infant_state: IndexedInMemoryCorpus::new(),
@@ -231,27 +170,37 @@ impl InfantStateState {
     }
 }
 
-impl HasHashToAddress for FuzzState {
+impl<VI, VS, Addr> HasHashToAddress for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
         &self.hash_to_address
     }
 }
 
-impl State for InfantStateState {}
+impl<VS> State for InfantStateState<VS> where VS: Default + VMStateT + DeserializeOwned {}
 
-impl HasCorpus<StagedVMState> for InfantStateState {
-    type Corpus = IndexedInMemoryCorpus<StagedVMState>;
+impl<VS> HasCorpus<StagedVMState<VS>> for InfantStateState<VS>
+where
+    VS: Default + VMStateT + DeserializeOwned,
+{
+    type Corpus = IndexedInMemoryCorpus<StagedVMState<VS>>;
 
-    fn corpus(&self) -> &IndexedInMemoryCorpus<StagedVMState> {
+    fn corpus(&self) -> &IndexedInMemoryCorpus<StagedVMState<VS>> {
         &self.infant_state
     }
 
-    fn corpus_mut(&mut self) -> &mut IndexedInMemoryCorpus<StagedVMState> {
+    fn corpus_mut(&mut self) -> &mut IndexedInMemoryCorpus<StagedVMState<VS>> {
         &mut self.infant_state
     }
 }
 
-impl HasMetadata for InfantStateState {
+impl<VS> HasMetadata for InfantStateState<VS>
+where
+    VS: Default + VMStateT,
+{
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
     }
@@ -261,7 +210,10 @@ impl HasMetadata for InfantStateState {
     }
 }
 
-impl HasRand for InfantStateState {
+impl<VS> HasRand for InfantStateState<VS>
+where
+    VS: Default + VMStateT,
+{
     type Rand = StdRand;
 
     fn rand(&self) -> &Self::Rand {
@@ -273,10 +225,14 @@ impl HasRand for InfantStateState {
     }
 }
 
-impl HasItyState for FuzzState {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
+impl<VI, VS, Addr> HasItyState<VS> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input + 'static,
+{
+    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState<VS>)>
     where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -291,9 +247,9 @@ impl HasItyState for FuzzState {
         Some((idx, state.input().clone().unwrap()))
     }
 
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<VS>, scheduler: &SC)
     where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     {
         let idx = self
             .infant_states_state
@@ -305,72 +261,81 @@ impl HasItyState for FuzzState {
             .expect("Failed to setup scheduler");
     }
 
-    fn get_rand_caller(&mut self) -> H160 {
-        self.default_callers[self.rand_generator.below(self.default_callers.len() as u64) as usize]
-    }
-
-    fn add_vm_input(&mut self, input: VMInput) -> usize {
-        let mut tc = Testcase::new(input);
-        tc.set_exec_time(Duration::from_secs(0));
-        let idx = self.txn_corpus.add(tc).expect("failed to add");
-        idx
-    }
-
-    fn add_abi<I>(
-        &mut self,
-        abi: &ABIConfig,
-        scheduler: &dyn Scheduler<I, FuzzState>,
-        deployed_address: H160,
-    ) where
-        I: Input + VMInputT + 'static,
-    {
-        if abi.is_constructor {
-            return;
-        }
-
-        match self
-            .hash_to_address
-            .get_mut(abi.function.clone().as_slice())
-        {
-            Some(addrs) => {
-                addrs.insert(deployed_address);
-            }
-            None => {
-                self.hash_to_address
-                    .insert(abi.function.clone(), HashSet::from([deployed_address]));
-            }
-        }
-        #[cfg(feature = "fuzz_static")]
-        if abi.is_static {
-            return;
-        }
-        let mut abi_instance = get_abi_type_boxed(&abi.abi);
-        abi_instance.set_func(abi.function);
-        let input = VMInput {
-            caller: self.get_rand_caller(),
-            contract: deployed_address,
-            data: Some(abi_instance),
-            sstate: StagedVMState::new_uninitialized(),
-            sstate_idx: 0,
-            txn_value: if abi.is_payable { Some(0) } else { None },
-            step: false,
-        };
-        let mut tc = Testcase::new(input);
-        tc.set_exec_time(Duration::from_secs(0));
-        let idx = self.txn_corpus.add(tc).expect("failed to add");
-        scheduler
-            .on_add(self, idx)
-            .expect("failed to call scheduler on_add");
-    }
+    // fn get_rand_caller(&mut self) -> H160 {
+    //     self.default_callers[self.rand_generator.below(self.default_callers.len() as u64) as usize]
+    // }
+    //
+    // fn add_vm_input(&mut self, input: EVMInput) -> usize {
+    //     let mut tc = Testcase::new(input.as_any().downcast_ref::<VI>().unwrap().clone());
+    //     tc.set_exec_time(Duration::from_secs(0));
+    //     let idx = self.txn_corpus.add(tc).expect("failed to add");
+    //     idx
+    // }
+    //
+    // fn add_abi<I>(
+    //     &mut self,
+    //     abi: &ABIConfig,
+    //     scheduler: &dyn Scheduler<I, Self>,
+    //     deployed_address: H160,
+    // ) where
+    //     I: Input + VMInputT<VS, H160> + 'static,
+    //     VS: Default + VMStateT,
+    // {
+    //     if abi.is_constructor {
+    //         return;
+    //     }
+    //
+    //     match self
+    //         .hash_to_address
+    //         .get_mut(abi.function.clone().as_slice())
+    //     {
+    //         Some(addrs) => {
+    //             addrs.insert(deployed_address);
+    //         }
+    //         None => {
+    //             self.hash_to_address
+    //                 .insert(abi.function.clone(), HashSet::from([deployed_address]));
+    //         }
+    //     }
+    //     #[cfg(feature = "fuzz_static")]
+    //     if abi.is_static {
+    //         return;
+    //     }
+    //     let mut abi_instance = get_abi_type_boxed(&abi.abi);
+    //     abi_instance.set_func(abi.function);
+    //     let input = EVMInput {
+    //         caller: self.get_rand_caller(),
+    //         contract: deployed_address,
+    //         data: Some(abi_instance),
+    //         sstate: StagedVMState::new_uninitialized(),
+    //         sstate_idx: 0,
+    //         txn_value: if abi.is_payable { Some(0) } else { None },
+    //         step: false,
+    //     };
+    //     let mut tc = Testcase::new(input.as_any().downcast_ref::<VI>().unwrap().clone());
+    //     tc.set_exec_time(Duration::from_secs(0));
+    //     let idx = self.txn_corpus.add(tc).expect("failed to add");
+    //     scheduler
+    //         .on_add(self, idx)
+    //         .expect("failed to call scheduler on_add");
+    // }
 }
 
-impl HasInfantStateState for FuzzState {
-    fn get_infant_state_state(&mut self) -> &mut InfantStateState {
+impl<VI, VS, Addr> HasInfantStateState<VS> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
+    fn get_infant_state_state(&mut self) -> &mut InfantStateState<VS> {
         &mut self.infant_states_state
     }
 }
 
-impl HasMaxSize for FuzzState {
+impl<VI, VS, Addr> HasMaxSize for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn max_size(&self) -> usize {
         self.max_size
     }
@@ -380,7 +345,11 @@ impl HasMaxSize for FuzzState {
     }
 }
 
-impl HasRand for FuzzState {
+impl<VI, VS, Addr> HasRand for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     type Rand = StdRand;
 
     fn rand(&self) -> &Self::Rand {
@@ -392,7 +361,11 @@ impl HasRand for FuzzState {
     }
 }
 
-impl HasExecutions for FuzzState {
+impl<VI, VS, Addr> HasExecutions for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn executions(&self) -> &usize {
         &self.executions
     }
@@ -402,7 +375,11 @@ impl HasExecutions for FuzzState {
     }
 }
 
-impl HasMetadata for FuzzState {
+impl<VI, VS, Addr> HasMetadata for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
     }
@@ -412,11 +389,15 @@ impl HasMetadata for FuzzState {
     }
 }
 
-impl HasCorpus<VMInput> for FuzzState {
+impl<VI, VS, Addr> HasCorpus<VI> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     #[cfg(not(feature = "evaluation"))]
-    type Corpus = InMemoryCorpus<VMInput>;
+    type Corpus = InMemoryCorpus<VI>;
     #[cfg(feature = "evaluation")]
-    type Corpus = OnDiskCorpus<VMInput>;
+    type Corpus = OnDiskCorpus<VI>;
 
     fn corpus(&self) -> &Self::Corpus {
         &self.txn_corpus
@@ -427,8 +408,12 @@ impl HasCorpus<VMInput> for FuzzState {
     }
 }
 
-impl HasSolutions<VMInput> for FuzzState {
-    type Solutions = OnDiskCorpus<VMInput>;
+impl<VI, VS, Addr> HasSolutions<VI> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
+    type Solutions = OnDiskCorpus<VI>;
 
     fn solutions(&self) -> &Self::Solutions {
         &self.solutions
@@ -439,7 +424,11 @@ impl HasSolutions<VMInput> for FuzzState {
     }
 }
 
-impl HasClientPerfMonitor for FuzzState {
+impl<VI, VS, Addr> HasClientPerfMonitor for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn introspection_monitor(&self) -> &ClientPerfMonitor {
         todo!()
     }
@@ -449,21 +438,29 @@ impl HasClientPerfMonitor for FuzzState {
     }
 }
 
-impl HasExecutionResult for FuzzState {
-    fn get_execution_result(&self) -> &ExecutionResult {
+impl<VI, VS, Addr> HasExecutionResult<VS> for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
+    fn get_execution_result(&self) -> &ExecutionResult<VS> {
         &self.execution_result
     }
 
-    fn set_execution_result(&mut self, res: ExecutionResult) {
+    fn set_execution_result(&mut self, res: ExecutionResult<VS>) {
         self.execution_result = res
     }
 
-    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult {
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<VS> {
         &mut self.execution_result
     }
 }
 
-impl HasNamedMetadata for FuzzState {
+impl<VI, VS, Addr> HasNamedMetadata for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Addr> + Input,
+{
     fn named_metadata(&self) -> &NamedSerdeAnyMap {
         &self.named_metadata
     }
@@ -473,4 +470,10 @@ impl HasNamedMetadata for FuzzState {
     }
 }
 
-impl State for FuzzState {}
+impl<VI, VS, Addr> State for FuzzState<VI, VS, Addr>
+where
+    VS: Default + VMStateT + DeserializeOwned,
+    VI: VMInputT<VS, Addr> + Input,
+    Addr: Serialize + DeserializeOwned,
+{
+}
