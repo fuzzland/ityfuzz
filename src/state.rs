@@ -120,7 +120,7 @@ where
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
             max_size: 20,
             hash_to_address: Default::default(),
-            phantom: Default::default()
+            phantom: Default::default(),
         }
     }
 
@@ -272,7 +272,6 @@ where
     //     idx
     // }
     //
-
 }
 
 impl<VI, VS, Addr> HasInfantStateState<VS> for FuzzState<VI, VS, Addr>

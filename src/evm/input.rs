@@ -1,14 +1,14 @@
+use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
+use crate::evm::vm::EVMState;
+use crate::input::VMInputT;
+use crate::state::{HasCaller, HasItyState};
+use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
-use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::vm::EVMState;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState};
-use crate::state_input::StagedVMState;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
@@ -55,8 +55,8 @@ impl VMInputT<EVMState, H160> for EVMInput {
     }
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State + HasRand + HasMaxSize + HasItyState<EVMState> + HasCaller<H160>,
+    where
+        S: State + HasRand + HasMaxSize + HasItyState<EVMState> + HasCaller<H160>,
     {
         let vm_slots = if let Some(s) = self.get_state().get(&self.get_contract()) {
             Some(s.clone())
