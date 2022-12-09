@@ -1,7 +1,8 @@
-use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
+use std::ops::Add;
+use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::mutation_utils::VMStateHintedMutator;
-use crate::state::InfantStateState;
+use crate::state::{HasCaller, InfantStateState};
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
@@ -11,24 +12,35 @@ use libafl::Error;
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
 
-pub struct FuzzMutator<'a, S> {
-    pub infant_scheduler: &'a S,
+pub struct FuzzMutator<'a, VS, Addr, SC>
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+{
+    pub infant_scheduler: &'a SC,
+    pub phantom: std::marker::PhantomData<(VS, Addr)>,
 }
 
-impl<'a, SC> FuzzMutator<'a, SC>
+impl<'a, VS, Addr, SC> FuzzMutator<'a, VS, Addr, SC>
 where
-    SC: Scheduler<StagedVMState, InfantStateState>,
+    VS: Default + VMStateT,
+    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
 {
     pub fn new(infant_scheduler: &'a SC) -> Self {
-        Self { infant_scheduler }
+        Self {
+            infant_scheduler,
+            phantom: Default::default(),
+        }
     }
 }
 
-impl<'a, I, S, SC> Mutator<I, S> for FuzzMutator<'a, SC>
+impl<'a, VS, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Addr, SC>
 where
-    I: VMInputT + Input,
-    S: State + HasRand + HasMaxSize + HasItyState,
-    SC: Scheduler<StagedVMState, InfantStateState>,
+    I: VMInputT<VS, Addr> + Input,
+    S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>,
+    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    VS: Default + VMStateT,
+    Addr: PartialEq
 {
     fn mutate(
         &mut self,
@@ -81,13 +93,10 @@ where
                 16 => {
                     // make it a step forward to pop one post execution
                     // todo(@shou): fix the sizing of return
-                    if input.get_staged_state().state.post_execution.len() > 0 && !input.is_step() {
+                    if input.get_staged_state().state.has_post_execution() && !input.is_step() {
                         input.set_step(true);
-                        input.set_abi(BoxedABI::new(Box::new(AUnknown {
-                            concrete_type: BoxedABI::new(Box::new(AEmpty {})),
-                            size: input.get_state().post_execution.last().unwrap().output_len
-                                as usize,
-                        })));
+                        // todo(@shou): move args into
+                        input.set_as_post_exec(input.get_state().get_post_execution_needed_len() as usize);
                         MutationResult::Mutated
                     } else {
                         MutationResult::Skipped

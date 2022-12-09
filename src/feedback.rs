@@ -1,3 +1,10 @@
+use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
+use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
+use crate::oracle::{Oracle, OracleCtx};
+use crate::scheduler::HasVote;
+use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
+use crate::state_input::StagedVMState;
 use libafl::corpus::Testcase;
 use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
@@ -7,33 +14,27 @@ use libafl::prelude::{Feedback, HasMetadata, Named};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
-use primitive_types::U256;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
-
 use std::marker::PhantomData;
 
-use crate::evm::vm::{state_change, EVMExecutor, JMP_MAP, MAP_SIZE, READ_MAP, WRITE_MAP};
 
-use crate::input::VMInputT;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::scheduler::HasVote;
-use crate::state::{HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState};
-use crate::state_input::StagedVMState;
-
-pub struct InfantFeedback<'a, I, S: 'static>
+pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
-    oracle: &'a Vec<Box<dyn Oracle<I, S>>>,
-    executor: EVMExecutor<I, S>,
+    oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
+    executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
     map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S)>,
 }
 
-impl<'a, I, S> Debug for InfantFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Debug
+    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InfantFeedback")
@@ -42,20 +43,26 @@ where
     }
 }
 
-impl<'a, I, S> Named for InfantFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Named
+    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
     fn name(&self) -> &str {
         "InfantFeedback"
     }
 }
 
-impl<'a, I, S> InfantFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
-    pub fn new(oracle: &'a Vec<Box<dyn Oracle<I, S>>>, executor: EVMExecutor<I, S>) -> Self {
+    pub fn new(
+        oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
+        executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    ) -> Self {
         Self {
             oracle,
             executor,
@@ -65,10 +72,12 @@ where
     }
 }
 
-impl<'a, I, S> Feedback<I, S> for InfantFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
+    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasMetadata + HasItyState,
-    I: Input + VMInputT + 'static,
+    S: State + HasClientPerfMonitor + HasExecutionResult<VS> + HasCorpus<I> + HasMetadata,
+    I: Input + VMInputT<VS, Addr> + 'static,
+    VS: Default + VMStateT,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
@@ -91,7 +100,7 @@ where
             state,
             input.get_state(),
             &state.get_execution_result().new_state.state,
-            &mut self.executor,
+            &self.executor,
             input,
         );
 
@@ -134,17 +143,20 @@ where
     }
 }
 
-pub struct OracleFeedback<'a, I, S: 'static>
+pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
-    oracle: &'a Vec<Box<dyn Oracle<I, S>>>,
-    executor: EVMExecutor<I, S>,
+    oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
+    executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
 }
 
-impl<'a, I, S> Debug for OracleFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Debug
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OracleFeedback")
@@ -153,34 +165,36 @@ where
     }
 }
 
-impl<'a, I, S> Named for OracleFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Named
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
     fn name(&self) -> &str {
         "OracleFeedback"
     }
 }
 
-impl<'a, I, S> OracleFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
-    pub fn new(oracle: &'a Vec<Box<dyn Oracle<I, S>>>, executor: EVMExecutor<I, S>) -> Self {
+    pub fn new(
+        oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
+        executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    ) -> Self {
         Self { oracle, executor }
     }
 }
 
-impl<'a, I, S> Feedback<I, S> for OracleFeedback<'a, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State
-        + HasClientPerfMonitor
-        + HasExecutionResult
-        + HasCorpus<I>
-        + HasMetadata
-        + HasItyState
-        + 'static,
-    I: VMInputT + 'static,
+    S: State + HasClientPerfMonitor + HasExecutionResult<VS> + HasCorpus<I> + HasMetadata + 'static,
+    I: VMInputT<VS, Addr> + 'static,
+    VS: Default + VMStateT,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
@@ -205,17 +219,15 @@ where
             .get_execution_result()
             .new_state
             .state
-            .post_execution
-            .len()
-            > 0
+            .has_post_execution()
         {
             return Ok(false);
         }
-        let mut oracle_ctx: OracleCtx<I, S> = OracleCtx::new(
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S> = OracleCtx::new(
             state,
             input.get_state(),
             &state.get_execution_result().new_state.state,
-            &mut self.executor,
+            &self.executor,
             input,
         );
         // todo(@shou): should it be new stage?
@@ -250,14 +262,15 @@ where
 /// Logic: Maintains read and write map, if a write map idx is true in the read map,
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
-pub struct DataflowFeedback<'a> {
+pub struct DataflowFeedback<'a, VS, Addr> {
     global_write_map: [[bool; 4]; MAP_SIZE],
     read_map: &'a mut [bool],
     write_map: &'a mut [u8],
+    phantom: PhantomData<(VS, Addr)>,
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a> Debug for DataflowFeedback<'a> {
+impl<'a, VS, Addr> Debug for DataflowFeedback<'a, VS, Addr> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataflowFeedback")
             // .field("oracle", &self.oracle)
@@ -266,28 +279,30 @@ impl<'a> Debug for DataflowFeedback<'a> {
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a> Named for DataflowFeedback<'a> {
+impl<'a, VS, Addr> Named for DataflowFeedback<'a, VS, Addr> {
     fn name(&self) -> &str {
         "DataflowFeedback"
     }
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a> DataflowFeedback<'a> {
+impl<'a, VS, Addr> DataflowFeedback<'a, VS, Addr> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
             global_write_map: [[false; 4]; MAP_SIZE],
             read_map,
             write_map,
+            phantom: PhantomData,
         }
     }
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
+impl<'a, VS, Addr, I, S> Feedback<I, S> for DataflowFeedback<'a, VS, Addr>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult,
-    I: VMInputT,
+    S: State + HasClientPerfMonitor + HasExecutionResult<VS>,
+    I: VMInputT<VS, Addr>,
+    VS: Default + VMStateT,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -346,52 +361,71 @@ where
 }
 
 #[cfg(feature = "cmp")]
-pub struct CmpFeedback<'a, SC> {
-    min_map: [U256; MAP_SIZE],
-    current_map: &'a mut [U256],
+pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> {
+    min_map: [SlotTy; MAP_SIZE],
+    current_map: &'a mut [SlotTy],
     known_jmp_map: [u8; MAP_SIZE],
     known_states: HashSet<u64>,
     known_pcs: HashSet<usize>,
     scheduler: &'a SC,
+    vm: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    phantom: PhantomData<(Addr)>,
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC> CmpFeedback<'a, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
-    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState>,
+    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>
+        + HasVote<StagedVMState<VS>, InfantStateState<VS>>,
+    VS: Default + VMStateT,
+    SlotTy: PartialOrd + Copy + From<u128>,
 {
-    pub(crate) fn new(current_map: &'a mut [U256], scheduler: &'a SC) -> Self {
+    pub(crate) fn new(
+        current_map: &'a mut [SlotTy],
+        scheduler: &'a SC,
+        vm: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    ) -> Self {
         Self {
-            min_map: [U256::MAX; MAP_SIZE],
+            min_map: [SlotTy::from(u128::MAX); MAP_SIZE],
             current_map,
             known_jmp_map: [0; MAP_SIZE],
             known_states: Default::default(),
             known_pcs: Default::default(),
             scheduler,
+            vm,
+            phantom: Default::default()
         }
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC> Named for CmpFeedback<'a, SC> {
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> Named
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
+{
     fn name(&self) -> &str {
         "CmpFeedback"
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, SC> Debug for CmpFeedback<'a, SC> {
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> Debug
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CmpFeedback").finish()
     }
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, I0, S0, SC> Feedback<I0, S0> for CmpFeedback<'a, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, I0, S0, SC> Feedback<I0, S0>
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
-    S0: State + HasClientPerfMonitor + HasInfantStateState + HasExecutionResult,
-    I0: Input + VMInputT,
-    SC: Scheduler<StagedVMState, InfantStateState> + HasVote<StagedVMState, InfantStateState>,
+    S0: State + HasClientPerfMonitor + HasInfantStateState<VS> + HasExecutionResult<VS>,
+    I0: Input + VMInputT<VS, Addr>,
+    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>
+        + HasVote<StagedVMState<VS>, InfantStateState<VS>>,
+    VS: Default + VMStateT + 'static,
+    SlotTy: PartialOrd + Copy,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())
@@ -411,6 +445,7 @@ where
     {
         let mut cmp_interesting = false;
         let mut cov_interesting = false;
+
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {
                 self.min_map[i] = self.current_map[i];
@@ -434,21 +469,22 @@ where
         }
 
         unsafe {
+            let cur_read_map = self.vm.get_read();
+            let cur_write_map = self.vm.get_write();
             // hack to account for saving reentrancy without dataflow
-            let post_exec = state.get_execution_result().get_post_execution();
-            let mut pc_interesting = if post_exec.len() > 0 {
-                let pc = post_exec.last().unwrap().pc;
-                if self.known_pcs.contains(&pc) {
-                    false
-                } else {
-                    self.known_pcs.insert(pc);
-                    true
-                }
-            } else {
+            let post_exec_pc = state
+                .get_execution_result()
+                .new_state
+                .state
+                .get_post_execution_pc();
+            let mut pc_interesting = if self.known_pcs.contains(&post_exec_pc) {
                 false
+            } else {
+                self.known_pcs.insert(post_exec_pc);
+                true
             };
 
-            if state_change || pc_interesting {
+            if self.vm.state_changed() || pc_interesting {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
@@ -456,13 +492,13 @@ where
 
                 let mut df_interesting = false;
                 for i in 0..MAP_SIZE {
-                    if READ_MAP[i] && WRITE_MAP[i] != 0 {
+                    if cur_read_map[i] && cur_write_map[i] != 0 {
                         df_interesting = true;
                         break;
                     }
                 }
                 for i in 0..MAP_SIZE {
-                    WRITE_MAP[i] = 0;
+                    cur_write_map[i] = 0;
                 }
                 if df_interesting || pc_interesting {
                     self.known_states.insert(hash);
