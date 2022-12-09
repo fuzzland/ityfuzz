@@ -12,7 +12,6 @@ use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasExecutionResult;
-use crate::tracer::{build_basic_txn, TxnTrace};
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
