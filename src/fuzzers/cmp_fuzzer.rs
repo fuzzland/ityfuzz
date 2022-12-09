@@ -7,7 +7,6 @@ use crate::{
     evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    mutator::FuzzMutator,
     rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
@@ -15,14 +14,14 @@ use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::{CalibrationStage, Stage};
 use libafl::{
-    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
-    stages::StdPowerMutationalStage,
     Fuzzer,
+    prelude::{MaxMapFeedback, SimpleMonitor, StdMapObserver, tuple_list},
+    stages::StdPowerMutationalStage,
 };
 
-use crate::evm::contract_utils::{set_hash, ContractLoader};
+use crate::evm::contract_utils::{ContractLoader, set_hash};
 use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
-use crate::evm::vm::{EVMState, CMP_MAP};
+use crate::evm::vm::{CMP_MAP, EVMState};
 use crate::feedback::{CmpFeedback, OracleFeedback};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
@@ -38,6 +37,7 @@ use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::Bytecode;
+use crate::evm::mutator::FuzzMutator;
 
 struct ABIConfig {
     abi: String,
