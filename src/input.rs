@@ -7,8 +7,8 @@ use libafl::inputs::Input;
 use libafl::mutators::Mutator;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 
-use crate::generic_vm::vm_state::VMStateT;
 use crate::evm::mutation_utils::VMStateHintedMutator;
+use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
