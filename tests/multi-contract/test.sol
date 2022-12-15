@@ -16,12 +16,8 @@ contract main {
         x.fx();
         require(a < 2, "2");
         knownsec[2] = a;
+        bug();
         return 'Hello Contracts';
     }
 
-    function oracle_harness() public view returns (bool) {
-        require(knownsec[2] > 0);
-        bug();
-        return true;
-    }
 }
