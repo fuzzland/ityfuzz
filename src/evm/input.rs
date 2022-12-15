@@ -21,6 +21,10 @@ pub struct EVMInput {
     pub sstate_idx: usize,
     pub txn_value: Option<usize>,
     pub step: bool,
+
+    #[cfg(test)]
+    pub direct_data: Bytes,
+
 }
 
 impl HasLen for EVMInput {
@@ -139,6 +143,11 @@ impl VMInputT<EVMState, H160> for EVMInput {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    #[cfg(test)]
+    fn get_direct_data(&self) -> Vec<u8> {
+        self.direct_data.to_vec()
     }
 }
 
