@@ -10,6 +10,7 @@ use move_vm_runtime::move_vm;
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use std::collections::HashMap;
+use crate::input::VMInputT;
 
 struct MoveVM {
     state: MoveVMState,
@@ -18,7 +19,7 @@ struct MoveVM {
 impl<I, S> GenericVM<MoveVMState, CompiledModule, MoveFunctionInput, ModuleId, values::Value, I, S>
     for MoveVM
 where
-    I: MoveFunctionInputT,
+    I: VMInputT<MoveVMState, ModuleId> + MoveFunctionInputT,
 {
     fn deploy(
         &mut self,

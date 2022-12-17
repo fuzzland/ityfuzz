@@ -184,6 +184,7 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+use crate::evm::input::EVMInputT;
 
 #[derive(Debug)]
 pub struct FuzzHost {
@@ -938,7 +939,7 @@ where
 
 impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, U256, I, S> for EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160> + 'static,
+    I: VMInputT<VS, H160> + EVMInputT + 'static,
     S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
     VS: VMStateT + Default + 'static,
 {
