@@ -1,5 +1,6 @@
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
 use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
@@ -10,7 +11,6 @@ use move_vm_runtime::move_vm;
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use std::collections::HashMap;
-use crate::input::VMInputT;
 
 struct MoveVM {
     state: MoveVMState,

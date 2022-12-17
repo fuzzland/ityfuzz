@@ -28,7 +28,6 @@ pub struct EVMInput {
 
     #[cfg(test)]
     pub direct_data: Bytes,
-
 }
 
 impl HasLen for EVMInput {
@@ -64,7 +63,6 @@ impl EVMInputT for EVMInput {
 }
 
 impl VMInputT<EVMState, H160> for EVMInput {
-
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State + HasRand + HasMaxSize + HasItyState<EVMState> + HasCaller<H160>,

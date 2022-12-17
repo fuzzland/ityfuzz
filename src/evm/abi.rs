@@ -706,10 +706,10 @@ impl ABI for AUnknown {
 
 mod tests {
     use super::*;
-    use crate::state::FuzzState;
-    use hex;
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
+    use crate::state::FuzzState;
+    use hex;
 
     #[test]
     fn test_int() {

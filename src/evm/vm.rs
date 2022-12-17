@@ -168,6 +168,7 @@ impl HasMetadata for EVMState {
     }
 }
 
+use crate::evm::input::EVMInputT;
 use crate::evm::middleware::{
     CallMiddlewareReturn, CanHandleDeferredActions, ExecutionStage, Middleware, MiddlewareOp,
     MiddlewareType,
@@ -184,7 +185,6 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::evm::input::EVMInputT;
 
 #[derive(Debug)]
 pub struct FuzzHost {
@@ -1104,6 +1104,8 @@ where
 mod tests {
     use super::*;
     use crate::evm::abi::get_abi_type;
+    use crate::evm::input::EVMInput;
+    use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
     use crate::evm::vm::{FuzzHost, JMP_MAP};
     use crate::generic_vm::vm_executor::MAP_SIZE;
@@ -1115,12 +1117,11 @@ mod tests {
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
     use libafl::state::State;
     use revm::Bytecode;
-    use crate::evm::input::EVMInput;
-    use crate::evm::types::EVMFuzzState;
 
     #[test]
     fn test_fuzz_executor() {
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(FuzzHost::new(), generate_random_address());
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
+            EVMExecutor::new(FuzzHost::new(), generate_random_address());
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 
@@ -1159,15 +1160,12 @@ mod tests {
                     hex::decode("0000000000000000000000000000000000000000000000000000000000000000")
                         .unwrap(),
                 ]
-                    .concat(),
-            )
+                .concat(),
+            ),
         };
 
         // process(0)
-        let execution_result_0 = evm_executor.execute(
-            &input_0,
-            None,
-        );
+        let execution_result_0 = evm_executor.execute(&input_0, None);
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
         for i in 0..MAP_SIZE {
@@ -1192,8 +1190,8 @@ mod tests {
                     hex::decode("0000000000000000000000000000000000000000000000000000000000000005")
                         .unwrap(),
                 ]
-                    .concat(),
-            )
+                .concat(),
+            ),
         };
 
         let execution_result_5 = evm_executor.execute(&input_5, None);
