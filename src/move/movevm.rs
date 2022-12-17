@@ -54,7 +54,7 @@ where
         let mut sess = vm.new_session(&self.state);
 
         let ret = sess.execute_function_bypass_visibility(
-            &input.module_id(),
+            &input.get_contract(),
             &input.function_name(),
             input.ty_args(),
             input.args(),

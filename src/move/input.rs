@@ -3,7 +3,6 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_vm_types::values::Value;
 
 pub trait MoveFunctionInputT {
-    fn module_id(&self) -> &ModuleId;
     fn function_name(&self) -> &Identifier;
     fn args(&self) -> Vec<Vec<u8>>;
     fn ty_args(&self) -> Vec<TypeTag>;
