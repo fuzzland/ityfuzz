@@ -25,7 +25,6 @@ where
     fn get_caller_mut(&mut self) -> &mut Addr;
     fn get_caller(&self) -> Addr;
     fn set_caller(&mut self, caller: Addr);
-    fn get_contract_mut(&mut self) -> &mut Addr;
     fn get_contract(&self) -> Addr;
     fn get_state(&self) -> &VS;
     fn set_staged_state(&mut self, state: StagedVMState<VS>, idx: usize);
