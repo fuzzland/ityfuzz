@@ -85,7 +85,7 @@ pub struct EVMState {
     // More than one when the control is leaked again with the call based on the incomplete state
     pub post_execution: Vec<PostExecutionCtx>,
     pub leaked_func_hash: Option<u64>,
-    pub metadata: SerdeAnyMap,
+    pub flashloan_data: FlashloanData,
 }
 
 impl Default for EVMState {
@@ -94,7 +94,7 @@ impl Default for EVMState {
             state: HashMap::new(),
             post_execution: Vec::new(),
             leaked_func_hash: None,
-            metadata: SerdeAnyMap::new(),
+            flashloan_data: FlashloanData::new()
         }
     }
 }
@@ -141,7 +141,7 @@ impl EVMState {
             state: HashMap::new(),
             post_execution: vec![],
             leaked_func_hash: None,
-            metadata: Default::default(),
+            flashloan_data: FlashloanData::new()
         }
     }
 
@@ -158,22 +158,12 @@ impl EVMState {
     }
 }
 
-impl HasMetadata for EVMState {
-    fn metadata(&self) -> &SerdeAnyMap {
-        &self.metadata
-    }
-
-    fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
-        &mut self.metadata
-    }
-}
-
 use crate::evm::input::EVMInputT;
 use crate::evm::middleware::{
     CallMiddlewareReturn, CanHandleDeferredActions, ExecutionStage, Middleware, MiddlewareOp,
     MiddlewareType,
 };
-use crate::evm::onchain::flashloan::Flashloan;
+use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use crate::evm::onchain::onchain::OnChain;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
@@ -198,7 +188,7 @@ pub struct FuzzHost {
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     middlewares_enabled: bool,
     // middleware sets are available empty middlewares for each type
-    middleware_indvidual_enabled: HashMap<MiddlewareType, bool>,
+    middleware_individual_enabled: HashMap<MiddlewareType, bool>,
     middlewares: HashMap<MiddlewareType, Box<dyn Middleware>>,
     // for some middlewares, it appears in the execution based on some probability
     // see set_prob_middlewares for more details
@@ -224,7 +214,7 @@ impl Clone for FuzzHost {
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             middlewares_enabled: false,
-            middleware_indvidual_enabled: Default::default(),
+            middleware_individual_enabled: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
@@ -259,7 +249,7 @@ impl FuzzHost {
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
             middlewares_enabled: false,
-            middleware_indvidual_enabled: Default::default(),
+            middleware_individual_enabled: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
@@ -281,7 +271,7 @@ impl FuzzHost {
         let ty = middlewares.get_type();
         self.middlewares_deferred_actions.insert(ty, vec![]);
         self.middlewares.insert(ty, middlewares);
-        self.middleware_indvidual_enabled.insert(ty, true);
+        self.middleware_individual_enabled.insert(ty, true);
         self.middleware_probs.insert(ty, prob);
     }
 
@@ -290,9 +280,9 @@ impl FuzzHost {
             // random number between 0 and 1
             let rand = rand::random::<f32>();
             if rand < *prob {
-                self.middleware_indvidual_enabled.insert(*ty, true);
+                self.middleware_individual_enabled.insert(*ty, true);
             } else {
-                self.middleware_indvidual_enabled.insert(*ty, false);
+                self.middleware_individual_enabled.insert(*ty, false);
             }
         }
     }
@@ -365,7 +355,7 @@ impl Host for FuzzHost {
                 let all_mutation_ops = self
                     .middlewares
                     .iter_mut()
-                    .filter(|(ty, _)| self.middleware_indvidual_enabled[ty])
+                    .filter(|(ty, _)| self.middleware_individual_enabled[ty])
                     .map(|m| m.1.on_step(interp))
                     .collect::<Vec<_>>();
                 all_mutation_ops.iter().for_each(|ops| {
@@ -786,7 +776,7 @@ where
         {
             self.host
                 .total_instr
-                .insert(address, EVMExecutor::<I, S>::count_instructions(&bytecode));
+                .insert(address, EVMExecutor::<I, S, VS>::count_instructions(&bytecode));
         }
     }
 
