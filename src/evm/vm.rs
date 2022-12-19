@@ -96,7 +96,7 @@ impl Default for EVMState {
             state: HashMap::new(),
             post_execution: Vec::new(),
             leaked_func_hash: None,
-            flashloan_data: FlashloanData::new()
+            flashloan_data: FlashloanData::new(),
         }
     }
 }
@@ -143,7 +143,7 @@ impl EVMState {
             state: HashMap::new(),
             post_execution: vec![],
             leaked_func_hash: None,
-            flashloan_data: FlashloanData::new()
+            flashloan_data: FlashloanData::new(),
         }
     }
 
@@ -272,7 +272,10 @@ impl FuzzHost {
         self.middlewares_enabled = true;
         let ty = middlewares.get_type();
         self.middlewares_deferred_actions.insert(ty, vec![]);
-        self.middlewares.deref().borrow_mut().insert(ty, middlewares);
+        self.middlewares
+            .deref()
+            .borrow_mut()
+            .insert(ty, middlewares);
         self.middleware_individual_enabled.insert(ty, true);
         self.middleware_probs.insert(ty, prob);
     }
@@ -354,11 +357,7 @@ impl Host for FuzzHost {
 
         unsafe {
             if self.middlewares_enabled {
-                for (_, middleware) in &mut self.middlewares
-                    .clone()
-                    .deref()
-                    .borrow_mut()
-                    .iter_mut()
+                for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     for op in middleware.on_step(interp) {
                         op.execute(self);
@@ -773,9 +772,10 @@ where
         self.host.set_code(address, bytecode.clone());
         #[cfg(feature = "evaluation")]
         {
-            self.host
-                .total_instr
-                .insert(address, EVMExecutor::<I, S, VS>::count_instructions(&bytecode));
+            self.host.total_instr.insert(
+                address,
+                EVMExecutor::<I, S, VS>::count_instructions(&bytecode),
+            );
         }
     }
 
@@ -879,7 +879,13 @@ where
             memory: interp.memory.data().clone(),
         };
         // hack to record txn value
-        if let Some(mid) = self.host.middlewares.deref().borrow_mut().get_mut(&MiddlewareType::Flashloan) {
+        if let Some(mid) = self
+            .host
+            .middlewares
+            .deref()
+            .borrow_mut()
+            .get_mut(&MiddlewareType::Flashloan)
+        {
             unsafe {
                 mid.as_any()
                     .downcast_mut_unchecked::<Flashloan<S>>()
@@ -901,7 +907,8 @@ where
                         for op in f.1 {
                             self.host
                                 .middlewares
-                                .deref().borrow_mut()
+                                .deref()
+                                .borrow_mut()
                                 .get_mut(f.0)
                                 .expect("middleware not found")
                                 .as_any()

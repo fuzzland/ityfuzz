@@ -1,6 +1,7 @@
-use std::any;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
+use crate::input::VMInputT;
+use crate::r#move::vm_state::MoveVMState;
+use crate::state::{HasCaller, HasItyState};
+use crate::state_input::StagedVMState;
 use libafl::inputs::Input;
 use libafl::prelude::{HasMaxSize, MutationResult, State};
 use libafl::state::HasRand;
@@ -11,12 +12,11 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::values::{Value, ValueImpl};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::DeserializeOwned;
-use crate::input::VMInputT;
-use crate::r#move::vm_state::MoveVMState;
-use crate::state::{HasCaller, HasItyState};
-use crate::state_input::StagedVMState;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::any;
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -24,7 +24,6 @@ pub trait MoveFunctionInputT {
     fn args(&self) -> &Vec<CloneableValue>;
     fn ty_args(&self) -> &Vec<TypeTag>;
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveFunctionInput {
@@ -39,19 +38,15 @@ pub struct MoveFunctionInput {
     pub vm_state_idx: usize,
 }
 
-impl MoveFunctionInput {
-
-}
+impl MoveFunctionInput {}
 
 #[derive(Debug)]
 pub struct CloneableValue {
     pub value: Value,
 }
 
-
 impl Clone for CloneableValue {
     fn clone(&self) -> Self {
-
         CloneableValue {
             value: self.value.clone(),
         }
@@ -60,8 +55,8 @@ impl Clone for CloneableValue {
 
 impl Serialize for CloneableValue {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         unreachable!()
     }
@@ -69,8 +64,8 @@ impl Serialize for CloneableValue {
 
 impl<'de> Deserialize<'de> for CloneableValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         unreachable!()
     }
@@ -100,11 +95,11 @@ impl Input for MoveFunctionInput {
     }
 }
 
-
 impl VMInputT<MoveVMState, AccountAddress> for MoveFunctionInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State + HasRand + HasMaxSize + HasItyState<MoveVMState> + HasCaller<AccountAddress> {
+    where
+        S: State + HasRand + HasMaxSize + HasItyState<MoveVMState> + HasCaller<AccountAddress>,
+    {
         unimplemented!()
     }
     fn get_caller_mut(&mut self) -> &mut AccountAddress {
