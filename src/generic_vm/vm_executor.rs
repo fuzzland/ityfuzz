@@ -31,7 +31,7 @@ where
 }
 
 pub trait GenericVM<VS, Code, By, Loc, SlotTy, I, S> {
-    fn deploy(&mut self, code: Code, constructor_args: By, deployed_address: Loc) -> Option<Loc>;
+    fn deploy(&mut self, code: Code, constructor_args: Option<By>, deployed_address: Loc) -> Option<Loc>;
     fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<VS>
     where
         VS: VMStateT;

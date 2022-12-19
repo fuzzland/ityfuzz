@@ -55,7 +55,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(
                     Bytecode::new_raw(Bytes::from(contract.code)),
-                    Bytes::from(contract.constructor_args),
+                    Some(Bytes::from(contract.constructor_args)),
                     contract.deployed_address,
                 ) {
                     Some(addr) => addr,

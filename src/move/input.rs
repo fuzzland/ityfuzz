@@ -25,6 +25,7 @@ pub trait MoveFunctionInputT {
     fn ty_args(&self) -> &Vec<TypeTag>;
 }
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveFunctionInput {
     pub module: ModuleId,
@@ -38,6 +39,10 @@ pub struct MoveFunctionInput {
     pub vm_state_idx: usize,
 }
 
+impl MoveFunctionInput {
+
+}
+
 #[derive(Debug)]
 pub struct CloneableValue {
     pub value: Value,
@@ -46,10 +51,9 @@ pub struct CloneableValue {
 
 impl Clone for CloneableValue {
     fn clone(&self) -> Self {
-        let Value(v) = &self.value;
 
         CloneableValue {
-            value: Value(v.copy_value().unwrap()),
+            value: self.value.clone(),
         }
     }
 }
