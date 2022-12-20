@@ -201,8 +201,9 @@ where
             }
         }
 
-        #[cfg(feature = "print_corpus")]
+        #[cfg(feature = "print_txn_corpus")]
         {
+            use crate::r#const::DEBUG_PRINT_PERCENT;
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
                 println!("============= Corpus =============");
                 for i in 0..state.corpus().count() {

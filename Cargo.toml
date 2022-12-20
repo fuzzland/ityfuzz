@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "deployer_is_attacker"]
+default = ["cmp", "dataflow", "deployer_is_attacker", "print_txn_corpus"]
 cmp = []
 dataflow = []
 evaluation = []
@@ -20,7 +20,8 @@ ondisk_corpus = []
 # need to turn off when running DV contracts
 deployer_is_attacker = []
 record_instruction_coverage = []
-print_corpus = []
+print_infant_corpus = []
+print_txn_corpus = []
 fuzz_static = []
 downcast_unchecked = []
 
