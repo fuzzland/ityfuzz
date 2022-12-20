@@ -11,30 +11,34 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct BasicTxn {
-    pub caller: H160,
-    pub contract: H160,
-    pub data: Option<BoxedABI>,
+pub struct BasicTxn<Addr> {
+    pub caller: Addr,
+    pub contract: Addr,
+    pub data: Option<String>,
     pub txn_value: usize,
 }
 
-impl Debug for BasicTxn {
+impl<Addr> Debug for BasicTxn<Addr>
+where Addr: Debug {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicTxn")
             .field("caller", &self.caller)
             .field("contract", &self.contract)
-            .field("data", &self.data.as_ref().unwrap().to_string())
+            .field("data", &self.data)
             .field("txn_value", &self.txn_value)
             .finish()
     }
 }
 
-pub fn build_basic_txn<VS, I>(v: &I) -> BasicTxn
-where
-    I: VMInputT<VS, H160>,
+pub fn build_basic_txn<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
+    where
+    I: VMInputT<VS, Loc, Addr>,
     VS: VMStateT,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Debug  + Serialize + DeserializeOwned + Clone,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -45,23 +49,29 @@ where
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TxnTrace {
-    pub transactions: Vec<BasicTxn>,
+pub struct TxnTrace<Loc, Addr>
+where
+{
+    pub transactions: Vec<BasicTxn<Addr>>,
     pub from_idx: usize,
+    pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
-impl TxnTrace {
+impl<Loc, Addr> TxnTrace<Loc, Addr> {
     pub(crate) fn new() -> Self {
         Self {
             transactions: Vec::new(),
             from_idx: 0,
+            phantom: Default::default()
         }
     }
 
-    pub fn to_string<VS, S>(trace: &TxnTrace, state: &mut S) -> String
+    pub fn to_string<VS, S>(trace: &TxnTrace<Loc, Addr>, state: &mut S) -> String
     where
-        S: HasInfantStateState<VS>,
+        S: HasInfantStateState<Loc, Addr, VS>,
         VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
         if trace.from_idx == 0 {
             return String::from("Begin\n");
@@ -85,7 +95,7 @@ impl TxnTrace {
         s
     }
 }
-impl Default for TxnTrace {
+impl<Loc, Addr> Default for TxnTrace<Loc, Addr> {
     fn default() -> Self {
         Self::new()
     }

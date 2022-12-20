@@ -7,6 +7,8 @@ use libafl::prelude::{HasCorpus, HasMetadata, HasObservers, ObserversTuple};
 use libafl::state::State;
 use libafl::Error;
 use std::fmt::Debug;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
@@ -17,11 +19,13 @@ use crate::state::HasExecutionResult;
 // handle timeout/crash of executing contract
 pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
-    pub vm: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    pub vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     observers: OT,
     phantom: PhantomData<(I, S, Addr)>,
 }
@@ -29,9 +33,11 @@ where
 impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT> Debug
     for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzExecutor")
@@ -44,12 +50,14 @@ where
 impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
     FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
-        vm_executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+        vm_executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
         observers: OT,
     ) -> Self {
         Self {
@@ -63,10 +71,12 @@ where
 impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT, EM, Z> Executor<EM, I, S, Z>
     for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
-    I: VMInputT<VS, Addr> + Input + 'static,
+    I: VMInputT<VS, Loc, Addr> + Input + 'static,
     OT: ObserversTuple<I, S>,
-    S: State + HasExecutionResult<VS> + HasCorpus<I> + HasMetadata + 'static,
+    S: State + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata + 'static,
     VS: Default + VMStateT,
+    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn run_target(
         &mut self,
@@ -88,9 +98,11 @@ where
 impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT> HasObservers<I, OT, S>
     for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     fn observers(&self) -> &OT {
         &self.observers

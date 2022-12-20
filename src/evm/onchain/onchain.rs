@@ -26,7 +26,7 @@ const UNBOUND_THRESHOLD: usize = 5;
 
 pub struct OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160>,
+    I: Input + VMInputT<VS, H160, H160>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -42,7 +42,7 @@ where
 
 impl<VS, I, S> Debug for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160>,
+    I: Input + VMInputT<VS, H160, H160>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -57,7 +57,7 @@ where
 
 impl<VS, I, S> OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160>,
+    I: Input + VMInputT<VS, H160, H160>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -84,7 +84,7 @@ where
 
 impl<VS, I, S> Middleware for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160> + 'static,
+    I: Input + VMInputT<VS, H160, H160> + 'static,
     S: State + std::fmt::Debug + 'static,
     VS: VMStateT + Default + 'static,
 {
@@ -177,8 +177,8 @@ where
 
 impl<VS, I, S> CanHandleDeferredActions<VS, S> for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160> + 'static,
-    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    I: Input + VMInputT<VS, H160, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + 'static,
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(

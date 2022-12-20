@@ -8,22 +8,27 @@ use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
 use crate::tracer::TxnTrace;
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StagedVMState<VS>
+pub struct StagedVMState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
+    Addr: Debug,
+    Loc: Debug,
 {
     #[serde(deserialize_with = "VS::deserialize")]
     pub state: VS,
     pub stage: Vec<u64>,
     pub initialized: bool,
-    pub trace: TxnTrace,
+    pub trace: TxnTrace<Loc, Addr>,
 }
 
-impl<VS> StagedVMState<VS>
+impl<Loc, Addr, VS> StagedVMState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
+    Addr: Debug,
+    Loc: Debug,
 {
     pub fn new_with_state(state: VS) -> Self {
         Self {
@@ -49,9 +54,11 @@ where
     }
 }
 
-impl<VS> Input for StagedVMState<VS>
+impl<Loc, Addr, VS> Input for StagedVMState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Debug + Serialize + DeserializeOwned + Clone,
 {
     fn generate_name(&self, idx: usize) -> String {
         format!("input-{}.state", idx)

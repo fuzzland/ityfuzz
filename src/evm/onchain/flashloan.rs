@@ -249,7 +249,7 @@ impl_serdeany!(FlashloanData);
 
 impl<VS, S> CanHandleDeferredActions<VS, S> for Flashloan<S>
 where
-    S: HasItyState<VS>,
+    S: HasItyState<H160, H160, VS>,
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(

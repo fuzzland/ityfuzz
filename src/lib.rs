@@ -16,5 +16,5 @@ pub mod rand_utils;
 pub mod scheduler;
 pub mod state;
 pub mod state_input;
-pub mod tracer;
 pub mod types;
+pub mod tracer;

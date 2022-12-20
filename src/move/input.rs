@@ -17,6 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use crate::r#move::types::MoveStagedVMState;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -34,7 +35,7 @@ pub struct MoveFunctionInput {
 
     pub caller: AccountAddress,
 
-    pub vm_state: StagedVMState<MoveVMState>,
+    pub vm_state: MoveStagedVMState,
     pub vm_state_idx: usize,
 }
 
@@ -95,10 +96,10 @@ impl Input for MoveFunctionInput {
     }
 }
 
-impl VMInputT<MoveVMState, AccountAddress> for MoveFunctionInput {
+impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<MoveVMState> + HasCaller<AccountAddress>,
+        S: State + HasRand + HasMaxSize + HasItyState<ModuleId, AccountAddress, MoveVMState> + HasCaller<AccountAddress>,
     {
         unimplemented!()
     }
@@ -120,14 +121,14 @@ impl VMInputT<MoveVMState, AccountAddress> for MoveFunctionInput {
     fn get_state(&self) -> &MoveVMState {
         &self.vm_state.state
     }
-    fn set_staged_state(&mut self, state: StagedVMState<MoveVMState>, idx: usize) {
+    fn set_staged_state(&mut self, state: MoveStagedVMState, idx: usize) {
         self.vm_state = state;
         self.vm_state_idx = idx;
     }
     fn get_state_idx(&self) -> usize {
         self.vm_state_idx
     }
-    fn get_staged_state(&self) -> &StagedVMState<MoveVMState> {
+    fn get_staged_state(&self) -> &MoveStagedVMState {
         &self.vm_state
     }
     fn get_txn_value(&self) -> Option<usize> {

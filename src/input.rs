@@ -11,25 +11,28 @@ use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 
 // ST: Should VMInputT be the generic type for both inputs?
-pub trait VMInputT<VS, Addr>:
+pub trait VMInputT<VS, Loc, Addr>:
     Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize
 where
     VS: Default + VMStateT,
+    Addr: Debug + Clone + Serialize + DeserializeOwned,
+    Loc: Debug + Clone + Serialize + DeserializeOwned,
 {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>;
+        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr>;
     fn get_caller_mut(&mut self) -> &mut Addr;
     fn get_caller(&self) -> Addr;
     fn set_caller(&mut self, caller: Addr);
     fn get_contract(&self) -> Addr;
     fn get_state(&self) -> &VS;
-    fn set_staged_state(&mut self, state: StagedVMState<VS>, idx: usize);
+    fn set_staged_state(&mut self, state: StagedVMState<Loc, Addr, VS>, idx: usize);
     fn get_state_idx(&self) -> usize;
-    fn get_staged_state(&self) -> &StagedVMState<VS>;
+    fn get_staged_state(&self) -> &StagedVMState<Loc, Addr, VS>;
     fn get_txn_value(&self) -> Option<usize>;
     fn set_txn_value(&mut self, v: usize);
     // fn get_abi_cloned(&self) -> Option<BoxedABI>;
