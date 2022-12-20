@@ -45,7 +45,7 @@ where
     BasicTxn {
         caller: v.get_caller(),
         contract: v.get_contract(),
-        data: None, //v.get_abi_cloned(),
+        data: v.pretty_txn(),
         txn_value: v.get_txn_value().unwrap_or(0),
     }
 }
@@ -64,6 +64,10 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             from_idx: 0,
             phantom: Default::default(),
         }
+    }
+
+    pub fn add_txn(&mut self, txn: BasicTxn<Addr>) {
+        self.transactions.push(txn);
     }
 
     pub fn to_string<VS, S>(trace: &TxnTrace<Loc, Addr>, state: &mut S) -> String

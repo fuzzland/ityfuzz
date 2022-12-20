@@ -39,7 +39,7 @@ where
     fn set_as_post_exec(&mut self, out_size: usize);
     fn is_step(&self) -> bool;
     fn set_step(&mut self, gate: bool);
-    fn to_string(&self) -> String;
+    fn pretty_txn(&self) -> Option<String>;
     fn as_any(&self) -> &dyn any::Any;
 
     #[cfg(test)]
