@@ -7,6 +7,9 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -136,6 +139,9 @@ where
     }
 }
 
+#[cfg(feature = "print_txn_corpus")]
+pub static mut DUMP_FILE_COUNT: u8 = 0;
+
 // implement evaluator trait for ItyFuzzer
 impl<'a, VS, Loc, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
     for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
@@ -212,14 +218,27 @@ where
                 res = ExecuteInputResult::Corpus;
                 #[cfg(feature = "print_txn_corpus")]
                 {
-
-                    println!("============= New Corpus Item =============");
-                    println!("Input: {}", state
+                    unsafe {
+                        DUMP_FILE_COUNT += 1;
+                    }
+                    let txn_text = state
                         .get_execution_result()
                         .new_state.trace
                         .clone()
-                        .to_string(state));
+                        .to_string(state);
+                    println!("============= New Corpus Item =============");
+                    println!("{}", txn_text);
                     println!("==========================================");
+
+                    // write to file
+                    let path = Path::new("corpus");
+                    if !path.exists() {
+                        std::fs::create_dir(path).unwrap();
+                    }
+                    let mut file = File::create(
+                        format!("corpus/{}", unsafe { DUMP_FILE_COUNT })
+                    ).unwrap();
+                    file.write_all(txn_text.as_bytes()).unwrap();
                 }
 
             }

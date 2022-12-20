@@ -53,7 +53,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TxnTrace<Loc, Addr> {
     pub transactions: Vec<BasicTxn<Addr>>,
-    pub from_idx: usize,
+    pub from_idx: Option<usize>,
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
@@ -61,7 +61,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
     pub(crate) fn new() -> Self {
         Self {
             transactions: Vec::new(),
-            from_idx: 0,
+            from_idx: None,
             phantom: Default::default(),
         }
     }
@@ -77,10 +77,10 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
-        if self.from_idx == 0 {
+        if self.from_idx.is_none() {
             return String::from("Begin\n");
         }
-        let mut current_idx = self.from_idx;
+        let mut current_idx = self.from_idx.unwrap();
         let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
