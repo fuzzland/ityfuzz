@@ -70,17 +70,17 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         self.transactions.push(txn);
     }
 
-    pub fn to_string<VS, S>(trace: &TxnTrace<Loc, Addr>, state: &mut S) -> String
+    pub fn to_string<VS, S>(&self, state: &mut S) -> String
     where
         S: HasInfantStateState<Loc, Addr, VS>,
         VS: VMStateT,
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
-        if trace.from_idx == 0 {
+        if self.from_idx == 0 {
             return String::from("Begin\n");
         }
-        let mut current_idx = trace.from_idx;
+        let mut current_idx = self.from_idx;
         let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
@@ -92,7 +92,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         }
 
         let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
-        for t in &trace.transactions {
+        for t in &self.transactions {
             s.push_str(format!("{:?}\n", t).as_str());
             s.push_str("\n");
         }

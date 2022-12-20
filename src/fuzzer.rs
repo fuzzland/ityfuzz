@@ -210,23 +210,18 @@ where
                 .is_interesting(state, manager, &input, observers, &exitkind)?;
             if is_corpus {
                 res = ExecuteInputResult::Corpus;
-            }
-        }
+                #[cfg(feature = "print_txn_corpus")]
+                {
 
-        #[cfg(feature = "print_txn_corpus")]
-        {
-            use crate::r#const::DEBUG_PRINT_PERCENT;
-            if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-                println!("============= Corpus =============");
-                for i in 0..state.corpus().count() {
-                    match state.corpus().get(i) {
-                        Ok(v) => {
-                            println!("{:?}", v.borrow().input().as_ref().unwrap().pretty_txn());
-                        }
-                        _ => {}
-                    }
+                    println!("============= New Corpus Item =============");
+                    println!("Input: {}", state
+                        .get_execution_result()
+                        .new_state.trace
+                        .clone()
+                        .to_string(state));
+                    println!("==========================================");
                 }
-                println!("==================================");
+
             }
         }
 
