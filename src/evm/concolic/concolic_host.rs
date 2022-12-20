@@ -195,7 +195,7 @@ impl BVBox {
 }
 
 pub struct Solving<'a> {
-    context: & 'a Context,
+    context: &'a Context,
     input: &'a BV<'a>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
@@ -215,13 +215,12 @@ impl<'a> Solving<'a> {
             input,
             balance,
             calldatavalue,
-            constraints
+            constraints,
         }
     }
 }
 
 impl<'a> Solving<'a> {
-
     pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
@@ -314,12 +313,15 @@ impl<'a> Solving<'a> {
 
         let result = solver.check();
         match result {
-            z3::SatResult::Sat => {
-                Some(solver.get_model().unwrap().eval(self.input, true).unwrap().to_string())
-            }
-            z3::SatResult::Unsat => {
-                None
-            }
+            z3::SatResult::Sat => Some(
+                solver
+                    .get_model()
+                    .unwrap()
+                    .eval(self.input, true)
+                    .unwrap()
+                    .to_string(),
+            ),
+            z3::SatResult::Unsat => None,
             z3::SatResult::Unknown => todo!(),
         }
     }
@@ -385,10 +387,9 @@ impl ConcolicHost {
             Some(s) => {
                 let bytes = Self::string_to_bytes(&s);
                 Some(bytes)
-            },
+            }
             None => None,
         }
-
     }
 }
 
