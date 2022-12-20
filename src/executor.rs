@@ -89,7 +89,10 @@ where
         let mut res = self.vm.execute(input, Some(state));
 
         // add the trace of the new state
-        res.new_state.trace.add_txn(build_basic_txn(input));
+        #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
+        {
+            res.new_state.trace.add_txn(build_basic_txn(input));
+        }
 
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
