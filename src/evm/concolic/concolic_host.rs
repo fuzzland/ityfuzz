@@ -4,7 +4,10 @@ use revm::db::BenchmarkDB;
 use std::any::Any;
 
 use crate::evm::middleware::MiddlewareType::Concolic;
-use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::vm::IntermediateExecutionResult;
+use crate::generic_vm::vm_state::VMStateT;
+use crate::state::HasItyState;
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -808,5 +811,20 @@ impl Middleware for ConcolicHost {
 
     fn as_any(&mut self) -> &mut (dyn Any + 'static) {
         self
+    }
+}
+
+impl<VS, S> CanHandleDeferredActions<VS, &mut S> for ConcolicHost
+where
+    S: HasItyState<VS>,
+    VS: VMStateT + Default,
+{
+    fn handle_deferred_actions(
+        &self,
+        op: &MiddlewareOp,
+        state: &mut &mut S,
+        result: &mut IntermediateExecutionResult,
+    ) {
+        todo!()
     }
 }

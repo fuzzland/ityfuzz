@@ -13,6 +13,7 @@ use std::process::exit;
 use std::rc::Rc;
 use std::str::FromStr;
 
+use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::input::VMInputT;
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
@@ -925,7 +926,9 @@ where
                         MiddlewareType::Flashloan => {
                             define_deferred_handler!(Flashloan<S>)
                         }
-                        MiddlewareType::Concolic => {}
+                        MiddlewareType::Concolic => {
+                            define_deferred_handler!(ConcolicHost)
+                        }
                     }
                 }
             });
