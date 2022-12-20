@@ -1,2 +1,2 @@
-pub(crate) mod concolic_host;
+pub mod concolic_host;
 mod concolic_test;

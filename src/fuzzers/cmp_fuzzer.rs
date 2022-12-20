@@ -71,6 +71,12 @@ pub fn cmp_fuzzer(
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new();
+
+    match config.concolic_prob {
+        Some(prob) => fuzz_host.set_concolic_prob(prob),
+        None => {},
+    }
+
     match config.onchain {
         Some(onchain) => {
             let mut mid = Box::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(

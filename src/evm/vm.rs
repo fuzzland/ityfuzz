@@ -189,13 +189,9 @@ pub struct FuzzHost {
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
+    concolic_prob: f32,
     middlewares_enabled: bool,
-    // middleware sets are available empty middlewares for each type
-    middleware_individual_enabled: HashMap<MiddlewareType, bool>,
     middlewares: Rc<RefCell<HashMap<MiddlewareType, Box<dyn Middleware>>>>,
-    // for some middlewares, it appears in the execution based on some probability
-    // see set_prob_middlewares for more details
-    middleware_probs: HashMap<MiddlewareType, f32>,
     pub middlewares_deferred_actions: HashMap<MiddlewareType, Vec<MiddlewareOp>>,
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -216,11 +212,10 @@ impl Clone for FuzzHost {
             _pc: self._pc,
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
+            concolic_prob: self.concolic_prob,
             middlewares_enabled: false,
-            middleware_individual_enabled: Default::default(),
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             middlewares_deferred_actions: Default::default(),
-            middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: self.pc_coverage.clone(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -251,11 +246,10 @@ impl FuzzHost {
             _pc: 0,
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
+            concolic_prob: 0.0,
             middlewares_enabled: false,
-            middleware_individual_enabled: Default::default(),
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             middlewares_deferred_actions: Default::default(),
-            middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -266,10 +260,6 @@ impl FuzzHost {
     }
 
     pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware>) {
-        self.add_middlewares_with_prob(middlewares, 1.0);
-    }
-
-    pub fn add_middlewares_with_prob(&mut self, middlewares: Box<dyn Middleware>, prob: f32) {
         self.middlewares_enabled = true;
         let ty = middlewares.get_type();
         self.middlewares_deferred_actions.insert(ty, vec![]);
@@ -277,20 +267,16 @@ impl FuzzHost {
             .deref()
             .borrow_mut()
             .insert(ty, middlewares);
-        self.middleware_individual_enabled.insert(ty, true);
-        self.middleware_probs.insert(ty, prob);
     }
 
-    pub fn set_prob_middlewares(&mut self) {
-        for (ty, prob) in &self.middleware_probs {
-            // random number between 0 and 1
-            let rand = rand::random::<f32>();
-            if rand < *prob {
-                self.middleware_individual_enabled.insert(*ty, true);
-            } else {
-                self.middleware_individual_enabled.insert(*ty, false);
-            }
+    pub fn set_concolic_prob(&mut self, prob: f32) {
+        if prob > 1.0 || prob < 0.0 {
+            panic!("concolic prob should be in [0, 1]");
+        } else if prob != 0.0 {
+            self.concolic_prob = prob;
+            self.middlewares_enabled = true;
         }
+    
     }
 
     pub fn initialize<S>(&mut self, state: &S)
@@ -809,9 +795,9 @@ where
         post_exec: Option<PostExecutionCtx>,
         mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
-        // setup available middlewares
-        self.host.set_prob_middlewares();
         self.host.data = vm_state.clone();
+        // FIXME: should the length of the input data.len or data.len - 4?
+        let input_len_concolic = data.len() * 8;
 
         unsafe {
             global_call_context = Some(call_ctx.clone());
@@ -857,6 +843,13 @@ where
         };
         unsafe {
             state_change = false;
+        }
+
+        if self.host.middlewares_enabled {
+            let rand = rand::random::<f32>();
+            if self.host.concolic_prob > rand {
+                self.host.add_middlewares(Box::new(ConcolicHost::new(input_len_concolic.try_into().unwrap())));
+            }
         }
 
         // cleanup the deferred actions map
@@ -933,6 +926,14 @@ where
                 }
             });
         }
+
+        // remove all concolic hosts
+        self.host
+            .middlewares
+            .deref()
+            .borrow_mut()
+            .retain(|k, _| *k != MiddlewareType::Concolic);
+
         result
     }
 }

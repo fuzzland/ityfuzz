@@ -68,6 +68,14 @@ struct Args {
     #[arg(long)]
     onchain_etherscan_api_key: Option<String>,
 
+    /// Enable Concolic
+    #[arg(short, long, default_value = "false")]
+    concolic: bool,
+
+    /// Concolic: prob
+    #[arg(long, default_value = "0.1")]
+    concolic_prob: f32,
+
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
@@ -172,6 +180,11 @@ fn main() {
             }
         },
         onchain,
+        concolic_prob: if args.concolic {
+            Some(args.concolic_prob)
+        } else {
+            None
+        },
         oracle: oracles,
         flashloan: if args.flashloan {
             Some(Flashloan::new())
