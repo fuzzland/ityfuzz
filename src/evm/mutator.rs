@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -8,9 +7,10 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
-use std::ops::Add;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
+use std::ops::Add;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -19,7 +19,7 @@ pub struct FuzzMutator<'a, VS, Loc, Addr, SC>
 where
     VS: Default + VMStateT,
     SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
-    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub infant_scheduler: &'a SC,

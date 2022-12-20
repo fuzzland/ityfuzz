@@ -10,8 +10,8 @@ use crate::evm::abi::BoxedABI;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn<Addr> {
@@ -22,7 +22,9 @@ pub struct BasicTxn<Addr> {
 }
 
 impl<Addr> Debug for BasicTxn<Addr>
-where Addr: Debug {
+where
+    Addr: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicTxn")
             .field("caller", &self.caller)
@@ -34,11 +36,11 @@ where Addr: Debug {
 }
 
 pub fn build_basic_txn<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
-    where
+where
     I: VMInputT<VS, Loc, Addr>,
     VS: VMStateT,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
-    Loc: Debug  + Serialize + DeserializeOwned + Clone,
+    Loc: Debug + Serialize + DeserializeOwned + Clone,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -49,9 +51,7 @@ pub fn build_basic_txn<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TxnTrace<Loc, Addr>
-where
-{
+pub struct TxnTrace<Loc, Addr> {
     pub transactions: Vec<BasicTxn<Addr>>,
     pub from_idx: usize,
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
@@ -62,7 +62,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         Self {
             transactions: Vec::new(),
             from_idx: 0,
-            phantom: Default::default()
+            phantom: Default::default(),
         }
     }
 

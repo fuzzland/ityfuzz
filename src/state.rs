@@ -40,7 +40,10 @@ where
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
 {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState<Loc, Addr, VS>)>
+    fn get_infant_state<SC>(
+        &mut self,
+        scheduler: &SC,
+    ) -> Option<(usize, StagedVMState<Loc, Addr, VS>)>
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>;
     fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS>, scheduler: &SC)
@@ -200,10 +203,12 @@ where
 }
 
 impl<Loc, Addr, VS> State for InfantStateState<Loc, Addr, VS>
-    where VS: Default + VMStateT + DeserializeOwned,
-            Addr: Debug + Serialize + DeserializeOwned + Clone,
-            Loc: Serialize + DeserializeOwned + Debug + Clone,
-{}
+where
+    VS: Default + VMStateT + DeserializeOwned,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+{
+}
 
 impl<Loc, Addr, VS> HasCorpus<StagedVMState<Loc, Addr, VS>> for InfantStateState<Loc, Addr, VS>
 where
@@ -226,7 +231,7 @@ impl<Loc, Addr, VS> HasMetadata for InfantStateState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc:Serialize + DeserializeOwned +  Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
@@ -261,7 +266,10 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
-    fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState<Loc, Addr, VS>)>
+    fn get_infant_state<SC>(
+        &mut self,
+        scheduler: &SC,
+    ) -> Option<(usize, StagedVMState<Loc, Addr, VS>)>
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     {

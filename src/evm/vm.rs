@@ -276,7 +276,6 @@ impl FuzzHost {
             self.concolic_prob = prob;
             self.middlewares_enabled = true;
         }
-    
     }
 
     pub fn initialize<S>(&mut self, state: &S)
@@ -848,7 +847,9 @@ where
         if self.host.middlewares_enabled {
             let rand = rand::random::<f32>();
             if self.host.concolic_prob > rand {
-                self.host.add_middlewares(Box::new(ConcolicHost::new(input_len_concolic.try_into().unwrap())));
+                self.host.add_middlewares(Box::new(ConcolicHost::new(
+                    input_len_concolic.try_into().unwrap(),
+                )));
             }
         }
 

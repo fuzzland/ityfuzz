@@ -1,10 +1,10 @@
-use std::fmt::Debug;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 pub const MAP_SIZE: usize = 1024;
 

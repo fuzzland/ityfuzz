@@ -14,18 +14,18 @@ use libafl::prelude::{Feedback, HasMetadata, Named};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
     executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
@@ -38,8 +38,8 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Debug
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InfantFeedback")
@@ -53,8 +53,8 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Named
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn name(&self) -> &str {
         "InfantFeedback"
@@ -66,8 +66,8 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
         oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
@@ -85,7 +85,11 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
     for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata,
+    S: State
+        + HasClientPerfMonitor
+        + HasExecutionResult<Loc, Addr, VS>
+        + HasCorpus<I>
+        + HasMetadata,
     I: Input + VMInputT<VS, Loc, Addr> + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -213,7 +217,12 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata + 'static,
+    S: State
+        + HasClientPerfMonitor
+        + HasExecutionResult<Loc, Addr, VS>
+        + HasCorpus<I>
+        + HasMetadata
+        + 'static,
     I: VMInputT<VS, Loc, Addr> + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -448,13 +457,16 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> Debug
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, I0, S0, SC> Feedback<I0, S0>
     for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
-    S0: State + HasClientPerfMonitor + HasInfantStateState<Loc, Addr, VS> + HasExecutionResult<Loc, Addr, VS>,
+    S0: State
+        + HasClientPerfMonitor
+        + HasInfantStateState<Loc, Addr, VS>
+        + HasExecutionResult<Loc, Addr, VS>,
     I0: Input + VMInputT<VS, Loc, Addr>,
     SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
         + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
-    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
