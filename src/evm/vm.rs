@@ -796,7 +796,8 @@ where
         mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
-        // FIXME: should the length of the input data.len or data.len - 4?
+        // although some of the concolic inputs are concrete
+        // see EVMInputConstraint
         let input_len_concolic = data.len() * 8;
 
         unsafe {
