@@ -53,6 +53,7 @@ where
 
 pub trait HasCaller<Addr> {
     fn get_rand_caller(&mut self) -> Addr;
+    fn add_caller(&mut self, caller: &Addr);
 }
 
 pub trait HasInfantStateState<Loc, Addr, VS>
@@ -103,7 +104,7 @@ where
     named_metadata: NamedSerdeAnyMap,
     #[serde(deserialize_with = "ExecutionResult::deserialize")]
     execution_result: ExecutionResult<Loc, Addr, VS>,
-    pub default_callers: Vec<Addr>,
+    pub callers_pool: Vec<Addr>,
     pub rand_generator: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
@@ -114,7 +115,7 @@ impl<VI, VS, Loc, Addr> FuzzState<VI, VS, Loc, Addr>
 where
     VS: Default + VMStateT + 'static,
     VI: VMInputT<VS, Loc, Addr> + Input,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new() -> Self {
@@ -131,7 +132,7 @@ where
             metadata: Default::default(),
             named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
-            default_callers: vec![],
+            callers_pool: Vec::new(),
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
             max_size: 20,
             hash_to_address: Default::default(),
@@ -140,7 +141,7 @@ where
     }
 
     pub fn add_deployer_to_callers(&mut self, deployer: Addr) {
-        self.default_callers.push(deployer);
+        self.add_caller(&deployer);
     }
 
     pub fn add_tx_to_corpus(&mut self, input: Testcase<VI>) -> Result<usize, Error> {
@@ -152,12 +153,18 @@ impl<VI, VS, Loc, Addr> HasCaller<Addr> for FuzzState<VI, VS, Loc, Addr>
 where
     VS: Default + VMStateT + 'static,
     VI: VMInputT<VS, Loc, Addr> + Input,
-    Addr: Serialize + DeserializeOwned + Clone + Debug,
+    Addr: Serialize + DeserializeOwned + Clone + Debug + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn get_rand_caller(&mut self) -> Addr {
-        let idx = self.rand_generator.below(self.default_callers.len() as u64);
-        self.default_callers[idx as usize].clone()
+        let idx = self.rand_generator.below(self.callers_pool.len() as u64);
+        self.callers_pool[idx as usize].clone()
+    }
+
+    fn add_caller(&mut self, addr: &Addr) {
+        if !self.callers_pool.contains(addr) {
+            self.callers_pool.push(addr.clone());
+        }
     }
 }
 
