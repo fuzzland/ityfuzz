@@ -2,6 +2,7 @@ use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 use std::any::Any;
+use std::iter::Map;
 
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
@@ -23,7 +24,7 @@ use z3::{ast::Ast, Config, Context, Solver};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
-    U256,
+    U256(U256),
     ADD,
     DIV,
     MUL,
@@ -40,9 +41,10 @@ enum ConcolicOp {
     SHR,
     SAR,
     INPUT,
-    SLICEDINPUT,
+    SLICEDINPUT(U256),
     BALANCE,
     CALLVALUE,
+    BV(u32),
     // constraint OP here
     EQ,
     LT,
@@ -55,7 +57,8 @@ enum ConcolicOp {
 pub struct BVBox {
     lhs: Option<Box<BVBox>>,
     rhs: Option<Box<BVBox>>,
-    concrete: Option<U256>,
+    // concrete should be used in constant folding
+    // concrete: Option<U256>,
     op: ConcolicOp,
 }
 
@@ -71,7 +74,6 @@ macro_rules! box_bv {
         Box::new(BVBox {
             lhs: Some(Box::new($lhs)),
             rhs: Some($rhs),
-            concrete: None,
             op: $op,
         })
     };
@@ -93,7 +95,6 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: None,
             op: ConcolicOp::INPUT,
         }
     }
@@ -102,8 +103,7 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: Some(idx),
-            op: ConcolicOp::SLICEDINPUT,
+            op: ConcolicOp::SLICEDINPUT(idx),
         }
     }
 
@@ -111,7 +111,6 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: None,
             op: ConcolicOp::BALANCE,
         }
     }
@@ -120,7 +119,6 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: None,
             op: ConcolicOp::CALLVALUE,
         }
     }
@@ -162,7 +160,6 @@ impl BVBox {
         Box::new(BVBox {
             lhs: Some(Box::new(self)),
             rhs: None,
-            concrete: None,
             op: ConcolicOp::NOT,
         })
     }
@@ -232,8 +229,8 @@ impl<'a> Solving<'a> {
             };
         }
         match bv.op {
-            ConcolicOp::U256 => {
-                bv_from_u256!(bv.concrete.unwrap(), ctx)
+            ConcolicOp::U256(constant) => {
+                bv_from_u256!(constant, ctx)
             }
             ConcolicOp::ADD => {
                 binop!(bv.lhs, bv.rhs, bvadd)
@@ -279,8 +276,8 @@ impl<'a> Solving<'a> {
                 binop!(bv.lhs, bv.rhs, bvashr)
             }
             ConcolicOp::INPUT => self.input.clone(),
-            ConcolicOp::SLICEDINPUT => {
-                let idx = bv.concrete.unwrap().0[0] as u32;
+            ConcolicOp::SLICEDINPUT(idx) => {
+                let idx = idx.0[0] as u32;
                 self.input.extract(idx * 8 + 32, idx * 8)
             }
             ConcolicOp::BALANCE => self.balance.clone(),
@@ -353,6 +350,12 @@ impl<'a> Solving<'a> {
 //         else:
 //             bug
 
+pub struct ConcolicEVMInput {
+    // concrete data of EVM Input
+    data: Bytes,
+    concolic_data: Map<u32, Box<BVBox>>,
+}
+
 // Q: Why do we need to make persistent memory symbolic?
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,8 +412,7 @@ impl Middleware for ConcolicHost {
                         Box::new(BVBox {
                             lhs: None,
                             rhs: None,
-                            concrete: Some(u256),
-                            op: ConcolicOp::U256,
+                            op: ConcolicOp::U256(u256),
                         })
                     }
                 }
@@ -503,8 +505,7 @@ impl Middleware for ConcolicHost {
                 vec![Some(Box::new(BVBox {
                     lhs: None,
                     rhs: None,
-                    concrete: Some(res),
-                    op: ConcolicOp::U256,
+                    op: ConcolicOp::U256(res),
                 }))]
             }
             // SIGNEXTEND - FIXME: need to check
@@ -554,8 +555,7 @@ impl Middleware for ConcolicHost {
                 let res = Some(stack_bv!(0).eq(Box::new(BVBox {
                     lhs: None,
                     rhs: None,
-                    concrete: Some(U256::from(0)),
-                    op: ConcolicOp::U256,
+                    op: ConcolicOp::U256(U256::from(0)),
                 })));
                 self.symbolic_stack.pop();
                 vec![res]
