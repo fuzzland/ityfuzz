@@ -21,7 +21,6 @@ use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
-use nix::libc::stat;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
