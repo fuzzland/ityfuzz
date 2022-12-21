@@ -12,13 +12,10 @@ pub fn is_uniswap() -> Option<UniswapVer> {
 // this saves significant amount of time since exploring router on chain takes infinite amount
 // of time due to large number of pairs
 
-
 // 1. fetch erc20 address of pair's both direction
 // 2. append additional testcase: calling router.swap, router.addLiquidity, router.removeLiquidity
 
-
 // to avoid recognizing this as re-entrancy, we deploy each router contract for each side of each pair
-
 
 // function swap(
 //     uint amountIn,
