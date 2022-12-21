@@ -369,9 +369,9 @@ pub struct EVMInputConstraint {
 
 impl EVMInputConstraint {
     // TODO: build input constraints from ABI
-    pub fn new(vmInput: BoxedABI) -> Self {
+    pub fn new(vm_input: BoxedABI) -> Self {
         Self {
-            data: Bytes::from(vmInput.get_bytes()),
+            data: Bytes::from(vm_input.get_bytes()),
             input_constraints: vec![],
         }
     }
@@ -400,10 +400,10 @@ pub struct ConcolicHost {
 }
 
 impl ConcolicHost {
-    pub fn new(bytes: u32, vmInput: BoxedABI) -> Self {
+    pub fn new(bytes: u32, vm_input: BoxedABI) -> Self {
         Self {
             symbolic_stack: Vec::new(),
-            input_constraints: EVMInputConstraint::new(vmInput),
+            input_constraints: EVMInputConstraint::new(vm_input),
             constraints: vec![],
             bits: 8 * bytes,
         }
