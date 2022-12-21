@@ -10,5 +10,5 @@ pub mod mutator;
 pub mod onchain;
 pub mod oracle;
 pub mod types;
-pub mod vm;
 pub mod uniswap;
+pub mod vm;

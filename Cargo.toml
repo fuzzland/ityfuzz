@@ -12,7 +12,8 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "deployer_is_attacker"]
+default = ["cmp", "dataflow", "deployer_is_attacker", "evm"]
+evm = []
 cmp = []
 dataflow = []
 evaluation = []
