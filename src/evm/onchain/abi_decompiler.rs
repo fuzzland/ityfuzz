@@ -19,7 +19,12 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
             ABIStructure::Function(func) => {
                 let mut inputs = vec![];
                 for input in func.inputs {
-                    inputs.push(input.type_);
+                    let ty = input.type_;
+                    if ty == "bytes" {
+                        inputs.push("unknown".to_string());
+                    } else {
+                        inputs.push(ty);
+                    }
                 }
 
                 let name = func.name.replace("Unresolved_", "");
