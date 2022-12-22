@@ -189,7 +189,7 @@ where
     ) {
         match op {
             MiddlewareOp::AddCorpus(.., input, address) => {
-                state.add_caller(address);
+                state.add_address(address);
                 ContractLoader::parse_abi_str(input)
                     .iter()
                     .filter(|v| !v.is_constructor)

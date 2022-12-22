@@ -52,8 +52,13 @@ where
 }
 
 pub trait HasCaller<Addr> {
+    // address are for ABI mutation
+    // caller are for transaction sender mutation
+    // caller pool is a subset of address pool
+    fn get_rand_address(&mut self) -> Addr;
     fn get_rand_caller(&mut self) -> Addr;
     fn add_caller(&mut self, caller: &Addr);
+    fn add_address(&mut self, caller: &Addr);
 }
 
 pub trait HasInfantStateState<Loc, Addr, VS>
@@ -105,6 +110,7 @@ where
     #[serde(deserialize_with = "ExecutionResult::deserialize")]
     execution_result: ExecutionResult<Loc, Addr, VS>,
     pub callers_pool: Vec<Addr>,
+    pub addresses_pool: Vec<Addr>,
     pub rand_generator: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
@@ -133,6 +139,7 @@ where
             named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
             callers_pool: Vec::new(),
+            addresses_pool: Vec::new(),
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
             max_size: 20,
             hash_to_address: Default::default(),
@@ -156,6 +163,11 @@ where
     Addr: Serialize + DeserializeOwned + Clone + Debug + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    fn get_rand_address(&mut self) -> Addr {
+        let idx = self.rand_generator.below(self.addresses_pool.len() as u64);
+        self.addresses_pool[idx as usize].clone()
+    }
+
     fn get_rand_caller(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.callers_pool.len() as u64);
         self.callers_pool[idx as usize].clone()
@@ -164,6 +176,13 @@ where
     fn add_caller(&mut self, addr: &Addr) {
         if !self.callers_pool.contains(addr) {
             self.callers_pool.push(addr.clone());
+        }
+        self.add_address(addr);
+    }
+
+    fn add_address(&mut self, caller: &Addr) {
+        if !self.addresses_pool.contains(caller) {
+            self.addresses_pool.push(caller.clone());
         }
     }
 }
