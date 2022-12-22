@@ -17,6 +17,12 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
+use once_cell::sync::Lazy;
+
+
+static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(|| {
+    HashMap::new()
+});
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -103,8 +109,24 @@ impl BoxedABI {
         self.function = function;
     }
 
+    pub fn set_func_with_name(&mut self, function: [u8; 4], function_name: String) {
+        self.function = function;
+        unsafe {
+            FUNCTION_SIG.insert(function, function_name);
+        }
+    }
+
     pub fn to_string(&self) -> String {
-        format!("{}{}", hex::encode(self.function), self.b.to_string())
+        if self.function == [0; 4] {
+            format!("Stepping with return: {}", hex::encode(self.b.to_string()))
+        } else {
+            let function_name = unsafe {
+                FUNCTION_SIG.get(&self.function).unwrap_or(
+                    &hex::encode(self.function)).clone()
+            };
+            format!("{}{}", function_name, self.b.to_string())
+        }
+
     }
 }
 
