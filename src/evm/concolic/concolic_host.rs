@@ -50,9 +50,12 @@ enum ConcolicOp {
     CALLVALUE,
     // Represent a symbolic BV with width u32
     BVVAR(u32),
+    // symbolic byte
+    SYMBYTE(String),
     // helper OP for concrete btyes
-    CONCBYTES(Bytes),
+    CONSTBYTES(Bytes),
     // helper OP for input slicing (not in EVM)
+    CONSTBYTE(u8),
     // (start, end) in bytes, end is not included
     FINEGRAINEDINPUT(u32, u32),
     // constraint OP here
@@ -102,44 +105,44 @@ macro_rules! bv_from_u256 {
 }
 
 impl Expr {
-    pub fn new_sliced_input(idx: U256) -> Self {
-        Expr {
+    pub fn new_sliced_input(idx: U256) -> Box<Expr> {
+        Box::new(Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::SLICEDINPUT(idx),
-        }
+        })
     }
 
-    pub fn new_balance() -> Self {
-        Expr {
+    pub fn new_balance() -> Box<Expr> {
+        Box::new(Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::BALANCE,
-        }
+        })
     }
 
-    pub fn new_callvalue() -> Self {
-        Expr {
+    pub fn new_callvalue() -> Box<Expr> {
+        Box::new(Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::CALLVALUE,
-        }
+        })
     }
 
-    pub fn new_bv_with_width(width: u32) -> Self {
-        Expr {
+    pub fn new_bv_with_width(width: u32) -> Box<Expr> {
+        Box::new(Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::BVVAR(width),
-        }
+        })
     }
 
-    pub fn sliced_input(start: u32, end: u32) -> Self {
-        Expr {
+    pub fn sliced_input(start: u32, end: u32) -> Box<Expr> {
+        Box::new(Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::FINEGRAINEDINPUT(start, end),
-        }
+        })
     }
 
     pub fn div(self, rhs: Box<Expr>) -> Box<Expr> {
@@ -210,6 +213,22 @@ impl Expr {
 
     pub fn eq(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::EQ)
+    }
+
+    pub fn sym_byte(s: String) -> Box<Expr> {
+        Box::new(Expr {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::SYMBYTE(s),
+        })
+    }
+
+    pub fn const_byte(b: u8) -> Box<Expr> {
+        Box::new(Expr {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::CONSTBYTE(b),
+        })
     }
 
     // logical not
@@ -321,6 +340,9 @@ impl<'a> Solving<'a> {
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
             ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(start, end),
             ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
+            ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, b as u64, 8),
+            ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s, 8),
+
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -709,7 +731,7 @@ impl Middleware for ConcolicHost {
             // BALANCE
             // TODO: need to get value from a hashmap
             0x31 => {
-                vec![Some(Box::new(Expr::new_balance()))]
+                vec![Some(Expr::new_balance())]
             }
             // ORIGIN
             0x32 => {
@@ -721,13 +743,11 @@ impl Middleware for ConcolicHost {
             }
             // CALLVALUE
             0x34 => {
-                vec![Some(Box::new(Expr::new_callvalue()))]
+                vec![Some(Expr::new_callvalue())]
             }
             // CALLDATALOAD
             0x35 => {
-                vec![Some(Box::new(Expr::new_sliced_input(
-                    interp.stack.peek(0).unwrap(),
-                )))]
+                vec![Some(Expr::new_sliced_input(interp.stack.peek(0).unwrap()))]
             }
             // CALLDATASIZE
             0x36 => {
