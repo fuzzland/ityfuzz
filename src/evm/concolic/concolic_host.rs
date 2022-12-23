@@ -4,7 +4,7 @@ use revm::db::BenchmarkDB;
 use std::any::Any;
 use std::iter::Map;
 
-use crate::evm::abi::BoxedABI;
+use crate::evm::abi::{AEmpty, BoxedABI};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::vm::IntermediateExecutionResult;
@@ -65,24 +65,24 @@ enum ConcolicOp {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BVBox {
-    lhs: Option<Box<BVBox>>,
-    rhs: Option<Box<BVBox>>,
+pub struct Expr {
+    lhs: Option<Box<Expr>>,
+    rhs: Option<Box<Expr>>,
     // concrete should be used in constant folding
     // concrete: Option<U256>,
     op: ConcolicOp,
 }
 
 // pub struct Constraint {
-//     pub lhs: Box<BVBox>,
-//     pub rhs: Box<BVBox>,
+//     pub lhs: Box<Expr>,
+//     pub rhs: Box<Expr>,
 //     pub op: ConstraintOp,
 // }
 
 // TODO: if both operands are concrete we can do constant folding somewhere
 macro_rules! box_bv {
     ($lhs:expr, $rhs:expr, $op:expr) => {
-        Box::new(BVBox {
+        Box::new(Expr {
             lhs: Some(Box::new($lhs)),
             rhs: Some($rhs),
             op: $op,
@@ -101,9 +101,9 @@ macro_rules! bv_from_u256 {
     }};
 }
 
-impl BVBox {
+impl Expr {
     pub fn new_sliced_input(idx: U256) -> Self {
-        BVBox {
+        Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::SLICEDINPUT(idx),
@@ -111,7 +111,7 @@ impl BVBox {
     }
 
     pub fn new_balance() -> Self {
-        BVBox {
+        Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::BALANCE,
@@ -119,7 +119,7 @@ impl BVBox {
     }
 
     pub fn new_callvalue() -> Self {
-        BVBox {
+        Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::CALLVALUE,
@@ -127,7 +127,7 @@ impl BVBox {
     }
 
     pub fn new_bv_with_width(width: u32) -> Self {
-        BVBox {
+        Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::BVVAR(width),
@@ -135,86 +135,86 @@ impl BVBox {
     }
 
     pub fn sliced_input(start: u32, end: u32) -> Self {
-        BVBox {
+        Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::FINEGRAINEDINPUT(start, end),
         }
     }
 
-    pub fn div(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn div(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::DIV)
     }
-    pub fn mul(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn mul(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::MUL)
     }
-    pub fn add(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn add(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::ADD)
     }
-    pub fn sub(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn sub(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SUB)
     }
-    pub fn bvsdiv(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvsdiv(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SDIV)
     }
-    pub fn bvsmod(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvsmod(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SMOD)
     }
-    pub fn bvurem(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvurem(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::UREM)
     }
-    pub fn bvsrem(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvsrem(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SREM)
     }
-    pub fn bvand(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvand(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::AND)
     }
-    pub fn bvor(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvor(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::OR)
     }
-    pub fn bvxor(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvxor(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::XOR)
     }
-    pub fn bvnot(self) -> Box<BVBox> {
-        Box::new(BVBox {
+    pub fn bvnot(self) -> Box<Expr> {
+        Box::new(Expr {
             lhs: Some(Box::new(self)),
             rhs: None,
             op: ConcolicOp::NOT,
         })
     }
-    pub fn bvshl(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvshl(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SHL)
     }
-    pub fn bvlshr(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvlshr(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SHR)
     }
-    pub fn bvsar(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvsar(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SAR)
     }
 
-    pub fn bvult(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvult(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::LT)
     }
 
-    pub fn bvugt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvugt(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::GT)
     }
 
-    pub fn bvslt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvslt(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SLT)
     }
 
-    pub fn bvsgt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn bvsgt(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SGT)
     }
 
-    pub fn eq(self, rhs: Box<BVBox>) -> Box<BVBox> {
+    pub fn eq(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::EQ)
     }
 
     // logical not
-    pub fn lnot(self) -> Box<BVBox> {
-        Box::new(BVBox {
+    pub fn lnot(self) -> Box<Expr> {
+        Box::new(Expr {
             lhs: Some(Box::new(self)),
             rhs: None,
             op: ConcolicOp::LNOT,
@@ -227,7 +227,7 @@ pub struct Solving<'a> {
     input: &'a Vec<BV<'a>>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
-    constraints: &'a Vec<Box<BVBox>>,
+    constraints: &'a Vec<Box<Expr>>,
 }
 
 impl<'a> Solving<'a> {
@@ -236,7 +236,7 @@ impl<'a> Solving<'a> {
         input: &'a Vec<BV<'a>>,
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
-        constraints: &'a Vec<Box<BVBox>>,
+        constraints: &'a Vec<Box<Expr>>,
     ) -> Self {
         Solving {
             context,
@@ -259,7 +259,7 @@ impl<'a> Solving<'a> {
         slice
     }
 
-    pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
+    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> BV<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
                 self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
@@ -391,45 +391,45 @@ impl<'a> Solving<'a> {
 //         else:
 //             bug
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EVMInputConstraint {
-    // concrete data of EVM Input
-    data: Bytes,
-    input_constraints: Vec<Box<BVBox>>,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct EVMInputConstraint {
+//     // concrete data of EVM Input
+//     data: Bytes,
+//     input_constraints: Vec<Box<Expr>>,
+// }
 
-impl EVMInputConstraint {
-    pub fn new(vm_input: BoxedABI) -> Self {
-        // TODO: build input constraints from ABI
-        let mut input_constraints = vec![];
-        // input_constraints.push()
+// impl EVMInputConstraint {
+//     pub fn new(vm_input: BoxedABI) -> Self {
+//         // TODO: build input constraints from ABI
+//         let mut input_constraints = vec![];
+//         // input_constraints.push()
 
-        Self {
-            data: Bytes::from(vm_input.get_bytes()),
-            input_constraints: input_constraints,
-        }
-    }
+//         Self {
+//             data: Bytes::from(vm_input.get_bytes()),
+//             input_constraints: input_constraints,
+//         }
+//     }
 
-    pub fn add_constraint(&mut self, constraint: Box<BVBox>) {
-        self.input_constraints.push(constraint);
-    }
+//     pub fn add_constraint(&mut self, constraint: Box<Expr>) {
+//         self.input_constraints.push(constraint);
+//     }
 
-    pub fn get_constraints(&self) -> &Vec<Box<BVBox>> {
-        &self.input_constraints
-    }
+//     pub fn get_constraints(&self) -> &Vec<Box<Expr>> {
+//         &self.input_constraints
+//     }
 
-    pub fn get_data(&self) -> &Bytes {
-        &self.data
-    }
-}
+//     pub fn get_data(&self) -> &Bytes {
+//         &self.data
+//     }
+// }
 
 // Q: Why do we need to make persistent memory symbolic?
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicHost {
-    symbolic_stack: Vec<Option<Box<BVBox>>>,
-    input_constraints: EVMInputConstraint,
-    constraints: Vec<Box<BVBox>>,
+    symbolic_stack: Vec<Option<Box<Expr>>>,
+    input_bytes: Vec<Box<Expr>>,
+    constraints: Vec<Box<Expr>>,
     bytes: u32,
     caller: H160,
 }
@@ -438,11 +438,18 @@ impl ConcolicHost {
     pub fn new(bytes: u32, vm_input: BoxedABI, caller: H160) -> Self {
         Self {
             symbolic_stack: Vec::new(),
-            input_constraints: EVMInputConstraint::new(vm_input),
+            input_bytes: Self::construct_input_from_abi(vm_input),
             constraints: vec![],
             bytes: bytes,
             caller: caller,
         }
+    }
+
+    fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
+        let mut input_bytes: Vec<Box<Expr>> = vec![];
+        let vm_input = vm_input.b;
+
+        todo!()
     }
 
     fn string_to_bytes(s: &str) -> Vec<u8> {
@@ -485,7 +492,7 @@ impl Middleware for ConcolicHost {
                     Some(bv) => bv.clone(),
                     None => {
                         let u256 = fast_peek!($idx).expect("stack underflow");
-                        Box::new(BVBox {
+                        Box::new(Expr {
                             lhs: None,
                             rhs: None,
                             op: ConcolicOp::U256(u256),
@@ -508,7 +515,7 @@ impl Middleware for ConcolicHost {
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
-        let bv: Vec<Option<Box<BVBox>>> = match *interp.instruction_pointer {
+        let bv: Vec<Option<Box<Expr>>> = match *interp.instruction_pointer {
             // ADD
             0x01 => {
                 let res = Some(stack_bv!(0).add(stack_bv!(1)));
@@ -580,7 +587,7 @@ impl Middleware for ConcolicHost {
                 let res = stack_concrete!(0).pow(stack_concrete!(1));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
-                vec![Some(Box::new(BVBox {
+                vec![Some(Box::new(Expr {
                     lhs: None,
                     rhs: None,
                     op: ConcolicOp::U256(res),
@@ -630,7 +637,7 @@ impl Middleware for ConcolicHost {
             }
             // ISZERO
             0x15 => {
-                let res = Some(stack_bv!(0).eq(Box::new(BVBox {
+                let res = Some(stack_bv!(0).eq(Box::new(Expr {
                     lhs: None,
                     rhs: None,
                     op: ConcolicOp::U256(U256::from(0)),
@@ -702,7 +709,7 @@ impl Middleware for ConcolicHost {
             // BALANCE
             // TODO: need to get value from a hashmap
             0x31 => {
-                vec![Some(Box::new(BVBox::new_balance()))]
+                vec![Some(Box::new(Expr::new_balance()))]
             }
             // ORIGIN
             0x32 => {
@@ -714,11 +721,11 @@ impl Middleware for ConcolicHost {
             }
             // CALLVALUE
             0x34 => {
-                vec![Some(Box::new(BVBox::new_callvalue()))]
+                vec![Some(Box::new(Expr::new_callvalue()))]
             }
             // CALLDATALOAD
             0x35 => {
-                vec![Some(Box::new(BVBox::new_sliced_input(
+                vec![Some(Box::new(Expr::new_sliced_input(
                     interp.stack.peek(0).unwrap(),
                 )))]
             }
