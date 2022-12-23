@@ -101,14 +101,12 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
         if ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed {
             println!(
                 "[Flashloan] Earned {} more than owed {}",
-                 ctx.post_state.flashloan_data.earned,
-                 ctx.post_state.flashloan_data.owed
+                ctx.post_state.flashloan_data.earned, ctx.post_state.flashloan_data.owed
             );
             true
         } else {
             false
         }
-
     }
 }
 
