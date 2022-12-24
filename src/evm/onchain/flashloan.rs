@@ -18,6 +18,7 @@ use primitive_types::{H160, U256, U512};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::cmp::min;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -275,29 +276,36 @@ where
             };
         }
 
-        if !self.known_tokens.contains(&call_target) {
-            match self.endpoint.fetch_holders(call_target) {
-                None => {
-                    println!("failed to fetch token holders for token {:?}", call_target);
-                    vec![]
-                }
-                Some(v) => {
-                    let rich_caller = MiddlewareOp::AddCaller(
-                        MiddlewareType::Flashloan,
-                        v.clone().get(0).unwrap().clone(),
-                    );
-                    [
-                        v.into_iter()
-                            .map(|holder| {
-                                MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder)
-                            })
-                            .collect(),
-                        vec![rich_caller],
-                    ]
-                    .concat()
+        macro_rules! add_rich_when_ret {
+            ($rem: expr) => {
+                if !self.known_tokens.contains(&call_target) {
+                    self.known_tokens.insert(call_target);
+                    match self.endpoint.fetch_holders(call_target) {
+                        None => {
+                            println!("failed to fetch token holders for token {:?}", call_target);
+                            $rem
+                        }
+                        Some(v) => {
+                            let rich_caller = MiddlewareOp::AddCaller(
+                                MiddlewareType::Flashloan,
+                                v.clone().get(0).unwrap().clone(),
+                            );
+                            [
+                                v[0..min(3, v.len())].into_iter()
+                                    .map(|holder| {
+                                        MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder.clone())
+                                    })
+                                    .collect(),
+                                vec![rich_caller],
+                                $rem,
+                            ]
+                            .concat()
+                        }
+                    }
+                } else {
+                    $rem
                 }
             };
-            self.known_tokens.insert(call_target);
         }
 
         let erc20_ops = match data[0..4] {
@@ -308,14 +316,14 @@ where
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
                         if dst == interp.contract.caller {
-                            return vec![earned!(value)];
+                            return add_rich_when_ret!(vec![earned!(value)]);
                         }
                     }
                     // if no value, we can't borrow it!
                     // bypass by explicitly returning value for every token
                     _ => {}
                 }
-                vec![]
+                add_rich_when_ret!(vec![])
             }
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
@@ -326,16 +334,16 @@ where
                     Some(value) => {
                         // todo: replace caller with all trusted addresses
                         if src == interp.contract.caller {
-                            return vec![MiddlewareOp::Owed(MiddlewareType::Flashloan, value)];
+                            return add_rich_when_ret!(vec![MiddlewareOp::Owed(MiddlewareType::Flashloan, value)]);
                         } else if dst == interp.contract.caller {
-                            return vec![earned!(value)];
+                            return add_rich_when_ret!(vec![earned!(value)]);
                         }
                     }
                     // if no value, we can't borrow it!
                     // bypass by explicitly returning value for every token
                     _ => {}
                 }
-                vec![]
+                add_rich_when_ret!(vec![])
             }
             _ => {
                 vec![]
