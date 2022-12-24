@@ -808,7 +808,7 @@ pub struct IntermediateExecutionResult {
 
 impl<VS, I, S> EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160, H160> + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + 'static,
     VS: Default + VMStateT + 'static,
 {
@@ -891,7 +891,7 @@ where
                 #[cfg(feature = "evm")]
                 self.host.add_middlewares(Box::new(ConcolicHost::new(
                     input_len_concolic.try_into().unwrap(),
-                    input.get_data_abi(),
+                    input.get_data_abi().unwrap(),
                     input.get_caller(),
                 )));
             }
@@ -917,6 +917,7 @@ where
             stack: interp.stack.data().clone(),
             memory: interp.memory.data().clone(),
         };
+
         // hack to record txn value
         if let Some(mid) = self
             .host
@@ -928,13 +929,9 @@ where
             unsafe {
                 mid.as_any()
                     .downcast_mut_unchecked::<Flashloan<S>>()
-                    .handle_deferred_actions(
-                        &MiddlewareOp::Owed(
-                            MiddlewareType::Flashloan,
-                            U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5),
-                        ),
-                        state.as_mut().unwrap(),
-                        &mut result,
+                    .analyze_call(
+                        input,
+                        &mut result
                     )
             }
         }

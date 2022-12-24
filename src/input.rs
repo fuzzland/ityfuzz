@@ -13,6 +13,7 @@ use crate::state::{HasCaller, HasItyState};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
+use crate::evm::abi::BoxedABI;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT<VS, Loc, Addr>:
@@ -43,7 +44,7 @@ where
     fn as_any(&self) -> &dyn any::Any;
 
     #[cfg(feature = "evm")]
-    fn get_data_abi(&self) -> crate::evm::abi::BoxedABI;
+    fn get_data_abi(&self) -> Option<BoxedABI>;
 
     #[cfg(test)]
     fn get_direct_data(&self) -> Vec<u8>;

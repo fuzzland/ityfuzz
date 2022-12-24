@@ -72,7 +72,7 @@ where
 pub struct BoxedABI {
     #[serde(with = "serde_traitobject")]
     pub b: Box<dyn ABI>,
-    function: [u8; 4],
+    pub function: [u8; 4],
 }
 
 impl BoxedABI {
