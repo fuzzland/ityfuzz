@@ -514,17 +514,11 @@ where
             let cur_read_map = self.vm.get_read();
             let cur_write_map = self.vm.get_write();
             // hack to account for saving reentrancy without dataflow
-            let post_exec_pc = state
+            let pc_interesting = state
                 .get_execution_result()
                 .new_state
                 .state
-                .get_post_execution_pc();
-            let mut pc_interesting = if self.known_pcs.contains(&post_exec_pc) {
-                false
-            } else {
-                self.known_pcs.insert(post_exec_pc);
-                true
-            };
+                .get_post_execution_pc() != 0;
 
             if self.vm.state_changed() || pc_interesting {
                 let hash = state.get_execution_result().new_state.state.get_hash();
