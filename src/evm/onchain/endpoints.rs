@@ -102,7 +102,7 @@ impl OnChainConfig {
             .to_string(),
             chain.to_lowercase(),
             false,
-            "".to_string()
+            "".to_string(),
         )
     }
 
@@ -114,7 +114,7 @@ impl OnChainConfig {
             "".to_string(),
             chain.to_lowercase(),
             true,
-            local_proxy_addr
+            local_proxy_addr,
         )
     }
 
@@ -125,7 +125,7 @@ impl OnChainConfig {
         etherscan_base: String,
         chain_name: String,
         use_local_proxy: bool,
-        local_proxy_addr: String
+        local_proxy_addr: String,
     ) -> Self {
         Self {
             endpoint_url,
@@ -145,7 +145,7 @@ impl OnChainConfig {
             code_cache: Default::default(),
             price_cache: Default::default(),
             abi_cache: Default::default(),
-            local_proxy_addr
+            local_proxy_addr,
         }
     }
 
@@ -161,7 +161,10 @@ impl OnChainConfig {
         if !self.use_local_proxy {
             panic!("remote fetch for holders is not supported");
         }
-        let endpoint = format!("{}/holders/{}/{:?}", self.local_proxy_addr, self.chain_name, token_address);
+        let endpoint = format!(
+            "{}/holders/{}/{:?}",
+            self.local_proxy_addr, self.chain_name, token_address
+        );
         return match self.client.get(endpoint).send() {
             Ok(res) => {
                 let data = res.text().unwrap();
@@ -169,23 +172,25 @@ impl OnChainConfig {
                     None
                 } else {
                     // hacky way to parse an array of addresses
-                    Some(data[1..data.len() - 1]
-                        .split(",")
-                        .map(|x| x.trim_start_matches('"').trim_end_matches('"'))
-                        .map(|x| H160::from_str(x).unwrap())
-                        .collect())
+                    Some(
+                        data[1..data.len() - 1]
+                            .split(",")
+                            .map(|x| x.trim_start_matches('"').trim_end_matches('"'))
+                            .map(|x| H160::from_str(x).unwrap())
+                            .collect(),
+                    )
                 }
             }
-            Err(_) => {
-                None
-            }
-        }
-
+            Err(_) => None,
+        };
     }
 
     pub fn fetch_abi_uncached(&self, address: H160) -> Option<String> {
         if self.use_local_proxy {
-            let endpoint = format!("{}/abi/{}/{:?}", self.local_proxy_addr, self.chain_name, address);
+            let endpoint = format!(
+                "{}/abi/{}/{:?}",
+                self.local_proxy_addr, self.chain_name, address
+            );
             return match self.client.get(endpoint).send() {
                 Ok(res) => {
                     let data = res.text().unwrap();
@@ -195,10 +200,8 @@ impl OnChainConfig {
                         Some(data)
                     }
                 }
-                Err(_) => {
-                    None
-                }
-            }
+                Err(_) => None,
+            };
         }
 
         let endpoint = format!(
