@@ -6,9 +6,9 @@ use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::rand_utils::generate_random_address;
+use crate::rand_utils::{fixed_address, generate_random_address};
 use crate::state::{
-    FuzzState, HasCaller, HasItyState, InfantStateState, ACCOUNT_AMT, CONTRACT_AMT,
+    FuzzState, HasCaller, HasItyState, InfantStateState,
 };
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -44,8 +44,8 @@ impl<'a> EVMCorpusInitializer<'a> {
     }
 
     pub fn initialize(&mut self, contracts: Vec<ContractInfo>) {
-        self.setup_default_callers(ACCOUNT_AMT as usize);
-        self.setup_contract_callers(CONTRACT_AMT as usize);
+        self.setup_default_callers();
+        self.setup_contract_callers();
         self.initialize_corpus(contracts);
     }
 
@@ -113,20 +113,27 @@ impl<'a> EVMCorpusInitializer<'a> {
             .expect("failed to call infant scheduler on_add");
     }
 
-    pub fn setup_default_callers(&mut self, amount: usize) {
-        for _ in 0..amount {
-            let addr = generate_random_address();
-            self.state.add_caller(&addr);
+    pub fn setup_default_callers(&mut self) {
+        let mut default_callers = HashSet::from([
+            fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
+            fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
+        ]);
+
+        for caller in default_callers {
+            self.state.add_address(&caller);
         }
     }
 
-    pub fn setup_contract_callers(&mut self, amount: usize) {
-        for _ in 0..amount {
-            let address = generate_random_address();
-            self.state.add_caller(&address);
+    pub fn setup_contract_callers(&mut self) {
+        let mut contract_callers = HashSet::from([
+            fixed_address("e1A425f1AC34A8a441566f93c82dD730639c8510"),
+            fixed_address("68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024"),
+        ]);
+        for caller in contract_callers {
+            self.state.add_caller(&caller);
             self.executor
                 .host
-                .set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
+                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
         }
     }
 
