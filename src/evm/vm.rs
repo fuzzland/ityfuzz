@@ -919,6 +919,7 @@ where
         };
 
         // hack to record txn value
+        #[cfg(feature = "flashloan_v2")]
         if let Some(mid) = self
             .host
             .middlewares
@@ -935,6 +936,29 @@ where
                     )
             }
         }
+
+        #[cfg(not(feature = "flashloan_v2"))]
+        if let Some(mid) = self
+            .host
+            .middlewares
+            .deref()
+            .borrow_mut()
+            .get_mut(&MiddlewareType::Flashloan)
+        {
+            unsafe {
+                mid.as_any()
+                    .downcast_mut_unchecked::<Flashloan<S>>()
+                    .handle_deferred_actions(
+                        &MiddlewareOp::Owed(
+                            MiddlewareType::Flashloan,
+                            U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5),
+                        ),
+                        state.as_mut().unwrap(),
+                        &mut result,
+                    )
+            }
+        }
+
 
         if self.host.middlewares_enabled {
             self.host.middlewares_deferred_actions.iter().for_each(|f| {
