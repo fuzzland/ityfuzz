@@ -39,6 +39,7 @@ pub enum MiddlewareOp {
     AddCorpus(MiddlewareType, String, H160),
     AddCaller(MiddlewareType, H160),
     AddAddress(MiddlewareType, H160),
+    AddBlacklist(MiddlewareType, H160),
     Owed(MiddlewareType, U512),
     Earned(MiddlewareType, U512),
     MakeSubsequentCallSuccess(Bytes),
@@ -74,13 +75,29 @@ impl MiddlewareOp {
                 host.middlewares_latent_call_actions
                     .push(CallMiddlewareReturn::ReturnSuccess(data.clone()));
             }
-            MiddlewareOp::AddCaller(middleware, ..) => {
+            MiddlewareOp::AddCaller(middleware, addr) => {
+                // todo: find a better way to handle this
+                // this ensures that a newly inserted address by flashloan V2 is never fetched as contract again
+                host.middlewares_deferred_actions
+                    .get_mut(&MiddlewareType::OnChain)
+                    .expect("Middleware not found")
+                    .push(MiddlewareOp::AddBlacklist(MiddlewareType::OnChain, addr.clone()));
                 host.middlewares_deferred_actions
                     .get_mut(middleware)
                     .expect("Middleware not found")
                     .push(self.clone());
             }
-            MiddlewareOp::AddAddress(middleware, ..) => {
+            MiddlewareOp::AddAddress(middleware, addr) => {
+                host.middlewares_deferred_actions
+                    .get_mut(&MiddlewareType::OnChain)
+                    .expect("Middleware not found")
+                    .push(MiddlewareOp::AddBlacklist(MiddlewareType::OnChain, addr.clone()));
+                host.middlewares_deferred_actions
+                    .get_mut(middleware)
+                    .expect("Middleware not found")
+                    .push(self.clone());
+            }
+            MiddlewareOp::AddBlacklist(middleware, ..) => {
                 host.middlewares_deferred_actions
                     .get_mut(middleware)
                     .expect("Middleware not found")
@@ -92,7 +109,7 @@ impl MiddlewareOp {
 
 pub trait CanHandleDeferredActions<VS, S> {
     fn handle_deferred_actions(
-        &self,
+        &mut self,
         op: &MiddlewareOp,
         state: &mut S,
         result: &mut IntermediateExecutionResult,
