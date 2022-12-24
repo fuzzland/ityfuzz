@@ -228,7 +228,11 @@ where
                         .clone()
                         .to_string(state);
 
-                    let data = format!("Reverted? {} \n Txn: {}", state.get_execution_result().reverted, txn_text);
+                    let data = format!(
+                        "Reverted? {} \n Txn: {}",
+                        state.get_execution_result().reverted,
+                        txn_text
+                    );
                     println!("============= New Corpus Item =============");
                     println!("{}", data);
                     println!("==========================================");
