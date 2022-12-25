@@ -348,10 +348,10 @@ where
                         Some(v) => {
                             let rich_caller = MiddlewareOp::AddCaller(
                                 MiddlewareType::Flashloan,
-                                v.clone().get(0).unwrap().clone(),
+                                v.clone().get(5).unwrap().clone(),
                             );
                             [
-                                v[0..min(2, v.len())].into_iter()
+                                v[0..2].into_iter()
                                     .map(|holder| {
                                         MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder.clone())
                                     })

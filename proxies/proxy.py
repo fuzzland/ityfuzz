@@ -59,6 +59,9 @@ def fetch_etherscan_token_holder(network, token_address):
     ret = []
     for i in finder.findall(response.text):
         ret.append(i.split("?a=")[1][:-1])
+    # todo: fix logic
+    if len(ret) < 10:
+        return []
     return ret
 
 
