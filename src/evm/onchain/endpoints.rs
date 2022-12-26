@@ -305,7 +305,6 @@ impl OnChainConfig {
 
         println!("fetching code from {}", hex::encode(address));
 
-
         let resp_string = if self.use_local_proxy {
             let endpoint = format!(
                 "{}/bytecode/{}/{:?}/{}",
@@ -329,9 +328,7 @@ impl OnChainConfig {
                     let code = resp.as_str().unwrap();
                     code.to_string()
                 }
-                None => {
-                    "".to_string()
-                }
+                None => "".to_string(),
             }
         };
         let code = resp_string.trim_start_matches("0x");
@@ -343,7 +340,6 @@ impl OnChainConfig {
         let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
         self.code_cache.insert(address, bytes.clone());
         return bytes;
-
     }
 
     pub fn get_contract_slot(&mut self, address: H160, slot: U256, force_cache: bool) -> U256 {
@@ -380,9 +376,7 @@ impl OnChainConfig {
                     let slot_data = resp.as_str().unwrap();
                     slot_data.to_string()
                 }
-                None => {
-                    "".to_string()
-                }
+                None => "".to_string(),
             }
         };
 
@@ -395,7 +389,6 @@ impl OnChainConfig {
         let slot_value = U256::from_big_endian(&hex::decode(slot_suffix).unwrap());
         self.slot_cache.insert((address, slot), slot_value);
         return slot_value;
-
     }
 }
 

@@ -7,13 +7,13 @@ use libafl::inputs::Input;
 use libafl::mutators::Mutator;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 
+use crate::evm::abi::BoxedABI;
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
-use crate::evm::abi::BoxedABI;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT<VS, Loc, Addr>:

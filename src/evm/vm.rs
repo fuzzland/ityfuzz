@@ -930,10 +930,7 @@ where
             unsafe {
                 mid.as_any()
                     .downcast_mut_unchecked::<Flashloan<S>>()
-                    .analyze_call(
-                        input,
-                        &mut result
-                    )
+                    .analyze_call(input, &mut result)
             }
         }
 
@@ -958,7 +955,6 @@ where
                     )
             }
         }
-
 
         if self.host.middlewares_enabled {
             self.host.middlewares_deferred_actions.iter().for_each(|f| {
