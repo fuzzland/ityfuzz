@@ -430,7 +430,6 @@ impl ABI for A256 {
             let mut ptr = bytes.as_mut_ptr();
             ptr = ptr.add(32 - data_len);
             for i in 0..data_len {
-                // FIXME: check if this is correct for 2's complement for integers
                 *ptr.add(i) = Expr::sym_byte(format!("{}_A256_{}", counter, i));
             }
         }
@@ -498,6 +497,8 @@ impl ABI for ADynamic {
             let counter = CONCOLIC_COUNTER;
             CONCOLIC_COUNTER += 1;
             let ptr = bytes.as_mut_ptr();
+            // here we assume the size of the dynamic data
+            // will not change. However, this may change as well
             let mut rem: usize = self.data.len();
             for i in 0..32 {
                 *ptr.add(31 - i) = Expr::const_byte((rem & 0xff) as u8);

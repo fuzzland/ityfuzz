@@ -286,52 +286,22 @@ impl<'a> Solving<'a> {
             };
         }
         match &bv.op {
-            ConcolicOp::U256(constant) => {
-                bv_from_u256!(constant, ctx)
-            }
-            ConcolicOp::ADD => {
-                binop!(bv.lhs, bv.rhs, bvadd)
-            }
-            ConcolicOp::DIV => {
-                binop!(bv.lhs, bv.rhs, bvudiv)
-            }
-            ConcolicOp::MUL => {
-                binop!(bv.lhs, bv.rhs, bvmul)
-            }
-            ConcolicOp::SUB => {
-                binop!(bv.lhs, bv.rhs, bvsub)
-            }
-            ConcolicOp::SDIV => {
-                binop!(bv.lhs, bv.rhs, bvsdiv)
-            }
-            ConcolicOp::SMOD => {
-                binop!(bv.lhs, bv.rhs, bvsmod)
-            }
-            ConcolicOp::UREM => {
-                binop!(bv.lhs, bv.rhs, bvurem)
-            }
-            ConcolicOp::SREM => {
-                binop!(bv.lhs, bv.rhs, bvsrem)
-            }
-            ConcolicOp::AND => {
-                binop!(bv.lhs, bv.rhs, bvand)
-            }
-            ConcolicOp::OR => {
-                binop!(bv.lhs, bv.rhs, bvor)
-            }
-            ConcolicOp::XOR => {
-                binop!(bv.lhs, bv.rhs, bvxor)
-            }
+            ConcolicOp::U256(constant) => bv_from_u256!(constant, ctx),
+            ConcolicOp::ADD => binop!(bv.lhs, bv.rhs, bvadd),
+            ConcolicOp::DIV => binop!(bv.lhs, bv.rhs, bvudiv),
+            ConcolicOp::MUL => binop!(bv.lhs, bv.rhs, bvmul),
+            ConcolicOp::SUB => binop!(bv.lhs, bv.rhs, bvsub),
+            ConcolicOp::SDIV => binop!(bv.lhs, bv.rhs, bvsdiv),
+            ConcolicOp::SMOD => binop!(bv.lhs, bv.rhs, bvsmod),
+            ConcolicOp::UREM => binop!(bv.lhs, bv.rhs, bvurem),
+            ConcolicOp::SREM => binop!(bv.lhs, bv.rhs, bvsrem),
+            ConcolicOp::AND => binop!(bv.lhs, bv.rhs, bvand),
+            ConcolicOp::OR => binop!(bv.lhs, bv.rhs, bvor),
+            ConcolicOp::XOR => binop!(bv.lhs, bv.rhs, bvxor),
             ConcolicOp::NOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).bvnot(),
-            ConcolicOp::SHL => {
-                binop!(bv.lhs, bv.rhs, bvshl)
-            }
-            ConcolicOp::SHR => {
-                binop!(bv.lhs, bv.rhs, bvlshr)
-            }
-            ConcolicOp::SAR => {
-                binop!(bv.lhs, bv.rhs, bvashr)
-            }
+            ConcolicOp::SHL => binop!(bv.lhs, bv.rhs, bvshl),
+            ConcolicOp::SHR => binop!(bv.lhs, bv.rhs, bvlshr),
+            ConcolicOp::SAR => binop!(bv.lhs, bv.rhs, bvashr),
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.0[0] as u32;
                 self.slice_input(idx, idx + 4)
@@ -342,7 +312,6 @@ impl<'a> Solving<'a> {
             ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
             ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, *b as u64, 8),
             ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s.clone(), 8),
-
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
