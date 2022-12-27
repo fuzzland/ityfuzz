@@ -169,7 +169,7 @@ fn main() {
         FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<
-        Box<dyn Oracle<EVMState, H160, _, _, H160, U256, EVMInput, EVMFuzzState>>,
+        Box<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>,
     > = vec![];
     if args.ierc20_oracle {
         oracles.push(Box::new(flashloan_oracle));
