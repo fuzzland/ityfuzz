@@ -10,4 +10,6 @@ use move_vm_types::values;
 pub type MoveAddress = AccountAddress;
 pub type MoveSlotTy = (ModuleId, Vec<usize>);
 pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState>;
+
+pub type MoveOutput = Vec<MoveFunctionInput>;
 // pub type MoveVMTy<I, S> = dyn ;

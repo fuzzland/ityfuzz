@@ -11,9 +11,9 @@ use bytes::Bytes;
 use primitive_types::{H160, U256};
 use revm::Bytecode;
 
-pub type EVMFuzzState = FuzzState<EVMInput, EVMState, H160, H160>;
+pub type EVMFuzzState = FuzzState<EVMInput, EVMState, H160, H160, Vec<u8>>;
 pub type EVMOracleCtx<'a> =
-    OracleCtx<'a, EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>;
+    OracleCtx<'a, EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>;
 
 pub type EVMFuzzMutator<'a> = FuzzMutator<
     'a,

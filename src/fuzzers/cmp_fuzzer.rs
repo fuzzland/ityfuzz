@@ -50,7 +50,7 @@ struct ContractInfo {
 }
 
 pub fn cmp_fuzzer(
-    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
+    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
 ) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
