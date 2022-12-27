@@ -24,7 +24,7 @@ use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
 
-pub static mut concolic_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
@@ -437,10 +437,7 @@ impl ConcolicHost {
     }
 
     fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
-        let mut input_bytes: Vec<Box<Expr>> = vec![];
-        let vm_input = vm_input.b;
-
-        todo!()
+        vm_input.b.get_concolic()
     }
 
     fn string_to_bytes(s: &str) -> Vec<u8> {
