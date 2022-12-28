@@ -66,7 +66,6 @@ where
     VS: Default + VMStateT,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
-
 {
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS>;
 }
@@ -80,8 +79,7 @@ where
     VS: Default + VMStateT,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
-    Out: Default
-
+    Out: Default,
 {
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out>;
     fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out>;
@@ -96,7 +94,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Debug + Serialize + DeserializeOwned + Clone,
-    Out: Default
+    Out: Default,
 {
     #[serde(deserialize_with = "InfantStateState::deserialize")]
     pub infant_states_state: InfantStateState<Loc, Addr, VS>,
@@ -127,8 +125,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     pub fn new() -> Self {
         let seed = current_nanos();
@@ -168,8 +165,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Clone + Debug + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn get_rand_address(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.addresses_pool.len() as u64);
@@ -230,8 +226,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
         &self.hash_to_address
@@ -243,7 +238,6 @@ where
     VS: Default + VMStateT + DeserializeOwned,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-
 {
 }
 
@@ -302,7 +296,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input + 'static,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
+    Out: Default,
 {
     fn get_infant_state<SC>(
         &mut self,
@@ -351,14 +345,14 @@ where
     //
 }
 
-impl<VI, VS, Loc, Addr, Out> HasInfantStateState<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr, Out>
+impl<VI, VS, Loc, Addr, Out> HasInfantStateState<Loc, Addr, VS>
+    for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS> {
         &mut self.infant_states_state
@@ -371,8 +365,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn max_size(&self) -> usize {
         self.max_size
@@ -389,8 +382,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     type Rand = StdRand;
 
@@ -409,8 +401,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn executions(&self) -> &usize {
         &self.executions
@@ -427,8 +418,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
@@ -445,8 +435,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     #[cfg(not(feature = "evaluation"))]
     type Corpus = InMemoryCorpus<VI>;
@@ -468,8 +457,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     type Solutions = OnDiskCorpus<VI>;
 
@@ -488,8 +476,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn introspection_monitor(&self) -> &ClientPerfMonitor {
         todo!()
@@ -500,14 +487,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr, Out> HasExecutionResult<Loc, Addr, VS, Out> for FuzzState<VI, VS, Loc, Addr, Out>
+impl<VI, VS, Loc, Addr, Out> HasExecutionResult<Loc, Addr, VS, Out>
+    for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out> {
         &self.execution_result
@@ -528,8 +515,7 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn named_metadata(&self) -> &NamedSerdeAnyMap {
         &self.named_metadata
@@ -546,7 +532,6 @@ where
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Serialize + DeserializeOwned + Default
-
+    Out: Serialize + DeserializeOwned + Default,
 {
 }

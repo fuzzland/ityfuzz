@@ -1,4 +1,5 @@
 use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::ContractLoader;
 use crate::evm::input::EVMInput;
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
@@ -10,6 +11,8 @@ use crate::input::VMInputT;
 use crate::state::{FuzzState, HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;
+use crypto::digest::Digest;
+use crypto::sha3::Sha3;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::prelude::{HasCorpus, HasMetadata, Input, MutationResult};
 use libafl::schedulers::Scheduler;
@@ -22,9 +25,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
-use crypto::digest::Digest;
-use crypto::sha3::Sha3;
-use crate::evm::config::StorageFetchingMode;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
@@ -68,7 +68,11 @@ where
     S: State,
     VS: VMStateT + Default,
 {
-    pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC, storage_fetching: StorageFetchingMode) -> Self
+    pub fn new<SC>(
+        endpoint: OnChainConfig,
+        scheduler: SC,
+        storage_fetching: StorageFetchingMode,
+    ) -> Self
     where
         SC: Scheduler<I, S> + 'static,
     {
@@ -83,7 +87,7 @@ where
             storage_all: Default::default(),
             storage_dump: Default::default(),
             phantom: Default::default(),
-            storage_fetching
+            storage_fetching,
         }
     }
 
@@ -91,7 +95,6 @@ where
         self.blacklist.insert(address);
     }
 }
-
 
 pub fn keccak_hex(data: U256) -> String {
     let mut hasher = Sha3::keccak256();
@@ -143,16 +146,21 @@ where
                 let address = interp.contract.address;
 
                 macro_rules! load_data {
-                    ($func: ident, $stor: ident, $key: ident) => {
-                        {
-                            if !self.$stor.contains_key(&address) {
-                                let storage = self.endpoint.$func(address)
-                                    .unwrap_or(Arc::new(HashMap::new()));
-                                self.$stor.insert(address, storage);
-                            }
-                            self.$stor.get(&address).unwrap().get(&$key).unwrap_or(&U256::zero()).clone()
+                    ($func: ident, $stor: ident, $key: ident) => {{
+                        if !self.$stor.contains_key(&address) {
+                            let storage = self
+                                .endpoint
+                                .$func(address)
+                                .unwrap_or(Arc::new(HashMap::new()));
+                            self.$stor.insert(address, storage);
                         }
-                    };
+                        self.$stor
+                            .get(&address)
+                            .unwrap()
+                            .get(&$key)
+                            .unwrap_or(&U256::zero())
+                            .clone()
+                    }};
                     () => {};
                 }
 
@@ -166,23 +174,19 @@ where
                             let key = keccak_hex(slot_idx);
                             load_data!(fetch_storage_all, storage_all, key)
                         }
-                        StorageFetchingMode::OneByOne => {
-                            self.endpoint.get_contract_slot(
-                                address,
-                                slot_idx,
-                                force_cache!(self.locs, slot_idx),
-                            )
-                        }
+                        StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
+                            address,
+                            slot_idx,
+                            force_cache!(self.locs, slot_idx),
+                        ),
                     }
                 };
-                vec![
-                    UpdateSlot(
-                        MiddlewareType::OnChain,
-                        address,
-                        slot_idx,
-                        slot_val,
-                    )
-                ]
+                vec![UpdateSlot(
+                    MiddlewareType::OnChain,
+                    address,
+                    slot_idx,
+                    slot_val,
+                )]
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {
