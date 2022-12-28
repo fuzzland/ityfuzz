@@ -182,8 +182,8 @@ impl OnChainConfig {
         );
         let resp = if self.use_local_proxy {
             let endpoint = format!(
-                "{}/full_storage/{}/{:?}",
-                self.local_proxy_addr, self.chain_name, address
+                "{}/storage_all/{}/{:?}/{}",
+                self.local_proxy_addr, self.chain_name, address, self.block_number
             );
             match self.client.get(endpoint).send() {
                 Ok(res) => Some(
@@ -256,8 +256,8 @@ impl OnChainConfig {
     ) -> Option<Arc<HashMap<U256, U256>>> {
         let resp = if self.use_local_proxy {
             let endpoint = format!(
-                "{}/storage_dump/{}/{:?}",
-                self.local_proxy_addr, self.chain_name, address
+                "{}/storage_dump/{}/{:?}/{}",
+                self.local_proxy_addr, self.chain_name, address, self.block_number
             );
             match self.client.get(endpoint).send() {
                 Ok(res) => Some(
