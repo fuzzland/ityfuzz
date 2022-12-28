@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
 use std::time::Duration;
 
 const UNBOUND_THRESHOLD: usize = 5;
@@ -37,6 +38,8 @@ where
     pub endpoint: OnChainConfig,
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
     pub blacklist: HashSet<H160>,
+    pub use_full_storage: bool,
+    pub full_storage: HashMap<H160, Arc<HashMap<U256, U256>>>,
     pub phantom: std::marker::PhantomData<VS>,
 }
 
@@ -61,7 +64,7 @@ where
     S: State,
     VS: VMStateT + Default,
 {
-    pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC) -> Self
+    pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC, use_full_storage: bool) -> Self
     where
         SC: Scheduler<I, S> + 'static,
     {
@@ -73,6 +76,8 @@ where
             endpoint,
             scheduler: Some(Box::new(scheduler)),
             blacklist: Default::default(),
+            use_full_storage,
+            full_storage: Default::default(),
             phantom: Default::default(),
         }
     }
@@ -120,16 +125,38 @@ where
             0x54 => {
                 let slot_idx = interp.stack.peek(0).unwrap();
                 let address = interp.contract.address;
-                vec![UpdateSlot(
-                    MiddlewareType::OnChain,
-                    address,
-                    slot_idx,
-                    self.endpoint.get_contract_slot(
+
+                let slot_val = {
+                    if self.use_full_storage {
+                        if !self.full_storage.contains_key(&address) {
+                            let storage = self
+                                .endpoint
+                                .fetch_full_storage(address)
+                                .unwrap_or(Arc::new(HashMap::new()));
+                            self.full_storage.insert(address, storage);
+                        }
+
+                        if let Some(storage) = self.full_storage.get(&address) {
+                            storage.get(&slot_idx).unwrap_or(&U256::zero()).clone()
+                        } else {
+                            unreachable!("full storage should be loaded");
+                        }
+                    } else {
+                        self.endpoint.get_contract_slot(
+                            address,
+                            slot_idx,
+                            force_cache!(self.locs, slot_idx),
+                        )
+                    }
+                };
+                vec![
+                    UpdateSlot(
+                        MiddlewareType::OnChain,
                         address,
                         slot_idx,
-                        force_cache!(self.locs, slot_idx),
-                    ),
-                )]
+                        slot_val,
+                    )
+                ]
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {

@@ -27,4 +27,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+    pub use_full_storage: bool,
 }

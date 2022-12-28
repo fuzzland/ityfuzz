@@ -72,6 +72,10 @@ struct Args {
     #[arg(long)]
     onchain_local_proxy_addr: Option<String>,
 
+    /// Onchain whether to use eth_getStorageAll (Default: false)
+    #[arg(long, default_value = "false")]
+    onchain_full_storage: bool,
+
     /// Enable Concolic
     #[arg(long, default_value = "false")]
     concolic: bool,
@@ -210,6 +214,7 @@ fn main() {
         },
         oracle: oracles,
         flashloan: args.flashloan,
+        use_full_storage: args.onchain_full_storage,
     };
 
     match config.fuzzer_type {
