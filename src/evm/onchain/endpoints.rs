@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fmt::{format, Debug};
 use std::panic;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum Chain {
@@ -53,7 +54,7 @@ impl Chain {
     pub fn get_chain_rpc(&self) -> String {
         match self {
             Chain::ETH => "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657",
-            Chain::BSC => "https://bsc-dataseed.binance.org/",
+            Chain::BSC => "https://bsc-node.scf.so/",
             Chain::POLYGON => "https://polygon-rpc.com/",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
         }
@@ -85,6 +86,7 @@ pub struct OnChainConfig {
     code_cache: HashMap<H160, Bytecode>,
     price_cache: HashMap<H160, (f64, u32)>,
     abi_cache: HashMap<H160, Option<String>>,
+    full_storage_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
 }
 
 impl OnChainConfig {
@@ -145,7 +147,9 @@ impl OnChainConfig {
             code_cache: Default::default(),
             price_cache: Default::default(),
             abi_cache: Default::default(),
+
             local_proxy_addr,
+            full_storage_cache: Default::default()
         }
     }
 
@@ -155,6 +159,59 @@ impl OnChainConfig {
 
     pub fn add_moralis_api_key(&mut self, key: String) {
         self.moralis_api_key.push(key);
+    }
+
+    pub fn fetch_full_storage(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+        if let Some(storage) = self.full_storage_cache.get(&address) {
+            return storage.clone();
+        } else {
+            let storage = self.fetch_full_storage_uncached(address);
+            self.full_storage_cache.insert(address, storage.clone());
+            storage
+        }
+    }
+
+    pub fn fetch_full_storage_uncached(&self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+        assert_eq!(self.block_number, "latest", "fetch_full_storage only works with latest block");
+        let resp = if self.use_local_proxy {
+            let endpoint = format!(
+                "{}/full_storage/{}/{:?}",
+                self.local_proxy_addr, self.chain_name, address
+            );
+            match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    Some(
+                        serde_json::from_str::<Value>(
+                            &res.text().unwrap().trim().to_string()
+                        ).expect("Failed to parse proxy response")
+                    )
+                }
+                Err(_) => None,
+            }
+        } else {
+            let mut params = String::from("[");
+            params.push_str(&format!("\"0x{:x}\",", address));
+            params.push_str(&format!("\"{}\"", self.block_number));
+            params.push_str("]");
+            self._request("eth_getStorageAll".to_string(), params)
+        };
+
+        match resp {
+            Some(resp) => {
+                let mut map = HashMap::new();
+                for (k, v) in resp.as_object()
+                    .expect("failed to convert resp to array, are you using a node that supports eth_getStorageAll?")
+                    .iter()
+                {
+                    map.insert(
+                        U256::from_str_radix(k.trim_start_matches("0x"), 16).unwrap(),
+                        U256::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap(),
+                    );
+                }
+                Some(Arc::new(map))
+            }
+            None => None,
+        }
     }
 
     pub fn fetch_holders(&self, token_address: H160) -> Option<Vec<H160>> {
@@ -269,6 +326,7 @@ impl OnChainConfig {
         match self
             .client
             .post(self.endpoint_url.clone())
+            .header("Content-Type", "application/json")
             .body(data)
             .send()
         {
@@ -516,6 +574,15 @@ mod tests {
         );
         let v = config.fetch_token_price(
             H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
+        );
+        println!("{:?}", v)
+    }
+
+    #[test]
+    fn test_fetch_full_storage() {
+        let mut config = OnChainConfig::new(BSC, 0);
+        let v = config.fetch_full_storage(
+            H160::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
         );
         println!("{:?}", v)
     }
