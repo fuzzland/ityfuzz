@@ -53,8 +53,8 @@ impl Chain {
 
     pub fn get_chain_rpc(&self) -> String {
         match self {
-            Chain::ETH => "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657",
-            Chain::BSC => "https://bsc-node.scf.so/",
+            Chain::ETH => "https://eth.llamarpc.com",
+            Chain::BSC => "http://bsc.node1.infra.fuzz.land",
             Chain::POLYGON => "https://polygon-rpc.com/",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
         }
@@ -72,6 +72,7 @@ pub struct OnChainConfig {
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
     pub block_number: String,
+    pub block_hash: Option<String>,
 
     pub etherscan_api_key: Vec<String>,
     pub etherscan_base: String,
@@ -86,7 +87,8 @@ pub struct OnChainConfig {
     code_cache: HashMap<H160, Bytecode>,
     price_cache: HashMap<H160, (f64, u32)>,
     abi_cache: HashMap<H160, Option<String>>,
-    full_storage_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
+    storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
+    storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
 }
 
 impl OnChainConfig {
@@ -138,6 +140,7 @@ impl OnChainConfig {
             } else {
                 format!("0x{:x}", block_number)
             },
+            block_hash: None,
             etherscan_api_key: vec![],
             moralis_api_key: vec![],
             etherscan_base,
@@ -149,7 +152,8 @@ impl OnChainConfig {
             abi_cache: Default::default(),
 
             local_proxy_addr,
-            full_storage_cache: Default::default()
+            storage_all_cache: Default::default(),
+            storage_dump_cache: Default::default(),
         }
     }
 
@@ -161,17 +165,17 @@ impl OnChainConfig {
         self.moralis_api_key.push(key);
     }
 
-    pub fn fetch_full_storage(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
-        if let Some(storage) = self.full_storage_cache.get(&address) {
+    pub fn fetch_storage_all(&mut self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
+        if let Some(storage) = self.storage_all_cache.get(&address) {
             return storage.clone();
         } else {
-            let storage = self.fetch_full_storage_uncached(address);
-            self.full_storage_cache.insert(address, storage.clone());
+            let storage = self.fetch_storage_all_uncached(address);
+            self.storage_all_cache.insert(address, storage.clone());
             storage
         }
     }
 
-    pub fn fetch_full_storage_uncached(&self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+    pub fn fetch_storage_all_uncached(&self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
         assert_eq!(self.block_number, "latest", "fetch_full_storage only works with latest block");
         let resp = if self.use_local_proxy {
             let endpoint = format!(
@@ -204,8 +208,85 @@ impl OnChainConfig {
                     .iter()
                 {
                     map.insert(
-                        U256::from_str_radix(k.trim_start_matches("0x"), 16).unwrap(),
+                        k.trim_start_matches("0x").to_string(),
                         U256::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap(),
+                    );
+                }
+                Some(Arc::new(map))
+            }
+            None => None,
+        }
+    }
+
+    pub fn fetch_blk_hash(&mut self) -> &String {
+        if self.block_hash == None {
+            self.block_hash = {
+                let mut params = String::from("[");
+                params.push_str(&format!("\"{}\",false", self.block_number));
+                params.push_str("]");
+                let res = self._request("eth_getBlockByNumber".to_string(), params);
+                match res {
+                    Some(res) => {
+                        let blk_hash = res["hash"].as_str().expect("fail to find block hash").to_string();
+                        Some(blk_hash)
+                    }
+                    None => panic!("fail to get block hash"),
+                }
+            }
+        }
+        return self.block_hash.as_ref().unwrap();
+    }
+
+    pub fn fetch_storage_dump(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+        if let Some(storage) = self.storage_dump_cache.get(&address) {
+            return storage.clone();
+        } else {
+            let storage = self.fetch_storage_dump_uncached(address);
+            self.storage_dump_cache.insert(address, storage.clone());
+            storage
+        }
+    }
+
+    pub fn fetch_storage_dump_uncached(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+        let resp = if self.use_local_proxy {
+            let endpoint = format!(
+                "{}/storage_dump/{}/{:?}",
+                self.local_proxy_addr, self.chain_name, address
+            );
+            match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    Some(
+                        serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
+                            .expect("Failed to parse proxy response")
+                    )
+                }
+                Err(_) => None,
+            }
+        } else {
+            let blk_hash = self.fetch_blk_hash();
+            let mut params = String::from("[");
+            params.push_str(&format!("\"{}\",", blk_hash));
+            params.push_str("0,");
+            params.push_str(&format!("\"0x{:x}\",", address));
+            params.push_str("\"\",");
+            params.push_str(&format!("1000000000000000"));
+            params.push_str("]");
+            self._request("debug_storageRangeAt".to_string(), params)
+        };
+
+        match resp {
+            Some(resp) => {
+                let mut map = HashMap::new();
+                for (_, v) in resp["storage"].as_object()
+                    .expect("failed to convert resp to array")
+                    .iter()
+                {
+                    let key = v["key"].as_str().expect("fail to find key");
+                    let value = v["value"].as_str().expect("fail to find value");
+
+                    map.insert(
+                        U256::from_str_radix(key.trim_start_matches("0x"), 16).unwrap(),
+                        U256::from_str_radix(value.trim_start_matches("0x"), 16).unwrap(),
                     );
                 }
                 Some(Arc::new(map))
@@ -525,7 +606,7 @@ impl PriceOracle for OnChainConfig {
 
 mod tests {
     use super::*;
-    use crate::evm::onchain::endpoints::Chain::BSC;
+    use crate::evm::onchain::endpoints::Chain::{BSC, ETH};
 
     #[test]
     fn test_onchain_config() {
@@ -579,11 +660,32 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_full_storage() {
+    fn test_fetch_storage_all() {
         let mut config = OnChainConfig::new(BSC, 0);
-        let v = config.fetch_full_storage(
+        let v = config.fetch_storage_all(
             H160::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
         );
         println!("{:?}", v)
+    }
+
+    #[test]
+    fn test_fetch_storage_dump() {
+        let mut config = OnChainConfig::new(ETH, 0);
+        let v = config.fetch_storage_dump(
+            H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+        ).unwrap();
+
+
+        let v0 = v.get(&U256::from(0)).unwrap().clone();
+
+
+        let slot_v = config.get_contract_slot(
+            H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+            U256::from(0),
+            false,
+        );
+
+
+        assert_eq!(slot_v, v0);
     }
 }
