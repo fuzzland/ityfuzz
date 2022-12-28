@@ -38,9 +38,11 @@ def get_endpoint(network):
 
 def get_rpc(network):
     if network == "eth":
-        return "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657"
+        return "https://eth.llamarpc.com"
     elif network == "bsc":
-        return "https://bsc-dataseed.binance.org/"
+        # BSC mod to geth make it no longer possible to use debug_storageRangeAt
+        # so, we use our own node that supports eth_getStorageAll
+        return "http://bsc.node1.infra.fuzz.land"
     elif network == "polygon":
         return "https://polygon-rpc.com/"
     elif network == "mumbai":
@@ -108,6 +110,64 @@ def fetch_rpc_byte_code(network, address, block):
     return response.json()["result"]
 
 
+@functools.lru_cache(maxsize=10240)
+@retry(tries=3, delay=0.5, backoff=2)
+def fetch_blk_hash(network, num):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_getBlockByNumber",
+        "params": [num, False],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    return response.json()["result"]["hash"]
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
+def fetch_rpc_storage_dump(network, address, block):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "debug_storageRangeAt",
+        "params": [fetch_blk_hash(network, block), 0, address, "", 1000000000000000],
+        "id": 1
+    }
+
+    response = requests.post(url, json=payload)
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        print(response.text)
+        raise e
+
+    j = response.json()
+    if "result" not in j:
+        print(j)
+        raise Exception("invalid response")
+    # this rpc is likely going to fail for a few times
+    return j["result"]["storage"]
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
+def fetch_rpc_storage_all(network, address, block):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_getStorageAll",
+        "params": [address, block],
+        "id": 1
+    }
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+
+    return response.json()["result"]
+
+
 app = flask.Flask(__name__)
 
 
@@ -131,4 +191,19 @@ def bytecode(network, address, block):
     return fetch_rpc_byte_code(network, address, block)
 
 
+@app.route("/storage_dump/<network>/<address>/<block>", methods=["GET"])
+def storage_dump(network, address, block):
+    # use debug_storageRangeAt to dump the storage
+    # this requires RPC endpoint enabling debug & archive node
+    return fetch_rpc_storage_dump(network, address, block)
+
+
+@app.route("/storage_all/<network>/<address>/<block>", methods=["GET"])
+def storage_all(network, address, block):
+    # use eth_getStorageAll to dump the storage
+    # this requires running a modified geth
+    return fetch_rpc_storage_all(network, address, block)
+
+
 app.run(port=5003)
+
