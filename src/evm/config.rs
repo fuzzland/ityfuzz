@@ -15,13 +15,13 @@ pub enum StorageFetchingMode {
     OneByOne,
 }
 
-impl From<&str> for StorageFetchingMode {
-    fn from(s: &str) -> Self {
+impl StorageFetchingMode {
+    pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "dump" => StorageFetchingMode::Dump,
-            "all" => StorageFetchingMode::All,
-            "onebyone" => StorageFetchingMode::OneByOne,
-            _ => panic!("Storage fetching mode not supported"),
+            "dump" => Some(StorageFetchingMode::Dump),
+            "all" => Some(StorageFetchingMode::All),
+            "onebyone" => Some(StorageFetchingMode::OneByOne),
+            _ => None,
         }
     }
 }
