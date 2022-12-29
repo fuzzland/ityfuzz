@@ -304,7 +304,7 @@ impl BoxedABI {
                         a_unknown.concrete_type = BoxedABI::new(Box::new(AEmpty {}));
                         return MutationResult::Skipped;
                     }
-                    if (state.rand_mut().below(100)) < 90 {
+                    if (state.rand_mut().below(100)) < 80 {
                         a_unknown
                             .concrete_type
                             .mutate_with_vm_slots(state, vm_slots)

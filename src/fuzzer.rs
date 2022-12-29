@@ -32,6 +32,7 @@ use libafl::{
 use rand::random;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use crate::evm::oracle::FL_DATA;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -289,6 +290,9 @@ where
                 Ok((res, Some(idx)))
             }
             ExecuteInputResult::Solution => {
+                unsafe {
+                    println!("Flashloan: {}", FL_DATA);
+                }
                 println!(
                     "Found a solution! trace: {}",
                     state

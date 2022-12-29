@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -70,6 +71,19 @@ where
             if input.is_step() {
                 return input.mutate(state);
             }
+            if input.get_staged_state().state.has_post_execution() && !input.is_step() {
+                if state.rand_mut().below(100) < 60 as u64 {
+                    input.set_step(true);
+                    // todo(@shou): move args into
+                    input.set_as_post_exec(
+                        input.get_state().get_post_execution_needed_len() as usize
+                    );
+                    for _ in 0..havoc_times - 1 {
+                        input.mutate(state);
+                    }
+                    return MutationResult::Mutated;
+                }
+            }
             match state.rand_mut().below(100) {
                 1..=5 => {
                     // mutate the caller
@@ -98,20 +112,6 @@ where
                     }
                     None => MutationResult::Skipped,
                 },
-                16..=20 => {
-                    // make it a step forward to pop one post execution
-                    // todo(@shou): fix the sizing of return
-                    if input.get_staged_state().state.has_post_execution() && !input.is_step() {
-                        input.set_step(true);
-                        // todo(@shou): move args into
-                        input.set_as_post_exec(
-                            input.get_state().get_post_execution_needed_len() as usize
-                        );
-                        MutationResult::Mutated
-                    } else {
-                        MutationResult::Skipped
-                    }
-                }
                 _ => input.mutate(state),
             }
         };
