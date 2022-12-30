@@ -937,12 +937,7 @@ where
             }
         }
 
-
-        let mut dummy_state = S::default();
-        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, match state {
-            Some(s) => s,
-            None => &mut dummy_state,
-        });
+        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, state.as_mut().unwrap());
 
         // For each middleware, execute the deferred actions
         let mut result = IntermediateExecutionResult {
