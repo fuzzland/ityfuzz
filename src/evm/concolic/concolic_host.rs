@@ -6,11 +6,11 @@ use std::iter::Map;
 
 use crate::evm::abi::{AEmpty, BoxedABI};
 use crate::evm::middleware::MiddlewareType::Concolic;
-use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
-use crate::evm::vm::{jmp_map, IntermediateExecutionResult};
+use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::vm::{jmp_map, IntermediateExecutionResult, FuzzHost};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
-use crate::state::HasItyState;
+use crate::state::{HasCaller, HasItyState};
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -19,10 +19,18 @@ use revm::{
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::str::FromStr;
+use std::sync::Arc;
+use libafl::prelude::{HasMetadata, Input};
+use libafl::schedulers::Scheduler;
+use libafl::state::{HasCorpus, State};
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::evm::types::EVMFuzzState;
+use crate::input::VMInputT;
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -419,16 +427,17 @@ impl<'a> Solving<'a> {
 
 // Q: Why do we need to make persistent memory symbolic?
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConcolicHost {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConcolicHost<I, VS> {
     symbolic_stack: Vec<Option<Box<Expr>>>,
     input_bytes: Vec<Box<Expr>>,
     constraints: Vec<Box<Expr>>,
     bytes: u32,
     caller: H160,
+    phantom: PhantomData<(I, VS)>,
 }
 
-impl ConcolicHost {
+impl<I, VS> ConcolicHost<I, VS> {
     pub fn new(bytes: u32, vm_input: BoxedABI, caller: H160) -> Self {
         Self {
             symbolic_stack: Vec::new(),
@@ -436,6 +445,7 @@ impl ConcolicHost {
             constraints: vec![],
             bytes,
             caller,
+            phantom: Default::default()
         }
     }
 
@@ -468,8 +478,13 @@ impl ConcolicHost {
     }
 }
 
-impl Middleware for ConcolicHost {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
+impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
+    where
+        I: Input + VMInputT<VS, H160, H160> + 'static,
+        VS: VMStateT,
+        S: State + HasCaller<H160> + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + Debug + Clone,
+{
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.peek(interp.stack.len() - 1 - $idx)
@@ -909,34 +924,14 @@ impl Middleware for ConcolicHost {
             self.symbolic_stack.push(v);
         }
 
-        solutions
-            .iter()
-            .map(|s| -> MiddlewareOp {
-                MiddlewareOp::AddCorpus(Concolic, s.to_string(), self.caller)
-            })
-            .collect()
+
+        for s in solutions {
+            add_corpus(host, self.caller, &s.to_string(), state);
+        }
     }
 
     fn get_type(&self) -> MiddlewareType {
         Concolic
     }
 
-    fn as_any(&mut self) -> &mut (dyn Any + 'static) {
-        self
-    }
-}
-
-impl<VS, S> CanHandleDeferredActions<VS, &mut S> for ConcolicHost
-where
-    S: HasItyState<H160, H160, VS>,
-    VS: VMStateT + Default,
-{
-    fn handle_deferred_actions(
-        &mut self,
-        op: &MiddlewareOp,
-        state: &mut &mut S,
-        result: &mut IntermediateExecutionResult,
-    ) {
-        todo!()
-    }
 }

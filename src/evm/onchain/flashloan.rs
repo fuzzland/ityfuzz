@@ -4,10 +4,10 @@
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
-use crate::evm::vm::{EVMState, IntermediateExecutionResult};
+use crate::evm::vm::{EVMState, FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::oracle::Oracle;
@@ -27,9 +27,13 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
+use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 
 #[derive(Debug)]
-pub struct Flashloan<S> {
+pub struct Flashloan<S>
+where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+
+{
     phantom: PhantomData<S>,
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
@@ -48,7 +52,10 @@ impl PriceOracle for DummyPriceOracle {
     }
 }
 
-impl<S> Flashloan<S> {
+impl<S> Flashloan<S>
+    where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+
+{
     #[cfg(not(feature = "flashloan_v2"))]
     pub fn new(use_contract_value: bool) -> Self {
         Self {
@@ -88,7 +95,10 @@ impl<S> Flashloan<S> {
 }
 
 #[cfg(feature = "flashloan_v2")]
-impl<S> Flashloan<S> {
+impl<S> Flashloan<S>
+    where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+
+{
     pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
     where
         I: VMInputT<VS, H160, H160> + EVMInputT,
@@ -144,17 +154,32 @@ impl<S> Flashloan<S> {
     }
 }
 
-impl<S> Middleware for Flashloan<S>
+impl<S> Middleware<S> for Flashloan<S>
 where
-    S: State + Debug + Clone + 'static,
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     #[cfg(not(feature = "flashloan_v2"))]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
+        macro_rules! earned {
+            ($amount:expr) => {
+                host.data.flashloan_data.earned += $amount;
+            };
+            () => {};
+        }
+
+        macro_rules! owed {
+            ($amount:expr) => {
+                host.data.flashloan_data.owed += $amount;
+            };
+            () => {};
+        }
+
+
         let offset_of_arg_offset: usize = match *interp.instruction_pointer {
             0xf1 | 0xf2 => 3,
             0xf4 | 0xfa => 2,
             _ => {
-                return vec![];
+                return;
             }
         };
 
@@ -166,41 +191,38 @@ where
         // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
-        let value_transfer_ops = if value_transfer > U256::zero() {
-            if call_target == interp.contract.caller {
-                vec![MiddlewareOp::Earned(
-                    MiddlewareType::Flashloan,
-                    U512::from(value_transfer) * float_scale_to_u512(1.0, 5),
-                )]
-            } else {
-                vec![]
-            }
-        } else {
-            vec![]
-        };
+        if value_transfer > U256::zero() && call_target == interp.contract.caller {
+                earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
+        }
 
         let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
         let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
         if size < U256::from(4) {
-            return vec![];
+            return;
         }
         let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
         // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
-        macro_rules! earned {
-            ($amount:expr) => {
-                MiddlewareOp::Earned(MiddlewareType::Flashloan, $amount)
+
+        macro_rules! make_transfer_call_success {
+            () => {
+                host.middlewares_latent_call_actions.push(ReturnSuccess(Bytes::from(
+                    [vec![0x0; 31], vec![0x1]].concat(),
+                )));
             };
         }
 
+        macro_rules! make_balance_call_success {
+            () => {
+                host.middlewares_latent_call_actions.push(ReturnSuccess(Bytes::from(
+                    vec![0xff; 32]
+                )));
+            };
+        }
         macro_rules! handle_contract_contract_transfer {
             () => {
-                if self.use_contract_value {
-                    vec![]
-                } else {
-                    vec![MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                        [vec![0x0; 31], vec![0x1]].concat(),
-                    ))]
+                if !self.use_contract_value {
+                    make_transfer_call_success!();
                 }
             };
         }
@@ -210,26 +232,18 @@ where
                 if self.use_contract_value {
                     // if we use contract value, we make attacker earns amount for oracle proc
                     // we assume the subsequent would revert if no enough balance
-                    vec![earned!($amount)]
+                    earned!($amount);
                 } else {
-                    vec![
-                        earned!($amount),
-                        MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                            [vec![0x0; 31], vec![0x1]].concat(),
-                        )),
-                    ]
+                    earned!($amount);
+                    make_transfer_call_success!();
                 }
             };
         }
-        let erc20_ops = match data[0..4] {
+        match data[0..4] {
             // balanceOf / approval
             [0x70, 0xa0, 0x82, 0x31] | [0x09, 0x5e, 0xa7, 0xb3] => {
                 if !self.use_contract_value {
-                    vec![MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                        vec![0xff; 32],
-                    ))]
-                } else {
-                    vec![]
+                    make_balance_call_success!();
                 }
             }
             // transfer
@@ -241,9 +255,6 @@ where
                 //     interp.contract.address, dst, amount
                 // );
 
-                let make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                    [vec![0x0; 31], vec![0x1]].concat(),
-                ));
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
                         if dst == interp.contract.caller {
@@ -267,10 +278,8 @@ where
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
                         if src == interp.contract.caller {
-                            return vec![
-                                make_success,
-                                MiddlewareOp::Owed(MiddlewareType::Flashloan, value),
-                            ];
+                            make_transfer_call_success!();
+                            return owed!(value);
                         } else if dst == interp.contract.caller {
                             return handle_dst_is_attacker!(value);
                         }
@@ -281,24 +290,34 @@ where
                 }
                 if src != interp.contract.caller && dst != interp.contract.caller {
                     handle_contract_contract_transfer!()
-                } else {
-                    vec![]
                 }
             }
-            _ => {
-                vec![]
-            }
+            _ => {}
         };
-        [value_transfer_ops, erc20_ops].concat()
     }
 
     #[cfg(feature = "flashloan_v2")]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, s: &mut S)
+    where S: HasCaller<H160> {
+        macro_rules! earned {
+            ($amount:expr) => {
+                host.data.flashloan_data.earned += $amount;
+            };
+            () => {};
+        }
+
+        macro_rules! owed {
+            ($amount:expr) => {
+                host.data.flashloan_data.owed += $amount;
+            };
+            () => {};
+        }
+
         let offset_of_arg_offset: usize = match *interp.instruction_pointer {
             0xf1 | 0xf2 => 3,
             0xf4 | 0xfa => 2,
             _ => {
-                return vec![];
+                return;
             }
         };
 
@@ -310,64 +329,39 @@ where
         // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
-        let value_transfer_ops = if value_transfer > U256::zero() {
+        if value_transfer > U256::zero() {
             if call_target == interp.contract.caller {
-                vec![MiddlewareOp::Earned(
-                    MiddlewareType::Flashloan,
-                    U512::from(value_transfer) * float_scale_to_u512(1.0, 5),
-                )]
-            } else {
-                vec![]
+                earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
             }
-        } else {
-            vec![]
-        };
+        }
 
         let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
         let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
         if size < U256::from(4) {
-            return vec![];
+            return;
         }
         let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
 
-        macro_rules! earned {
-            ($amount:expr) => {
-                MiddlewareOp::Earned(MiddlewareType::Flashloan, $amount)
-            };
-        }
 
         macro_rules! add_rich_when_ret {
-            ($rem: expr) => {
+            () => {
                 if !self.known_tokens.contains(&call_target) {
                     self.known_tokens.insert(call_target);
                     match self.endpoint.fetch_holders(call_target) {
                         None => {
                             println!("failed to fetch token holders for token {:?}", call_target);
-                            $rem
                         }
                         Some(v) => {
-                            let rich_caller = MiddlewareOp::AddCaller(
-                                MiddlewareType::Flashloan,
-                                v.clone().get(5).unwrap().clone(),
-                            );
-                            [
-                                v[0..2]
-                                    .into_iter()
-                                    .map(|holder| {
-                                        MiddlewareOp::AddAddress(
-                                            MiddlewareType::Flashloan,
-                                            holder.clone(),
-                                        )
-                                    })
-                                    .collect(),
-                                vec![rich_caller],
-                                $rem,
-                            ]
-                            .concat()
+                            // add some user funds address
+                            v[0..2]
+                                .into_iter()
+                                .for_each(|holder| {
+                                    s.add_address(&holder);
+                                });
+                            // add rich caller
+                            s.add_caller(&v.clone().get(5).unwrap().clone());
                         }
                     }
-                } else {
-                    $rem
                 }
             };
         }
@@ -380,14 +374,14 @@ where
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
                         if dst == interp.contract.caller {
-                            return add_rich_when_ret!(vec![earned!(value)]);
+                            earned!(value);
+                            return add_rich_when_ret!();
                         }
                     }
                     // if no value, we can't borrow it!
                     // bypass by explicitly returning value for every token
                     _ => {}
                 }
-                add_rich_when_ret!(vec![])
             }
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
@@ -398,33 +392,24 @@ where
                     Some(value) => {
                         // todo: replace caller with all trusted addresses
                         if src == interp.contract.caller {
-                            return add_rich_when_ret!(vec![MiddlewareOp::Owed(
-                                MiddlewareType::Flashloan,
-                                value
-                            )]);
+                            owed!(value);
+                            return add_rich_when_ret!();
                         } else if dst == interp.contract.caller {
-                            return add_rich_when_ret!(vec![earned!(value)]);
+                            earned!(value);
+                            return add_rich_when_ret!();
                         }
                     }
                     // if no value, we can't borrow it!
                     // bypass by explicitly returning value for every token
                     _ => {}
                 }
-                add_rich_when_ret!(vec![])
             }
-            _ => {
-                vec![]
-            }
+            _ => {}
         };
-        [value_transfer_ops, erc20_ops].concat()
     }
 
     fn get_type(&self) -> MiddlewareType {
         return MiddlewareType::Flashloan;
-    }
-
-    fn as_any(&mut self) -> &mut (dyn Any + 'static) {
-        return self;
     }
 }
 
@@ -444,32 +429,3 @@ impl FlashloanData {
 }
 
 impl_serdeany!(FlashloanData);
-
-impl<VS, S> CanHandleDeferredActions<VS, S> for Flashloan<S>
-where
-    S: HasItyState<H160, H160, VS> + HasCaller<H160>,
-    VS: VMStateT + Default,
-{
-    fn handle_deferred_actions(
-        &mut self,
-        op: &MiddlewareOp,
-        state: &mut S,
-        result: &mut IntermediateExecutionResult,
-    ) {
-        match op {
-            MiddlewareOp::Owed(.., amount) => {
-                result.new_state.flashloan_data.owed += *amount;
-            }
-            MiddlewareOp::Earned(.., amount) => {
-                result.new_state.flashloan_data.earned += *amount;
-            }
-            MiddlewareOp::AddAddress(.., address) => {
-                state.add_address(address);
-            }
-            MiddlewareOp::AddCaller(.., address) => {
-                state.add_caller(address);
-            }
-            _ => {}
-        }
-    }
-}

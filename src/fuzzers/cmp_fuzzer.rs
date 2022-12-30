@@ -70,7 +70,7 @@ pub fn cmp_fuzzer(
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new();
+    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));
 
     match config.concolic_prob {
         Some(prob) => fuzz_host.set_concolic_prob(prob),
@@ -91,10 +91,12 @@ pub fn cmp_fuzzer(
                 config.onchain.is_some(),
                 "Flashloan v2 requires onchain env"
             );
-            fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(
-                true,
-                config.onchain.clone().unwrap(),
-            )));
+            fuzz_host.add_flashloan_middleware(
+                Flashloan::<EVMFuzzState>::new(
+                    true,
+                    config.onchain.clone().unwrap(),
+                )
+            );
         }
     }
 
@@ -103,7 +105,6 @@ pub fn cmp_fuzzer(
             let mut mid = Box::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
                 // scheduler can be cloned because it never uses &mut self
                 onchain,
-                scheduler.clone(),
                 config.onchain_storage_fetching.unwrap(),
             ));
             fuzz_host.add_middlewares(mid);

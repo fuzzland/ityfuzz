@@ -2,7 +2,7 @@ use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::input::VMInputT;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
-use libafl::state::State;
+use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::{H160, U256, U512};
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,14 @@ use std::any::Any;
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::time::Duration;
+use libafl::inputs::Input;
+use libafl::schedulers::Scheduler;
+use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::contract_utils::ContractLoader;
+use crate::evm::input::EVMInput;
+use crate::generic_vm::vm_state::VMStateT;
+use crate::state::{HasCaller, HasItyState};
+use crate::state_input::StagedVMState;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
@@ -45,85 +53,46 @@ pub enum MiddlewareOp {
     MakeSubsequentCallSuccess(Bytes),
 }
 
-impl MiddlewareOp {
-    pub fn execute(&self, host: &mut FuzzHost) {
-        match self {
-            MiddlewareOp::UpdateSlot(.., addr, slot, val) => match host.data.get_mut(&addr) {
-                Some(data) => {
-                    if data.get(&slot).is_none() {
-                        data.insert(*slot, *val);
-                    }
-                }
-                None => {
-                    let mut data = std::collections::HashMap::new();
-                    data.insert(*slot, *val);
-                    host.data.insert(*addr, data);
-                }
-            },
-            MiddlewareOp::UpdateCode(.., addr, code) => {
-                host.set_code(*addr, code.clone());
+pub fn add_corpus<VS, I, S>(host: &FuzzHost<S>, address: H160, input: &String, state: &mut S) where
+    I: Input + VMInputT<VS, H160, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + Clone + Debug + 'static,
+    VS: VMStateT + Default {
+    state.add_address(&address);
+    ContractLoader::parse_abi_str(input)
+        .iter()
+        .filter(|v| !v.is_constructor)
+        .for_each(|abi| {
+            #[cfg(not(feature = "fuzz_static"))]
+            if abi.is_static {
+                return;
             }
-            MiddlewareOp::AddCorpus(middleware, ..)
-            | MiddlewareOp::Owed(middleware, ..)
-            | MiddlewareOp::Earned(middleware, ..) => {
-                host.middlewares_deferred_actions
-                    .get_mut(middleware)
-                    .expect("Middleware not found")
-                    .push(self.clone());
-            }
-            MiddlewareOp::MakeSubsequentCallSuccess(data) => {
-                host.middlewares_latent_call_actions
-                    .push(CallMiddlewareReturn::ReturnSuccess(data.clone()));
-            }
-            MiddlewareOp::AddCaller(middleware, addr) => {
-                // todo: find a better way to handle this
-                // this ensures that a newly inserted address by flashloan V2 is never fetched as contract again
-                host.middlewares_deferred_actions
-                    .get_mut(&MiddlewareType::OnChain)
-                    .expect("Middleware not found")
-                    .push(MiddlewareOp::AddBlacklist(
-                        MiddlewareType::OnChain,
-                        addr.clone(),
-                    ));
-                host.middlewares_deferred_actions
-                    .get_mut(middleware)
-                    .expect("Middleware not found")
-                    .push(self.clone());
-            }
-            MiddlewareOp::AddAddress(middleware, addr) => {
-                host.middlewares_deferred_actions
-                    .get_mut(&MiddlewareType::OnChain)
-                    .expect("Middleware not found")
-                    .push(MiddlewareOp::AddBlacklist(
-                        MiddlewareType::OnChain,
-                        addr.clone(),
-                    ));
-                host.middlewares_deferred_actions
-                    .get_mut(middleware)
-                    .expect("Middleware not found")
-                    .push(self.clone());
-            }
-            MiddlewareOp::AddBlacklist(middleware, ..) => {
-                host.middlewares_deferred_actions
-                    .get_mut(middleware)
-                    .expect("Middleware not found")
-                    .push(self.clone());
-            }
-        }
-    }
+
+            let mut abi_instance = get_abi_type_boxed(&abi.abi);
+            abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
+            let input = EVMInput {
+                caller: state.get_rand_caller(),
+                contract: address.clone(),
+                data: Some(abi_instance),
+                sstate: StagedVMState::new_uninitialized(),
+                sstate_idx: 0,
+                txn_value: if abi.is_payable { Some(0) } else { None },
+                step: false,
+
+                #[cfg(test)]
+                direct_data: Default::default(),
+            };
+            let mut tc = Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
+            tc.set_exec_time(Duration::from_secs(0));
+            let idx = state.corpus_mut().add(tc).expect("failed to add");
+            host.scheduler
+                .on_add(state, idx)
+                .expect("failed to call scheduler on_add");
+        });
 }
 
-pub trait CanHandleDeferredActions<VS, S> {
-    fn handle_deferred_actions(
-        &mut self,
-        op: &MiddlewareOp,
-        state: &mut S,
-        result: &mut IntermediateExecutionResult,
-    );
-}
 
-pub trait Middleware: Debug {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp>;
+pub trait Middleware<S>: Debug
+where S: State + HasCaller<H160> + Clone + Debug {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S);
     fn get_type(&self) -> MiddlewareType;
-    fn as_any(&mut self) -> &mut (dyn Any + 'static);
 }
