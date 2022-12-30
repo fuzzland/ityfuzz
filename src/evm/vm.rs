@@ -238,7 +238,7 @@ impl Clone for FuzzHost {
 // this return type is never used as we disabled gas
 const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = false;
-const CONTROL_LEAK_DETECTION: bool = false;
+const CONTROL_LEAK_DETECTION: bool = true;
 const UNBOUND_CALL_THRESHOLD: usize = 10;
 
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
@@ -691,6 +691,7 @@ impl Host for FuzzHost {
         }
 
         let mut input_seq = input.input.to_vec();
+
         // check whether the whole CALLDATAVALUE can be arbitrary
         if !self.pc_to_call_hash.contains_key(&self._pc) {
             self.pc_to_call_hash.insert(self._pc, HashSet::new());
@@ -711,34 +712,32 @@ impl Host for FuzzHost {
             }
         }
 
-        let input_bytes = Bytes::from(input_seq);
+        // control leak check
+        assert_ne!(self._pc, 0);
+        if !self.pc_to_addresses.contains_key(&self._pc) {
+            self.pc_to_addresses.insert(self._pc, HashSet::new());
+        }
+        let addresses_at_pc = self.pc_to_addresses
+            .get_mut(&self._pc)
+            .unwrap();
+        addresses_at_pc.insert(input.contract);
 
-        // find the contract wrt the hash
-        let contract_loc_option = self.hash_to_address.get(hash.as_slice());
-
-        // if the contract is not found or control leak is enabled, return controlleak if it is unbounded call
-        if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
-            assert_ne!(self._pc, 0);
-            if !self.pc_to_addresses.contains_key(&self._pc) {
-                self.pc_to_addresses.insert(self._pc, HashSet::new());
-            }
-
-            if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
-                // println!("control leak");
+        // if control leak is enabled, return controlleak if it is unbounded call
+        if CONTROL_LEAK_DETECTION {
+            if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
                 record_func_hash!();
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
-            self.pc_to_addresses
-                .get_mut(&self._pc)
-                .unwrap()
-                .insert(input.contract);
         }
 
         unsafe {
             global_call_context = Some(input.context.clone());
         }
 
+        let input_bytes = Bytes::from(input_seq);
+
         // find contracts that have this function hash
+        let contract_loc_option = self.hash_to_address.get(hash.as_slice());
         if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
             let loc = contract_loc_option.unwrap();
             // if there is such a location known, then we can use exact call
@@ -761,31 +760,26 @@ impl Host for FuzzHost {
             }
         }
 
-        // transfer txn
+        // if there is code, then call the code
+        if let Some(code) = self.code.get(&input.context.code_address) {
+            let mut interp = Interpreter::new::<LatestSpec>(
+                Contract::new_with_context::<LatestSpec>(
+                    input_bytes,
+                    code.clone(),
+                    &input.context,
+                ),
+                1e10 as u64,
+            );
+            let ret = interp.run::<FuzzHost, LatestSpec>(self);
+            return (ret, Gas::new(0), interp.return_value());
+        }
+
+        // transfer txn and fallback provided
         if hash == [0x00, 0x00, 0x00, 0x00] {
             return (Continue, Gas::new(0), Bytes::new());
         }
 
-        // default behavior
-        match self.code.get(&input.contract) {
-            Some(code) => {
-                let mut interp = Interpreter::new::<LatestSpec>(
-                    Contract::new_with_context::<LatestSpec>(
-                        input_bytes,
-                        code.clone(),
-                        &input.context,
-                    ),
-                    1e10 as u64,
-                );
-                let ret = interp.run::<FuzzHost, LatestSpec>(self);
-                return (ret, Gas::new(0), interp.return_value());
-            }
-            None => {
-                return (Revert, Gas::new(0), Bytes::new());
-            }
-        }
-
-        return (Continue, Gas::new(0), Bytes::new());
+        return (Revert, Gas::new(0), Bytes::new());
     }
 }
 
