@@ -17,6 +17,7 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::prelude::{HasCorpus, HasMetadata, Input, MutationResult};
 use libafl::schedulers::Scheduler;
 use libafl::state::State;
+use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize, Serializer};
@@ -25,7 +26,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
-use nix::libc::stat;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
@@ -68,10 +68,7 @@ where
     S: State,
     VS: VMStateT + Default,
 {
-    pub fn new(
-        endpoint: OnChainConfig,
-        storage_fetching: StorageFetchingMode,
-    ) -> Self {
+    pub fn new(endpoint: OnChainConfig, storage_fetching: StorageFetchingMode) -> Self {
         Self {
             loaded_data: Default::default(),
             loaded_code: Default::default(),
@@ -104,7 +101,14 @@ pub fn keccak_hex(data: U256) -> String {
 impl<VS, I, S> Middleware<S> for OnChain<VS, I, S>
 where
     I: Input + VMInputT<VS, H160, H160> + 'static,
-    S: State + Debug + HasCaller<H160> + HasCorpus<I> + HasItyState<H160, H160, VS>  + HasMetadata + Clone + 'static,
+    S: State
+        + Debug
+        + HasCaller<H160>
+        + HasCorpus<I>
+        + HasItyState<H160, H160, VS>
+        + HasMetadata
+        + Clone
+        + 'static,
     VS: VMStateT + Default + 'static,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
@@ -159,25 +163,23 @@ where
                     () => {};
                 }
                 macro_rules! slot_val {
-                    () => {
-                        {
-                            match self.storage_fetching {
-                                StorageFetchingMode::Dump => {
-                                    load_data!(fetch_storage_dump, storage_dump, slot_idx)
-                                }
-                                StorageFetchingMode::All => {
-                                    // the key is in keccak256 format
-                                    let key = keccak_hex(slot_idx);
-                                    load_data!(fetch_storage_all, storage_all, key)
-                                }
-                                StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
-                                    address,
-                                    slot_idx,
-                                    force_cache!(self.locs, slot_idx),
-                                ),
+                    () => {{
+                        match self.storage_fetching {
+                            StorageFetchingMode::Dump => {
+                                load_data!(fetch_storage_dump, storage_dump, slot_idx)
                             }
+                            StorageFetchingMode::All => {
+                                // the key is in keccak256 format
+                                let key = keccak_hex(slot_idx);
+                                load_data!(fetch_storage_all, storage_all, key)
+                            }
+                            StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
+                                address,
+                                slot_idx,
+                                force_cache!(self.locs, slot_idx),
+                            ),
                         }
-                    };
+                    }};
                 }
 
                 match host.data.get_mut(&address) {
@@ -206,7 +208,8 @@ where
 
                 if !self.loaded_code.contains(&address_h160)
                     && !force_cache
-                    && !contract_code.is_empty() {
+                    && !contract_code.is_empty()
+                {
                     let abi = self.endpoint.fetch_abi(address_h160);
                     self.loaded_code.insert(address_h160);
                     match abi {
@@ -226,5 +229,4 @@ where
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::OnChain
     }
-
 }

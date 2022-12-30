@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -10,6 +9,7 @@ use libafl::schedulers::Scheduler;
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::Add;
 

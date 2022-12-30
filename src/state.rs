@@ -160,12 +160,12 @@ where
 }
 
 impl<VI, VS, Loc, Addr, Out> Default for FuzzState<VI, VS, Loc, Addr, Out>
-    where
-        VS: Default + VMStateT + 'static,
-        VI: VMInputT<VS, Loc, Addr> + Input,
-        Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        Out: Default
+where
+    VS: Default + VMStateT + 'static,
+    VI: VMInputT<VS, Loc, Addr> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
 {
     fn default() -> Self {
         Self::new()

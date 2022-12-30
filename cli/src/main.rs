@@ -132,7 +132,6 @@ fn main() {
                     ))
                 } else {
                     Some(OnChainConfig::new(chain, block_number))
-
                 }
             }
             None => Some(OnChainConfig::new_raw(
@@ -215,8 +214,10 @@ fn main() {
         oracle: oracles,
         flashloan: args.flashloan,
         onchain_storage_fetching: if is_onchain {
-            Some(StorageFetchingMode::from_str(args.onchain_storage_fetching.as_str())
-                .expect("unknown storage fetching mode"))
+            Some(
+                StorageFetchingMode::from_str(args.onchain_storage_fetching.as_str())
+                    .expect("unknown storage fetching mode"),
+            )
         } else {
             None
         },

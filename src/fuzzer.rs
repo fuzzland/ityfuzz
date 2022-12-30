@@ -11,6 +11,7 @@ use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
+use crate::evm::oracle::FL_DATA;
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
@@ -32,7 +33,6 @@ use libafl::{
 use rand::random;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use crate::evm::oracle::FL_DATA;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
