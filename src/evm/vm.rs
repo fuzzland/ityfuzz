@@ -213,6 +213,9 @@ where
     pub origin: H160,
 
     pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
+
+    // controlled by onchain module, if sload cant find the slot, use this value
+    pub next_slot: U256
 }
 
 impl<S> Debug for FuzzHost<S>
@@ -267,6 +270,7 @@ where
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
             scheduler: self.scheduler.clone(),
+            next_slot: Default::default()
         }
     }
 }
@@ -323,8 +327,9 @@ where
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
             scheduler,
+            next_slot: Default::default()
         };
-        ret.env.block.timestamp = U256::max_value();
+        // ret.env.block.timestamp = U256::max_value();
         ret
     }
 
@@ -649,10 +654,16 @@ where
     }
 
     fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
-        match self.data.get(&address) {
-            Some(account) => Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
-            None => Some((U256::zero(), true)),
+        if let Some(account) = self.data.get(&address) {
+            if let Some(slot) = account.get(&index) {
+                return Some((slot.clone(), true))
+            }
         }
+        Some((self.next_slot, true))
+        // match self.data.get(&address) {
+        //     Some(account) => Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
+        //     None => Some((U256::zero(), true)),
+        // }
     }
 
     fn sstore(
@@ -661,16 +672,19 @@ where
         index: U256,
         value: U256,
     ) -> Option<(U256, U256, U256, bool)> {
-        match self.data.get_mut(&address) {
-            Some(account) => {
-                account.insert(index, value);
-            }
-            None => {
-                let mut account = HashMap::new();
-                account.insert(index, value);
-                self.data.insert(address, account);
-            }
-        };
+        if !value.is_zero() {
+            match self.data.get_mut(&address) {
+                Some(account) => {
+                    account.insert(index, value);
+                }
+                None => {
+                    let mut account = HashMap::new();
+                    account.insert(index, value);
+                    self.data.insert(address, account);
+                }
+            };
+        }
+
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
