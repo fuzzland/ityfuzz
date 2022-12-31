@@ -12,6 +12,7 @@ use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn<Addr> {
@@ -19,6 +20,8 @@ pub struct BasicTxn<Addr> {
     pub contract: Addr,
     pub data: Option<String>,
     pub txn_value: usize,
+    #[cfg(feature = "full_trace")]
+    pub flashloan: String,
 }
 
 impl<Addr> Debug for BasicTxn<Addr>
@@ -26,27 +29,38 @@ where
     Addr: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BasicTxn")
+        let mut binding = f.debug_struct("BasicTxn");
+        let ff = binding
             .field("caller", &self.caller)
             .field("contract", &self.contract)
             .field("data", &self.data)
-            .field("txn_value", &self.txn_value)
-            .finish()
+            .field("txn_value", &self.txn_value);
+        #[cfg(feature = "full_trace")]
+        {
+            ff.field("flashloan", &self.flashloan).finish()
+        }
+        #[cfg(not(feature = "full_trace"))]
+        {
+            ff.finish()
+        }
     }
 }
 
-pub fn build_basic_txn<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
+pub fn build_basic_txn<Loc, Addr, VS, I, Out>(v: &I, res: &ExecutionResult<Loc, Addr, VS, Out>) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: VMStateT,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Debug + Serialize + DeserializeOwned + Clone,
+    Out: Default,
 {
     BasicTxn {
         caller: v.get_caller(),
         contract: v.get_contract(),
         data: v.pretty_txn(),
         txn_value: v.get_txn_value().unwrap_or(0),
+        #[cfg(feature = "full_trace")]
+        flashloan: res.new_state.state.get_flashloan(),
     }
 }
 
