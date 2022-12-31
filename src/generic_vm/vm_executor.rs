@@ -45,7 +45,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         constructor_args: Option<By>,
         deployed_address: Addr,
     ) -> Option<Addr>;
-    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<Loc, Addr, VS, Out>
+    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<Loc, Addr, VS, Out>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,

@@ -87,7 +87,7 @@ where
         _mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
-        let mut res = self.vm.execute(input, Some(state));
+        let mut res = self.vm.execute(input, state);
 
         // add the trace of the new state
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]

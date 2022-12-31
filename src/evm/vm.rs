@@ -906,7 +906,7 @@ where
         data: Bytes,
         input: &I,
         post_exec: Option<PostExecutionCtx>,
-        mut state: Option<&mut S>,
+        mut state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
         // although some of the concolic inputs are concrete
@@ -971,7 +971,7 @@ where
             }
         }
 
-        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, state.as_mut().unwrap());
+        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, state);
 
         // For each middleware, execute the deferred actions
         let mut result = IntermediateExecutionResult {
@@ -1059,7 +1059,7 @@ where
     fn execute(
         &mut self,
         input: &I,
-        state: Option<&mut S>,
+        state: &mut S,
     ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         let mut _vm_state = unsafe {
             input
@@ -1241,8 +1241,10 @@ mod tests {
             ),
         };
 
+        let mut state = FuzzState::new();
+
         // process(0)
-        let execution_result_0 = evm_executor.execute(&input_0, None);
+        let execution_result_0 = evm_executor.execute(&input_0, &mut state);
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
         for i in 0..MAP_SIZE {
@@ -1271,7 +1273,7 @@ mod tests {
             ),
         };
 
-        let execution_result_5 = evm_executor.execute(&input_5, None);
+        let execution_result_5 = evm_executor.execute(&input_5, &mut state);
 
         // checking cmp map about coverage
         let mut cov_changed = false;
