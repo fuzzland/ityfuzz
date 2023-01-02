@@ -11,7 +11,7 @@ BIN = "../cli/target/release/cli"
 
 
 def run(target):
-    cmd = f'timeout 10s {BIN} -f -o -c ETH -i -t {target} --onchain-block-number 0 --onchain-etherscan-api-key 59XNVB5SNJ324D9IMITPK7JWEP3PHT6VJ5 --onchain-local-proxy-addr http://localhost:5003 --onchain-storage-fetching dump'
+    cmd = f'timeout 10s {BIN} -f -o -c ETH -i -t {target} --onchain-block-number 0 --onchain-etherscan-api-key 59XNVB5SNJ324D9IMITPK7JWEP3PHT6VJ5 --onchain-local-proxy-addr http://localhost:5003 --onchain-storage-fetching dump --flashloan-price-oracle onchain'
     print(cmd)
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
