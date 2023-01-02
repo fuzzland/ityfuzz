@@ -1,5 +1,5 @@
 use crate::evm::contract_utils::ContractInfo;
-use crate::evm::onchain::endpoints::OnChainConfig;
+use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::oracle::Oracle;
 
@@ -45,4 +45,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+    pub price_oracle: Box<dyn PriceOracle>
 }

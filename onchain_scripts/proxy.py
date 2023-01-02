@@ -92,6 +92,23 @@ def fetch_etherscan_contract_abi(network, token_address):
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
+def fetch_token_price(network, token_address):
+    url = f"{get_endpoint(network)}/token/{token_address}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    resp = response.text.replace("\r", "").replace("\t", "").replace("\n", "")
+    price_finder = re.compile("text-nowrap\'> @ (.+?) Eth</span>")
+    price = price_finder.findall(resp)
+
+    decimals_finder = re.compile("Decimals:</div><div class=\"col-md-8\">(.+?)</div>")
+    decimals = decimals_finder.findall(resp)
+
+    if len(price) == 0 or len(decimals) == 0:
+        return 0, 0
+    return int(float(price[0]) * 10e5), int(decimals[0])
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=3, delay=0.5, backoff=2)
 def fetch_rpc_slot(network, token_address, slot, block):
     url = f"{get_rpc(network)}"
     payload = {
@@ -216,5 +233,10 @@ def storage_all(network, address, block):
     return fetch_rpc_storage_all(network, address, block)
 
 
+@app.route("/price/<network>/<token_address>", methods=["GET"])
+def price(network, token_address):
+    return ",".join(map(str, fetch_token_price(network, token_address)))
+
 app.run(port=5003)
+
 

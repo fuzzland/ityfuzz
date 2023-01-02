@@ -94,6 +94,7 @@ pub fn cmp_fuzzer(
             fuzz_host.add_flashloan_middleware(Flashloan::<EVMFuzzState>::new(
                 true,
                 config.onchain.clone().unwrap(),
+                config.price_oracle
             ));
         }
     }

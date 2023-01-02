@@ -5,7 +5,7 @@ use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
-use ityfuzz::evm::onchain::flashloan::Flashloan;
+use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
@@ -88,6 +88,10 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
 
+    /// Flashloan price oracle (onchain/dummy) (Default: DummyPriceOracle)
+    #[arg(long, default_value = "dummy")]
+    flashloan_price_oracle: String,
+
     /// Enable ierc20 oracle
     #[arg(short, long, default_value = "false")]
     ierc20_oracle: bool,
@@ -156,6 +160,8 @@ fn main() {
         None
     };
 
+    let onchain_clone = onchain.clone();
+
     if onchain.is_some() && args.onchain_etherscan_api_key.is_some() {
         onchain
             .as_mut()
@@ -213,6 +219,10 @@ fn main() {
         },
         oracle: oracles,
         flashloan: args.flashloan,
+        price_oracle: match args.flashloan_price_oracle.as_str() {
+            "onchain" => Box::new(onchain_clone.expect("onchain unavailable but used for flashloan")),
+            _ => Box::new(DummyPriceOracle {}),
+        },
         onchain_storage_fetching: if is_onchain {
             Some(
                 StorageFetchingMode::from_str(args.onchain_storage_fetching.as_str())
