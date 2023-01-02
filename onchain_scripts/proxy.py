@@ -80,13 +80,14 @@ def fetch_etherscan_contract_abi(network, token_address):
 
     if "loadIframeSourceProxyRead" in response.text:
         # this is a proxy contract, we need to merge with the implementation contract abi
-        base_address_finder = re.compile("ABI for the implementation contract at <a href=\'(.+?)\'>")
+        base_address_finder = re.compile(" at <a href=\'(.+?)\'>")
         base_address = base_address_finder.findall(response.text)
         if len(base_address) == 0:
             print("Failed to find base address for proxy contract")
-        base_address = base_address[0].split("/")[-1].split("?")[0].split("#")[0]
-        res = fetch_etherscan_contract_abi(network, base_address)
-        contract_abi += res
+        else:
+            base_address = base_address[0].split("/")[-1].split("?")[0].split("#")[0]
+            res = fetch_etherscan_contract_abi(network, base_address)
+            contract_abi += res
     return contract_abi
 
 
