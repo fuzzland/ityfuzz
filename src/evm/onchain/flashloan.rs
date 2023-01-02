@@ -23,11 +23,12 @@ use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::cmp::min;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
+use crate::evm::contract_utils::ABIConfig;
 
 #[derive(Debug)]
 pub struct Flashloan<S>
@@ -38,9 +39,10 @@ where
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
     #[cfg(feature = "flashloan_v2")]
-    known_tokens: HashSet<H160>,
+    known_addresses: HashSet<H160>,
     #[cfg(feature = "flashloan_v2")]
     endpoint: OnChainConfig,
+    erc20_address: HashSet<H160>
 }
 
 #[derive(Clone, Debug)]
@@ -71,8 +73,9 @@ where
             phantom: PhantomData,
             oracle: Box::new(DummyPriceOracle {}),
             use_contract_value,
-            known_tokens: Default::default(),
+            known_addresses: Default::default(),
             endpoint,
+            erc20_address: Default::default()
         }
     }
 
@@ -92,6 +95,44 @@ where
             _ => None,
         }
     }
+
+    #[cfg(feature = "flashloan_v2")]
+    pub fn on_contract_insertion(&mut self, addr: &H160, abi: &Vec<ABIConfig>, state: &mut S) {
+        // should not happen, just sanity check
+        if self.known_addresses.contains(addr) {
+            return;
+        }
+        self.known_addresses.insert(addr.clone());
+
+        // if the contract is erc20, query its holders
+        let abi_signatures = vec![
+            "balanceOf".to_string(),
+            "transfer".to_string(),
+            "transferFrom".to_string(),
+            "approve".to_string(),
+        ];
+        let abi_names = abi.iter().map(|x| x.function_name.clone()).collect::<HashSet<String>>();
+        println!("abi_names: {:?}", abi_names);
+        // check abi_signatures is subset of abi.name
+        if !abi_signatures.iter().all(|x| abi_names.contains(x)) {
+            return;
+        }
+        // if the #holder > 10, then add it to the erc20_address
+        match self.endpoint.fetch_holders(*addr) {
+            None => {
+                println!("failed to fetch token holders for token {:?}", addr);
+            }
+            Some(v) => {
+                self.erc20_address.insert(addr.clone());
+                // add some user funds address
+                v[0..2].into_iter().for_each(|holder| {
+                    state.add_address(&holder);
+                });
+                // add rich caller
+                state.add_caller(&v.clone().get(5).unwrap().clone());
+            }
+        }
+    }
 }
 
 #[cfg(feature = "flashloan_v2")]
@@ -104,56 +145,17 @@ where
         I: VMInputT<VS, H160, H160> + EVMInputT,
         VS: VMStateT,
     {
-        macro_rules! scale {
-            ($data: expr) => {$data * float_scale_to_u512(1.0, 23)};
-        }
+        // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
-            result.new_state.flashloan_data.owed += scale!(U512::from(input.get_txn_value().unwrap()));
+            result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
         }
-        let call_target = input.get_contract();
-        match input.get_data_abi() {
-            Some(ref data) => {
-                let serialized_data = input.to_bytes();
-                if serialized_data.len() < 4 {
-                    return;
-                }
-                match data.function {
-                    [0xa9, 0x05, 0x9c, 0xbb] => {
-                        let dst = H160::from_slice(&serialized_data[16..36]);
-                        let amount = U256::from_big_endian(&serialized_data[36..68]);
-                        match self.calculate_usd_value_from_addr(call_target, amount) {
-                            Some(value) => {
-                                if dst != input.get_caller() {
-                                    result.new_state.flashloan_data.owed += value;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    // transferFrom
-                    [0x23, 0xb8, 0x72, 0xdd] => {
-                        let src = H160::from_slice(&serialized_data[16..36]);
-                        let dst = H160::from_slice(&serialized_data[48..68]);
-                        let amount = U256::from_big_endian(&serialized_data[68..100]);
-                        match self.calculate_usd_value_from_addr(call_target, amount) {
-                            Some(value) => {
-                                // todo: replace caller with all trusted addresses
-                                if src == input.get_caller() {
-                                    result.new_state.flashloan_data.owed += value;
-                                } else if dst == input.get_caller() {
-                                    result.new_state.flashloan_data.earned += value;
-                                }
-                            }
-                            // if no value, we can't borrow it!
-                            // bypass by explicitly returning value for every token
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
+        let addr = input.get_contract();
+        // dont care if the call target is not erc20
+        if !self.erc20_address.contains(&addr) {
+            return;
         }
+        // if the target is erc20 contract, then check the balance of the caller in the oracle
+        result.new_state.flashloan_data.oracle_recheck_balance.insert(addr);
     }
 }
 
@@ -302,110 +304,17 @@ where
     where
         S: HasCaller<H160>,
     {
-        macro_rules! earned {
-            ($amount:expr) => {
-                host.data.flashloan_data.earned += $amount;
-            };
-            () => {};
-        }
-
-        macro_rules! owed {
-            ($amount:expr) => {
-                host.data.flashloan_data.owed += $amount;
-            };
-            () => {};
-        }
-
-        let offset_of_arg_offset: usize = match *interp.instruction_pointer {
+        match *interp.instruction_pointer {
             0xf1 | 0xf2 => 3,
             0xf4 | 0xfa => 2,
             _ => {
                 return;
             }
         };
-
-        let value_transfer = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
-            _ => U256::zero(),
-        };
-
-        // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
-
-        if value_transfer > U256::zero() {
-            if call_target == interp.contract.caller {
-                earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
-            }
+        if self.erc20_address.contains(&call_target) {
+            host.data.flashloan_data.oracle_recheck_balance.insert(call_target);
         }
-
-        let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
-        let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-        if size < U256::from(4) {
-            return;
-        }
-        let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
-
-        macro_rules! add_rich_when_ret {
-            () => {
-                if !self.known_tokens.contains(&call_target) {
-                    self.known_tokens.insert(call_target);
-                    match self.endpoint.fetch_holders(call_target) {
-                        None => {
-                            println!("failed to fetch token holders for token {:?}", call_target);
-                        }
-                        Some(v) => {
-                            // add some user funds address
-                            v[0..2].into_iter().for_each(|holder| {
-                                s.add_address(&holder);
-                            });
-                            // add rich caller
-                            s.add_caller(&v.clone().get(5).unwrap().clone());
-                        }
-                    }
-                }
-            };
-        }
-
-        let erc20_ops = match data[0..4] {
-            // transfer
-            [0xa9, 0x05, 0x9c, 0xbb] => {
-                let dst = H160::from_slice(&data[16..36]);
-                let amount = U256::from_big_endian(&data[36..68]);
-                match self.calculate_usd_value_from_addr(call_target, amount) {
-                    Some(value) => {
-                        if dst == interp.contract.caller {
-                            earned!(value);
-                            return add_rich_when_ret!();
-                        }
-                    }
-                    // if no value, we can't borrow it!
-                    // bypass by explicitly returning value for every token
-                    _ => {}
-                }
-            }
-            // transferFrom
-            [0x23, 0xb8, 0x72, 0xdd] => {
-                let src = H160::from_slice(&data[16..36]);
-                let dst = H160::from_slice(&data[48..68]);
-                let amount = U256::from_big_endian(&data[68..100]);
-                match self.calculate_usd_value_from_addr(call_target, amount) {
-                    Some(value) => {
-                        // todo: replace caller with all trusted addresses
-                        if src == interp.contract.caller {
-                            owed!(value);
-                            return add_rich_when_ret!();
-                        } else if dst == interp.contract.caller {
-                            earned!(value);
-                            return add_rich_when_ret!();
-                        }
-                    }
-                    // if no value, we can't borrow it!
-                    // bypass by explicitly returning value for every token
-                    _ => {}
-                }
-            }
-            _ => {}
-        };
     }
 
     fn get_type(&self) -> MiddlewareType {
@@ -413,12 +322,13 @@ where
     }
 }
 
+#[cfg(not(feature = "flashloan_v2"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
     pub owed: U512,
     pub earned: U512,
 }
-
+#[cfg(not(feature = "flashloan_v2"))]
 impl FlashloanData {
     pub fn new() -> Self {
         Self {
@@ -428,4 +338,27 @@ impl FlashloanData {
     }
 }
 
+#[cfg(not(feature = "flashloan_v2"))]
 impl_serdeany!(FlashloanData);
+
+
+
+#[cfg(feature = "flashloan_v2")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FlashloanData {
+    pub account_balances: HashMap<H160, U256>,
+    pub oracle_recheck_balance: HashSet<H160>,
+    pub owed: U512,
+    pub earned: U512,
+}
+
+impl FlashloanData {
+    pub fn new() -> Self {
+        Self {
+            account_balances: HashMap::new(),
+            oracle_recheck_balance: HashSet::new(),
+            owed: Default::default(),
+            earned: Default::default()
+        }
+    }
+}

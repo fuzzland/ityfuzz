@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use bytes::Bytes;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -124,21 +126,23 @@ pub fn cmp_fuzzer(
     evm_executor.host.initialize(&mut state);
 
     // now evm executor is ready, we can clone it
-    let cloned_evm = evm_executor.clone();
-    let cloned_evm2 = evm_executor.clone();
+    // let cloned_evm = evm_executor.clone();
+    // let cloned_evm2 = evm_executor.clone();
 
-    let mut executor = FuzzExecutor::new(Box::new(evm_executor), tuple_list!(jmp_observer));
+    let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
+
+    let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_deployer_to_callers(deployer);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
-    let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, Box::new(cloned_evm2));
+    let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
-    let oracles = config.oracle;
+    let mut oracles = config.oracle;
 
-    let objective = OracleFeedback::new(&oracles, Box::new(cloned_evm));
+    let objective = OracleFeedback::new(&mut oracles, evm_executor_ref.clone());
 
     ItyFuzzer::new(
         scheduler,

@@ -126,6 +126,11 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     fn get_state(&self) -> &MoveVMState {
         &self.vm_state.state
     }
+
+    fn get_state_mut(&mut self) -> &mut MoveVMState {
+        &mut self.vm_state.state
+    }
+
     fn set_staged_state(&mut self, state: MoveStagedVMState, idx: usize) {
         self.vm_state = state;
         self.vm_state_idx = idx;

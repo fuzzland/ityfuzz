@@ -1,7 +1,8 @@
-use crate::generic_vm::vm_executor::GenericVM;
+use std::cell::RefCell;
+use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{FuzzState, HasItyState};
+use crate::state::{FuzzState, HasExecutionResult, HasItyState};
 use crate::state_input::StagedVMState;
 use hex;
 use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};
@@ -10,6 +11,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
 where
@@ -17,12 +20,12 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
 {
-    pub fuzz_state: &'a S,
+    pub fuzz_state: &'a mut S,
     pub pre_state: &'a VS,
-    pub post_state: &'a VS,
     pub metadata: SerdeAnyMap,
-    pub executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+    pub executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     pub input: &'a I,
     pub phantom: PhantomData<(Addr)>,
 }
@@ -31,68 +34,43 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
     OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
 where
     I: VMInputT<VS, Loc, Addr> + 'static,
-    S: State + HasCorpus<I> + HasMetadata,
+    S: State + HasCorpus<I> + HasMetadata + HasExecutionResult<Loc, Addr, VS, Out>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
 {
     pub fn new(
-        fuzz_state: &'a S,
+        fuzz_state: &'a mut S,
         pre_state: &'a VS,
-        post_state: &'a VS,
-        executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+        executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
         input: &'a I,
     ) -> Self {
         Self {
             fuzz_state,
             pre_state,
-            post_state,
             metadata: SerdeAnyMap::new(),
             executor,
             input,
             phantom: Default::default(),
         }
     }
-    //
-    // fn call_pre(&mut self, contract_address: H160, address: H160, data: Option<BoxedABI>) -> ExecutionResult {
-    //     self.executor.execute(
-    //         &VMInput {
-    //             caller: address,
-    //             contract: contract_address,
-    //             data,
-    //             sstate: StagedVMState {
-    //                 state: self.pre_state.clone(),
-    //                 stage: vec![],
-    //                 initialized: false,
-    //                 trace: Default::default()
-    //             },
-    //             sstate_idx: 0,
-    //             txn_value: Some(0),
-    //             step: false
-    //         },
-    //         None
-    //     )
-    // }
-    //
-    // fn call_post(&mut self, contract_address: H160, address: H160, data: Option<BoxedABI>) -> ExecutionResult {
-    //     self.executor.execute(
-    //         &VMInput {
-    //             caller: address,
-    //             contract: contract_address,
-    //             data,
-    //             sstate: StagedVMState {
-    //                 state: self.post_state.clone(),
-    //                 stage: vec![],
-    //                 initialized: false,
-    //                 trace: Default::default()
-    //             },
-    //             sstate_idx: 0,
-    //             txn_value: Some(0),
-    //             step: false
-    //         },
-    //         None
-    //     )
-    // }
+
+    pub(crate) fn call_pre(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
+        input.set_staged_state(StagedVMState::new_with_state(self.pre_state.clone()), 0);
+        self.executor.deref().borrow_mut().execute(
+            input,
+            &mut self.fuzz_state
+        )
+    }
+
+    pub(crate) fn call_post(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
+        input.set_staged_state(StagedVMState::new_with_state(self.fuzz_state.get_execution_result().new_state.state.clone()), 0);
+        self.executor.deref().borrow_mut().execute(
+            input,
+            &mut self.fuzz_state
+        )
+    }
 }
 
 pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
@@ -101,6 +79,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
 {
     fn transition(
         &self,

@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -222,6 +223,7 @@ where
                     }
                 }
 
+                println!("set next code {:?}", address_h160);
                 host.set_code(address_h160, contract_code);
             }
             _ => {}
