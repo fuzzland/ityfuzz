@@ -738,6 +738,7 @@ where
 
         self.data.leaked_func_hash = None;
 
+        // middlewares
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
             match action {
@@ -759,6 +760,7 @@ where
             return middleware_result.unwrap();
         }
 
+        // if calling sender, then definitely control leak
         if self.origin == input.contract {
             record_func_hash!();
             // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
@@ -796,7 +798,7 @@ where
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call
-        if CONTROL_LEAK_DETECTION {
+        if CONTROL_LEAK_DETECTION == true {
             if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
                 record_func_hash!();
                 return (ControlLeak, Gas::new(0), Bytes::new());
