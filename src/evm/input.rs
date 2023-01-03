@@ -99,6 +99,10 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         &self.sstate.state
     }
 
+    fn get_state_mut(&mut self) -> &mut EVMState {
+        &mut self.sstate.state
+    }
+
     fn set_staged_state(&mut self, state: EVMStagedVMState, idx: usize) {
         self.sstate = state;
         self.sstate_idx = idx;

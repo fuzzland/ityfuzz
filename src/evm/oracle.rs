@@ -4,11 +4,14 @@ use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::oracle::{Oracle, OracleCtx};
-use crate::state::FuzzState;
+use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
 use bytes::Bytes;
 use libafl::state::HasMetadata;
-use primitive_types::{H160, U256};
+use primitive_types::{H160, U256, U512};
 use revm::Bytecode;
+use crate::evm::abi::{A256, BoxedABI};
+use crate::input::VMInputT;
+use crate::state_input::StagedVMState;
 
 pub struct NoOracle {}
 
@@ -85,11 +88,16 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
     }
 }
 
-pub struct IERC20OracleFlashloan {}
+pub struct IERC20OracleFlashloan {
+    pub balance_of: Vec<u8>,
+}
 
 impl IERC20OracleFlashloan {
+
     pub fn new() -> Self {
-        Self {}
+        Self {
+            balance_of: hex::decode("70a08231").unwrap(),
+        }
     }
 }
 
@@ -102,13 +110,90 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         0
     }
 
+    #[cfg(not(feature = "flashloan_v2"))]
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         // has balance increased?
-        if ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed {
+        let exec_res = &ctx.fuzz_state.get_execution_result().new_state.state;
+        if exec_res.flashloan_data.earned > exec_res.flashloan_data.owed {
             unsafe {
                 FL_DATA = format!(
                     "[Flashloan] Earned {} more than owed {}",
-                    ctx.post_state.flashloan_data.earned, ctx.post_state.flashloan_data.owed
+                    exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
+                );
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
+        let need_recheck = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.oracle_recheck_balance.clone();
+        let zero = U256::zero();
+        let caller = ctx.input.get_caller();
+        for token in need_recheck {
+            let mut extended_address = vec![0; 12];
+            extended_address.extend_from_slice(caller.0.as_slice());
+            let mut abi = BoxedABI::new(Box::new(
+                A256 {
+                    data: extended_address,
+                    is_address: false
+                }
+            ));
+            abi.function.copy_from_slice(self.balance_of.as_slice());
+
+            let res_pre = ctx.call_pre(&mut EVMInput {
+                caller: Default::default(),
+                contract: token,
+                data: Some(abi.clone()),
+                sstate: StagedVMState::new_uninitialized(),
+                sstate_idx: 0,
+                txn_value: None,
+                step: false,
+                #[cfg(test)]
+                direct_data: Default::default()
+            });
+
+
+            let res_post = ctx.call_post(&mut EVMInput {
+                caller: Default::default(),
+                contract: token,
+                data: Some(abi),
+                sstate: StagedVMState::new_uninitialized(),
+                sstate_idx: 0,
+                txn_value: None,
+                step: false,
+                #[cfg(test)]
+                direct_data: Default::default()
+            });
+
+
+
+
+            let exec_res = ctx.fuzz_state.get_execution_result_mut();
+            let new_balance = U256::from(res_post.output.as_slice());
+            let prev_balance = U256::from(res_pre.output.as_slice());
+
+
+            if new_balance > prev_balance {
+                exec_res.new_state.state.flashloan_data.earned += U512::from(new_balance - prev_balance);
+            } else {
+                exec_res.new_state.state.flashloan_data.owed += U512::from(prev_balance - new_balance);
+                // println!("{} owed {} more", token, *prev_balance - new_balance);
+            }
+
+            // exec_res.new_state.state.flashloan_data.account_balances.insert(token, new_balance);
+        };
+
+        let exec_res = ctx.fuzz_state.get_execution_result_mut();
+        exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();
+
+        if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed {
+            unsafe {
+                FL_DATA = format!(
+                    "[Flashloan] Earned {} more than owed {}",
+                    exec_res.new_state.state.flashloan_data.earned, exec_res.new_state.state.flashloan_data.owed
                 );
             }
             true

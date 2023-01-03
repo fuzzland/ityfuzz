@@ -24,9 +24,10 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
-
+use std::str::FromStr;
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
@@ -75,7 +76,12 @@ where
             calls: Default::default(),
             locs: Default::default(),
             endpoint,
-            blacklist: Default::default(),
+            blacklist: HashSet::from([
+                H160::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(), H160::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
+                H160::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
+                H160::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap()
+
+            ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),
             phantom: Default::default(),

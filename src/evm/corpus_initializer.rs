@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::EVMInput;
@@ -17,6 +18,7 @@ use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::H160;
 use revm::Bytecode;
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
@@ -69,6 +71,18 @@ impl<'a> EVMCorpusInitializer<'a> {
                     .set_code(contract.deployed_address, contract.code);
                 contract.deployed_address
             };
+
+            #[cfg(feature = "flashloan_v2")]
+            match self.executor.host.flashloan_middleware {
+                Some(ref middleware) => {
+                    middleware.deref().borrow_mut().on_contract_insertion(
+                        &deployed_address,
+                        &contract.abi,
+                        &mut self.state
+                    );
+                }
+                None => {}
+            }
 
             self.state.add_address(&deployed_address);
 

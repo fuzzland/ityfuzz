@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -19,6 +20,8 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
 where
@@ -28,7 +31,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-    executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+    executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S, Out)>,
 }
@@ -71,7 +74,7 @@ where
 {
     pub fn new(
         oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-        executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+        executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
             oracle,
@@ -116,8 +119,7 @@ where
             // todo(@shou): we should get a previous state, not incomplete state!
             state,
             input.get_state(),
-            &state.get_execution_result().new_state.state,
-            &self.executor,
+            self.executor,
             input,
         );
 
@@ -168,7 +170,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-    executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<(Out)>,
 }
 
@@ -209,8 +211,8 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
-        oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-        executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+        oracle: &'a mut Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+        executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
             oracle,
@@ -265,8 +267,7 @@ where
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> = OracleCtx::new(
             state,
             input.get_state(),
-            &state.get_execution_result().new_state.state,
-            &self.executor,
+            &mut self.executor,
             input,
         );
         // todo(@shou): should it be new stage?
@@ -410,7 +411,7 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> {
     known_states: HashSet<u64>,
     known_pcs: HashSet<usize>,
     scheduler: &'a SC,
-    vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+    vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<(Addr, Out)>,
 }
 
@@ -428,7 +429,7 @@ where
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
         scheduler: &'a SC,
-        vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+        vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
             min_map: [SlotTy::from(u128::MAX); MAP_SIZE],
@@ -520,8 +521,8 @@ where
         }
 
         unsafe {
-            let cur_read_map = self.vm.get_read();
-            let cur_write_map = self.vm.get_write();
+            let cur_read_map = self.vm.deref().borrow_mut().get_read();
+            let cur_write_map = self.vm.deref().borrow_mut().get_write();
             // hack to account for saving reentrancy without dataflow
             let pc_interesting = state
                 .get_execution_result()
@@ -530,7 +531,7 @@ where
                 .get_post_execution_pc()
                 != 0;
 
-            if self.vm.state_changed() || pc_interesting {
+            if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
