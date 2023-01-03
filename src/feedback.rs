@@ -255,15 +255,6 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        // ensure the execution is finished
-        if state
-            .get_execution_result()
-            .new_state
-            .state
-            .has_post_execution()
-        {
-            return Ok(false);
-        }
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> = OracleCtx::new(
             state,
             input.get_state(),
@@ -278,6 +269,15 @@ where
                 input.get_staged_state().stage[idx]
             };
             if self.oracle[idx].oracle(&mut oracle_ctx, original_stage) {
+                // ensure the execution is finished
+                if state
+                    .get_execution_result()
+                    .new_state
+                    .state
+                    .has_post_execution()
+                {
+                    return Ok(false);
+                }
                 return Ok(true);
             }
         }

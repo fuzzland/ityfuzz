@@ -75,11 +75,17 @@ impl<'a> EVMCorpusInitializer<'a> {
             #[cfg(feature = "flashloan_v2")]
             match self.executor.host.flashloan_middleware {
                 Some(ref middleware) => {
-                    middleware.deref().borrow_mut().on_contract_insertion(
+                    let mut mid = middleware.deref().borrow_mut();
+
+                    let blacklists = mid.on_contract_insertion(
                         &deployed_address,
                         &contract.abi,
-                        &mut self.state
+                        &mut self.state,
                     );
+
+                    for addr in blacklists {
+                        mid.onchain_middlware.deref().borrow_mut().blacklist.insert(addr);
+                    }
                 }
                 None => {}
             }

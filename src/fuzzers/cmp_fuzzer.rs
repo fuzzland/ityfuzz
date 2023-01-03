@@ -79,39 +79,44 @@ pub fn cmp_fuzzer(
         None => {}
     }
 
+    let onchain_middleware = match config.onchain.clone() {
+        Some(onchain) => {
+            Some({
+                let mut mid = Rc::new(RefCell::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                    // scheduler can be cloned because it never uses &mut self
+                    onchain,
+                    config.onchain_storage_fetching.unwrap(),
+                )));
+                fuzz_host.add_middlewares(mid.clone());
+                mid
+            })
+        }
+        None => { None }
+    };
+
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan
         // to contract as well for on chain env
         #[cfg(not(feature = "flashloan_v2"))]
-        fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
             config.onchain.is_some(),
-        )));
+        ))));
 
         #[cfg(feature = "flashloan_v2")]
         {
             assert!(
-                config.onchain.is_some(),
+                onchain_middleware.is_some(),
                 "Flashloan v2 requires onchain env"
             );
-            fuzz_host.add_flashloan_middleware(Flashloan::<EVMFuzzState>::new(
+            fuzz_host.add_flashloan_middleware(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
                 true,
                 config.onchain.clone().unwrap(),
-                config.price_oracle
+                config.price_oracle,
+                onchain_middleware.unwrap()
             ));
         }
     }
 
-    match config.onchain {
-        Some(onchain) => {
-            let mut mid = Box::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
-                // scheduler can be cloned because it never uses &mut self
-                onchain,
-                config.onchain_storage_fetching.unwrap(),
-            ));
-            fuzz_host.add_middlewares(mid);
-        }
-        None => {}
-    };
 
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);

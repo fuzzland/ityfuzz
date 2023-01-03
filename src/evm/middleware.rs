@@ -1,6 +1,6 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::ContractLoader;
-use crate::evm::input::EVMInput;
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -54,9 +54,9 @@ pub enum MiddlewareOp {
     MakeSubsequentCallSuccess(Bytes),
 }
 
-pub fn add_corpus<VS, I, S>(host: &FuzzHost<S>, address: H160, input: &String, state: &mut S)
+pub fn add_corpus<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, input: &EVMInput)
 where
-    I: Input + VMInputT<VS, H160, H160> + 'static,
+    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
@@ -67,56 +67,21 @@ where
         + 'static,
     VS: VMStateT + Default,
 {
-    state.add_address(&address);
-    let abis = ContractLoader::parse_abi_str(input);
-    #[cfg(feature = "flashloan_v2")]
-    match host.flashloan_middleware {
-        Some(ref middleware) => {
-            middleware.deref().borrow_mut().on_contract_insertion(
-                &address,
-                &abis,
-                state,
-            );
-        }
-        None => {}
-    }
-    abis
-        .iter()
-        .filter(|v| !v.is_constructor)
-        .for_each(|abi| {
-            #[cfg(not(feature = "fuzz_static"))]
-            if abi.is_static {
-                return;
-            }
-
-            let mut abi_instance = get_abi_type_boxed(&abi.abi);
-            abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
-            let input = EVMInput {
-                caller: state.get_rand_caller(),
-                contract: address.clone(),
-                data: Some(abi_instance),
-                sstate: StagedVMState::new_uninitialized(),
-                sstate_idx: 0,
-                txn_value: if abi.is_payable { Some(0) } else { None },
-                step: false,
-
-                #[cfg(test)]
-                direct_data: Default::default(),
-            };
-            let mut tc =
-                Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
-            tc.set_exec_time(Duration::from_secs(0));
-            let idx = state.corpus_mut().add(tc).expect("failed to add");
-            host.scheduler
-                .on_add(state, idx)
-                .expect("failed to call scheduler on_add");
-        });
+    let mut tc =
+        Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
+    tc.set_exec_time(Duration::from_secs(0));
+    let idx = state.corpus_mut().add(tc).expect("failed to add");
+    host.scheduler
+        .on_add(state, idx)
+        .expect("failed to call scheduler on_add");
 }
 
-pub trait Middleware<S>: Debug
+pub trait Middleware<VS, I, S>: Debug
 where
     S: State + HasCaller<H160> + Clone + Debug,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S);
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S);
     fn get_type(&self) -> MiddlewareType;
 }
