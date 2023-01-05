@@ -135,6 +135,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut default_callers = HashSet::from([
             fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
             fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
+            fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb")
         ]);
 
         for caller in default_callers {
@@ -146,6 +147,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut contract_callers = HashSet::from([
             fixed_address("e1A425f1AC34A8a441566f93c82dD730639c8510"),
             fixed_address("68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024"),
+            fixed_address("aF97EE5eef1B02E12B650B8127D8E8a6cD722bD2"),
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
