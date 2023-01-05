@@ -211,7 +211,7 @@ where
                     _ => { unreachable!() }
                 };
                 let address_h160 = convert_u256_to_h160(address);
-                if self.blacklist.contains(&address_h160) {
+                if self.blacklist.contains(&address_h160) || host.code.contains_key(&address_h160) {
                     return;
                 }
                 let force_cache = force_cache!(self.calls, address_h160);
