@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::ContractLoader;
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{AccessPattern, EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::OnChainConfig;
@@ -262,6 +262,8 @@ where
                                         txn_value: if abi.is_payable { Some(0) } else { None },
                                         step: false,
 
+                                        env: Default::default(),
+                                        access_pattern: AccessPattern::new(),
                                         #[cfg(any(test, feature = "debug"))]
                                         direct_data: Default::default(),
                                     };

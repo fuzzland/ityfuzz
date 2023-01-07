@@ -30,7 +30,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::EVMInput;
+use crate::evm::input::{AccessPattern, EVMInput};
 use crate::evm::middleware::Middleware;
 use crate::evm::mutator::FuzzMutator;
 use crate::evm::onchain::flashloan::Flashloan;
@@ -186,8 +186,12 @@ pub fn cmp_fuzzer(
                         sstate_idx: 0,
                         txn_value: if value == 0 { None } else { Some(value) },
                         step: is_step,
+                        env: Default::default(),
+                        access_pattern: AccessPattern::new(),
+
                         #[cfg(any(test, feature = "debug"))]
                         direct_data: Bytes::from(input.clone()),
+
                     },
                     false
                 ).unwrap();

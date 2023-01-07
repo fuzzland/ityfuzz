@@ -10,11 +10,71 @@ use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, State};
 use primitive_types::{H160, U512};
+use revm::{Env, Interpreter};
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
+use crate::types::convert_u256_to_h160;
 
 pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;
+    fn set_vm_env(&mut self, env: &Env);
+    fn get_vm_env(&self) -> &Env;
+    fn get_access_pattern(&self) -> &AccessPattern;
+    fn get_access_pattern_mut(&mut self) -> &mut AccessPattern;
+}
+
+// each mutant should report to its source's access pattern
+// if a new corpus item is added, it should inherit the access pattern of its source
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccessPattern {
+    caller: bool, // or origin
+    balance: Vec<H160>, // balance queried for accounts
+    call_value: bool,
+    gas_price: bool,
+    block_number: bool,
+    coinbase: bool,
+    timestamp: bool,
+    prevrandao: bool,
+    gas_limit: bool,
+    chain_id: bool,
+    base_fee: bool,
+}
+
+impl AccessPattern {
+    pub fn new() -> Self {
+        Self {
+            balance: vec![],
+            caller: false,
+            call_value: false,
+            gas_price: false,
+            block_number: false,
+            coinbase: false,
+            timestamp: false,
+            prevrandao: false,
+            gas_limit: false,
+            chain_id: false,
+            base_fee: false,
+        }
+    }
+
+    pub fn decode_instruction(&mut self, interp: &Interpreter) {
+        match unsafe {*interp.instruction_pointer} {
+            0x31 => self.balance.push(
+                convert_u256_to_h160(interp.stack.peek(0).unwrap())
+            ),
+            0x33 => self.caller = true,
+            0x34 => self.call_value = true,
+            0x3a => self.gas_price = true,
+            0x43 => self.block_number = true,
+            0x41 => self.coinbase = true,
+            0x42 => self.timestamp = true,
+            0x44 => self.prevrandao = true,
+            0x45 => self.gas_limit = true,
+            0x46 => self.chain_id = true,
+            0x48 => self.base_fee = true,
+            _ => {}
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -26,6 +86,8 @@ pub struct EVMInput {
     pub sstate_idx: usize,
     pub txn_value: Option<usize>,
     pub step: bool,
+    pub env: Env,
+    pub access_pattern: AccessPattern,
 
     #[cfg(any(test, feature = "debug"))]
     pub direct_data: Bytes,
@@ -60,6 +122,22 @@ impl EVMInputT for EVMInput {
             Some(ref d) => d.get_bytes(),
             None => vec![],
         }
+    }
+
+    fn set_vm_env(&mut self, env: &Env) {
+        self.env = env.clone();
+    }
+
+    fn get_vm_env(&self) -> &Env {
+        &self.env
+    }
+
+    fn get_access_pattern(&self) -> &AccessPattern {
+        &self.access_pattern
+    }
+
+    fn get_access_pattern_mut(&mut self) -> &mut AccessPattern {
+        &mut self.access_pattern
     }
 }
 

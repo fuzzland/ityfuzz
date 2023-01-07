@@ -1,7 +1,7 @@
 use std::borrow::BorrowMut;
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::EVMInput;
+use crate::evm::input::{AccessPattern, EVMInput};
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
@@ -105,6 +105,8 @@ impl<'a> EVMCorpusInitializer<'a> {
                     sstate_idx: 0,
                     txn_value: Some(1),
                     step: false,
+                    env: Default::default(),
+                    access_pattern: AccessPattern::new(),
                     #[cfg(any(test, feature = "debug"))]
                     direct_data: Default::default(),
                 };
@@ -195,6 +197,8 @@ impl<'a> EVMCorpusInitializer<'a> {
             sstate_idx: 0,
             txn_value: if abi.is_payable { Some(0) } else { None },
             step: false,
+            env: Default::default(),
+            access_pattern: AccessPattern::new(),
             #[cfg(any(test, feature = "debug"))]
             direct_data: Default::default(),
         };
