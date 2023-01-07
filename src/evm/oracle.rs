@@ -153,7 +153,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 sstate_idx: 0,
                 txn_value: None,
                 step: false,
-                #[cfg(test)]
+                #[cfg(any(test, feature = "debug"))]
                 direct_data: Default::default()
             });
 
@@ -166,7 +166,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 sstate_idx: 0,
                 txn_value: None,
                 step: false,
-                #[cfg(test)]
+                #[cfg(any(test, feature = "debug"))]
                 direct_data: Default::default()
             });
 

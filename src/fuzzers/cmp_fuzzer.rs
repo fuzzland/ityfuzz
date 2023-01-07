@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::fs::File;
+use std::io::Read;
 use std::rc::Rc;
 use bytes::Bytes;
 use std::str::FromStr;
@@ -15,11 +17,7 @@ use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, QueueScheduler, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::{CalibrationStage, Stage, StdMutationalStage};
-use libafl::{
-    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
-    stages::StdPowerMutationalStage,
-    Fuzzer,
-};
+use libafl::{prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver}, stages::StdPowerMutationalStage, Fuzzer, Evaluator};
 
 use crate::evm::contract_utils::{set_hash, ContractLoader};
 use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
@@ -27,7 +25,7 @@ use crate::evm::vm::{EVMState, CMP_MAP};
 use crate::feedback::{CmpFeedback, OracleFeedback};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, InfantStateState};
+use crate::state::{FuzzState, HasExecutionResult, InfantStateState};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
@@ -148,13 +146,54 @@ pub fn cmp_fuzzer(
 
     let objective = OracleFeedback::new(&mut oracles, evm_executor_ref.clone());
 
-    ItyFuzzer::new(
+    let mut fuzzer = ItyFuzzer::new(
         scheduler,
         &infant_scheduler,
         feedback,
         infant_feedback,
         objective,
-    )
-    .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-    .expect("Fuzzing failed");
+    );
+    match config.debug_file {
+        None => {
+            fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+                .expect("Fuzzing failed");
+        }
+        Some(file) => {
+            let mut f = File::open(file).expect("Failed to open file");
+            let mut transactions = String::new();
+            f.read_to_string(&mut transactions).expect("Failed to read file");
+
+            let mut vm_state = StagedVMState::new_with_state(EVMState::new());
+
+            for txn in transactions.split("\n") {
+                let splitter = txn.split(" ").collect::<Vec<&str>>();
+
+                // [is_step] [caller] [target] [input] [value]
+
+                let is_step = splitter[0] == "step";
+                let caller = H160::from_str(splitter[1]).unwrap();
+                let contract = H160::from_str(splitter[1]).unwrap();
+                let input = hex::decode(splitter[3]).unwrap();
+                let value = splitter[4].parse::<usize>().unwrap();
+
+
+                fuzzer.evaluate_input_events(
+                    &mut state, &mut executor, &mut mgr, EVMInput {
+                        caller,
+                        contract,
+                        data: None,
+                        sstate: vm_state.clone(),
+                        sstate_idx: 0,
+                        txn_value: if value == 0 { None } else { Some(value) },
+                        step: is_step,
+                        #[cfg(any(test, feature = "debug"))]
+                        direct_data: Bytes::from(input.clone()),
+                    },
+                    false
+                ).unwrap();
+
+                vm_state = state.get_execution_result().new_state.clone();
+            }
+        }
+    }
 }

@@ -50,6 +50,6 @@ where
     #[cfg(feature = "evm")]
     fn get_data_abi(&self) -> Option<BoxedABI>;
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "debug"))]
     fn get_direct_data(&self) -> Vec<u8>;
 }

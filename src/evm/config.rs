@@ -45,5 +45,6 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-    pub price_oracle: Box<dyn PriceOracle>
+    pub price_oracle: Box<dyn PriceOracle>,
+    pub debug_file: Option<String>,
 }
