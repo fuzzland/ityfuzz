@@ -14,13 +14,11 @@ contract main {
 
 
     constructor() {
-        owner = msg.sender;
         balances = 1;
         is_success = 0;
     }
 
     function a(address x) public {
-        require(msg.sender == owner);
         require(balances > 0);
         is_success += 1;
         Someone(x).something();
