@@ -100,6 +100,17 @@ If ItyFuzz encounters an unknown slot in the memory, it would pull the slot from
 If ItyFuzz encounters calls to external unknown contract, it would pull the bytecode and ABI of that contract. 
 If its ABI is not available, ItyFuzz would not send any transaction to that contract.
 
+### Onchain Proxy
+
+To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is made. 
+To run the proxy:
+```bash
+cd onchain_scripts
+python3 proxy.py
+```
+
+To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
+
 ### Z3 Installation (macOS)
 ```bash
 git clone https://github.com/Z3Prover/z3 && cd z3
