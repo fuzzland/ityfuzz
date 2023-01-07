@@ -1259,7 +1259,7 @@ mod tests {
             txn_value: Some(0),
             step: false,
             env: Default::default(),
-            access_pattern: AccessPattern::new(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),
@@ -1293,7 +1293,7 @@ mod tests {
             txn_value: Some(0),
             step: false,
             env: Default::default(),
-            access_pattern: AccessPattern::new(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),

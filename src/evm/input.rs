@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
@@ -19,8 +21,7 @@ pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;
     fn set_vm_env(&mut self, env: &Env);
     fn get_vm_env(&self) -> &Env;
-    fn get_access_pattern(&self) -> &AccessPattern;
-    fn get_access_pattern_mut(&mut self) -> &mut AccessPattern;
+    fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
 }
 
 // each mutant should report to its source's access pattern
@@ -87,7 +88,7 @@ pub struct EVMInput {
     pub txn_value: Option<usize>,
     pub step: bool,
     pub env: Env,
-    pub access_pattern: AccessPattern,
+    pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     #[cfg(any(test, feature = "debug"))]
     pub direct_data: Bytes,
@@ -132,12 +133,8 @@ impl EVMInputT for EVMInput {
         &self.env
     }
 
-    fn get_access_pattern(&self) -> &AccessPattern {
+    fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>> {
         &self.access_pattern
-    }
-
-    fn get_access_pattern_mut(&mut self) -> &mut AccessPattern {
-        &mut self.access_pattern
     }
 }
 
