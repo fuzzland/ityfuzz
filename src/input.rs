@@ -6,6 +6,7 @@ use crate::state_input::StagedVMState;
 use libafl::inputs::Input;
 use libafl::mutators::Mutator;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
+use libafl::state::HasMetadata;
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::mutation_utils::VMStateHintedMutator;
@@ -25,7 +26,7 @@ where
 {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr>;
+        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata;
     fn get_caller_mut(&mut self) -> &mut Addr;
     fn get_caller(&self) -> Addr;
     fn set_caller(&mut self, caller: Addr);

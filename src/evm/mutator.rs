@@ -12,6 +12,7 @@ use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
+use libafl::state::HasMetadata;
 use primitive_types::H160;
 use revm::Interpreter;
 use crate::evm::input::{EVMInput, EVMInputT};
@@ -109,7 +110,7 @@ where
 impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC>
 where
     I: VMInputT<VS, Loc, Addr> + Input,
-    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr>,
+    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
     SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,

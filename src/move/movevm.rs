@@ -71,6 +71,7 @@ where
         module: CompiledModule,
         _constructor_args: Option<MoveFunctionInput>,
         _deployed_address: AccountAddress,
+        _state: &mut S,
     ) -> Option<AccountAddress> {
         let pre_mc_func_idx = self._module_cache.functions.len();
         self._module_cache
@@ -228,7 +229,10 @@ mod tests {
             FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
         >::new();
         let loc = mv
-            .deploy(module, None, AccountAddress::new([0; 32]))
+            .deploy(
+                module, None, AccountAddress::new([0; 32]),
+                &mut FuzzState::new(),
+            )
             .unwrap();
 
         assert_eq!(mv.modules.len(), 1);
