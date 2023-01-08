@@ -1,4 +1,4 @@
-use crate::evm::mutation_utils::VMStateHintedMutator;
+use crate::evm::mutation_utils::{mutate_with_vm_slot, VMStateHintedMutator};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, InfantStateState};
@@ -8,13 +8,77 @@ use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::ops::Add;
+use std::ops::{Add, Deref};
+use primitive_types::H160;
+use revm::Interpreter;
+use crate::evm::input::{EVMInput, EVMInputT};
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
+use crate::types::convert_u256_to_h160;
+
+
+// each mutant should report to its source's access pattern
+// if a new corpus item is added, it should inherit the access pattern of its source
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccessPattern {
+    pub caller: bool, // or origin
+    pub balance: Vec<H160>, // balance queried for accounts
+    pub call_value: bool,
+    pub gas_price: bool,
+    pub number: bool,
+    pub coinbase: bool,
+    pub timestamp: bool,
+    pub prevrandao: bool,
+    pub gas_limit: bool,
+    pub chain_id: bool,
+    pub basefee: bool,
+}
+
+impl AccessPattern {
+    pub fn new() -> Self {
+        Self {
+            balance: vec![],
+            caller: false,
+            call_value: false,
+            gas_price: false,
+            number: false,
+            coinbase: false,
+            timestamp: false,
+            prevrandao: false,
+            gas_limit: false,
+            chain_id: false,
+            basefee: false,
+        }
+    }
+
+    pub fn decode_instruction(&mut self, interp: &Interpreter) {
+        match unsafe {*interp.instruction_pointer} {
+            0x31 => self.balance.push(
+                convert_u256_to_h160(interp.stack.peek(0).unwrap())
+            ),
+            0x33 => self.caller = true,
+            0x34 => {
+                // prevent initial check of dispatch to fallback
+                if interp.program_counter() > 0xb {
+                    self.call_value = true;
+                }
+            }
+            0x3a => self.gas_price = true,
+            0x43 => self.number = true,
+            0x41 => self.coinbase = true,
+            0x42 => self.timestamp = true,
+            0x44 => self.prevrandao = true,
+            0x45 => self.gas_limit = true,
+            0x46 => self.chain_id = true,
+            0x48 => self.basefee = true,
+            _ => {}
+        }
+    }
+}
 
 pub struct FuzzMutator<'a, VS, Loc, Addr, SC>
 where
@@ -85,16 +149,7 @@ where
                 }
             }
             match state.rand_mut().below(100) {
-                1..=5 => {
-                    // mutate the caller
-                    let caller = state.get_rand_caller();
-                    if caller == input.get_caller() {
-                        return MutationResult::Skipped;
-                    }
-                    input.set_caller(caller);
-                    MutationResult::Mutated
-                }
-                6..=10 => {
+                0..=5 => {
                     // cross over infant state
                     // we need power schedule here for infant states
                     let old_idx = input.get_state_idx();
@@ -105,13 +160,6 @@ where
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
                 }
-                11..=15 => match input.get_txn_value() {
-                    Some(_) => {
-                        input.set_txn_value(state.rand_mut().next() as usize);
-                        MutationResult::Mutated
-                    }
-                    None => MutationResult::Skipped,
-                },
                 _ => input.mutate(state),
             }
         };

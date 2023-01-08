@@ -19,7 +19,6 @@ pub struct BasicTxn<Addr> {
     pub caller: Addr,
     pub contract: Addr,
     pub data: Option<String>,
-    pub txn_value: usize,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
 }
@@ -33,8 +32,7 @@ where
         let ff = binding
             .field("caller", &self.caller)
             .field("contract", &self.contract)
-            .field("data", &self.data)
-            .field("txn_value", &self.txn_value);
+            .field("data", &self.data);
         #[cfg(feature = "full_trace")]
         {
             ff.field("flashloan", &self.flashloan).finish()
@@ -58,7 +56,6 @@ where
         caller: v.get_caller(),
         contract: v.get_contract(),
         data: v.pretty_txn(),
-        txn_value: v.get_txn_value().unwrap_or(0),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
     }

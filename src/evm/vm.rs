@@ -190,6 +190,7 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+use crate::evm::mutator::AccessPattern;
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -223,7 +224,9 @@ where
     pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
 
     // controlled by onchain module, if sload cant find the slot, use this value
-    pub next_slot: U256
+    pub next_slot: U256,
+
+    pub access_pattern: Rc<RefCell<AccessPattern>>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -282,7 +285,8 @@ where
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
             scheduler: self.scheduler.clone(),
-            next_slot: Default::default()
+            next_slot: Default::default(),
+            access_pattern: self.access_pattern.clone(),
         }
     }
 }
@@ -341,7 +345,8 @@ where
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
             scheduler,
-            next_slot: Default::default()
+            next_slot: Default::default(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -622,6 +627,8 @@ where
                 }
                 _ => {}
             }
+
+            self.access_pattern.deref().borrow_mut().decode_instruction(interp);
         }
         return Continue;
     }
@@ -939,6 +946,8 @@ where
         mut state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
+        self.host.access_pattern = input.get_access_pattern().clone();
+
         // although some of the concolic inputs are concrete
         // see EVMInputConstraint
         let input_len_concolic = data.len() * 8;
@@ -946,6 +955,7 @@ where
         unsafe {
             global_call_context = Some(call_ctx.clone());
         }
+
 
         let mut bytecode = self
             .host
@@ -1107,7 +1117,7 @@ where
             data = Bytes::from(input.get_direct_data());
         }
 
-        let value = input.get_txn_value().unwrap_or(0);
+        let value = input.get_txn_value().unwrap_or(U256::zero());
         let contract_address = input.get_contract();
 
         let mut r = if is_step {
@@ -1131,7 +1141,7 @@ where
                     address: contract_address,
                     caller,
                     code_address: contract_address,
-                    apparent_value: U256::from(value),
+                    apparent_value: value,
                     scheme: CallScheme::Call,
                 },
                 &_vm_state,
@@ -1205,7 +1215,7 @@ where
 mod tests {
     use super::*;
     use crate::evm::abi::get_abi_type;
-    use crate::evm::input::{AccessPattern, EVMInput};
+    use crate::evm::input::{EVMInput};
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
     use crate::evm::vm::{FuzzHost, JMP_MAP};
@@ -1219,6 +1229,7 @@ mod tests {
     use libafl::schedulers::StdScheduler;
     use libafl::state::State;
     use revm::Bytecode;
+    use crate::evm::mutator::AccessPattern;
 
     #[test]
     fn test_fuzz_executor() {
@@ -1256,7 +1267,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(0),
+            txn_value: Some(U256::zero()),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -1290,7 +1301,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(0),
+            txn_value: Some(U256::zero()),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),

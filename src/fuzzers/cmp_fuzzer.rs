@@ -30,9 +30,9 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{AccessPattern, EVMInput};
+use crate::evm::input::{EVMInput};
 use crate::evm::middleware::Middleware;
-use crate::evm::mutator::FuzzMutator;
+use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
@@ -184,7 +184,7 @@ pub fn cmp_fuzzer(
                         data: None,
                         sstate: vm_state.clone(),
                         sstate_idx: 0,
-                        txn_value: if value == 0 { None } else { Some(value) },
+                        txn_value: if value == 0 { None } else { Some(U256::from(value)) },
                         step: is_step,
                         env: Default::default(),
                         access_pattern: Rc::new(RefCell::new(AccessPattern::new())),

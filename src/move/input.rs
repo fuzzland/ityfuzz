@@ -141,12 +141,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     fn get_staged_state(&self) -> &MoveStagedVMState {
         &self.vm_state
     }
-    fn get_txn_value(&self) -> Option<usize> {
-        panic!("MoveVM does not have a txn value")
-    }
-    fn set_txn_value(&mut self, v: usize) {
-        panic!("MoveVM does not have a txn value")
-    }
+
     // fn get_abi_cloned(&self) -> Option<BoxedABI>;
     fn set_as_post_exec(&mut self, out_size: usize) {
         todo!()

@@ -1,5 +1,8 @@
 use std::cell::RefCell;
+use std::fmt::Debug;
+use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
@@ -10,72 +13,23 @@ use bytes::Bytes;
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMaxSize, HasRand, State};
-use primitive_types::{H160, U512};
+use libafl::prelude::{HasBytesVec, HasMaxSize, HasRand, Rand, State};
+use primitive_types::{H160, H256, U256, U512};
 use revm::{Env, Interpreter};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
+use crate::evm::mutation_utils::{byte_mutator, mutate_with_vm_slot};
+use crate::evm::mutator::AccessPattern;
 use crate::types::convert_u256_to_h160;
 
 pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;
-    fn set_vm_env(&mut self, env: &Env);
     fn get_vm_env(&self) -> &Env;
+    fn get_vm_env_mut(&mut self) -> &mut Env;
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
-}
-
-// each mutant should report to its source's access pattern
-// if a new corpus item is added, it should inherit the access pattern of its source
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccessPattern {
-    caller: bool, // or origin
-    balance: Vec<H160>, // balance queried for accounts
-    call_value: bool,
-    gas_price: bool,
-    block_number: bool,
-    coinbase: bool,
-    timestamp: bool,
-    prevrandao: bool,
-    gas_limit: bool,
-    chain_id: bool,
-    base_fee: bool,
-}
-
-impl AccessPattern {
-    pub fn new() -> Self {
-        Self {
-            balance: vec![],
-            caller: false,
-            call_value: false,
-            gas_price: false,
-            block_number: false,
-            coinbase: false,
-            timestamp: false,
-            prevrandao: false,
-            gas_limit: false,
-            chain_id: false,
-            base_fee: false,
-        }
-    }
-
-    pub fn decode_instruction(&mut self, interp: &Interpreter) {
-        match unsafe {*interp.instruction_pointer} {
-            0x31 => self.balance.push(
-                convert_u256_to_h160(interp.stack.peek(0).unwrap())
-            ),
-            0x33 => self.caller = true,
-            0x34 => self.call_value = true,
-            0x3a => self.gas_price = true,
-            0x43 => self.block_number = true,
-            0x41 => self.coinbase = true,
-            0x42 => self.timestamp = true,
-            0x44 => self.prevrandao = true,
-            0x45 => self.gas_limit = true,
-            0x46 => self.chain_id = true,
-            0x48 => self.base_fee = true,
-            _ => {}
-        }
-    }
+    fn get_txn_value(&self) -> Option<U256>;
+    fn set_txn_value(&mut self, v: U256);
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -85,7 +39,7 @@ pub struct EVMInput {
     pub data: Option<BoxedABI>,
     pub sstate: StagedVMState<H160, H160, EVMState>,
     pub sstate_idx: usize,
-    pub txn_value: Option<usize>,
+    pub txn_value: Option<U256>,
     pub step: bool,
     pub env: Env,
     pub access_pattern: Rc<RefCell<AccessPattern>>,
@@ -125,8 +79,8 @@ impl EVMInputT for EVMInput {
         }
     }
 
-    fn set_vm_env(&mut self, env: &Env) {
-        self.env = env.clone();
+    fn get_vm_env_mut(&mut self) -> &mut Env {
+        &mut self.env
     }
 
     fn get_vm_env(&self) -> &Env {
@@ -136,6 +90,217 @@ impl EVMInputT for EVMInput {
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>> {
         &self.access_pattern
     }
+
+    fn get_txn_value(&self) -> Option<U256> {
+        self.txn_value
+    }
+
+    fn set_txn_value(&mut self, v: U256) {
+        self.txn_value = Some(v);
+    }
+
+}
+
+
+macro_rules! impl_env_mutator_u256 {
+    ($item: ident, $loc: ident) => {
+        pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+            where S: State + HasCaller<H160> + HasRand {
+            let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
+                Some(s.clone())
+            } else {
+                None
+            };
+            let mut input_by = [0; 32];
+            input.get_vm_env().$loc.$item.to_big_endian(&mut input_by);
+            let mut input_vec = input_by.to_vec();
+            let mut wrapper = MutatorInput::new(&mut input_vec);
+            let res = byte_mutator(
+                state_,
+                &mut wrapper,
+                vm_slots
+            );
+            if res == MutationResult::Skipped {
+                return res;
+            }
+            input.get_vm_env_mut().$loc.$item = U256::from_big_endian(&input_vec.as_slice());
+            res
+        }
+    };
+}
+
+macro_rules! impl_env_mutator_h160 {
+    ($item: ident, $loc: ident) => {
+        pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+            where S: State + HasCaller<H160> + HasRand {
+            let addr = state_.get_rand_caller();
+            if addr == input.get_caller() {
+                return MutationResult::Skipped;
+            } else {
+                input.get_vm_env_mut().$loc.$item = addr;
+                MutationResult::Mutated
+            }
+        }
+    };
+}
+
+// Wrapper for U256 so that it represents a mutable Input in LibAFL
+#[derive(Serialize)]
+struct MutatorInput<'a> {
+    #[serde(skip_serializing)]
+    pub val_vec: &'a mut Vec<u8>,
+}
+
+impl<'a, 'de> Deserialize<'de> for MutatorInput<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        unreachable!()
+    }
+}
+
+impl<'a> Clone for MutatorInput<'a> {
+    fn clone(&self) -> Self {
+        unreachable!()
+    }
+}
+
+impl<'a> Debug for MutatorInput<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MutatorInput")
+            .field("val_vec", &self.val_vec)
+            .finish()
+    }
+}
+
+impl<'a> MutatorInput<'a> {
+    pub fn new(val_vec: &'a mut Vec<u8>) -> Self {
+        MutatorInput {
+            val_vec
+        }
+    }
+}
+
+impl<'a> Input for MutatorInput<'a> {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("{}_{:?}", idx, self.val_vec)
+    }
+}
+
+impl<'a> HasBytesVec for MutatorInput<'a> {
+    fn bytes(&self) -> &[u8] {
+        self.val_vec
+    }
+
+    fn bytes_mut(&mut self) -> &mut Vec<u8> {
+        self.val_vec
+    }
+}
+
+impl EVMInput {
+
+    impl_env_mutator_u256!(basefee, block);
+    impl_env_mutator_u256!(timestamp, block);
+    impl_env_mutator_h160!(coinbase, block);
+    impl_env_mutator_u256!(gas_limit, block);
+    impl_env_mutator_u256!(number, block);
+    impl_env_mutator_u256!(chain_id, cfg);
+
+    pub fn prevrandao<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand {
+        // not supported yet
+        unreachable!();
+    }
+
+    pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand {
+        // not supported yet
+        unreachable!();
+    }
+
+    pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand {
+        // not supported yet
+        unreachable!();
+    }
+
+    pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand {
+        let caller = state_.get_rand_caller();
+        if caller == input.get_caller() {
+            return MutationResult::Skipped;
+        } else {
+            input.set_caller(caller);
+            MutationResult::Mutated
+        }
+    }
+
+    pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand {
+        let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
+            Some(s.clone())
+        } else {
+            None
+        };
+        let mut input_by = [0; 32];
+        input.get_txn_value().unwrap_or(U256::zero()).to_big_endian(&mut input_by);
+        let mut input_vec = input_by.to_vec();
+        let mut wrapper = MutatorInput::new(&mut input_vec);
+        let res = byte_mutator(
+            state_,
+            &mut wrapper,
+            vm_slots
+        );
+        if res == MutationResult::Skipped {
+            return res;
+        }
+        input.set_txn_value(U256::from_big_endian(&input_vec.as_slice()));
+        res
+
+    }
+
+    pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
+        where S: State + HasCaller<H160> + HasRand
+    {
+        let ap = self.get_access_pattern().deref().borrow().clone();
+        let mut mutators = vec![];
+        macro_rules! add_mutator {
+            ($item: ident) => {
+                if ap.$item {
+                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                }
+            };
+
+            ($item: ident, $cond: expr) => {
+                if $cond {
+                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                }
+            };
+        }
+        add_mutator!(caller);
+        add_mutator!(balance, ap.balance.len() > 0);
+        if ap.call_value || self.get_txn_value().is_some() {
+            mutators.push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+        }
+        add_mutator!(gas_price);
+        add_mutator!(basefee);
+        add_mutator!(timestamp);
+        add_mutator!(coinbase);
+        add_mutator!(gas_limit);
+        add_mutator!(number);
+        add_mutator!(chain_id);
+        add_mutator!(prevrandao);
+
+        if mutators.len() == 0 {
+            return MutationResult::Skipped;
+        }
+
+        let mutator = mutators[
+            state.rand_mut().below(mutators.len() as u64) as usize
+        ];
+        mutator(self, state)
+    }
 }
 
 impl VMInputT<EVMState, H160, H160> for EVMInput {
@@ -143,6 +308,9 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     where
         S: State + HasRand + HasMaxSize + HasItyState<H160, H160, EVMState> + HasCaller<H160>,
     {
+        if state.rand_mut().next() % 100 > 95 {
+            return self.mutate_env_with_access_pattern(state);
+        }
         let vm_slots = if let Some(s) = self.get_state().get(&self.get_contract()) {
             Some(s.clone())
         } else {
@@ -189,14 +357,6 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
 
     fn get_staged_state(&self) -> &EVMStagedVMState {
         &self.sstate
-    }
-
-    fn get_txn_value(&self) -> Option<usize> {
-        self.txn_value
-    }
-
-    fn set_txn_value(&mut self, v: usize) {
-        self.txn_value = Some(v);
     }
 
     fn set_as_post_exec(&mut self, out_size: usize) {
