@@ -12,12 +12,12 @@ use revm::Return::{Continue};
 use crate::rand;
 const MAP_SIZE: usize = 256;
 
-pub type State = HashMap<H160, HashMap<U256, U256>>;
+pub type VMState = HashMap<H160, HashMap<U256, U256>>;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
     env: Env,
-    data: State,
+    data: VMState,
     code: HashMap<H160, Bytecode>,
     jmp_map: [u8; MAP_SIZE],
 }
@@ -155,7 +155,7 @@ pub struct EVMExecutor {
 pub struct ExecutionResult {
     pub output: Bytes,
     pub reverted: bool,
-    pub new_state: State,
+    pub new_state: VMState,
 }
 
 impl EVMExecutor {
@@ -180,7 +180,7 @@ impl EVMExecutor {
     pub fn execute(&mut self,
                    contract_address: H160,
                    caller: H160,
-                   state: &State,
+                   state: &VMState,
                    data: Bytes) -> ExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
