@@ -167,6 +167,9 @@ pub fn cmp_fuzzer(
 
             for txn in transactions.split("\n") {
                 let splitter = txn.split(" ").collect::<Vec<&str>>();
+                if splitter.len() < 4 {
+                    continue;
+                }
 
                 // [is_step] [caller] [target] [input] [value]
 
@@ -195,6 +198,8 @@ pub fn cmp_fuzzer(
                     },
                     false
                 ).unwrap();
+
+                println!("result: {:?}", state.get_execution_result().clone());
 
                 vm_state = state.get_execution_result().new_state.clone();
             }

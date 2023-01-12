@@ -42,7 +42,7 @@ def get_rpc(network):
     elif network == "bsc":
         # BSC mod to geth make it no longer possible to use debug_storageRangeAt
         # so, we use our own node that supports eth_getStorageAll
-        return "http://bsc.node1.infra.fuzz.land"
+        return "https://blue-damp-glitter.bsc.discover.quiknode.pro/8364ed151b17ed4619e9effc6237600241c2e65c/"
     elif network == "polygon":
         return "https://polygon-rpc.com/"
     elif network == "mumbai":
