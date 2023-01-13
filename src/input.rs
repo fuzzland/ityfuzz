@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 pub trait VMInputT {
-    fn to_bytes(&self) -> &Bytes;
+    fn to_bytes(&self) -> Bytes;
     fn get_caller(&self) -> H160;
     fn get_contract(&self) -> H160;
     fn get_state(&self) -> &evm::VMState;
@@ -34,16 +34,16 @@ impl std::fmt::Debug for VMInput {
 }
 
 impl VMInputT for VMInput {
-    fn to_bytes(&self) -> &Bytes {
-        self.data.get().to_bytes()
+    fn to_bytes(&self) -> Bytes {
+        self.data.get_bytes()
     }
 
     fn get_caller(&self) -> H160 {
-        self.caller
+        self.caller.clone()
     }
 
     fn get_contract(&self) -> H160 {
-        self.contract
+        self.contract.clone()
     }
 
     fn get_state(&self) -> &VMState {
