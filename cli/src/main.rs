@@ -1,3 +1,5 @@
+mod licensing;
+
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
@@ -107,6 +109,7 @@ enum TargetType {
 }
 
 fn main() {
+    licensing::init_license();
     let args = Args::parse();
     let target_type: TargetType = match args.target_type {
         Some(v) => match v.as_str() {
