@@ -135,7 +135,6 @@ impl ABI for ADynamic {
         }
         bytes
     }
-
 }
 
 impl ABI for AArray {
@@ -153,7 +152,7 @@ impl ABI for AArray {
         let mut head: Vec<Vec<u8>> = Vec::new();
         let mut head_data: Vec<Vec<u8>> = Vec::new();
         let mut head_size: usize = 0;
-        let dummy_bytes: Vec<u8> = vec![0;0];
+        let dummy_bytes: Vec<u8> = vec![0; 0];
         for i in 0..self.data.len() {
             if self.data[i].is_static() {
                 let encoded = self.data[i].get_bytes_vec();
@@ -168,8 +167,8 @@ impl ABI for AArray {
         }
         let mut content_size: usize = 0;
         tails_offset.push(0);
-        let mut head_data_size:usize = 0;
-        let mut tail_data_size:usize = 0;
+        let mut head_data_size: usize = 0;
+        let mut tail_data_size: usize = 0;
         if tails.len() > 0 {
             for i in 0..tails.len() - 1 {
                 content_size += tails[i].len();
@@ -187,18 +186,16 @@ impl ABI for AArray {
             }
             tail_data_size = content_size + tails[tails.len() - 1].len();
         }
-        let mut bytes = vec![
-            0;
-            head_data_size + tail_data_size
-                + if self.dynamic_size { 32 } else { 0 }
-        ];
+        let mut bytes =
+            vec![0; head_data_size + tail_data_size + if self.dynamic_size { 32 } else { 0 }];
 
         if self.dynamic_size {
             set_size(bytes.as_mut_ptr(), self.data.len());
         }
         let mut offset: usize = if self.dynamic_size { 32 } else { 0 };
         for i in 0..head_data.len() {
-            bytes[offset..offset + head_data[i].len()].copy_from_slice(head_data[i].to_vec().as_slice());
+            bytes[offset..offset + head_data[i].len()]
+                .copy_from_slice(head_data[i].to_vec().as_slice());
             offset += head_data[i].len();
         }
         for i in 0..tails.len() {
@@ -212,7 +209,7 @@ impl ABI for AArray {
 pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
     return BoxedABI {
         b: get_abi_type(abi_name),
-    }
+    };
 }
 
 pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
@@ -235,7 +232,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
             data: abi_name_str[1..abi_name_str.len() - 1]
                 .split(",")
                 .map(|x| BoxedABI {
-                    b: get_abi_type(&String::from(x))
+                    b: get_abi_type(&String::from(x)),
                 })
                 .collect(),
             dynamic_size: false,
@@ -243,19 +240,30 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     }
     if abi_name_str.ends_with("[]") {
         return Box::new(AArray {
-            data: vec![BoxedABI{
-                b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string())
-            }; 1],
+            data: vec![
+                BoxedABI {
+                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string())
+                };
+                1
+            ],
             dynamic_size: true,
         });
     } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
         let mut split = abi_name_str.split('[');
         let name = split.next().unwrap();
-        let len = split.next().unwrap().trim_end_matches(']').parse::<usize>().unwrap();
+        let len = split
+            .next()
+            .unwrap()
+            .trim_end_matches(']')
+            .parse::<usize>()
+            .unwrap();
         return Box::new(AArray {
-            data: vec![BoxedABI{
-                b: get_abi_type(&String::from(name))
-            }; len],
+            data: vec![
+                BoxedABI {
+                    b: get_abi_type(&String::from(name))
+                };
+                len
+            ],
             dynamic_size: false,
         });
     }
@@ -264,39 +272,28 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
 
 fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
     match abi_name {
-        "uint" | "int" => Box::new(
-            A256 {
-                data: [0; 32],
-                data_len: abi_bs,
-            }
-        ),
-        "address" => Box::new(
-            A256 {
-                data: [0; 32],
-                data_len: 20,
-            }
-        ),
-        "bool" => Box::new(
-            A256 {
-                data: [0; 32],
-                data_len: 1,
-            }
-        ),
-        "bytes" => Box::new(
-            ADynamic {
-                data: Vec::new(),
-                multiplier: 32,
-            }
-        ),
-        "string" => Box::new(
-            ADynamic {
-                data: Vec::new(),
-                multiplier: 32,
-            }
-        ),
+        "uint" | "int" => Box::new(A256 {
+            data: [0; 32],
+            data_len: abi_bs,
+        }),
+        "address" => Box::new(A256 {
+            data: [0; 32],
+            data_len: 20,
+        }),
+        "bool" => Box::new(A256 {
+            data: [0; 32],
+            data_len: 1,
+        }),
+        "bytes" => Box::new(ADynamic {
+            data: Vec::new(),
+            multiplier: 32,
+        }),
+        "string" => Box::new(ADynamic {
+            data: Vec::new(),
+            multiplier: 32,
+        }),
         _ => panic!("unsupported abi type"),
     }
-
 }
 
 // test serialization and deserialization
