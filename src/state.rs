@@ -33,6 +33,8 @@ impl Input for ItyVMState {
     }
 }
 
+// Note: Probably a better design is to use StdState with a custom corpus?
+// What are other metadata we need?
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FuzzState {
     infant_states: InMemoryCorpus<ItyVMState>,

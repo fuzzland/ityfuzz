@@ -7,7 +7,8 @@ use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-pub trait VMInputT {
+// ST: Should VMInputT be the generic type for both inputs?
+pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
     fn get_caller(&self) -> H160;
     fn get_contract(&self) -> H160;

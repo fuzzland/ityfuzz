@@ -1,6 +1,8 @@
 mod abi;
 mod evm;
 mod executor;
+mod fuzzer;
+mod fuzzers;
 mod input;
 mod mutator;
 mod rand;
