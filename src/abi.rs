@@ -1,11 +1,20 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use libafl::prelude::Prepend;
+use libafl::inputs::{HasBytesVec, Input};
+use libafl::mutators::{MutationResult, MutatorsTuple};
+use libafl::prelude::{Mutator, Prepend, tuple_list, BitFlipMutator, ByteFlipMutator, ByteIncMutator, ByteDecMutator, ByteNegMutator, ByteRandMutator, ByteAddMutator, WordAddMutator, DwordAddMutator, QwordAddMutator, ByteInterestingMutator, WordInterestingMutator, DwordInterestingMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesSetMutator, BytesRandSetMutator, BytesCopyMutator, BytesSwapMutator, State, HasConstLen};
+use libafl::state::HasRand;
+use rand::random;
 use serde::{Deserialize, Serialize};
+
+const MAX_INSERT_SIZE: u32 = 100;
 
 // how can we deserialize this trait?
 pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize {
     fn is_static(&self) -> bool;
     fn get_bytes(&self) -> Vec<u8>;
+    // fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+    // where
+    //     S: State;
 }
 
 trait CloneABI {
@@ -60,15 +69,33 @@ impl Clone for Box<dyn ABI> {
 // 0~256-bit data types
 #[derive(Clone, Serialize, Deserialize)]
 pub struct A256 {
-    data: [u8; 32],
-    // data len is a constant after initialization
-    data_len: usize,
+    data: Vec<u8>,
+}
+
+impl HasBytesVec for A256 {
+    fn bytes(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+
+    fn bytes_mut(&mut self) -> &mut Vec<u8> {
+        self.data.as_mut()
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ADynamic {
     data: Vec<u8>,
     multiplier: usize,
+}
+
+impl HasBytesVec for ADynamic {
+    fn bytes(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+
+    fn bytes_mut(&mut self) -> &mut Vec<u8> {
+        self.data.as_mut()
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -92,10 +119,11 @@ impl ABI for A256 {
 
     fn get_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![0; 32];
+        let data_len = self.data.len();
         unsafe {
             let mut ptr = bytes.as_mut_ptr();
-            ptr = ptr.add(32 - self.data_len);
-            for i in 0..self.data_len {
+            ptr = ptr.add(32 - data_len);
+            for i in 0..data_len {
                 *ptr.add(i) = self.data[i];
             }
         }
@@ -136,6 +164,7 @@ impl ABI for ADynamic {
         bytes
     }
 }
+
 
 impl ABI for AArray {
     fn is_static(&self) -> bool {
@@ -273,16 +302,13 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
 fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
     match abi_name {
         "uint" | "int" => Box::new(A256 {
-            data: [0; 32],
-            data_len: abi_bs,
+            data: vec![0; abi_bs],
         }),
         "address" => Box::new(A256 {
-            data: [0; 32],
-            data_len: 20,
+            data: vec![0; 20],
         }),
         "bool" => Box::new(A256 {
-            data: [0; 32],
-            data_len: 1,
+            data: vec![0; 1],
         }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
@@ -301,4 +327,5 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
 fn test_int() {
     let abi = get_abi_type_boxed(&String::from("int8"));
     abi.get_bytes();
+
 }
