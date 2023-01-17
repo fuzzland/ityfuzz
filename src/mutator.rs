@@ -2,46 +2,57 @@ use crate::input::VMInputT;
 use crate::state::FuzzState;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::{MutationResult, MutatorsTuple};
+use libafl::prelude::{
+    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
+    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
+    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasRand, Mutator,
+    Prepend, QwordAddMutator, State, WordAddMutator, WordInterestingMutator,
+};
 use libafl::Error;
-use libafl::prelude::{Mutator, Prepend, tuple_list, BitFlipMutator, ByteFlipMutator, ByteIncMutator, ByteDecMutator, ByteNegMutator, ByteRandMutator, ByteAddMutator, WordAddMutator, DwordAddMutator, QwordAddMutator, ByteInterestingMutator, WordInterestingMutator, DwordInterestingMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesSetMutator, BytesRandSetMutator, BytesCopyMutator, BytesSwapMutator, State, HasConstLen, HasRand};
 
+use crate::abi::{AArray, ADynamic, A256};
 use rand::random;
-use crate::abi::{A256, AArray, ADynamic};
 
 pub struct FuzzMutator {}
 
-
+impl FuzzMutator {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 fn byte_mutator<I, S>(mut state: S, input: &mut I) -> MutationResult
-    where S: State + HasRand,
-          I: HasBytesVec + Input {
+where
+    S: State + HasRand,
+    I: HasBytesVec + Input,
+{
     let mut mutations = tuple_list!(
-            BitFlipMutator::new(),
-            ByteFlipMutator::new(),
-            ByteIncMutator::new(),
-            ByteDecMutator::new(),
-            ByteNegMutator::new(),
-            ByteRandMutator::new(),
-            ByteAddMutator::new(),
-            WordAddMutator::new(),
-            DwordAddMutator::new(),
-            QwordAddMutator::new(),
-            ByteInterestingMutator::new(),
-            WordInterestingMutator::new(),
-            DwordInterestingMutator::new(),
-            // BytesExpandMutator::new(),
-            // BytesInsertMutator::new(),
-            // BytesRandInsertMutator::new(),
-            BytesSetMutator::new(),
-            BytesRandSetMutator::new(),
-            // BytesCopyMutator::new(),
-            BytesSwapMutator::new(),
-        );
+        BitFlipMutator::new(),
+        ByteFlipMutator::new(),
+        ByteIncMutator::new(),
+        ByteDecMutator::new(),
+        ByteNegMutator::new(),
+        ByteRandMutator::new(),
+        ByteAddMutator::new(),
+        WordAddMutator::new(),
+        DwordAddMutator::new(),
+        QwordAddMutator::new(),
+        ByteInterestingMutator::new(),
+        WordInterestingMutator::new(),
+        DwordInterestingMutator::new(),
+        // BytesExpandMutator::new(),
+        // BytesInsertMutator::new(),
+        // BytesRandInsertMutator::new(),
+        BytesSetMutator::new(),
+        BytesRandSetMutator::new(),
+        // BytesCopyMutator::new(),
+        BytesSwapMutator::new(),
+    );
     mutations
         .get_and_mutate(random::<usize>() % mutations.len(), &mut state, input, 0)
         .unwrap()
 }
-
 
 // impl A256 {
 //     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
@@ -86,7 +97,6 @@ fn byte_mutator<I, S>(mut state: S, input: &mut I) -> MutationResult
 //         MutationResult::Mutated
 //     }
 // }
-
 
 impl<I, S> Mutator<I, S> for FuzzMutator
 where
