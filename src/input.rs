@@ -7,7 +7,8 @@ use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-pub trait VMInputT {
+// ST: Should VMInputT be the generic type for both inputs?
+pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
     fn get_caller(&self) -> H160;
     fn get_contract(&self) -> H160;
@@ -52,6 +53,37 @@ impl VMInputT for VMInput {
 }
 
 impl Input for VMInput {
+    fn to_file<P>(&self, path: P) -> Result<(), Error>
+    where
+        P: AsRef<Path>,
+    {
+        todo!()
+    }
+
+    fn from_file<P>(path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        todo!()
+    }
+
+    fn generate_name(&self, idx: usize) -> String {
+        todo!()
+    }
+
+    fn wrapped_as_testcase(&mut self) {
+        // todo!()
+    }
+}
+
+// Input we saved in corpus, not real inputs
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum CorpusInput {
+    VMInput(VMInput),
+    VMState(VMState),
+}
+
+impl Input for CorpusInput {
     fn to_file<P>(&self, path: P) -> Result<(), Error>
     where
         P: AsRef<Path>,
