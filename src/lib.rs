@@ -9,6 +9,7 @@ mod mutator;
 mod rand;
 mod state;
 mod types;
+mod mutation_utils;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;

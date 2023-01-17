@@ -1,29 +1,41 @@
+use std::any::Any;
+use std::fmt::Debug;
+use std::ops::DerefMut;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::{MutationResult, MutatorsTuple};
-use libafl::prelude::{
-    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
-    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
-    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend,
-    QwordAddMutator, State, WordAddMutator, WordInterestingMutator,
-};
-use libafl::state::HasRand;
+use libafl::prelude::{tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator, ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend, QwordAddMutator, WordAddMutator, WordInterestingMutator, };
+use libafl::state::{HasMaxSize, HasRand, State};
 use rand::random;
 use serde::{Deserialize, Serialize};
+use crate::abi::ABILossyType::{T256, TArray, TDynamic};
+use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 
-const MAX_INSERT_SIZE: u32 = 100;
+
+pub enum ABILossyType {
+    T256,
+    TArray,
+    TDynamic,
+}
 
 // how can we deserialize this trait?
 pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize {
     fn is_static(&self) -> bool;
     fn get_bytes(&self) -> Vec<u8>;
-    // fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-    // where
-    //     S: State;
+    fn get_type(&self) -> ABILossyType;
+    fn as_any(&mut self) -> &mut dyn Any;
 }
 
-trait CloneABI {
+impl Debug for dyn ABI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ABI")
+            .field("is_static", &self.is_static())
+            .field("get_bytes", &self.get_bytes())
+            .finish()
+    }
+}
+
+pub trait CloneABI {
     fn clone_box(&self) -> Box<dyn ABI>;
 }
 
@@ -38,7 +50,7 @@ where
 
 // Use BoxedABI so that downstream code knows the size of the trait object
 // However, Box makes deserilization difficult
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BoxedABI {
     #[serde(with = "serde_traitobject")]
     b: Box<dyn ABI>,
@@ -53,6 +65,10 @@ impl BoxedABI {
         &self.b
     }
 
+    pub fn get_mut(&mut self) -> &mut Box<dyn ABI> {
+        &mut self.b
+    }
+
     pub fn get_bytes(&self) -> Bytes {
         Bytes::from(self.b.get_bytes())
     }
@@ -64,6 +80,57 @@ impl BoxedABI {
     pub fn is_static(&self) -> bool {
         self.b.is_static()
     }
+
+    pub fn get_type(&self) -> ABILossyType {
+        self.b.get_type()
+    }
+}
+
+impl BoxedABI {
+    pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+        where
+            S: State + HasRand + HasMaxSize
+    {
+        match self.get_type() {
+            T256 => {
+                let v = self.b.deref_mut().as_any();
+                let a256 = v.downcast_mut::<A256>().unwrap();
+                // self.b.downcast_ref::<A256>().unwrap().mutate(state);
+                byte_mutator(state, a256)
+            }
+            TDynamic => {
+                let adyn = self.b.deref_mut().as_any().downcast_mut::<ADynamic>().unwrap();
+                // self.b.downcast_ref::<A256>().unwrap().mutate(state);
+                byte_mutator_with_expansion(state, adyn)
+            }
+            TArray => {
+                let aarray = self.b.deref_mut().as_any().downcast_mut::<AArray>().unwrap();
+
+                let data_len = aarray.data.len();
+                if data_len == 0 {
+                    return MutationResult::Skipped;
+                }
+                if aarray.dynamic_size {
+                    if (random::<u8>() % 2) == 0 {
+                        let index: usize = random::<usize>() % data_len;
+                        let mut result = aarray.data[index].mutate(state);
+                        return result;
+                    }
+
+                    // increase size
+                    // let base_type = &;
+                    for _ in 0..random::<usize>() % state.max_size() {
+                        aarray.data.push(aarray.data[0].clone());
+                    }
+
+                } else {
+                    let mut index: usize = random::<usize>() % data_len;
+                    return aarray.data[index].mutate(state);
+                }
+                MutationResult::Mutated
+            }
+        }
+    }
 }
 
 impl Clone for Box<dyn ABI> {
@@ -73,9 +140,15 @@ impl Clone for Box<dyn ABI> {
 }
 
 // 0~256-bit data types
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct A256 {
     data: Vec<u8>,
+}
+
+impl Input for A256 {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("A256_{}", idx)
+    }
 }
 
 impl HasBytesVec for A256 {
@@ -88,10 +161,16 @@ impl HasBytesVec for A256 {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ADynamic {
     data: Vec<u8>,
     multiplier: usize,
+}
+
+impl Input for ADynamic {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("ADynamic_{}", idx)
+    }
 }
 
 impl HasBytesVec for ADynamic {
@@ -104,17 +183,15 @@ impl HasBytesVec for ADynamic {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AArray {
-    data: Vec<BoxedABI>,
-    dynamic_size: bool,
+    pub(crate) data: Vec<BoxedABI>,
+    pub(crate) dynamic_size: bool,
 }
 
-// FIXME: fix scope
-fn pad_bytes(bytes: &mut Bytes, len: usize) {
-    let padding = len - bytes.len();
-    if padding > 0 {
-        bytes.prepend(vec![0; padding].as_slice());
+impl Input for AArray {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("AArray_{}", idx)
     }
 }
 
@@ -135,7 +212,14 @@ impl ABI for A256 {
         }
         bytes
     }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn get_type(&self) -> ABILossyType { T256 }
 }
+
 
 fn roundup(x: usize, multiplier: usize) -> usize {
     (x + multiplier - 1) / multiplier * multiplier
@@ -168,6 +252,12 @@ impl ABI for ADynamic {
             }
         }
         bytes
+    }
+
+    fn get_type(&self) -> ABILossyType { TDynamic }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -237,6 +327,12 @@ impl ABI for AArray {
             offset += tails[i].len();
         }
         bytes
+    }
+
+    fn get_type(&self) -> ABILossyType { TArray }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
