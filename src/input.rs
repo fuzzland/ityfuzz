@@ -26,7 +26,12 @@ where
 {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata;
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<Loc, Addr, VS>
+            + HasCaller<Addr>
+            + HasMetadata;
     fn get_caller_mut(&mut self) -> &mut Addr;
     fn get_caller(&self) -> Addr;
     fn set_caller(&mut self, caller: Addr);
@@ -49,6 +54,9 @@ where
 
     #[cfg(feature = "evm")]
     fn get_data_abi(&self) -> Option<BoxedABI>;
+
+    #[cfg(feature = "evm")]
+    fn get_data_abi_mut(&mut self) -> &mut Option<BoxedABI>;
 
     #[cfg(any(test, feature = "debug"))]
     fn get_direct_data(&self) -> Vec<u8>;

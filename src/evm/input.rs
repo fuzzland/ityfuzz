@@ -1,14 +1,12 @@
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::ops::Deref;
-use std::rc::Rc;
-use std::sync::Arc;
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
+use crate::evm::mutation_utils::{byte_mutator, mutate_with_vm_slot};
+use crate::evm::mutator::AccessPattern;
 use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
+use crate::types::convert_u256_to_h160;
 use bytes::Bytes;
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
@@ -16,12 +14,14 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
 use primitive_types::{H160, H256, U256, U512};
 use revm::{Env, Interpreter};
-use serde::{Deserialize, Deserializer, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_traitobject::Any;
-use crate::evm::mutation_utils::{byte_mutator, mutate_with_vm_slot};
-use crate::evm::mutator::AccessPattern;
-use crate::types::convert_u256_to_h160;
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::ops::Deref;
+use std::rc::Rc;
+use std::sync::Arc;
 
 pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;
@@ -98,14 +98,14 @@ impl EVMInputT for EVMInput {
     fn set_txn_value(&mut self, v: U256) {
         self.txn_value = Some(v);
     }
-
 }
-
 
 macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-            where S: State + HasCaller<H160> + HasRand + HasMetadata  {
+        where
+            S: State + HasCaller<H160> + HasRand + HasMetadata,
+        {
             let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
                 Some(s.clone())
             } else {
@@ -115,11 +115,7 @@ macro_rules! impl_env_mutator_u256 {
             input.get_vm_env().$loc.$item.to_big_endian(&mut input_by);
             let mut input_vec = input_by.to_vec();
             let mut wrapper = MutatorInput::new(&mut input_vec);
-            let res = byte_mutator(
-                state_,
-                &mut wrapper,
-                vm_slots
-            );
+            let res = byte_mutator(state_, &mut wrapper, vm_slots);
             if res == MutationResult::Skipped {
                 return res;
             }
@@ -132,7 +128,9 @@ macro_rules! impl_env_mutator_u256 {
 macro_rules! impl_env_mutator_h160 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-            where S: State + HasCaller<H160> + HasRand {
+        where
+            S: State + HasCaller<H160> + HasRand,
+        {
             let addr = state_.get_rand_caller();
             if addr == input.get_caller() {
                 return MutationResult::Skipped;
@@ -153,8 +151,8 @@ struct MutatorInput<'a> {
 
 impl<'a, 'de> Deserialize<'de> for MutatorInput<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         unreachable!()
     }
@@ -176,9 +174,7 @@ impl<'a> Debug for MutatorInput<'a> {
 
 impl<'a> MutatorInput<'a> {
     pub fn new(val_vec: &'a mut Vec<u8>) -> Self {
-        MutatorInput {
-            val_vec
-        }
+        MutatorInput { val_vec }
     }
 }
 
@@ -199,7 +195,6 @@ impl<'a> HasBytesVec for MutatorInput<'a> {
 }
 
 impl EVMInput {
-
     impl_env_mutator_u256!(basefee, block);
     impl_env_mutator_u256!(timestamp, block);
     impl_env_mutator_h160!(coinbase, block);
@@ -208,26 +203,34 @@ impl EVMInput {
     impl_env_mutator_u256!(chain_id, cfg);
 
     pub fn prevrandao<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata {
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
+    {
         // not supported yet
         unreachable!();
     }
 
     pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
+    {
         // not supported yet
         unreachable!();
     }
 
     pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
+    {
         // not supported yet
         // unreachable!();
         return MutationResult::Skipped;
     }
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
+    {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
             return MutationResult::Skipped;
@@ -238,51 +241,55 @@ impl EVMInput {
     }
 
     pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
+    {
         let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
             Some(s.clone())
         } else {
             None
         };
         let mut input_by = [0; 32];
-        input.get_txn_value().unwrap_or(U256::zero()).to_big_endian(&mut input_by);
+        input
+            .get_txn_value()
+            .unwrap_or(U256::zero())
+            .to_big_endian(&mut input_by);
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
-        let res = byte_mutator(
-            state_,
-            &mut wrapper,
-            vm_slots
-        );
+        let res = byte_mutator(state_, &mut wrapper, vm_slots);
         if res == MutationResult::Skipped {
             return res;
         }
         input.set_txn_value(U256::from_big_endian(&input_vec.as_slice()));
         res
-
     }
 
     pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand + HasMetadata
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         let ap = self.get_access_pattern().deref().borrow().clone();
         let mut mutators = vec![];
         macro_rules! add_mutator {
             ($item: ident) => {
                 if ap.$item {
-                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                    mutators
+                        .push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
                 }
             };
 
             ($item: ident, $cond: expr) => {
                 if $cond {
-                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                    mutators
+                        .push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
                 }
             };
         }
         add_mutator!(caller);
         add_mutator!(balance, ap.balance.len() > 0);
         if ap.call_value || self.get_txn_value().is_some() {
-            mutators.push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+            mutators
+                .push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
         }
         add_mutator!(gas_price);
         add_mutator!(basefee);
@@ -297,9 +304,7 @@ impl EVMInput {
             return MutationResult::Skipped;
         }
 
-        let mutator = mutators[
-            state.rand_mut().below(mutators.len() as u64) as usize
-        ];
+        let mutator = mutators[state.rand_mut().below(mutators.len() as u64) as usize];
         mutator(self, state)
     }
 }
@@ -307,7 +312,12 @@ impl EVMInput {
 impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<H160, H160, EVMState> + HasCaller<H160> + HasMetadata,
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<H160, H160, EVMState>
+            + HasCaller<H160>
+            + HasMetadata,
     {
         if state.rand_mut().next() % 100 > 95 {
             return self.mutate_env_with_access_pattern(state);
@@ -416,6 +426,11 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     #[cfg(any(test, feature = "debug"))]
     fn get_direct_data(&self) -> Vec<u8> {
         self.direct_data.to_vec()
+    }
+
+    #[cfg(feature = "evm")]
+    fn get_data_abi_mut(&mut self) -> &mut Option<BoxedABI> {
+        &mut self.data
     }
 }
 
