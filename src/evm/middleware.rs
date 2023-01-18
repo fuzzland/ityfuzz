@@ -4,7 +4,7 @@ use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState, HasCurrentInputIdx};
+use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
@@ -67,8 +67,7 @@ where
         + 'static,
     VS: VMStateT + Default,
 {
-    let mut tc =
-        Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
+    let mut tc = Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
     tc.set_exec_time(Duration::from_secs(0));
     let idx = state.corpus_mut().add(tc).expect("failed to add");
     host.scheduler
@@ -82,6 +81,11 @@ where
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S);
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    );
     fn get_type(&self) -> MiddlewareType;
 }

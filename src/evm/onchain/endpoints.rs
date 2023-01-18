@@ -90,7 +90,6 @@ pub struct OnChainConfig {
     abi_cache: HashMap<H160, Option<String>>,
     storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
     storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
-
 }
 
 impl OnChainConfig {
@@ -546,9 +545,8 @@ impl OnChainConfig {
                     if data == "0,0" {
                         None
                     } else {
-                        let parts: Vec<u32> = data.split(",").map(
-                            |x| x.parse::<u32>().unwrap()
-                        ).collect();
+                        let parts: Vec<u32> =
+                            data.split(",").map(|x| x.parse::<u32>().unwrap()).collect();
                         assert_eq!(parts.len(), 2);
                         Some((parts[0], parts[1]))
                     }
@@ -558,7 +556,6 @@ impl OnChainConfig {
         } else {
             panic!("not implemented");
         }
-
     }
 }
 

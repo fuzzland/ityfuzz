@@ -1,8 +1,8 @@
-use std::collections::HashSet;
+use crate::evm::mutation_utils::ConstantPoolMetadata;
 use libafl::state::{HasMetadata, State};
 use primitive_types::U256;
 use revm::Bytecode;
-use crate::evm::mutation_utils::ConstantPoolMetadata;
+use std::collections::HashSet;
 
 pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
     let mut idx = 0;
@@ -38,7 +38,7 @@ pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
                             false
                         }
                     }
-                    None => { false }
+                    None => false,
                 };
 
                 // next op is not JUMPI
@@ -66,8 +66,10 @@ pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
 }
 
 // this can be costly, ensure sampling to be cheap
-pub fn add_analysis_result_to_state<S>(bytecode: &Bytecode, state: &mut S) where
-    S: HasMetadata + State{
+pub fn add_analysis_result_to_state<S>(bytecode: &Bytecode, state: &mut S)
+where
+    S: HasMetadata + State,
+{
     let constants = find_constants(bytecode);
     match state.metadata_mut().get_mut::<ConstantPoolMetadata>() {
         Some(meta) => {
@@ -87,8 +89,8 @@ pub fn add_analysis_result_to_state<S>(bytecode: &Bytecode, state: &mut S) where
 
 #[cfg(test)]
 mod tests {
-    use bytes::Bytes;
     use super::*;
+    use bytes::Bytes;
     use revm::Bytecode;
 
     #[test]
@@ -97,6 +99,12 @@ mod tests {
             hex::decode("73ccef237d1d745fba9114a4c8c7c1effb9edc87d830146080604052600080fdfea26469706673582212205377adc79bb987de03049c655529acbf51a3f7d36bb14c89a2d2f790fee54d6064736f6c63430008110033").unwrap()
         ));
         let constants = find_constants(&bytecode);
-        println!("{:?}", constants.iter().map(|x| hex::encode(x)).collect::<Vec<String>>());
+        println!(
+            "{:?}",
+            constants
+                .iter()
+                .map(|x| hex::encode(x))
+                .collect::<Vec<String>>()
+        );
     }
 }
