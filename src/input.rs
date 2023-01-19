@@ -11,8 +11,11 @@ use std::path::Path;
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
+    fn get_caller_mut(&mut self) -> &mut H160;
     fn get_caller(&self) -> H160;
+    fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
+    fn get_state_mut(&mut self) -> &mut VMState;
     fn get_state(&self) -> &evm::VMState;
 }
 
@@ -46,12 +49,24 @@ impl VMInputT for VMInput {
         self.data.get_bytes()
     }
 
+    fn get_caller_mut(&mut self) -> &mut H160 {
+        &mut self.caller
+    }
+
     fn get_caller(&self) -> H160 {
         self.caller.clone()
     }
 
+    fn get_contract_mut(&mut self) -> &mut H160 {
+        &mut self.contract
+    }
+
     fn get_contract(&self) -> H160 {
         self.contract.clone()
+    }
+
+    fn get_state_mut(&mut self) -> &mut VMState {
+        &mut self.state
     }
 
     fn get_state(&self) -> &VMState {

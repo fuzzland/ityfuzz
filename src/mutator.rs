@@ -7,12 +7,15 @@ use libafl::prelude::{
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
     BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasMaxSize, HasRand,
-    Mutator, Prepend, QwordAddMutator, State, WordAddMutator, WordInterestingMutator,
+    Mutator, Prepend, QwordAddMutator, Rand, State, WordAddMutator, WordInterestingMutator,
 };
 use libafl::Error;
+use primitive_types::H160;
 
 use crate::abi::{AArray, ADynamic, BoxedABI, A256};
+use crate::state::FuzzStateT;
 use rand::random;
+use serde::{Deserialize, Serialize};
 
 pub struct FuzzMutator {}
 
@@ -22,26 +25,10 @@ impl FuzzMutator {
     }
 }
 
-//
-// impl BoxedABI {
-//     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-//         where S: State + HasRand + HasMaxSize {
-//         match self.get_type() {
-//             ABILossyType::T256 => {
-//                 let mut inner = self.get_mut().downcast_mut::<A256>().unwrap();
-//                 inner.mutate(state)
-//             }
-//             _ => {
-//                 MutationResult::Mutated
-//             }
-//         }
-//     }
-// }
-
 impl<I, S> Mutator<I, S> for FuzzMutator
 where
     I: VMInputT + Input,
-    S: State,
+    S: State + HasRand + FuzzStateT,
 {
     fn mutate(
         &mut self,
@@ -49,7 +36,19 @@ where
         input: &mut I,
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
-        todo!()
+        match state.rand_mut().below(2) {
+            0 => {
+                // mutate the caller
+            }
+            1 => {
+                // cross over infant state
+                // we need power schedule here for infant states
+            }
+            _ => {
+                panic!("unreachable");
+            }
+        }
+        return Ok(MutationResult::Mutated);
     }
 
     fn post_exec(

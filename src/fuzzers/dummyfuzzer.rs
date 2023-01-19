@@ -27,6 +27,7 @@ use std::{
     path::PathBuf,
 };
 
+use crate::state::FuzzState;
 use nix::unistd::dup;
 use primitive_types::H160;
 
@@ -79,13 +80,7 @@ pub fn dummyfuzzer(
     // let feedback = feedback_or!(coverage_feedback, OracleCoverageFeedback::new());
     let mut objective = ConstFeedback::new(false);
     let mut feedback = ConstFeedback::new(false);
-    let mut state = StdState::new(
-        StdRand::with_seed(current_nanos()),
-        InMemoryItyCorpus::<VMInput>::default(),
-        OnDiskCorpus::new(objective_dir).unwrap(),
-        &mut feedback,
-        &mut objective,
-    )?;
+    let mut state = FuzzState::new();
 
     // TODO: currently Scheduler.next: () => usize, we might want to return something different
     let scheduler = StdScheduler::new();
