@@ -7,50 +7,42 @@ use libafl::Error;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use libafl::prelude::{current_nanos, StdRand};
-use libafl::state::{HasMaxSize, HasRand};
+use libafl::state::{HasMaxSize, HasRand, State};
+use crate::state_input::ItyVMState;
 
+// Note: Probably a better design is to use StdState with a custom corpus?
+// What are other metadata we need?
+// shou: may need intermediate info for future adding concolic execution
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct ItyVMState{
-    pub state: VMState,
+pub struct FuzzState {
+    infant_states: InMemoryCorpus<ItyVMState>,
+    txn_corpus: InMemoryCorpus<VMInput>,
     pub rand_generator: StdRand,
     pub max_size: usize,
 }
 
-impl ItyVMState {
+impl FuzzState {
     pub fn new() -> Self {
         Self {
-            state: VMState::new(),
+            infant_states: InMemoryCorpus::new(),
+            txn_corpus: InMemoryCorpus::new(),
             rand_generator: StdRand::with_seed(current_nanos()),
-            max_size: 1500,
+            max_size: 0,
         }
     }
 }
 
-impl Input for ItyVMState {
-    fn to_file<P>(&self, path: P) -> Result<(), Error>
-    where
-        P: AsRef<Path>,
-    {
-        todo!()
+impl HasMaxSize for FuzzState {
+    fn max_size(&self) -> usize {
+        self.max_size
     }
 
-    fn from_file<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        todo!()
-    }
-
-    fn generate_name(&self, idx: usize) -> String {
-        todo!()
-    }
-
-    fn wrapped_as_testcase(&mut self) {
-        // todo!()
+    fn set_max_size(&mut self, max_size: usize) {
+        self.max_size = max_size;
     }
 }
 
-impl HasRand for ItyVMState {
+impl HasRand for FuzzState {
     type Rand = StdRand;
 
     fn rand(&self) -> &Self::Rand {
@@ -62,20 +54,6 @@ impl HasRand for ItyVMState {
     }
 }
 
-impl HasMaxSize for ItyVMState {
-    fn max_size(&self) -> usize {
-        self.max_size
-    }
-
-    fn set_max_size(&mut self, max_size: usize) {
-        self.max_size = max_size;
-    }
-}
-
-// Note: Probably a better design is to use StdState with a custom corpus?
-// What are other metadata we need?
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FuzzState {
-    infant_states: InMemoryCorpus<ItyVMState>,
-    txn_corpus: InMemoryCorpus<VMInput>,
+impl State for FuzzState {
+    
 }

@@ -1,10 +1,10 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::DerefMut;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Bytes};
 use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::{MutationResult, MutatorsTuple};
-use libafl::prelude::{tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator, ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend, QwordAddMutator, WordAddMutator, WordInterestingMutator, };
+use libafl::mutators::{MutationResult};
+use libafl::prelude::{Mutator};
 use libafl::state::{HasMaxSize, HasRand, State};
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -346,15 +346,18 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
     if abi_name_str.starts_with("uint") {
         let len = abi_name_str[4..].parse::<usize>().unwrap();
-        return get_abi_type_basic("uint", len);
+        assert!(len % 8 == 0 && len >= 8);
+        return get_abi_type_basic("uint", len / 8);
     }
     if abi_name_str.starts_with("int") {
         let len = abi_name_str[3..].parse::<usize>().unwrap();
-        return get_abi_type_basic("int", len);
+        assert!(len % 8 == 0 && len >= 8);
+        return get_abi_type_basic("int", len / 8);
     }
     if abi_name_str.starts_with("bytes") {
         let len = abi_name_str[5..].parse::<usize>().unwrap();
-        return get_abi_type_basic("bytes", len);
+        assert!(len % 8 == 0 && len >= 8);
+        return get_abi_type_basic("bytes", len / 8);
     }
     // tuple
     if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
@@ -424,10 +427,14 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
 mod tests {
     use super::*;
     use hex;
+    use crate::state::FuzzState;
+
     #[test]
     fn test_int() {
-        let abi = get_abi_type_boxed(&String::from("int8"));
-        println!("abi: {:?}", hex::encode(abi.get_bytes()));
+        let mut abi = get_abi_type_boxed(&String::from("int8"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!("result: {:?} abi: {:?}", mutation_result, hex::encode(abi.get_bytes()));
     }
 }
 
