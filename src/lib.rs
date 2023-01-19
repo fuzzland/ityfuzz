@@ -1,3 +1,5 @@
+extern crate core;
+
 mod abi;
 mod corpus;
 mod evm;
