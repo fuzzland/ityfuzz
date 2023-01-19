@@ -2,10 +2,16 @@ use crate::input::VMInputT;
 use crate::state::FuzzState;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::{MutationResult, MutatorsTuple};
-use libafl::prelude::{tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator, ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasRand, Mutator, Prepend, QwordAddMutator, State, WordAddMutator, WordInterestingMutator, HasMaxSize};
+use libafl::prelude::{
+    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
+    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
+    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, HasMaxSize, HasRand,
+    Mutator, Prepend, QwordAddMutator, State, WordAddMutator, WordInterestingMutator,
+};
 use libafl::Error;
 
-use crate::abi::{AArray, ADynamic, A256, BoxedABI};
+use crate::abi::{AArray, ADynamic, BoxedABI, A256};
 use rand::random;
 
 pub struct FuzzMutator {}

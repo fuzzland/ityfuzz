@@ -1,15 +1,15 @@
 use std::collections::HashMap;
-use std::{str::FromStr};
+use std::str::FromStr;
 
 use crate::rand;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
+use revm::db::BenchmarkDB;
 use revm::Return::Continue;
 use revm::{
-    Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host,
-    Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
+    Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return,
+    SelfDestructResult, Spec,
 };
-use revm::db::BenchmarkDB;
 
 const MAP_SIZE: usize = 256;
 

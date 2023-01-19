@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use libafl::executors::{Executor, ExitKind};
 use libafl::inputs::Input;
 use libafl::prelude::{HasObservers, ObserversTuple};
-use libafl::{Error};
+use libafl::Error;
 use std::fmt::Debug;
 
 use crate::input::VMInputT;

@@ -5,12 +5,12 @@ mod executor;
 mod fuzzer;
 mod fuzzers;
 mod input;
+mod mutation_utils;
 mod mutator;
 mod rand;
 mod state;
-mod types;
-mod mutation_utils;
 mod state_input;
+mod types;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
