@@ -1,4 +1,4 @@
-use crate::evm::{VMState, ExecutionResult};
+use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
 use crate::state_input::ItyVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
@@ -219,7 +219,6 @@ impl HasExecutionResult for FuzzState {
     fn set_execution_result(&mut self, res: ExecutionResult) {
         self.execution_result = res
     }
-    
 }
 
 impl State for FuzzState {}

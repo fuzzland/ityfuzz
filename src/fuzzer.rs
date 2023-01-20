@@ -3,11 +3,16 @@ use std::marker::PhantomData;
 
 use libafl::{
     fuzzer::Fuzzer,
-    prelude::{EventManager, Executor, Feedback, HasObservers, Input, ObserversTuple, current_time, Testcase, Corpus, EventConfig, Event},
+    mark_feature_time,
+    prelude::{
+        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
+        Input, ObserversTuple, Testcase,
+    },
     schedulers::Scheduler,
     stages::StagesTuple,
-    state::{HasClientPerfMonitor, HasExecutions, HasMetadata, HasCorpus, HasSolutions},
-    Error, Evaluator, ExecuteInputResult, start_timer, mark_feature_time,
+    start_timer,
+    state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
+    Error, Evaluator, ExecuteInputResult,
 };
 
 #[derive(Debug)]
@@ -89,7 +94,6 @@ where
         input: I,
         send_events: bool,
     ) -> Result<(ExecuteInputResult, Option<usize>), Error> {
-
         start_timer!(state);
         executor.observers_mut().pre_exec_all(state, &input)?;
         mark_feature_time!(state, PerfFeature::PreExecObservers);
@@ -105,8 +109,10 @@ where
         mark_feature_time!(state, PerfFeature::PostExecObservers);
 
         let observers = executor.observers();
-        let is_solution = self.objective.is_interesting(state, manager, &input, observers, &exitkind)?;
-    
+        let is_solution = self
+            .objective
+            .is_interesting(state, manager, &input, observers, &exitkind)?;
+
         let mut res = ExecuteInputResult::None;
         if is_solution {
             res = ExecuteInputResult::Solution;
@@ -152,7 +158,7 @@ where
                             corpus_size: state.corpus().count(),
                             client_config: manager.configuration(),
                             time: current_time(),
-                            executions: 0
+                            executions: 0,
                         },
                     )?;
                 }
@@ -179,7 +185,6 @@ where
                 Ok((res, None))
             }
         }
-
     }
 
     fn add_input(

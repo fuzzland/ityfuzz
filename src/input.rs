@@ -80,7 +80,6 @@ impl VMInputT for VMInput {
 }
 
 impl Input for VMInput {
-
     fn generate_name(&self, idx: usize) -> String {
         todo!()
     }
