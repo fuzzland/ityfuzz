@@ -9,6 +9,7 @@ use std::fmt::Debug;
 
 use crate::input::VMInputT;
 use crate::EVMExecutor;
+use crate::state::HasExecutionResult;
 
 #[derive(Clone)]
 pub struct FuzzExecutor<I, S, OT>
@@ -52,6 +53,7 @@ impl<EM, I, S, Z, OT> Executor<EM, I, S, Z> for FuzzExecutor<I, S, OT>
 where
     I: VMInputT + Input,
     OT: ObserversTuple<I, S>,
+    S: HasExecutionResult
 {
     fn run_target(
         &mut self,
@@ -60,13 +62,15 @@ where
         mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
-        self.evm_executor.execute(
+        let res = self.evm_executor.execute(
             input.get_contract(),
             input.get_caller(),
             input.get_state(),
             input.to_bytes().clone(),
         );
-        // todo: run oracle here
+        // the execution result is added to the fuzzer state
+        // later the feedback/objective can run oracle on this result
+        state.set_execution_result(res);
         Ok(ExitKind::Ok)
     }
 }
