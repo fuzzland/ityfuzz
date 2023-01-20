@@ -35,7 +35,7 @@ where
 impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
 where
     I: VMInputT + Input,
-    S: State + HasRand + FuzzStateT,
+    S: State + HasRand + HasMaxSize + FuzzStateT,
     SC: Scheduler<ItyVMState, InfantStateState>,
 {
     fn mutate(
@@ -44,7 +44,7 @@ where
         input: &mut I,
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
-        match state.rand_mut().below(2) {
+        match state.rand_mut().below(3) {
             0 => {
                 // mutate the caller
             }
@@ -53,6 +53,9 @@ where
                 // we need power schedule here for infant states
                 let ItyVMState(mutant) = state.get_infant_state(&self.infant_scheduler).unwrap().1;
                 input.set_state(&mutant);
+            }
+            2 => {
+                input.mutate(state);
             }
             _ => {
                 panic!("unreachable");
