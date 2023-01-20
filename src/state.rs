@@ -1,4 +1,4 @@
-use crate::evm::VMState;
+use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
 use crate::state_input::ItyVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
@@ -30,6 +30,11 @@ pub trait FuzzStateT {
         SC: Scheduler<ItyVMState, InfantStateState>;
 }
 
+pub trait HasExecutionResult {
+    fn get_execution_result(self) -> ExecutionResult;
+    fn set_execution_result(&mut self, res: ExecutionResult);
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FuzzState {
     infant_states_state: InfantStateState,
@@ -37,6 +42,7 @@ pub struct FuzzState {
     solutions: OnDiskCorpus<VMInput>,
     executions: usize,
     metadata: SerdeAnyMap,
+    execution_result: ExecutionResult,
     pub rand_generator: StdRand,
     pub max_size: usize,
 }
@@ -49,6 +55,7 @@ impl FuzzState {
             solutions: OnDiskCorpus::new(Path::new("solutions")).unwrap(),
             executions: 0,
             metadata: Default::default(),
+            execution_result: ExecutionResult::empty_result(),
             rand_generator: StdRand::with_seed(current_nanos()),
             max_size: 1500,
         }
@@ -201,6 +208,16 @@ impl HasClientPerfMonitor for FuzzState {
 
     fn introspection_monitor_mut(&mut self) -> &mut ClientPerfMonitor {
         todo!()
+    }
+}
+
+impl HasExecutionResult for FuzzState {
+    fn get_execution_result(self) -> ExecutionResult {
+        self.execution_result
+    }
+
+    fn set_execution_result(&mut self, res: ExecutionResult) {
+        self.execution_result = res
     }
 }
 

@@ -80,20 +80,6 @@ impl VMInputT for VMInput {
 }
 
 impl Input for VMInput {
-    fn to_file<P>(&self, path: P) -> Result<(), Error>
-    where
-        P: AsRef<Path>,
-    {
-        todo!()
-    }
-
-    fn from_file<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        todo!()
-    }
-
     fn generate_name(&self, idx: usize) -> String {
         todo!()
     }

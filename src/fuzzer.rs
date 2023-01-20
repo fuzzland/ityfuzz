@@ -3,10 +3,15 @@ use std::marker::PhantomData;
 
 use libafl::{
     fuzzer::Fuzzer,
-    prelude::{EventManager, Executor, Feedback, HasObservers, Input, ObserversTuple},
+    mark_feature_time,
+    prelude::{
+        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
+        Input, ObserversTuple, Testcase,
+    },
     schedulers::Scheduler,
     stages::StagesTuple,
-    state::{HasClientPerfMonitor, HasExecutions, HasMetadata},
+    start_timer,
+    state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
 
@@ -79,7 +84,7 @@ where
     EM: EventManager<E, I, S, Self>,
     I: VMInputT,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor,
+    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I>,
 {
     fn evaluate_input_events(
         &mut self,
@@ -89,7 +94,97 @@ where
         input: I,
         send_events: bool,
     ) -> Result<(ExecuteInputResult, Option<usize>), Error> {
-        todo!()
+        start_timer!(state);
+        executor.observers_mut().pre_exec_all(state, &input)?;
+        mark_feature_time!(state, PerfFeature::PreExecObservers);
+
+        start_timer!(state);
+        let exitkind = executor.run_target(self, state, manager, &input)?;
+        mark_feature_time!(state, PerfFeature::TargetExecution);
+
+        start_timer!(state);
+        executor
+            .observers_mut()
+            .post_exec_all(state, &input, &exitkind)?;
+        mark_feature_time!(state, PerfFeature::PostExecObservers);
+
+        let observers = executor.observers();
+        let is_solution = self
+            .objective
+            .is_interesting(state, manager, &input, observers, &exitkind)?;
+
+        let mut res = ExecuteInputResult::None;
+        if is_solution {
+            res = ExecuteInputResult::Solution;
+        } else {
+            let is_corpus = self
+                .feedback
+                .is_interesting(state, manager, &input, observers, &exitkind)?;
+            if is_corpus {
+                res = ExecuteInputResult::Corpus;
+            }
+        }
+
+        match res {
+            ExecuteInputResult::None => {
+                self.feedback.discard_metadata(state, &input)?;
+                self.objective.discard_metadata(state, &input)?;
+                Ok((res, None))
+            }
+            ExecuteInputResult::Corpus => {
+                // Not a solution
+                self.objective.discard_metadata(state, &input)?;
+
+                // Add the input to the main corpus
+                let mut testcase = Testcase::new(input.clone());
+                self.feedback.append_metadata(state, &mut testcase)?;
+                let idx = state.corpus_mut().add(testcase)?;
+                // TODO: Depend on what we put into the corpus here, we may want to add the current state to infant state?
+                self.scheduler.on_add(state, idx)?;
+
+                if send_events {
+                    // TODO set None for fast targets
+                    let observers_buf = if manager.configuration() == EventConfig::AlwaysUnique {
+                        None
+                    } else {
+                        Some(manager.serialize_observers(observers)?)
+                    };
+                    manager.fire(
+                        state,
+                        Event::NewTestcase {
+                            input,
+                            observers_buf,
+                            exit_kind: exitkind,
+                            corpus_size: state.corpus().count(),
+                            client_config: manager.configuration(),
+                            time: current_time(),
+                            executions: 0,
+                        },
+                    )?;
+                }
+                Ok((res, Some(idx)))
+            }
+            ExecuteInputResult::Solution => {
+                // Not interesting
+                self.feedback.discard_metadata(state, &input)?;
+
+                // The input is a solution, add it to the respective corpus
+                let mut testcase = Testcase::new(input.clone());
+                self.objective.append_metadata(state, &mut testcase)?;
+                state.solutions_mut().add(testcase)?;
+
+                if send_events {
+                    manager.fire(
+                        state,
+                        Event::Objective {
+                            objective_size: state.solutions().count(),
+                        },
+                    )?;
+                }
+
+                Ok((res, None))
+            }
+        }
     }
 
     fn add_input(
