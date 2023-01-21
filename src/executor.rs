@@ -17,7 +17,7 @@ where
     I: VMInputT,
     OT: ObserversTuple<I, S>,
 {
-    pub evm_executor: EVMExecutor,
+    pub evm_executor: EVMExecutor<I, S>,
     observers: OT,
     phantom: PhantomData<(I, S)>,
 }
@@ -29,7 +29,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzExecutor")
-            .field("evm_executor", &self.evm_executor)
+            // .field("evm_executor", &self.evm_executor)
             .field("observers", &self.observers)
             .finish()
     }
@@ -40,7 +40,7 @@ where
     I: VMInputT,
     OT: ObserversTuple<I, S>,
 {
-    pub fn new(evm_executor: EVMExecutor, observers: OT) -> Self {
+    pub fn new(evm_executor: EVMExecutor<I, S>, observers: OT) -> Self {
         Self {
             evm_executor,
             observers,
@@ -67,6 +67,7 @@ where
             input.get_caller(),
             input.get_state(),
             input.to_bytes().clone(),
+            &mut self.observers,
         );
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
@@ -104,11 +105,12 @@ mod tests {
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
     use libafl::state::State;
     use revm::Bytecode;
+    use crate::evm::JMP_MAP;
 
     #[test]
     fn test_fuzz_executor() {
         let evm_executor = EVMExecutor::new(FuzzHost::new(), vec![], generate_random_address());
-        let observers = tuple_list!();
+        let mut observers = tuple_list!();
         let mut fuzz_executor: FuzzExecutor<VMInput, FuzzState, ()> =
             FuzzExecutor::new(evm_executor, observers);
         let mut vm_state = VMState::new();
@@ -144,12 +146,13 @@ mod tests {
                 ]
                 .concat(),
             ),
+            &mut observers,
         );
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
         for i in 0..MAP_SIZE {
-            know_map[i] = fuzz_executor.evm_executor.host.jmp_map[i];
-            fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+            know_map[i] = unsafe { JMP_MAP[i] };
+            unsafe {JMP_MAP[i] = 0 };
         }
         assert_eq!(execution_result_0.reverted, false);
 
@@ -166,15 +169,16 @@ mod tests {
                 ]
                 .concat(),
             ),
+            &mut observers,
         );
 
         // checking cmp map about coverage
         let mut cov_changed = false;
         for i in 0..MAP_SIZE {
-            let hit = fuzz_executor.evm_executor.host.jmp_map[i];
+            let hit = unsafe{ JMP_MAP[i] };
             if hit != know_map[i] && hit != 0 {
                 println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
-                fuzz_executor.evm_executor.host.jmp_map[i] = 0;
+                unsafe{ JMP_MAP[i] = 0 };
                 cov_changed = true;
             }
         }

@@ -1,4 +1,5 @@
 use crate::abi::BoxedABI;
+use crate::state::FuzzState;
 use crate::{evm, VMState};
 use bytes::Bytes;
 use libafl::inputs::Input;
@@ -7,12 +8,13 @@ use libafl::Error;
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use crate::state::FuzzState;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
-    fn mutate<S>(&mut self, state: &mut S) -> MutationResult where S: State + HasRand + HasMaxSize;
+    fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+    where
+        S: State + HasRand + HasMaxSize;
     fn get_caller_mut(&mut self) -> &mut H160;
     fn get_caller(&self) -> H160;
     fn get_contract_mut(&mut self) -> &mut H160;
@@ -53,7 +55,9 @@ impl VMInputT for VMInput {
     }
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-    where S: State + HasRand + HasMaxSize {
+    where
+        S: State + HasRand + HasMaxSize,
+    {
         self.data.mutate(state)
     }
 
