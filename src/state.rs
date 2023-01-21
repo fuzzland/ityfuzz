@@ -6,11 +6,12 @@ use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::powersched::PowerSchedule;
 use libafl::prelude::{
-    current_nanos, HasMetadata, QueueScheduler, Scheduler, SerdeAnyMap, StdRand,
+    current_nanos, HasMetadata, NamedSerdeAnyMap, QueueScheduler, Scheduler, SerdeAnyMap, StdRand,
 };
 use libafl::schedulers::PowerQueueScheduler;
 use libafl::state::{
-    HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasRand, HasSolutions, State,
+    HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
+    HasSolutions, State,
 };
 use libafl::Error;
 use nix::libc::stat;
@@ -42,6 +43,7 @@ pub struct FuzzState {
     solutions: OnDiskCorpus<VMInput>,
     executions: usize,
     metadata: SerdeAnyMap,
+    named_metadata: NamedSerdeAnyMap,
     execution_result: ExecutionResult,
     pub rand_generator: StdRand,
     pub max_size: usize,
@@ -55,6 +57,7 @@ impl FuzzState {
             solutions: OnDiskCorpus::new(Path::new("solutions")).unwrap(),
             executions: 0,
             metadata: Default::default(),
+            named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
             rand_generator: StdRand::with_seed(current_nanos()),
             max_size: 1500,
@@ -218,6 +221,16 @@ impl HasExecutionResult for FuzzState {
 
     fn set_execution_result(&mut self, res: ExecutionResult) {
         self.execution_result = res
+    }
+}
+
+impl HasNamedMetadata for FuzzState {
+    fn named_metadata(&self) -> &NamedSerdeAnyMap {
+        &self.named_metadata
+    }
+
+    fn named_metadata_mut(&mut self) -> &mut NamedSerdeAnyMap {
+        &mut self.named_metadata
     }
 }
 

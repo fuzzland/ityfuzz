@@ -57,9 +57,7 @@ impl Host for FuzzHost {
                         1
                     };
                     JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
-                        (JMP_MAP
-                            [(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE]
-                            + 1)
+                        (JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] + 1)
                             % 255;
                 }
                 _ => {}

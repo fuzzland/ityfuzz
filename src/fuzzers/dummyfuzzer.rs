@@ -1,12 +1,12 @@
 use crate::{
     corpus::InMemoryItyCorpus,
-    evm::{EVMExecutor, FuzzHost},
+    evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::{VMInput, VMInputT},
     mutator::FuzzMutator,
 };
-use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
+use libafl::prelude::{powersched::PowerSchedule, MapFeedback, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
 use libafl::{
     prelude::{
@@ -77,26 +77,26 @@ pub fn dummyfuzzer(
     // TODO: Finish Mutator
     let mutator = FuzzMutator::new(PowerQueueScheduler::new(PowerSchedule::FAST));
 
-    // TODO: Finish observer
-    let edges = unsafe { &mut [0; 10] };
-    let edges_observer = HitcountsMapObserver::new(StdMapObserver::new("edges", edges));
-    // TODO: implement coverage feedback for smart contract programs
+    let jmps = unsafe { &mut JMP_MAP };
+    let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
+    // TODO: implement OracleFeedback
     // let objective = OracleFeedback::new();
     // let feedback = feedback_or!(coverage_feedback, OracleCoverageFeedback::new());
     let mut objective = ConstFeedback::new(false);
-    let mut feedback = ConstFeedback::new(false);
+    // let mut feedback = ConstFeedback::new(false);
+    let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let mut state = FuzzState::new();
 
     // TODO: currently Scheduler.next: () => usize, we might want to return something different
     let scheduler = StdScheduler::new();
 
-    let std_stage = StdPowerMutationalStage::new(mutator, &edges_observer);
+    let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(std_stage);
 
     // TODO: Fill EVMExecutor with real data?
     let mut executor = FuzzExecutor::new(
         EVMExecutor::new(FuzzHost::new(), Vec::new(), H160::zero()),
-        tuple_list!(edges_observer),
+        tuple_list!(jmp_observer),
     );
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
