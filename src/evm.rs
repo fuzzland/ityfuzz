@@ -202,7 +202,7 @@ impl<I, S> EVMExecutor<I, S> {
             host: FuzzHost,
             contract_addresses,
             deployer,
-            phandom: PhantomData::default(),
+            phandom: PhantomData,
         }
     }
 
