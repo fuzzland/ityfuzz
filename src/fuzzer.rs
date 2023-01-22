@@ -1,4 +1,8 @@
-use crate::{input::VMInputT, state::{FuzzStateT, HasInfantStateState}, state_input::ItyVMState};
+use crate::{
+    input::VMInputT,
+    state::{FuzzStateT, HasInfantStateState},
+    state_input::ItyVMState,
+};
 use std::marker::PhantomData;
 
 use libafl::{
@@ -141,10 +145,12 @@ where
                 let idx = state.corpus_mut().add(testcase)?;
                 self.scheduler.on_add(state, idx)?;
 
-
                 // add the current VMState to the infant state corpus
-                state.get_infant_state_state().corpus_mut().add(Testcase::new(ItyVMState(input.get_state().clone())))?;
-                // FIXME: 
+                state
+                    .get_infant_state_state()
+                    .corpus_mut()
+                    .add(Testcase::new(ItyVMState(input.get_state().clone())))?;
+                // FIXME:
                 // add current scheduler metadata
 
                 if send_events {

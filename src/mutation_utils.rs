@@ -5,7 +5,7 @@ use libafl::prelude::{
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
     BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend,
-    QwordAddMutator, WordAddMutator, WordInterestingMutator, StdScheduledMutator,
+    QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
 };
 use libafl::state::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
