@@ -1,4 +1,4 @@
-use crate::input::VMInputT;
+use crate::{input::VMInputT, state::{FuzzStateT, HasInfantStateState}, state_input::ItyVMState};
 use std::marker::PhantomData;
 
 use libafl::{
@@ -84,7 +84,7 @@ where
     EM: EventManager<E, I, S, Self>,
     I: VMInputT,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I>,
+    S: HasClientPerfMonitor + HasCorpus<I> + HasSolutions<I> + HasInfantStateState,
 {
     fn evaluate_input_events(
         &mut self,
@@ -139,8 +139,13 @@ where
                 let mut testcase = Testcase::new(input.clone());
                 self.feedback.append_metadata(state, &mut testcase)?;
                 let idx = state.corpus_mut().add(testcase)?;
-                // TODO: Depend on what we put into the corpus here, we may want to add the current state to infant state?
                 self.scheduler.on_add(state, idx)?;
+
+
+                // add the current VMState to the infant state corpus
+                state.get_infant_state_state().corpus_mut().add(Testcase::new(ItyVMState(input.get_state().clone())))?;
+                // FIXME: 
+                // add current scheduler metadata
 
                 if send_events {
                     // TODO set None for fast targets

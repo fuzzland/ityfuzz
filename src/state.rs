@@ -31,6 +31,10 @@ pub trait FuzzStateT {
         SC: Scheduler<ItyVMState, InfantStateState>;
 }
 
+pub trait HasInfantStateState {
+    fn get_infant_state_state(&mut self) -> &mut InfantStateState;
+}
+
 pub trait HasExecutionResult {
     fn get_execution_result(self) -> ExecutionResult;
     fn set_execution_result(&mut self, res: ExecutionResult);
@@ -132,9 +136,16 @@ impl FuzzStateT for FuzzState {
             .corpus_mut()
             .add(Testcase::new(ItyVMState::new()))
             .expect("Failed to add new infant state");
+        // FIXME: This mixes the corpus and infant state
         scheduler
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
+    }
+}
+
+impl HasInfantStateState for FuzzState {
+    fn get_infant_state_state(&mut self) -> &mut InfantStateState {
+        &mut self.infant_states_state
     }
 }
 
