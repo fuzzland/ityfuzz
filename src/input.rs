@@ -17,6 +17,7 @@ pub trait VMInputT: Input {
         S: State + HasRand + HasMaxSize;
     fn get_caller_mut(&mut self) -> &mut H160;
     fn get_caller(&self) -> H160;
+    fn set_caller(&mut self, caller: H160);
     fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
     fn get_state_mut(&mut self) -> &mut VMState;
@@ -67,6 +68,10 @@ impl VMInputT for VMInput {
 
     fn get_caller(&self) -> H160 {
         self.caller.clone()
+    }
+
+    fn set_caller(&mut self, caller: H160) {
+        self.caller = caller;
     }
 
     fn get_contract_mut(&mut self) -> &mut H160 {
