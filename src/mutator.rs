@@ -44,7 +44,7 @@ where
         input: &mut I,
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
-        match state.rand_mut().below(3) {
+        match state.rand_mut().below(10) {
             0 => {
                 // mutate the caller
             }
@@ -54,11 +54,8 @@ where
                 let ItyVMState(mutant) = state.get_infant_state(&self.infant_scheduler).unwrap().1;
                 input.set_state(&mutant);
             }
-            2 => {
-                input.mutate(state);
-            }
             _ => {
-                panic!("unreachable");
+                input.mutate(state);
             }
         }
         return Ok(MutationResult::Mutated);
