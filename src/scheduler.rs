@@ -45,7 +45,7 @@ struct VoteData {
     pub visits_total: usize,
     pub votes_total: usize,
     #[cfg(feature = "full_trace")]
-    removed: usize
+    removed: usize,
 }
 
 impl_serdeany!(VoteData);
@@ -66,7 +66,7 @@ where
                 visits_total: 1,
                 votes_total: 1,
                 #[cfg(feature = "full_trace")]
-                removed: 0
+                removed: 0,
             });
         }
 
@@ -86,7 +86,7 @@ where
             let data = state.metadata().get::<VoteData>().unwrap();
             #[cfg(feature = "full_trace")]
             {
-                corpus_size -= unsafe {REMOVED_CORPUS};
+                corpus_size -= unsafe { REMOVED_CORPUS };
             }
 
             if corpus_size > DROP_THRESHOLD {
@@ -114,7 +114,6 @@ where
                     {
                         state.corpus_mut().remove(*x).expect("failed to remove");
                     }
-
                 });
             }
         }

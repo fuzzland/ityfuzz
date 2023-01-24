@@ -1,8 +1,8 @@
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
 use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::{EVMInput};
+use crate::evm::input::EVMInput;
+use crate::evm::mutator::AccessPattern;
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
@@ -18,12 +18,12 @@ use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::{H160, U256};
 use revm::Bytecode;
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
-use crate::evm::bytecode_analyzer;
-use crate::evm::mutator::AccessPattern;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -61,7 +61,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     Bytecode::new_raw(Bytes::from(contract.code)),
                     Some(Bytes::from(contract.constructor_args)),
                     contract.deployed_address,
-                    self.state
+                    self.state,
                 ) {
                     Some(addr) => addr,
                     None => {
@@ -74,7 +74,8 @@ impl<'a> EVMCorpusInitializer<'a> {
                 // directly set bytecode
                 let contract_code = Bytecode::new_raw(Bytes::from(contract.code));
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
-                self.executor.host
+                self.executor
+                    .host
                     .set_code(contract.deployed_address, contract_code);
                 contract.deployed_address
             };
@@ -91,7 +92,11 @@ impl<'a> EVMCorpusInitializer<'a> {
                     );
 
                     for addr in blacklists {
-                        mid.onchain_middlware.deref().borrow_mut().blacklist.insert(addr);
+                        mid.onchain_middlware
+                            .deref()
+                            .borrow_mut()
+                            .blacklist
+                            .insert(addr);
                     }
                 }
                 None => {}
@@ -144,7 +149,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut default_callers = HashSet::from([
             fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
             fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
-            fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb")
+            fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb"),
         ]);
 
         for caller in default_callers {
@@ -202,7 +207,11 @@ impl<'a> EVMCorpusInitializer<'a> {
             data: Some(abi_instance),
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: if abi.is_payable { Some(U256::zero()) } else { None },
+            txn_value: if abi.is_payable {
+                Some(U256::zero())
+            } else {
+                None
+            },
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
