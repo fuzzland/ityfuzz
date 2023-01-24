@@ -28,10 +28,10 @@ use std::{
     path::PathBuf,
 };
 
+use crate::infant_state_stage::InfantStateStage;
 use crate::state::FuzzState;
 use nix::unistd::dup;
 use primitive_types::H160;
-use crate::infant_state_stage::InfantStateStage;
 
 pub fn dummyfuzzer(
     corpus_dir: PathBuf,
