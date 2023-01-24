@@ -7,7 +7,7 @@ mod evm;
 mod executor;
 mod fuzzer;
 mod fuzzers;
-mod infant_feedback;
+mod feedback;
 mod infant_state_stage;
 mod input;
 mod mutation_utils;
