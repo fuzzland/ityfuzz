@@ -14,17 +14,17 @@ use std::str::FromStr;
 use z3::ast::{Bool, BV};
 use z3::{ast, ast::Ast, Config, Context, Solver};
 
-pub struct ConcolicHost<'a> {
+pub struct ConcolicHost {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
     code: HashMap<H160, Bytecode>,
-    solver: Solver<'a>,
+    solver: Solver<'static>,
     ctx: Context,
-    symbolic_stack: Vec<Option<z3::ast::BV<'a>>>,
+    symbolic_stack: Vec<Option<BV<'static>>>,
 }
 
-impl<'a> ConcolicHost<'a> {
-    pub fn new(solver: Solver<'a>, ctx: Context) -> Self {
+impl ConcolicHost {
+    pub fn new(solver: Solver<'static>, ctx: Context) -> Self {
         Self {
             env: Env::default(),
             data: HashMap::new(),
@@ -35,93 +35,67 @@ impl<'a> ConcolicHost<'a> {
         }
     }
 
-    pub fn get_solver_mut(&mut self) -> &mut Solver<'a> {
-        self.solver.borrow_mut()
-    }
+    // pub fn get_bv_from_stack(&self, index: usize, interp: &mut Interpreter) -> BV {
+    //
+    // }
 
-    pub fn get_bv_from_stack(&self, index: usize, interp: &mut Interpreter) -> BV {
-        match self.symbolic_stack[index].borrow() {
-            Some(bv) => bv.clone(),
-            None => {
-                let u256 = interp.stack.peek(index).expect("stack underflow");
-                let u64x4 = u256.0;
-
-                let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
-                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
-                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
-                let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[3], 64));
-                bv
-            }
-        }
-    }
-
-    pub unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<Option<BV>> {
+    pub unsafe fn on_step(&'static mut self, interp: &mut Interpreter) {
         // println!("{}", *interp.instruction_pointer);
-        match *interp.instruction_pointer {
+
+        macro_rules! stack_bv {
+            ($idx:expr) => {{
+                match self.symbolic_stack[$idx].borrow() {
+                    Some(bv) => bv.clone(),
+                    None => {
+                        let u256 = interp.stack.peek($idx).expect("stack underflow");
+                        let u64x4 = u256.0;
+
+                        let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
+                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
+                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
+                        let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[3], 64));
+                        bv
+                    }
+                }
+            }};
+        }
+
+        let bv = match *interp.instruction_pointer {
             // ADD
             0x01 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .add(self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).add(stack_bv!(1)))]
             }
             // MUL
             0x02 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .mul(self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).mul(stack_bv!(1)))]
             }
             // SUB
             0x03 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .sub(self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).sub(stack_bv!(1)))]
             }
             // DIV - is this signed?
             0x04 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvsdiv(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvsdiv(&stack_bv!(1)))]
             }
             // SDIV
             0x05 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvsdiv(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvsdiv(&stack_bv!(1)))]
             }
             // MOD
             0x06 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvurem(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvurem(&stack_bv!(1)))]
             }
             // SMOD
             0x07 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvsrem(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvsrem(&stack_bv!(1)))]
             }
             // ADDMOD
             0x08 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .add(&self.get_bv_from_stack(1, interp))
-                        .bvsrem(&self.get_bv_from_stack(2, interp)),
-                )]
+                vec![Some(stack_bv!(0).add(stack_bv!(1)).bvsrem(&stack_bv!(2)))]
             }
             // MULMOD
             0x09 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .mul(&self.get_bv_from_stack(1, interp))
-                        .bvsrem(&self.get_bv_from_stack(2, interp)),
-                )]
+                vec![Some(stack_bv!(0).mul(stack_bv!(1)).bvsrem(&stack_bv!(2)))]
             }
             // EXP - we can't support, cuz z3 is bad at it
             0x0a => {
@@ -129,7 +103,7 @@ impl<'a> ConcolicHost<'a> {
             }
             // SIGNEXTEND - need to check
             0x0b => {
-                // let bv = self.get_bv_from_stack(0, interp);
+                // let bv = stack_bv!(0);
                 // let bv = bv.bvshl(&self.ctx.bv_val(248, 256));
                 // let bv = bv.bvashr(&self.ctx.bv_val(248, 256));
                 vec![None]
@@ -137,9 +111,8 @@ impl<'a> ConcolicHost<'a> {
             // LT
             0x10 => {
                 self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        .bvult(&self.get_bv_from_stack(1, interp))
+                    &stack_bv!(0)
+                        .bvult(&stack_bv!(1))
                         ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
@@ -147,9 +120,8 @@ impl<'a> ConcolicHost<'a> {
             // GT
             0x11 => {
                 self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        .bvugt(&self.get_bv_from_stack(1, interp))
+                    &stack_bv!(0)
+                        .bvugt(&stack_bv!(1))
                         ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
@@ -157,9 +129,8 @@ impl<'a> ConcolicHost<'a> {
             // SLT
             0x12 => {
                 self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        .bvslt(&self.get_bv_from_stack(1, interp))
+                    &stack_bv!(0)
+                        .bvslt(&stack_bv!(1))
                         ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
@@ -167,55 +138,38 @@ impl<'a> ConcolicHost<'a> {
             // SGT
             0x13 => {
                 self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        .bvsgt(&self.get_bv_from_stack(1, interp))
+                    &stack_bv!(0)
+                        .bvsgt(&stack_bv!(1))
                         ._eq(&Bool::from_bool(&self.ctx, true)),
                 );
                 vec![None]
             }
             // EQ
             0x14 => {
-                self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        ._eq(&self.get_bv_from_stack(1, interp)),
-                );
+                self.solver.assert(&stack_bv!(0)._eq(&stack_bv!(1)));
                 vec![None]
             }
             // ISZERO
             0x15 => {
-                self.solver.assert(
-                    &self
-                        .get_bv_from_stack(0, interp)
-                        ._eq(&BV::from_u64(&self.ctx, 0, 256)),
-                );
+                self.solver
+                    .assert(&stack_bv!(0)._eq(&BV::from_u64(&self.ctx, 0, 256)));
                 vec![None]
             }
             // AND
             0x16 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvand(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvand(&stack_bv!(1)))]
             }
             // OR
             0x17 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvor(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvor(&stack_bv!(1)))]
             }
             // XOR
             0x18 => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvxor(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvxor(&stack_bv!(1)))]
             }
             // NOT
             0x19 => {
-                vec![Some(self.get_bv_from_stack(0, interp).bvnot())]
+                vec![Some(stack_bv!(0).bvnot())]
             }
             // BYTE
             0x1a => {
@@ -224,24 +178,15 @@ impl<'a> ConcolicHost<'a> {
             }
             // SHL
             0x1b => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvshl(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvshl(&stack_bv!(1)))]
             }
             // SHR
             0x1c => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvlshr(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvlshr(&stack_bv!(1)))]
             }
             // SAR
             0x1d => {
-                vec![Some(
-                    self.get_bv_from_stack(0, interp)
-                        .bvashr(&self.get_bv_from_stack(1, interp)),
-                )]
+                vec![Some(stack_bv!(0).bvashr(&stack_bv!(1)))]
             }
             // SHA3
             0x20 => {
@@ -380,20 +325,24 @@ impl<'a> ConcolicHost<'a> {
             _ => {
                 vec![None]
             }
-        }
-        // bv.iter().for_each(|x| {
-        //     self.symbolic_stack.push(x.clone());
-        // });
+        };
+        // // for v in bv {
+        // //             self.symbolic_stack.push(v.clone());
+        // //         }
+        // // bv.iter().for_each(|x| {
+        // //     self.symbolic_stack.push(x.clone());
+        // // });
+        // self;
     }
 
-    pub unsafe fn build_stack(&mut self, interp: &mut Interpreter) {
-        for v in self.on_step(interp) {
-            // self.symbolic_stack.push(v);
-        }
-    }
+    // pub unsafe fn build_stack(&'a mut self, interp: &mut Interpreter) {
+    //     for v in self.on_step(interp) {
+    //         self.symbolic_stack.push(v.clone());
+    //     }
+    // }
 }
 
-impl<'a> Host for ConcolicHost<'a> {
+impl Host for ConcolicHost {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
 
