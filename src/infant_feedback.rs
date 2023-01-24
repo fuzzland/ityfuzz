@@ -3,23 +3,32 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Feedback, Named};
+use libafl::prelude::{Feedback, Named, Executor};
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use std::fmt::{Debug, Formatter};
+use std::marker::PhantomData;
 
-use crate::evm::ExecutionResult;
+use crate::evm::{ExecutionResult, EVMExecutor};
+use crate::executor::FuzzExecutor;
 use crate::input::{VMInputT, VMInput};
 use crate::state::HasExecutionResult;
+use crate::oracle::{Oracle, OracleCtx};
 
-pub struct InfantFeedback<I>
+pub struct InfantFeedback<I, S, O, E, EM, Z>
 where I: VMInputT,
+E: Executor<EM, I, S, Z>,
+O: Oracle<I, S>,
 {
-    oracle: fn(&I, &ExecutionResult) -> bool
+    oracle: O,
+    executor: E,
+    phantom: PhantomData<(I, S, EM, Z)>,
 }
 
-impl<I> Debug for InfantFeedback<I>
+impl<I, S, O, E, EM, Z> Debug for InfantFeedback<I, S, O, E, EM, Z>
 where I: VMInputT,
+E: Executor<EM, I, S, Z>,
+O: Oracle<I, S>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InfantFeedback")
@@ -28,25 +37,34 @@ where I: VMInputT,
     }
 }
 
-impl<I> Named for InfantFeedback<I>
-where I: VMInputT {
+impl<I, S, O, E, EM, Z> Named for InfantFeedback<I, S, O, E, EM, Z>
+where I: VMInputT,
+E: Executor<EM, I, S, Z>,
+O: Oracle<I, S>,
+
+{
     fn name(&self) -> &str {
         "InfantFeedback"
     }
 }
 
-impl<I> InfantFeedback<I>
-where I: VMInputT
+impl<I, S, O, E, EM, Z> InfantFeedback<I, S, O, E, EM, Z>
+where I: VMInputT,
+E: Executor<EM, I, S, Z>,
+O: Oracle<I, S>,
+
 {
-    pub fn new(oracle: fn(&I, &ExecutionResult) -> bool) -> Self {
-        Self { oracle }
+    pub fn new(oracle: O, executor: E) -> Self {
+        Self { oracle, executor, phantom: PhantomData }
     }
 }
 
-impl<I, S> Feedback<I, S> for InfantFeedback<I>
+impl<I, S, O, E, EM, Z> Feedback<I, S> for InfantFeedback<I, S, O, E, EM, Z>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult,
     I: VMInputT,
+    E: Executor<EM, I, S, Z>,
+    O: Oracle<I, S>,
 {
     // since InfantFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
@@ -54,19 +72,19 @@ where
         todo!()
     }
 
-    fn is_interesting<EM, OT>(
+    fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
-        manager: &mut EM,
+        manager: &mut EMI,
         input: &I,
         observers: &OT,
         exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EM: EventFirer<I>,
+        EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        Ok((self.oracle)(input, state.get_execution_result()))
+        let mut oracle_ctx = OracleCtx::new(input.get_state_mut(), &mut state.get_execution_result().new_state, &mut self.executor, input);
     }
 
     fn append_metadata(

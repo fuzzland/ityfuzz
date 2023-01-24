@@ -1,25 +1,25 @@
 use crate::evm::ExecutionResult;
-use crate::input::VMInput;
+use crate::input::{VMInput, VMInputT};
 use crate::{EVMExecutor, VMState};
 use bytes::Bytes;
 use hex;
 use libafl::prelude::{tuple_list, SerdeAnyMap};
 use primitive_types::H160;
 
-pub struct OracleCtx<'a, I, S> {
+pub struct OracleCtx<'a, I, S> where I: VMInputT {
     pub pre_state: &'a mut VMState,
     pub post_state: &'a mut VMState,
     pub metadata: SerdeAnyMap,
     pub executor: &'a mut EVMExecutor<I, S>,
-    pub input: &'a VMInput,
+    pub input: &'a I,
 }
 
-impl<'a, I, S> OracleCtx<'a, I, S> {
+impl<'a, I, S> OracleCtx<'a, I, S> where I: VMInputT {
     pub fn new(
         pre_state: &'a mut VMState,
         post_state: &'a mut VMState,
         executor: &'a mut EVMExecutor<I, S>,
-        input: &'a VMInput,
+        input: &'a I,
     ) -> Self {
         Self {
             pre_state,
@@ -51,7 +51,7 @@ impl<'a, I, S> OracleCtx<'a, I, S> {
     }
 }
 
-trait Oracle<I, S> {
+pub trait Oracle<I, S> where I: VMInputT {
     fn pre_condition(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> u64;
     fn oracle(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> bool;
 }
