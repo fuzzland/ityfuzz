@@ -22,11 +22,11 @@ use crate::rand::generate_random_address;
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
 // shou: may need intermediate info for future adding concolic execution
-pub trait FuzzStateT {
+pub trait HasItyState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
     where
         SC: Scheduler<ItyVMState, InfantStateState>;
-    fn add_infant_state<SC>(&mut self, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &ItyVMState, scheduler: &SC)
     where
         SC: Scheduler<ItyVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
@@ -37,7 +37,7 @@ pub trait HasInfantStateState {
 }
 
 pub trait HasExecutionResult {
-    fn get_execution_result(self) -> ExecutionResult;
+    fn get_execution_result(&self) -> &ExecutionResult;
     fn set_execution_result(&mut self, res: ExecutionResult);
 }
 
@@ -118,7 +118,7 @@ impl HasMetadata for InfantStateState {
     }
 }
 
-impl FuzzStateT for FuzzState {
+impl HasItyState for FuzzState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, ItyVMState)>
     where
         SC: Scheduler<ItyVMState, InfantStateState>,
@@ -136,14 +136,14 @@ impl FuzzStateT for FuzzState {
         Some((idx, state.input().clone().unwrap()))
     }
 
-    fn add_infant_state<SC>(&mut self, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &ItyVMState, scheduler: &SC)
     where
         SC: Scheduler<ItyVMState, InfantStateState>,
     {
         let idx = self
             .infant_states_state
             .corpus_mut()
-            .add(Testcase::new(ItyVMState::new()))
+            .add(Testcase::new(state.clone()))
             .expect("Failed to add new infant state");
         // FIXME: This mixes the corpus and infant state
         scheduler
@@ -241,8 +241,8 @@ impl HasClientPerfMonitor for FuzzState {
 }
 
 impl HasExecutionResult for FuzzState {
-    fn get_execution_result(self) -> ExecutionResult {
-        self.execution_result
+    fn get_execution_result(&self) -> &ExecutionResult {
+        &self.execution_result
     }
 
     fn set_execution_result(&mut self, res: ExecutionResult) {
