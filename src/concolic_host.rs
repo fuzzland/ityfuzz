@@ -21,10 +21,12 @@ pub struct ConcolicHost {
     solver: Solver<'static>,
     ctx: Context,
     symbolic_stack: Vec<Option<BV<'static>>>,
+    shadow_inputs: Option<BV<'static>>,
+    bits: u32,
 }
 
 impl ConcolicHost {
-    pub fn new(solver: Solver<'static>, ctx: Context) -> Self {
+    pub fn new(solver: Solver<'static>, ctx: Context, bytes: u32) -> Self {
         Self {
             env: Env::default(),
             data: HashMap::new(),
@@ -32,7 +34,13 @@ impl ConcolicHost {
             solver,
             ctx,
             symbolic_stack: Vec::new(),
+            shadow_inputs: None,
+            bits: 8 * bytes,
         }
+    }
+
+    pub fn set_shadow_inputs(&'static mut self) {
+        self.shadow_inputs = Some(BV::new_const(&self.ctx, "shadow_inputs", self.bits));
     }
 
     // pub fn get_bv_from_stack(&self, index: usize, interp: &mut Interpreter) -> BV {
@@ -190,7 +198,6 @@ impl ConcolicHost {
             }
             // SHA3
             0x20 => {
-                // TODO
                 vec![None]
             }
             // ADDRESS
@@ -199,7 +206,7 @@ impl ConcolicHost {
             }
             // BALANCE
             0x31 => {
-                vec![None]
+                vec![Some(BV::new_const(&self.ctx, "balance", 256))]
             }
             // ORIGIN
             0x32 => {
@@ -211,10 +218,13 @@ impl ConcolicHost {
             }
             // CALLVALUE
             0x34 => {
-                vec![None]
+                vec![Some(BV::new_const(&self.ctx, "callvalue", 256))]
             }
             // CALLDATALOAD
             0x35 => {
+                // TODO(@shangying): can you please help me with this?
+                // basically, we need to get a new sub-BV from shadow input, which starts from
+                // `interp.stack.peek(0).unwrap().0[0] * 8` to that + 32 * 8 (32 bytes)
                 vec![None]
             }
             // CALLDATASIZE
@@ -326,9 +336,9 @@ impl ConcolicHost {
                 vec![None]
             }
         };
-        // // for v in bv {
-        // //             self.symbolic_stack.push(v.clone());
-        // //         }
+        for v in bv {
+                    self.symbolic_stack.push(v.clone());
+                }
         // // bv.iter().for_each(|x| {
         // //     self.symbolic_stack.push(x.clone());
         // // });
