@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-pub const MAP_SIZE: usize = 1024;
+pub const MAP_SIZE: usize = 4096;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutionResult<Loc, Addr, VS, Out>

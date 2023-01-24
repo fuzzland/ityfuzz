@@ -553,7 +553,16 @@ where
                         interp.contract.address,
                         fast_peek!(0),
                     );
-                    state_change = res.expect("sload failed").0 != value;
+                    let value_changed = res.expect("sload failed").0 != value;
+
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    jmp_map[idx] = if value_changed {
+                        1
+                    } else {
+                        0
+                    };
+
+                    state_change |= value_changed;
                 }
 
                 #[cfg(feature = "dataflow")]

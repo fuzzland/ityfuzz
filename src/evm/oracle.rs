@@ -166,8 +166,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
         let caller = ctx.input.get_caller();
 
-        let mut liquidations_pre = Vec::new();
-        let mut liquidations_post = Vec::new();
+        let mut liquidations_owed = Vec::new();
+        let mut liquidations_earned = Vec::new();
 
         for token in tokens {
             let mut extended_address = vec![0; 12];
@@ -215,23 +215,23 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
             let token_info = self.known_tokens.get(&token).expect("Token not found");
 
-
-            liquidations_pre.push((token_info, prev_balance));
-            liquidations_post.push((token_info, new_balance));
-
+            if prev_balance > new_balance {
+                liquidations_owed.push((token_info, prev_balance - new_balance));
+            } else if prev_balance < new_balance {
+                liquidations_earned.push((token_info, new_balance - prev_balance));
+            }
         };
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
         exec_res.new_state.state.flashloan_data.prev_reserves = new_reserves.clone();
 
+        let liquidation_owed = liquidate_all_token(liquidations_owed, prev_reserves);
+        let liquidation_earned = liquidate_all_token(liquidations_earned, new_reserves);
 
-        let liquidation_pre = liquidate_all_token(liquidations_pre, prev_reserves);
-        let liquidation_post = liquidate_all_token(liquidations_post, new_reserves);
-
-        if liquidation_post > liquidation_pre {
-            exec_res.new_state.state.flashloan_data.earned += U512::from(liquidation_post - liquidation_pre);
+        if liquidation_earned > liquidation_owed {
+            exec_res.new_state.state.flashloan_data.earned += U512::from(liquidation_earned - liquidation_owed);
         } else {
-            exec_res.new_state.state.flashloan_data.owed += U512::from(liquidation_pre - liquidation_post);
+            exec_res.new_state.state.flashloan_data.owed += U512::from(liquidation_owed - liquidation_earned);
         }
 
         exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();

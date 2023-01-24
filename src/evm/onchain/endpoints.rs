@@ -708,15 +708,15 @@ mod tests {
     //     );
     //     println!("{:?}", v)
     // }
-
-    #[test]
-    fn test_fetch_storage_all() {
-        let mut config = OnChainConfig::new(BSC, 0);
-        let v = config.fetch_storage_all(
-            H160::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
-        );
-        println!("{:?}", v)
-    }
+    //
+    // #[test]
+    // fn test_fetch_storage_all() {
+    //     let mut config = OnChainConfig::new(BSC, 0);
+    //     let v = config.fetch_storage_all(
+    //         H160::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
+    //     );
+    //     println!("{:?}", v)
+    // }
 
     #[test]
     fn test_fetch_storage_dump() {
