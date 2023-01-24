@@ -75,7 +75,7 @@ pub fn dummyfuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
-    let mutator = FuzzMutator::new(infant_scheduler);
+    let mutator = FuzzMutator::new(&infant_scheduler);
 
     let jmps = unsafe { &mut JMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
@@ -90,7 +90,7 @@ pub fn dummyfuzzer(
     let scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
-    let infant_state_stage = InfantStateStage::new(infant_scheduler);
+    let infant_state_stage = InfantStateStage::new(&infant_scheduler);
     let mut stages = tuple_list!(std_stage, infant_state_stage);
 
     // TODO: Fill EVMExecutor with real data?

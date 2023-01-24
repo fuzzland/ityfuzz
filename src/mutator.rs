@@ -19,20 +19,20 @@ use crate::state_input::ItyVMState;
 use rand::random;
 use serde::{Deserialize, Serialize};
 
-pub struct FuzzMutator<S> {
-    pub infant_scheduler: S,
+pub struct FuzzMutator<'a, S> {
+    pub infant_scheduler: &'a S,
 }
 
-impl<SC> FuzzMutator<SC>
+impl<'a, SC> FuzzMutator<'a, SC>
 where
     SC: Scheduler<ItyVMState, InfantStateState>,
 {
-    pub fn new(infant_scheduler: SC) -> Self {
+    pub fn new(infant_scheduler: &'a SC) -> Self {
         Self { infant_scheduler }
     }
 }
 
-impl<I, S, SC> Mutator<I, S> for FuzzMutator<SC>
+impl<'a, I, S, SC> Mutator<I, S> for FuzzMutator<'a, SC>
 where
     I: VMInputT + Input,
     S: State + HasRand + HasMaxSize + HasItyState,
@@ -56,7 +56,7 @@ where
             1 => {
                 // cross over infant state
                 // we need power schedule here for infant states
-                let ItyVMState(mutant) = state.get_infant_state(&self.infant_scheduler).unwrap().1;
+                let ItyVMState(mutant) = state.get_infant_state(self.infant_scheduler).unwrap().1;
                 input.set_state(&mutant);
             }
             _ => {
