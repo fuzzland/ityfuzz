@@ -6,18 +6,24 @@ use hex;
 use libafl::prelude::{tuple_list, SerdeAnyMap};
 use primitive_types::H160;
 
-pub struct OracleCtx<'a, I, S> where I: VMInputT {
-    pub pre_state: &'a mut VMState,
-    pub post_state: &'a mut VMState,
+pub struct OracleCtx<'a, I, S>
+where
+    I: VMInputT,
+{
+    pub pre_state: &'a VMState,
+    pub post_state: &'a VMState,
     pub metadata: SerdeAnyMap,
     pub executor: &'a mut EVMExecutor<I, S>,
     pub input: &'a I,
 }
 
-impl<'a, I, S> OracleCtx<'a, I, S> where I: VMInputT {
+impl<'a, I, S> OracleCtx<'a, I, S>
+where
+    I: VMInputT,
+{
     pub fn new(
-        pre_state: &'a mut VMState,
-        post_state: &'a mut VMState,
+        pre_state: &'a VMState,
+        post_state: &'a VMState,
         executor: &'a mut EVMExecutor<I, S>,
         input: &'a I,
     ) -> Self {
@@ -51,7 +57,10 @@ impl<'a, I, S> OracleCtx<'a, I, S> where I: VMInputT {
     }
 }
 
-pub trait Oracle<I, S> where I: VMInputT {
+pub trait Oracle<I, S>
+where
+    I: VMInputT,
+{
     fn pre_condition(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> u64;
     fn oracle(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> bool;
 }
