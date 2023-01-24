@@ -107,10 +107,12 @@ impl IERC20OracleFlashloan {
     pub fn new() -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
+            #[cfg(feature = "flashloan_v2")]
             known_tokens: HashMap::new(),
         }
     }
 
+    #[cfg(feature = "flashloan_v2")]
     pub fn register_token(&mut self, token: H160, token_ctx: TokenContext) {
         self.known_tokens.insert(token, token_ctx);
     }
