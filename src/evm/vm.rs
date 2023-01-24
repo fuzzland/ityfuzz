@@ -1028,11 +1028,16 @@ where
             state_change = false;
         }
 
+        // TODO: implement baseline here
+
         if self.host.middlewares_enabled && self.host.concolic_prob > 0.0 {
             // let rand = rand::random::<f32>();
             // if self.host.concolic_prob > rand {
             unsafe {
+                // here probably we should reset the number to 0?
+                // or let concolic run for ten times
                 if coverage_not_changed > 10000 {
+                    coverage_not_changed = 0;
                     self.host
                         .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
                             input_len_concolic.try_into().unwrap(),
