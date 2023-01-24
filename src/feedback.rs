@@ -169,7 +169,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
-    oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+    oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<(Out)>,
 }
@@ -211,7 +211,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
-        oracle: &'a mut Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
         executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
@@ -268,7 +268,7 @@ where
             } else {
                 input.get_staged_state().stage[idx]
             };
-            if self.oracle[idx].oracle(&mut oracle_ctx, original_stage) {
+            if self.oracle[idx].deref().borrow().oracle(&mut oracle_ctx, original_stage) {
                 // ensure the execution is finished
                 if state
                     .get_execution_result()

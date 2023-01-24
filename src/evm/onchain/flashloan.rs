@@ -34,10 +34,10 @@ use std::str::FromStr;
 use crate::evm::contract_utils::ABIConfig;
 use crate::evm::onchain::onchain::OnChain;
 use std::rc::Rc;
+use crate::evm::oracle::IERC20OracleFlashloan;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 
-#[derive(Debug)]
 pub struct Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -54,9 +54,28 @@ pub struct Flashloan<VS, I, S>
     #[cfg(feature = "flashloan_v2")]
     erc20_address: HashSet<H160>,
     #[cfg(feature = "flashloan_v2")]
+    pair_address: HashSet<H160>,
+    #[cfg(feature = "flashloan_v2")]
     pub onchain_middlware: Rc<RefCell<OnChain<VS, I, S>>>,
     #[cfg(feature = "flashloan_v2")]
     pub unbound_tracker: HashMap<usize, HashSet<H160>>, // pc -> [address called]
+    #[cfg(feature = "flashloan_v2")]
+    pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+}
+
+impl<VS, I, S> Debug for Flashloan<VS, I, S>
+    where
+        S: State + HasCaller<H160> + Debug + Clone + 'static,
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
+
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Flashloan")
+            .field("oracle", &self.oracle)
+            .field("use_contract_value", &self.use_contract_value)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +103,10 @@ impl<VS, I, S> Flashloan<VS, I, S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(use_contract_value: bool, endpoint: OnChainConfig, price_oracle: Box<dyn PriceOracle>, onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>) -> Self {
+    pub fn new(use_contract_value: bool, endpoint: OnChainConfig,
+               price_oracle: Box<dyn PriceOracle>, onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>,
+               flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>
+    ) -> Self {
         Self {
             phantom: PhantomData,
             oracle: price_oracle,
@@ -92,8 +114,10 @@ impl<VS, I, S> Flashloan<VS, I, S>
             known_addresses: Default::default(),
             endpoint,
             erc20_address: Default::default(),
+            pair_address: Default::default(),
             onchain_middlware: onchain_middleware,
-            unbound_tracker: Default::default()
+            unbound_tracker: Default::default(),
+            flashloan_oracle
         }
     }
 
@@ -123,35 +147,50 @@ impl<VS, I, S> Flashloan<VS, I, S>
         self.known_addresses.insert(addr.clone());
 
         // if the contract is erc20, query its holders
-        let abi_signatures = vec![
+        let abi_signatures_token = vec![
             "balanceOf".to_string(),
             "transfer".to_string(),
             "transferFrom".to_string(),
             "approve".to_string(),
         ];
+
+        let abi_signatures_pair = vec![
+            "skim".to_string(),
+            "sync".to_string(),
+            "swap".to_string(),
+        ];
         let abi_names = abi.iter().map(|x| x.function_name.clone()).collect::<HashSet<String>>();
-        println!("abi_names: {:?}", abi_names);
-        // check abi_signatures is subset of abi.name
-        if !abi_signatures.iter().all(|x| abi_names.contains(x)) {
-            return vec![];
-        }
-        // if the #holder > 10, then add it to the erc20_address
         let mut blacklist = vec![];
-        match self.endpoint.fetch_holders(*addr) {
-            None => {
-                println!("failed to fetch token holders for token {:?}", addr);
+
+        // check abi_signatures_token is subset of abi.name
+        if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
+            self.flashloan_oracle.deref().borrow_mut().register_token(
+                addr.clone(),
+                self.endpoint.fetch_uniswap_path_cached(addr.clone()).clone()
+            );
+            // if the #holder > 10, then add it to the erc20_address
+            match self.endpoint.fetch_holders(*addr) {
+                None => {
+                    println!("failed to fetch token holders for token {:?}", addr);
+                }
+                Some(v) => {
+                    self.erc20_address.insert(addr.clone());
+                    // add some user funds address
+                    v[0..2].into_iter().for_each(|holder| {
+                        state.add_address(&holder);
+                        blacklist.push(*holder);
+                    });
+                    // add rich caller
+                    let rich_account = v.clone().get(5).unwrap().clone();
+                    blacklist.push(rich_account);
+                }
             }
-            Some(v) => {
-                self.erc20_address.insert(addr.clone());
-                // add some user funds address
-                v[0..2].into_iter().for_each(|holder| {
-                    state.add_address(&holder);
-                    blacklist.push(*holder);
-                });
-                // add rich caller
-                let rich_account = v.clone().get(5).unwrap().clone();
-                blacklist.push(rich_account);
-            }
+        }
+
+        // if the contract is pair
+        if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
+            self.pair_address.insert(addr.clone());
+            println!("pair detected @ address {:?}", addr);
         }
 
         blacklist
@@ -329,16 +368,26 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
             S: HasCaller<H160>,
     {
         let offset_of_arg_offset = match *interp.instruction_pointer {
+            // detect whether it mutates token balance
             0xf1 => 3,
             0xfa => 2,
+            0x55 => {
+                // detect whether it mutates pair reserve
+                let key = interp.stack.peek(0).unwrap();
+                if key == U256::from(8) && self.pair_address.contains(&interp.contract.address) {
+                    host.data.flashloan_data.oracle_recheck_reserve.insert(
+                        interp.contract.address,
+                    );
+                }
+                return;
+            }
             _ => {
                 return;
             }
         };
 
-
         let value_transfer = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
+            0xf1 | 0xf2 => interp.stack.peek(2).unwrap() * U256::from(100000),
             _ => U256::zero(),
         };
 
@@ -434,20 +483,22 @@ impl_serdeany!(FlashloanData);
 #[cfg(feature = "flashloan_v2")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
-    pub account_balances: HashMap<H160, U256>,
+    pub oracle_recheck_reserve: HashSet<H160>,
     pub oracle_recheck_balance: HashSet<H160>,
     pub owed: U512,
     pub earned: U512,
+    pub prev_reserves: HashMap<H160, (U256, U256)>
 }
 
 #[cfg(feature = "flashloan_v2")]
 impl FlashloanData {
     pub fn new() -> Self {
         Self {
-            account_balances: HashMap::new(),
+            oracle_recheck_reserve: HashSet::new(),
             oracle_recheck_balance: HashSet::new(),
             owed: Default::default(),
-            earned: Default::default()
+            earned: Default::default(),
+            prev_reserves: Default::default()
         }
     }
 }
