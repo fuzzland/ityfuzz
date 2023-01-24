@@ -57,7 +57,6 @@ impl ConcolicHost {
                     None => {
                         let u256 = interp.stack.peek($idx).expect("stack underflow");
                         let u64x4 = u256.0;
-
                         let bv = BV::from_u64(&self.ctx, u64x4[0], 64);
                         let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[1], 64));
                         let bv = bv.concat(&BV::from_u64(&self.ctx, u64x4[2], 64));
@@ -331,14 +330,62 @@ impl ConcolicHost {
             0x57 => {
                 vec![None]
             }
+            // PC
+            0x58 => {
+                vec![None]
+            }
+            // MSIZE
+            0x59 => {
+                vec![None]
+            }
+            // GAS
+            0x5a => {
+                vec![None]
+            }
+            // JUMPDEST
+            0x5b => {
+                vec![]
+            }
+            // PUSH
+            0x60..=0x7f => {
+                let n = (*interp.instruction_pointer) - 0x60 + 1;
+                let mut data = vec![];
+                for i in 0..n {
+                    data.push(
+                        interp.contract().bytecode.bytecode()
+                            [interp.program_counter() + i as usize + 1],
+                    );
+                }
+                vec![
+                    //todo!
+                ]
+            }
+            // DUP
+            0x80..=0x8f => {
+                let n = (*interp.instruction_pointer) - 0x80 + 1;
+                vec![
+                    //todo!
+                ]
+            }
+            // SWAP
+            0x90..=0x9f => {
+                let n = (*interp.instruction_pointer) - 0x90 + 1;
+                vec![
+                    //todo!
+                ]
+            }
+            // LOG
+            0xa0..=0xa4 => {
+                vec![]
+            }
 
             _ => {
-                vec![None]
+                vec![]
             }
         };
         for v in bv {
-                    self.symbolic_stack.push(v.clone());
-                }
+            self.symbolic_stack.push(v.clone());
+        }
         // // bv.iter().for_each(|x| {
         // //     self.symbolic_stack.push(x.clone());
         // // });
@@ -358,7 +405,7 @@ impl Host for ConcolicHost {
 
     fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
         unsafe {
-            // self.build_stack(interp);
+            // self.on_step(interp);
         }
 
         return Continue;
