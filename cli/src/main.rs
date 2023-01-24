@@ -1,3 +1,6 @@
+mod licensing;
+
+use std::cell::RefCell;
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
@@ -14,6 +17,7 @@ use ityfuzz::oracle::Oracle;
 use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::str::FromStr;
 
 /// CLI for ItyFuzz
@@ -107,6 +111,7 @@ enum TargetType {
 }
 
 fn main() {
+    licensing::init_license();
     let args = Args::parse();
     let target_type: TargetType = match args.target_type {
         Some(v) => match v.as_str() {
@@ -174,18 +179,18 @@ fn main() {
             .push(args.onchain_etherscan_api_key.unwrap());
     }
 
-    let mut flashloan_oracle = IERC20OracleFlashloan::new();
-    let harness_code = "oracle_harness()";
-    let mut harness_hash: [u8; 4] = [0; 4];
-    set_hash(harness_code, &mut harness_hash);
-    let mut function_oracle =
-        FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
+    let mut flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new()));
+    // let harness_code = "oracle_harness()";
+    // let mut harness_hash: [u8; 4] = [0; 4];
+    // set_hash(harness_code, &mut harness_hash);
+    // let mut function_oracle =
+    //     FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<
-        Box<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>,
+        Rc<RefCell<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
     > = vec![];
     if args.ierc20_oracle {
-        oracles.push(Box::new(flashloan_oracle));
+        oracles.push(flashloan_oracle.clone());
     }
 
     let is_onchain = onchain.is_some();
@@ -236,6 +241,7 @@ fn main() {
             None
         },
         debug_file: args.debug_file,
+        flashloan_oracle
     };
 
     match config.fuzzer_type {
