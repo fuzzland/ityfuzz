@@ -121,7 +121,7 @@ pub fn cmp_fuzzer(
                 config.onchain.clone().unwrap(),
                 config.price_oracle,
                 onchain_middleware.unwrap(),
-                config.flashloan_oracle
+                config.flashloan_oracle,
             ));
         }
     }
@@ -222,9 +222,18 @@ pub fn cmp_fuzzer(
                     .unwrap();
 
                 println!("============ Execution result {} =============", idx);
-                println!("reverted: {:?}", state.get_execution_result().clone().reverted);
-                println!("trace: {:?}", state.get_execution_result().clone().new_state.trace);
-                println!("output: {:?}", hex::encode(state.get_execution_result().clone().output));
+                println!(
+                    "reverted: {:?}",
+                    state.get_execution_result().clone().reverted
+                );
+                println!(
+                    "trace: {:?}",
+                    state.get_execution_result().clone().new_state.trace
+                );
+                println!(
+                    "output: {:?}",
+                    hex::encode(state.get_execution_result().clone().output)
+                );
                 println!("================================================");
 
                 vm_state = state.get_execution_result().new_state.clone();
