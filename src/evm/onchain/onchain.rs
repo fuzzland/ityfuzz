@@ -278,6 +278,8 @@ where
 
                                     env: Default::default(),
                                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                                    #[cfg(feature = "flashloan_v2")]
+                                    liquidation_percent: 0,
                                     #[cfg(any(test, feature = "debug"))]
                                     direct_data: Default::default(),
                                 };

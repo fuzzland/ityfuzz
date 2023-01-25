@@ -488,7 +488,8 @@ pub struct FlashloanData {
     pub oracle_recheck_balance: HashSet<H160>,
     pub owed: U512,
     pub earned: U512,
-    pub prev_reserves: HashMap<H160, (U256, U256)>
+    pub prev_reserves: HashMap<H160, (U256, U256)>,
+    pub unliquidated_tokens: HashMap<H160, U256>,
 }
 
 #[cfg(feature = "flashloan_v2")]
@@ -499,7 +500,8 @@ impl FlashloanData {
             oracle_recheck_balance: HashSet::new(),
             owed: Default::default(),
             earned: Default::default(),
-            prev_reserves: Default::default()
+            prev_reserves: Default::default(),
+            unliquidated_tokens: Default::default()
         }
     }
 }

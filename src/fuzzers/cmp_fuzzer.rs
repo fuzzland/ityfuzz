@@ -193,6 +193,7 @@ pub fn cmp_fuzzer(
                 let contract = H160::from_str(splitter[2]).unwrap();
                 let input = hex::decode(splitter[3]).unwrap();
                 let value = splitter[4].parse::<usize>().unwrap();
+                let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
 
                 fuzzer
                     .evaluate_input_events(
@@ -213,7 +214,8 @@ pub fn cmp_fuzzer(
                             step: is_step,
                             env: Default::default(),
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent,
                             #[cfg(any(test, feature = "debug"))]
                             direct_data: Bytes::from(input.clone()),
                         },

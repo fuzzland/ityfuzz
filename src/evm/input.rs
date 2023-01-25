@@ -30,6 +30,11 @@ pub trait EVMInputT {
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
     fn get_txn_value(&self) -> Option<U256>;
     fn set_txn_value(&mut self, v: U256);
+    // scaled with 10
+    #[cfg(feature = "flashloan_v2")]
+    fn get_liquidation_percent(&self) -> u8;
+    #[cfg(feature = "flashloan_v2")]
+    fn set_liquidation_percent(&mut self, v: u8);
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -43,6 +48,8 @@ pub struct EVMInput {
     pub step: bool,
     pub env: Env,
     pub access_pattern: Rc<RefCell<AccessPattern>>,
+    #[cfg(feature = "flashloan_v2")]
+    pub liquidation_percent: u8,
 
     #[cfg(any(test, feature = "debug"))]
     pub direct_data: Bytes,
@@ -97,6 +104,14 @@ impl EVMInputT for EVMInput {
 
     fn set_txn_value(&mut self, v: U256) {
         self.txn_value = Some(v);
+    }
+
+    fn get_liquidation_percent(&self) -> u8 {
+        self.liquidation_percent
+    }
+
+    fn set_liquidation_percent(&mut self, v: u8) {
+        self.liquidation_percent = v;
     }
 }
 
