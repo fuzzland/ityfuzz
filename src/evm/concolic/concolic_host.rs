@@ -14,6 +14,7 @@ use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use either::Either;
 use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
@@ -30,9 +31,8 @@ use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
-use z3::ast::{BV, Bool};
+use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
-use either::{Either};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -291,8 +291,13 @@ impl<'a> Solving<'a> {
     pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> Either<BV<'a>, Bool<'a>> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
-                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx).expect_left("value was right")
-                    .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx).expect_left("value was right"))
+                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
+                    .expect_left("value was right")
+                    .$op(
+                        &self
+                            .generate_z3_bv($rhs.as_ref().unwrap(), ctx)
+                            .expect_left("value was right"),
+                    )
             };
         }
         // println!("generate_z3_bv: {:?}", bv);
@@ -315,7 +320,7 @@ impl<'a> Solving<'a> {
                     Either::Left(lhs) => Either::Left(lhs.bvnot()),
                     Either::Right(lhs) => Either::Right(lhs.not()),
                 }
-            },
+            }
             ConcolicOp::SHL => Either::Left(binop!(bv.lhs, bv.rhs, bvshl)),
             ConcolicOp::SHR => Either::Left(binop!(bv.lhs, bv.rhs, bvlshr)),
             ConcolicOp::SAR => Either::Left(binop!(bv.lhs, bv.rhs, bvashr)),
@@ -325,14 +330,16 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::BALANCE => Either::Left(self.balance.clone()),
             ConcolicOp::CALLVALUE => Either::Left(self.calldatavalue.clone()),
-            ConcolicOp::FINEGRAINEDINPUT(start, end) => Either::Left(self.slice_input(*start, *end)),
+            ConcolicOp::FINEGRAINEDINPUT(start, end) => {
+                Either::Left(self.slice_input(*start, *end))
+            }
             ConcolicOp::LNOT => {
                 let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
                 match lhs {
                     Either::Left(lhs) => Either::Left(lhs.not()),
                     Either::Right(lhs) => Either::Right(lhs.not()),
                 }
-            },
+            }
             ConcolicOp::CONSTBYTE(b) => Either::Left(BV::from_u64(ctx, *b as u64, 8)),
             ConcolicOp::SYMBYTE(s) => Either::Left(BV::new_const(ctx, s.clone(), 8)),
             ConcolicOp::EQ => {
@@ -343,7 +350,7 @@ impl<'a> Solving<'a> {
                     (Either::Right(lhs), Either::Right(rhs)) => Either::Right(lhs._eq(&rhs)),
                     _ => panic!("op {:?} not supported as operands", bv.op),
                 }
-                }
+            }
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -355,27 +362,35 @@ impl<'a> Solving<'a> {
             // println!("Constraints: {:?}", cons);
             let bv = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
-                ConcolicOp::GT => {
-                    bv.expect_left("lhs was Bool").bvugt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
-                }
-                ConcolicOp::SGT => {
-                    bv.expect_left("lhs was Bool").bvsgt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
-                }
-                ConcolicOp::EQ => {
-                    bv.expect_left("lhs was Bool")._eq(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
-                }
-                ConcolicOp::LT => {
-                    bv.expect_left("lhs was Bool").bvult(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
-                }
-                ConcolicOp::SLT => {
-                    bv.expect_left("lhs was Bool").bvslt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
-                }
-                ConcolicOp::LNOT =>{
-                    match bv {
-                        Either::Left(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
-                        Either::Right(bv) => bv.not(),
-                    }
-                }
+                ConcolicOp::GT => bv.expect_left("lhs was Bool").bvugt(
+                    &self
+                        .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
+                        .expect_left("rhs was Bool"),
+                ),
+                ConcolicOp::SGT => bv.expect_left("lhs was Bool").bvsgt(
+                    &self
+                        .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
+                        .expect_left("rhs was Bool"),
+                ),
+                ConcolicOp::EQ => bv.expect_left("lhs was Bool")._eq(
+                    &self
+                        .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
+                        .expect_left("rhs was Bool"),
+                ),
+                ConcolicOp::LT => bv.expect_left("lhs was Bool").bvult(
+                    &self
+                        .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
+                        .expect_left("rhs was Bool"),
+                ),
+                ConcolicOp::SLT => bv.expect_left("lhs was Bool").bvslt(
+                    &self
+                        .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
+                        .expect_left("rhs was Bool"),
+                ),
+                ConcolicOp::LNOT => match bv {
+                    Either::Left(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
+                    Either::Right(bv) => bv.not(),
+                },
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
             });
         }
@@ -907,8 +922,7 @@ where
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
                 if jmp_map[idx] == 0 {
                     let path_constraint = stack_bv!(1);
-                    self.constraints
-                        .push(path_constraint.lnot());
+                    self.constraints.push(path_constraint.lnot());
                     match self.solve() {
                         Some(s) => solutions.push(s),
                         None => {}
