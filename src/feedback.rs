@@ -67,12 +67,11 @@ where
     I: VMInputT,
     O: Oracle<I, S>,
 {
-    // since InfantFeedback is just a wrapper around one stateless oracle
-    // we don't need to do initialization
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
     }
 
+    // TODO: fix stage and pre_condition
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
@@ -91,7 +90,7 @@ where
             &mut self.executor,
             input,
         );
-        Ok(self.oracle.oracle(&mut oracle_ctx, 0))
+        Ok(self.oracle.pre_condition(&mut oracle_ctx, 0) != 0)
     }
 
     fn append_metadata(
@@ -162,7 +161,7 @@ where
     // since OracleFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
-        todo!()
+        Ok(())
     }
 
     fn is_interesting<EMI, OT>(
