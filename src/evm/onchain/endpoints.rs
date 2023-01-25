@@ -1,16 +1,18 @@
-use std::cell::RefCell;
+use crate::evm::uniswap::{
+    get_uniswap_info, PairContext, PathContext, TokenContext, UniswapInfo, UniswapProvider,
+};
 use bytes::Bytes;
 use primitive_types::{H160, U256};
 use revm::{Bytecode, LatestSpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{format, Debug};
 use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use crate::evm::uniswap::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapInfo, UniswapProvider};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum Chain {
@@ -94,7 +96,6 @@ pub struct OnChainConfig {
     storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
     storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
     uniswap_path_cache: HashMap<H160, TokenContext>,
-
 }
 
 impl OnChainConfig {
@@ -159,7 +160,7 @@ impl OnChainConfig {
             local_proxy_addr,
             storage_all_cache: Default::default(),
             storage_dump_cache: Default::default(),
-            uniswap_path_cache: Default::default()
+            uniswap_path_cache: Default::default(),
         }
     }
 
@@ -544,59 +545,83 @@ impl OnChainConfig {
                 self.local_proxy_addr, self.chain_name, token_address, self.block_number
             );
 
-            let res = self.client.get(endpoint).send().expect("failed to fetch swap path");
+            let res = self
+                .client
+                .get(endpoint)
+                .send()
+                .expect("failed to fetch swap path");
             let data = res.text().unwrap().trim().to_string();
             let paths: Value = serde_json::from_str(&data).expect("failed to parse API result");
-            let paths_parsed = paths.as_array().expect("unable to parse array").iter().map(|pairs| {
-                let mut path_parsed: PathContext = Default::default();
-                println!("{:?}", pairs);
-                pairs.as_array().expect("unable to parse array").iter().for_each(|pair| {
-                    let src = pair["src"].as_str().expect("failed to parse src");
-                    match src {
-                        "v2" => {
-                            // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse decimals0");
-                            // let decimals1 = pair["decimals1"].as_u64().expect("failed to parse decimals1");
-                            // let next = H160::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
-                            let reserve0_str = pair["initial_reserves_0"].as_str().expect("failed to parse initial_reserves_0").to_string();
-                            let reserve0 = U256::from_big_endian(&hex::decode(reserve0_str).unwrap());
-                            let reserve1_str = pair["initial_reserves_1"].as_str().expect("failed to parse initial_reserves_1").to_string();
-                            let reserve1 = U256::from_big_endian(&hex::decode(reserve1_str).unwrap());
+            let paths_parsed = paths
+                .as_array()
+                .expect("unable to parse array")
+                .iter()
+                .map(|pairs| {
+                    let mut path_parsed: PathContext = Default::default();
+                    println!("{:?}", pairs);
+                    pairs
+                        .as_array()
+                        .expect("unable to parse array")
+                        .iter()
+                        .for_each(|pair| {
+                            let src = pair["src"].as_str().expect("failed to parse src");
+                            match src {
+                                "v2" => {
+                                    // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse decimals0");
+                                    // let decimals1 = pair["decimals1"].as_u64().expect("failed to parse decimals1");
+                                    // let next = H160::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
+                                    let reserve0_str = pair["initial_reserves_0"]
+                                        .as_str()
+                                        .expect("failed to parse initial_reserves_0")
+                                        .to_string();
+                                    let reserve0 =
+                                        U256::from_big_endian(&hex::decode(reserve0_str).unwrap());
+                                    let reserve1_str = pair["initial_reserves_1"]
+                                        .as_str()
+                                        .expect("failed to parse initial_reserves_1")
+                                        .to_string();
+                                    let reserve1 =
+                                        U256::from_big_endian(&hex::decode(reserve1_str).unwrap());
 
+                                    let pair_address = H160::from_str(
+                                        pair["pair"].as_str().expect("failed to parse pair"),
+                                    )
+                                    .expect("failed to parse pair");
+                                    let side =
+                                        pair["in"].as_u64().expect("failed to parse direction")
+                                            as u8;
+                                    let src_exact = pair["src_exact"]
+                                        .as_str()
+                                        .expect("failed to parse src_exact");
 
-                            let pair_address = H160::from_str(pair["pair"].as_str().expect("failed to parse pair")).expect("failed to parse pair");
-                            let side = pair["in"].as_u64().expect("failed to parse direction") as u8;
-                            let src_exact = pair["src_exact"].as_str().expect("failed to parse src_exact");
-
-                            let pair = Rc::new(RefCell::new(
-                                PairContext {
-                                    pair_address,
-                                    side,
-                                    uniswap_info: Arc::new(get_uniswap_info(
-                                        &UniswapProvider::from_str(src_exact).unwrap(),
-                                        &Chain::from_str(&self.chain_name).unwrap(),
-                                    )),
-                                    initial_reserves: (reserve0, reserve1),
+                                    let pair = Rc::new(RefCell::new(PairContext {
+                                        pair_address,
+                                        side,
+                                        uniswap_info: Arc::new(get_uniswap_info(
+                                            &UniswapProvider::from_str(src_exact).unwrap(),
+                                            &Chain::from_str(&self.chain_name).unwrap(),
+                                        )),
+                                        initial_reserves: (reserve0, reserve1),
+                                    }));
+                                    path_parsed.route.push(pair)
                                 }
-                            ));
-                            path_parsed.route.push(pair)
-                        }
-                        "pegged" => {
-                            println!("{:?}", pair);
-                            // always live at final
-                            path_parsed.final_pegged_ratio = U256::from(
-                                pair["rate"].as_u64().expect("failed to parse ratio")
-                            );
-                        }
-                        _ => unimplemented!("unknown swap path source")
-                    }
-                });
-                path_parsed
-            }).collect();
+                                "pegged" => {
+                                    println!("{:?}", pair);
+                                    // always live at final
+                                    path_parsed.final_pegged_ratio = U256::from(
+                                        pair["rate"].as_u64().expect("failed to parse ratio"),
+                                    );
+                                }
+                                _ => unimplemented!("unknown swap path source"),
+                            }
+                        });
+                    path_parsed
+                })
+                .collect();
 
             TokenContext {
                 swaps: paths_parsed,
             }
-
         } else {
             unimplemented!("fetch_uniswap_path");
         }
@@ -611,7 +636,6 @@ impl OnChainConfig {
         self.uniswap_path_cache.insert(token, path);
         self.uniswap_path_cache.get(&token).unwrap()
     }
-
 }
 
 impl OnChainConfig {
@@ -627,9 +651,8 @@ impl OnChainConfig {
                     if data == "0,0" {
                         None
                     } else {
-                        let parts: Vec<u32> = data.split(",").map(
-                            |x| x.parse::<u32>().unwrap()
-                        ).collect();
+                        let parts: Vec<u32> =
+                            data.split(",").map(|x| x.parse::<u32>().unwrap()).collect();
                         assert_eq!(parts.len(), 2);
                         Some((parts[0], parts[1]))
                     }
@@ -639,7 +662,6 @@ impl OnChainConfig {
         } else {
             panic!("not implemented");
         }
-
     }
 }
 
