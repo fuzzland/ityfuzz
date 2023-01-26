@@ -133,7 +133,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             }
         }
         let mut tc = Testcase::new(StagedVMState::new_with_state(
-            self.executor.host.data.clone(),
+            self.executor.host.evmstate.clone(),
         ));
         tc.set_exec_time(Duration::from_secs(0));
         let idx = self
