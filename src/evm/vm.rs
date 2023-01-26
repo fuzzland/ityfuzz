@@ -204,7 +204,7 @@ where
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
-    pub data: EVMState,
+    pub evmstate: EVMState,
     // these are internal to the host
     env: Env,
     pub code: HashMap<H160, Bytecode>,
@@ -245,7 +245,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
-            .field("data", &self.data)
+            .field("data", &self.evmstate)
             .field("env", &self.env)
             .field("code", &self.code)
             .field("hash_to_address", &self.hash_to_address)
@@ -273,7 +273,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone(),
+            evmstate: self.evmstate.clone(),
             env: self.env.clone(),
             code: self.code.clone(),
             hash_to_address: self.hash_to_address.clone(),
@@ -334,7 +334,7 @@ where
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
         let mut ret = Self {
-            data: EVMState::new(),
+            evmstate: EVMState::new(),
             env: Env::default(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
@@ -698,7 +698,7 @@ where
     }
 
     fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
-        if let Some(account) = self.data.get(&address) {
+        if let Some(account) = self.evmstate.get(&address) {
             if let Some(slot) = account.get(&index) {
                 return Some((slot.clone(), true));
             }
@@ -716,14 +716,14 @@ where
         index: U256,
         value: U256,
     ) -> Option<(U256, U256, U256, bool)> {
-        match self.data.get_mut(&address) {
+        match self.evmstate.get_mut(&address) {
             Some(account) => {
                 account.insert(index, value);
             }
             None => {
                 let mut account = HashMap::new();
                 account.insert(index, value);
-                self.data.insert(address, account);
+                self.evmstate.insert(address, account);
             }
         };
 
@@ -768,12 +768,12 @@ where
                     hash.hash(&mut s);
                     let _hash = s.finish();
                     abi_max_size[(_hash as usize) % MAP_SIZE] = ret_size;
-                    self.data.leaked_func_hash = Some(_hash);
+                    self.evmstate.leaked_func_hash = Some(_hash);
                 }
             };
         }
 
-        self.data.leaked_func_hash = None;
+        self.evmstate.leaked_func_hash = None;
 
         // middlewares
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
@@ -969,7 +969,7 @@ where
         mut state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.coverage_changed = false;
-        self.host.data = vm_state.clone();
+        self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
 
@@ -1047,7 +1047,7 @@ where
 
         let mut result = IntermediateExecutionResult {
             output: interp.return_value(),
-            new_state: self.host.data.clone(),
+            new_state: self.host.evmstate.clone(),
             pc: interp.program_counter(),
             ret: r,
             stack: interp.stack.data().clone(),
