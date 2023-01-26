@@ -191,7 +191,8 @@ where
             &mut self.executor,
             input,
         );
-        Ok(self.oracle.oracle(&mut oracle_ctx, 0))
+        let old_stage = input.get_staged_state().stage;
+        Ok(self.oracle.oracle(&mut oracle_ctx, old_stage))
     }
 
     fn append_metadata(
