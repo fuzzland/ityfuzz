@@ -2,6 +2,7 @@ use crate::evm::ExecutionResult;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
+use revm::opcode::CALL;
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -11,20 +12,40 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Add, Deref, Mul, Sub};
 use std::str::FromStr;
-use revm::opcode::CALL;
 use z3::ast::{Bool, BV};
 use z3::{ast, ast::Ast, Config, Context, Solver};
 
 #[derive(Clone)]
 enum ConcolicOp {
-    U256, ADD, DIV, MUL, SUB, SDIV, SMOD, UREM, SREM,
-    AND, OR, XOR, NOT, NONE,
-    SHL, SHR, SAR,
-    INPUT, SLICEDINPUT, BALANCE, CALLVALUE
+    U256,
+    ADD,
+    DIV,
+    MUL,
+    SUB,
+    SDIV,
+    SMOD,
+    UREM,
+    SREM,
+    AND,
+    OR,
+    XOR,
+    NOT,
+    NONE,
+    SHL,
+    SHR,
+    SAR,
+    INPUT,
+    SLICEDINPUT,
+    BALANCE,
+    CALLVALUE,
 }
 
 pub enum ConstraintOp {
-    EQ, LT, SLT, GT, SGT
+    EQ,
+    LT,
+    SLT,
+    GT,
+    SGT,
 }
 
 #[derive(Clone)]
@@ -32,15 +53,14 @@ pub struct BVBox {
     lhs: Option<Box<BVBox>>,
     rhs: Option<Box<BVBox>>,
     concrete: Option<U256>,
-    op: ConcolicOp
+    op: ConcolicOp,
 }
 
 pub struct Constraint {
     pub lhs: Box<BVBox>,
     pub rhs: Box<BVBox>,
-    pub op: ConstraintOp
+    pub op: ConstraintOp,
 }
-
 
 macro_rules! box_bv {
     ($lhs:expr, $rhs:expr, $op:expr) => {
@@ -48,7 +68,7 @@ macro_rules! box_bv {
             lhs: Some(Box::new($lhs)),
             rhs: Some($rhs),
             concrete: None,
-            op: $op
+            op: $op,
         })
     };
 }
@@ -58,7 +78,7 @@ impl BVBox {
             lhs: None,
             rhs: None,
             concrete: None,
-            op: ConcolicOp::NONE
+            op: ConcolicOp::NONE,
         }
     }
 
@@ -67,17 +87,16 @@ impl BVBox {
             lhs: None,
             rhs: None,
             concrete: None,
-            op: ConcolicOp::INPUT
+            op: ConcolicOp::INPUT,
         }
     }
-
 
     pub fn new_sliced_input(idx: U256) -> Self {
         BVBox {
             lhs: None,
             rhs: None,
             concrete: Some(idx),
-            op: ConcolicOp::SLICEDINPUT
+            op: ConcolicOp::SLICEDINPUT,
         }
     }
 
@@ -86,7 +105,7 @@ impl BVBox {
             lhs: None,
             rhs: None,
             concrete: None,
-            op: ConcolicOp::BALANCE
+            op: ConcolicOp::BALANCE,
         }
     }
 
@@ -95,13 +114,13 @@ impl BVBox {
             lhs: None,
             rhs: None,
             concrete: None,
-            op: ConcolicOp::CALLVALUE
+            op: ConcolicOp::CALLVALUE,
         }
     }
 
     pub fn div(self, rhs: Box<BVBox>) -> Box<BVBox> {
-    box_bv!(self, rhs, ConcolicOp::DIV)
-}
+        box_bv!(self, rhs, ConcolicOp::DIV)
+    }
     pub fn mul(self, rhs: Box<BVBox>) -> Box<BVBox> {
         box_bv!(self, rhs, ConcolicOp::MUL)
     }
@@ -149,14 +168,14 @@ impl BVBox {
         Constraint {
             lhs: Box::new(self),
             rhs,
-            op: ConstraintOp::LT
+            op: ConstraintOp::LT,
         }
     }
     pub fn bvugt(self, rhs: Box<BVBox>) -> Constraint {
         Constraint {
             lhs: Box::new(self),
             rhs,
-            op: ConstraintOp::GT
+            op: ConstraintOp::GT,
         }
     }
 
@@ -164,14 +183,14 @@ impl BVBox {
         Constraint {
             lhs: Box::new(self),
             rhs,
-            op: ConstraintOp::SLT
+            op: ConstraintOp::SLT,
         }
     }
     pub fn bvsgt(self, rhs: Box<BVBox>) -> Constraint {
         Constraint {
             lhs: Box::new(self),
             rhs,
-            op: ConstraintOp::SGT
+            op: ConstraintOp::SGT,
         }
     }
 
@@ -179,13 +198,10 @@ impl BVBox {
         Constraint {
             lhs: Box::new(self),
             rhs,
-            op: ConstraintOp::EQ
+            op: ConstraintOp::EQ,
         }
     }
-
-
 }
-
 
 pub struct ConcolicHost {
     env: Env,
@@ -234,13 +250,12 @@ impl ConcolicHost {
                             lhs: None,
                             rhs: None,
                             concrete: Some(u256),
-                            op: ConcolicOp::U256
+                            op: ConcolicOp::U256,
                         })
                     }
                 }
             }};
         }
-
 
         let bv: Vec<Option<Box<BVBox>>> = match *interp.instruction_pointer {
             // ADD
@@ -292,26 +307,22 @@ impl ConcolicHost {
             }
             // LT
             0x10 => {
-                self.constraints.push(stack_bv!(0)
-                    .bvult(stack_bv!(1)));
+                self.constraints.push(stack_bv!(0).bvult(stack_bv!(1)));
                 vec![None]
             }
             // GT
             0x11 => {
-                self.constraints.push(stack_bv!(0)
-                    .bvugt(stack_bv!(1)));
+                self.constraints.push(stack_bv!(0).bvugt(stack_bv!(1)));
                 vec![None]
             }
             // SLT
             0x12 => {
-                self.constraints.push(stack_bv!(0)
-                    .bvslt(stack_bv!(1)));
+                self.constraints.push(stack_bv!(0).bvslt(stack_bv!(1)));
                 vec![None]
             }
             // SGT
             0x13 => {
-                self.constraints.push(stack_bv!(0)
-                    .bvsgt(stack_bv!(1)));
+                self.constraints.push(stack_bv!(0).bvsgt(stack_bv!(1)));
                 vec![None]
             }
             // EQ
@@ -322,11 +333,11 @@ impl ConcolicHost {
             // ISZERO
             0x15 => {
                 self.constraints.push(stack_bv!(0).eq(Box::new(BVBox {
-                        lhs: None,
-                        rhs: None,
-                        concrete: Some(U256::from(0)),
-                        op: ConcolicOp::U256
-                    })));
+                    lhs: None,
+                    rhs: None,
+                    concrete: Some(U256::from(0)),
+                    op: ConcolicOp::U256,
+                })));
                 vec![None]
             }
             // AND
@@ -391,7 +402,9 @@ impl ConcolicHost {
                 // TODO(@shangying): can you please help me with this?
                 // basically, we need to get a new sub-BV from shadow input, which starts from
                 // `interp.stack.peek(0).unwrap().0[0] * 8` to that + 32 * 8 (32 bytes)
-                vec![Some(Box::new(BVBox::new_sliced_input(interp.stack.peek(0).unwrap())))]
+                vec![Some(Box::new(BVBox::new_sliced_input(
+                    interp.stack.peek(0).unwrap(),
+                )))]
             }
             // CALLDATASIZE
             0x36 => {

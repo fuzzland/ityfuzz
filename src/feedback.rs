@@ -86,11 +86,20 @@ where
     {
         let mut oracle_ctx = OracleCtx::new(
             input.get_state(),
-            &state.get_execution_result().new_state,
+            &state.get_execution_result().new_state.state,
             &mut self.executor,
             input,
         );
-        Ok(self.oracle.pre_condition(&mut oracle_ctx, 0) != 0)
+        let original_stage = input.get_staged_state().stage;
+        let new_stage = self.oracle.transition(&mut oracle_ctx, original_stage);
+        if (new_stage != original_stage) {
+            state
+                .get_execution_result_mut()
+                .new_state
+                .update_stage(new_stage);
+            return Ok(true);
+        }
+        return Ok(false);
     }
 
     fn append_metadata(
@@ -178,7 +187,7 @@ where
     {
         let mut oracle_ctx = OracleCtx::new(
             input.get_state(),
-            &state.get_execution_result().new_state,
+            &state.get_execution_result().new_state.state,
             &mut self.executor,
             input,
         );
@@ -197,8 +206,6 @@ where
         Ok(())
     }
 }
-
-
 
 // // Resulting state should not change
 // fn oracle_same_state<I>(input: &I, result: &ExecutionResult) -> Result<bool, Error> where I: VMInputT {

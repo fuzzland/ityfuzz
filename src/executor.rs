@@ -101,7 +101,7 @@ mod tests {
     use crate::input::VMInput;
     use crate::rand::generate_random_address;
     use crate::state::FuzzState;
-    use crate::state_input::ItyVMState;
+    use crate::state_input::StagedVMState;
     use crate::VMState;
     use bytes::Bytes;
     use libafl::observers::StdMapObserver;

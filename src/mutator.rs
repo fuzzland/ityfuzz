@@ -15,7 +15,7 @@ use primitive_types::H160;
 
 use crate::abi::{AArray, ADynamic, BoxedABI, A256};
 use crate::state::HasItyState;
-use crate::state_input::ItyVMState;
+use crate::state_input::StagedVMState;
 use rand::random;
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +25,7 @@ pub struct FuzzMutator<'a, S> {
 
 impl<'a, SC> FuzzMutator<'a, SC>
 where
-    SC: Scheduler<ItyVMState, InfantStateState>,
+    SC: Scheduler<StagedVMState, InfantStateState>,
 {
     pub fn new(infant_scheduler: &'a SC) -> Self {
         Self { infant_scheduler }
@@ -36,7 +36,7 @@ impl<'a, I, S, SC> Mutator<I, S> for FuzzMutator<'a, SC>
 where
     I: VMInputT + Input,
     S: State + HasRand + HasMaxSize + HasItyState,
-    SC: Scheduler<ItyVMState, InfantStateState>,
+    SC: Scheduler<StagedVMState, InfantStateState>,
 {
     fn mutate(
         &mut self,
@@ -56,8 +56,8 @@ where
             1 => {
                 // cross over infant state
                 // we need power schedule here for infant states
-                let ItyVMState(mutant) = state.get_infant_state(self.infant_scheduler).unwrap().1;
-                input.set_state(&mutant);
+                let mutant = state.get_infant_state(self.infant_scheduler).unwrap().1;
+                input.set_staged_state(mutant);
             }
             _ => {
                 input.mutate(state);
