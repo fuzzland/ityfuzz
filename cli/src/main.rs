@@ -81,12 +81,8 @@ struct Args {
     onchain_storage_fetching: String,
 
     /// Enable Concolic
-    #[arg(long, default_value = "false")]
+    #[arg(short, long, default_value = "false")]
     concolic: bool,
-
-    /// Concolic: prob
-    #[arg(long, default_value = "0.1")]
-    concolic_prob: f32,
 
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
@@ -221,11 +217,7 @@ fn main() {
             }
         },
         onchain,
-        concolic_prob: if args.concolic {
-            Some(args.concolic_prob)
-        } else {
-            None
-        },
+        concolic: args.concolic,
         oracle: oracles,
         flashloan: args.flashloan,
         price_oracle: match args.flashloan_price_oracle.as_str() {
