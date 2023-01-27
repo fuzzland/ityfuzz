@@ -29,9 +29,12 @@ use std::{
 };
 
 use crate::infant_state_stage::InfantStateStage;
+use crate::rand::generate_random_address;
 use crate::state::FuzzState;
 use nix::unistd::dup;
 use primitive_types::H160;
+
+const ACCOUNT_AMT: u8 = 10;
 
 pub fn dummyfuzzer(
     corpus_dir: PathBuf,
@@ -95,7 +98,13 @@ pub fn dummyfuzzer(
 
     // TODO: Fill EVMExecutor with real data?
     let mut executor = FuzzExecutor::new(
-        EVMExecutor::new(FuzzHost::new(), Vec::new(), H160::zero()),
+        EVMExecutor::new(
+            FuzzHost::new(),
+            (0..ACCOUNT_AMT)
+                .map(|_| generate_random_address())
+                .collect::<Vec<H160>>(),
+            generate_random_address(),
+        ),
         tuple_list!(jmp_observer),
     );
 
