@@ -26,7 +26,7 @@ pub use jmp_map as JMP_MAP;
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
     env: Env,
-    data: VMState,
+    pub data: VMState,
     code: HashMap<H160, Bytecode>,
 }
 
@@ -175,7 +175,6 @@ impl Host for FuzzHost {
 #[derive(Debug, Clone)]
 pub struct EVMExecutor<I, S> {
     pub host: FuzzHost,
-    contract_addresses: Vec<H160>,
     deployer: H160,
     phandom: PhantomData<(I, S)>,
 }
@@ -198,10 +197,9 @@ impl ExecutionResult {
 }
 
 impl<I, S> EVMExecutor<I, S> {
-    pub fn new(FuzzHost: FuzzHost, contract_addresses: Vec<H160>, deployer: H160) -> Self {
+    pub fn new(FuzzHost: FuzzHost, deployer: H160) -> Self {
         Self {
             host: FuzzHost,
-            contract_addresses,
             deployer,
             phandom: PhantomData,
         }

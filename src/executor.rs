@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_fuzz_executor() {
-        let evm_executor = EVMExecutor::new(FuzzHost::new(), vec![], generate_random_address());
+        let evm_executor = EVMExecutor::new(FuzzHost::new(), generate_random_address());
         let mut observers = tuple_list!();
         let mut fuzz_executor: FuzzExecutor<VMInput, FuzzState, ()> =
             FuzzExecutor::new(evm_executor, observers);

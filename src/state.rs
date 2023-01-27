@@ -1,7 +1,10 @@
+use crate::abi::get_abi_type_boxed;
 use crate::evm::{ExecutionResult, VMState};
 use crate::input::VMInput;
 use crate::rand::generate_random_address;
 use crate::state_input::StagedVMState;
+use crate::EVMExecutor;
+use bytes::Bytes;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
@@ -18,9 +21,12 @@ use libafl::state::{
 use libafl::Error;
 use nix::libc::stat;
 use primitive_types::H160;
+use revm::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::path::Path;
+
+const ACCOUNT_AMT: u8 = 10;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -59,6 +65,18 @@ pub struct FuzzState {
     pub max_size: usize,
 }
 
+pub struct ABIConfig {
+    abi: String,
+    function: [u8; 4],
+}
+
+pub struct ContractInfo {
+    name: String,
+    abi: Vec<ABIConfig>,
+    code: Vec<u8>,
+    constructor_args: Vec<u8>,
+}
+
 impl FuzzState {
     pub fn new() -> Self {
         Self {
@@ -72,6 +90,41 @@ impl FuzzState {
             default_callers: vec![],
             rand_generator: StdRand::with_seed(current_nanos()),
             max_size: 1500,
+        }
+    }
+
+    pub fn initialize<I, S>(
+        &mut self,
+        contracts: Vec<ContractInfo>,
+        executor: &mut EVMExecutor<I, S>,
+    ) {
+        self.setup_default_callers(ACCOUNT_AMT as usize);
+        self.initialize_corpus(contracts, executor);
+    }
+
+    pub fn initialize_corpus<I, S>(
+        &mut self,
+        contracts: Vec<ContractInfo>,
+        executor: &mut EVMExecutor<I, S>,
+    ) {
+        for contract in contracts {
+            let deployed_address = executor.deploy(
+                Bytecode::new_raw(Bytes::from(contract.code)),
+                Bytes::from(contract.constructor_args),
+            );
+            for abi in contract.abi {
+                let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                abi_instance.set_func(abi.function);
+                let mut input = VMInput {
+                    caller: self.get_rand_caller(),
+                    contract: deployed_address,
+                    data: abi_instance,
+                    sstate: StagedVMState::new(executor.host.data.clone(), 0),
+                };
+                self.txn_corpus
+                    .add(Testcase::new(input))
+                    .expect("failed to add");
+            }
         }
     }
 
