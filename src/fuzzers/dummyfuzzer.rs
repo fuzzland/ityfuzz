@@ -112,6 +112,9 @@ pub fn dummyfuzzer(
 
     let oracle_executor = executor.clone();
 
+    // TODO(shou): parse abi and initialize corpus
+    // state.initialize()
+
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 
     fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
