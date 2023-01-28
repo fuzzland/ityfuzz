@@ -84,6 +84,10 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        // reverted states should be discarded as they are infeasible
+        if state.get_execution_result().reverted {
+            return Ok(false)
+        }
         let mut oracle_ctx = OracleCtx::new(
             input.get_state(),
             &state.get_execution_result().new_state.state,
@@ -92,7 +96,7 @@ where
         );
         let original_stage = input.get_staged_state().stage;
         let new_stage = self.oracle.transition(&mut oracle_ctx, original_stage);
-        if (new_stage != original_stage) {
+        if new_stage != original_stage {
             state
                 .get_execution_result_mut()
                 .new_state
