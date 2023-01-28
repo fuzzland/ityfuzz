@@ -87,6 +87,8 @@ where
         value: v.get_txn_value_temp(),
         #[cfg(feature = "evm")]
         data_abi: v.get_data_abi(),
+        #[cfg(feature = "full_trace")]
+        flashloan: "".to_string(),
     }
 }
 
