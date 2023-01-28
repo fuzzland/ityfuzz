@@ -76,10 +76,7 @@ pub fn cmp_fuzzer(
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));
 
-    match config.concolic_prob {
-        Some(prob) => fuzz_host.set_concolic_prob(prob),
-        None => {}
-    }
+    fuzz_host.set_concolic_enabled(config.concolic);
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {

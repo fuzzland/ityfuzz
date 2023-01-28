@@ -453,6 +453,11 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn get_data_abi_mut(&mut self) -> &mut Option<BoxedABI> {
         &mut self.data
     }
+
+    #[cfg(feature = "evm")]
+    fn get_txn_value_temp(&self) -> Option<U256> {
+        self.txn_value
+    }
 }
 
 impl Input for EVMInput {
