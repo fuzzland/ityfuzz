@@ -252,14 +252,14 @@ where
     ) {
         macro_rules! earned {
             ($amount:expr) => {
-                host.data.flashloan_data.earned += $amount;
+                host.evmstate.flashloan_data.earned += $amount;
             };
             () => {};
         }
 
         macro_rules! owed {
             ($amount:expr) => {
-                host.data.flashloan_data.owed += $amount;
+                host.evmstate.flashloan_data.owed += $amount;
             };
             () => {};
         }
@@ -397,7 +397,7 @@ where
                 // detect whether it mutates pair reserve
                 let key = interp.stack.peek(0).unwrap();
                 if key == U256::from(8) && self.pair_address.contains(&interp.contract.address) {
-                    host.data
+                    host.evmstate
                         .flashloan_data
                         .oracle_recheck_reserve
                         .insert(interp.contract.address);
