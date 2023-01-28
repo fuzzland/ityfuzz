@@ -436,7 +436,7 @@ where
                             }
                             Some(set) => {
                                 if set.len() > UNBOUND_TRANSFER_AMT {
-                                    host.data.flashloan_data.earned += U512::max_value();
+                                    host.evmstate.flashloan_data.earned += U512::max_value();
                                 }
                                 set.insert(call_target);
                             }
@@ -465,12 +465,12 @@ where
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         if value_transfer > U256::zero() && call_target == interp.contract.caller {
-            host.data.flashloan_data.earned += U512::from(value_transfer) * scale!();
+            host.evmstate.flashloan_data.earned += U512::from(value_transfer) * scale!();
         }
 
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
         if self.erc20_address.contains(&call_target) {
-            host.data
+            host.evmstate
                 .flashloan_data
                 .oracle_recheck_balance
                 .insert(call_target);
