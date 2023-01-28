@@ -28,6 +28,7 @@ where
     pub executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     pub input: &'a I,
     pub phantom: PhantomData<(Addr)>,
+    pub post_state: VS,
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
@@ -47,6 +48,7 @@ where
         input: &'a I,
     ) -> Self {
         Self {
+            post_state: fuzz_state.get_execution_result().new_state.state.clone(),
             fuzz_state,
             pre_state,
             metadata: SerdeAnyMap::new(),
@@ -56,29 +58,21 @@ where
         }
     }
 
-    pub(crate) fn call_pre(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
-        input.set_staged_state(StagedVMState::new_with_state(self.pre_state.clone()), 0);
+    pub(crate) fn call_pre(&mut self, address: Addr, data: By) -> Out {
         self.executor
             .deref()
             .borrow_mut()
-            .execute(input, &mut self.fuzz_state)
+            .fast_static_call(address, data, self.pre_state, self.fuzz_state)
     }
 
-    pub(crate) fn call_post(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
-        input.set_staged_state(
-            StagedVMState::new_with_state(
-                self.fuzz_state
-                    .get_execution_result()
-                    .new_state
-                    .state
-                    .clone(),
-            ),
-            0,
-        );
+    pub(crate) fn call_post(&mut self, address: Addr, data: By) -> Out {
         self.executor
             .deref()
             .borrow_mut()
-            .execute(input, &mut self.fuzz_state)
+            .fast_static_call(address, data,
+                              &self.post_state,
+                              self.fuzz_state
+            )
     }
 }
 

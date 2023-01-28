@@ -53,6 +53,13 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default;
 
+    fn fast_static_call(&mut self, address: Addr, data: By, vm_state: &VS, state: &mut S) -> Out
+        where
+            VS: VMStateT,
+            Addr: Serialize + DeserializeOwned + Debug,
+            Loc: Serialize + DeserializeOwned + Debug,
+            Out: Default;
+
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE];

@@ -37,7 +37,9 @@ use std::rc::Rc;
 use crate::evm::oracle::IERC20OracleFlashloan;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
-
+macro_rules! scale {
+    () => {U512::from(1_000_000)};
+}
 pub struct Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -209,7 +211,9 @@ impl<VS, I, S> Flashloan<VS, I, S>
     {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
-            result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
+            result.new_state.flashloan_data.owed += U512::from(
+                input.get_txn_value().unwrap()
+            ) * scale!();
         }
         let addr = input.get_contract();
         // dont care if the call target is not erc20
@@ -388,7 +392,7 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
         };
 
         let value_transfer = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => interp.stack.peek(2).unwrap() * U256::from(100000),
+            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
             _ => U256::zero(),
         };
 
@@ -445,7 +449,7 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         if value_transfer > U256::zero() && call_target == interp.contract.caller {
-            host.data.flashloan_data.earned += U512::from(value_transfer);
+            host.data.flashloan_data.earned += U512::from(value_transfer) * scale!();
         }
 
 
@@ -490,6 +494,8 @@ pub struct FlashloanData {
     pub earned: U512,
     pub prev_reserves: HashMap<H160, (U256, U256)>,
     pub unliquidated_tokens: HashMap<H160, U256>,
+    #[cfg(feature = "debug")]
+    pub extra_info: String
 }
 
 #[cfg(feature = "flashloan_v2")]
@@ -501,7 +507,9 @@ impl FlashloanData {
             owed: Default::default(),
             earned: Default::default(),
             prev_reserves: Default::default(),
-            unliquidated_tokens: Default::default()
+            unliquidated_tokens: Default::default(),
+            #[cfg(feature = "debug")]
+            extra_info: Default::default()
         }
     }
 }

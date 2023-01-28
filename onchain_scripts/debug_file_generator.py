@@ -67,7 +67,7 @@ def generate_debug_file(target, data):
         abi = fetch_etherscan_contract_abi(target, i["target"])
         contract = w3.eth.contract(address=i["target"], abi=abi)
         abi_encoded = contract.encodeABI(fn_name=i["name"], args=i["args"]).replace("0x", "")
-        print(f"txn {i['caller']} {i['target']} {abi_encoded} {i['value'] if 'value' in i else 0}")
+        print(f"txn {i['caller']} {i['target']} {abi_encoded} {i['value'] if 'value' in i else 0} {i['liquidation_percent'] if 'liquidation_percent' in i else 0}")
 
 
 

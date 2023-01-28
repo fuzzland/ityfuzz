@@ -21,7 +21,11 @@ use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use move_vm_types::values::Locals;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::Arc;
+use bytes::Bytes;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 struct MoveVM<I, S> {
     modules: HashMap<ModuleId, Arc<loader::Module>>,
@@ -100,6 +104,10 @@ where
         println!("deployed structs: {:?}", self._module_cache.structs);
 
         Some(module.self_id().address().clone())
+    }
+
+    fn fast_static_call(&mut self, address: AccountAddress, data: MoveFunctionInput, vm_state: &MoveVMState, state: &mut S) -> MoveOutput where MoveVMState: VMStateT, AccountAddress: Serialize + DeserializeOwned + Debug, ModuleId: Serialize + DeserializeOwned + Debug, MoveOutput: Default {
+        todo!()
     }
 
     fn execute(
