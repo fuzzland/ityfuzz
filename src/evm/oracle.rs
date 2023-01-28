@@ -1,27 +1,26 @@
+use crate::evm::abi::{AEmpty, BoxedABI, A256};
+use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::mutator::AccessPattern;
+use crate::evm::onchain::endpoints::OnChainConfig;
+use crate::evm::onchain::flashloan::FlashloanData;
+use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
+use crate::evm::uniswap::{liquidate_all_token, reserve_parser, PairContext, TokenContext};
+use crate::evm::vm::EVMState;
+use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
+use crate::oracle::{Oracle, OracleCtx};
+use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
+use crate::state_input::StagedVMState;
+use bytes::Bytes;
+use libafl::state::HasMetadata;
+use primitive_types::{H160, U256, U512};
+use revm::Bytecode;
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::onchain::flashloan::FlashloanData;
-use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
-use crate::evm::vm::EVMState;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
-use bytes::Bytes;
-use libafl::state::HasMetadata;
-use primitive_types::{H160, U256, U512};
-use revm::Bytecode;
-use crate::evm::abi::{A256, AEmpty, BoxedABI};
-use crate::evm::mutator::AccessPattern;
-use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::uniswap::{liquidate_all_token, PairContext, reserve_parser, TokenContext};
-use crate::input::VMInputT;
-use crate::state_input::StagedVMState;
-
 
 pub struct NoOracle {}
 
@@ -105,7 +104,6 @@ pub struct IERC20OracleFlashloan {
 }
 
 impl IERC20OracleFlashloan {
-
     pub fn new() -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
@@ -148,10 +146,38 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
     #[cfg(feature = "flashloan_v2")]
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
-        let tokens = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.oracle_recheck_balance.clone();
-        let reserves = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.oracle_recheck_reserve.clone();
-        let prev_reserves = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.prev_reserves.clone();
-        let unliquidated_tokens = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.unliquidated_tokens.clone();
+        let tokens = ctx
+            .fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_balance
+            .clone();
+        let reserves = ctx
+            .fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_reserve
+            .clone();
+        let prev_reserves = ctx
+            .fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .flashloan_data
+            .prev_reserves
+            .clone();
+        let unliquidated_tokens = ctx
+            .fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .flashloan_data
+            .unliquidated_tokens
+            .clone();
         let callers = ctx.fuzz_state.callers_pool.clone();
 
         let mut new_reserves = prev_reserves.clone();
@@ -165,20 +191,23 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             // println!("Reserve slot: {}: {:?}", pair_address, ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address));
             // new_reserves.insert(pair_address, reserve_parser(reserve_slot));
 
-
             let output = ctx.call_post(pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]));
             let reserve0 = U256::from_big_endian(&output[0..32]);
             let reserve1 = U256::from_big_endian(&output[32..64]);
             new_reserves.insert(pair_address, (reserve0, reserve1));
         }
 
-
         let mut liquidations_owed = Vec::new();
         let mut liquidations_earned = Vec::new();
 
-        # [cfg(feature = "debug")]
+        #[cfg(feature = "debug")]
         {
-            ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
+            ctx.fuzz_state
+                .get_execution_result_mut()
+                .new_state
+                .state
+                .flashloan_data
+                .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
         }
         for caller in &callers {
             let mut extended_address = vec![0; 12];
@@ -200,7 +229,9 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 if prev_balance > new_balance {
                     liquidations_owed.push((token_info, prev_balance - new_balance));
                 } else if prev_balance < new_balance {
-                    let to_liquidate = (new_balance - prev_balance) * U256::from(ctx.input.get_liquidation_percent()) / U256::from(10);
+                    let to_liquidate = (new_balance - prev_balance)
+                        * U256::from(ctx.input.get_liquidation_percent())
+                        / U256::from(10);
 
                     let unliquidated = new_balance - prev_balance - to_liquidate;
                     if to_liquidate > U256::from(0) {
@@ -208,56 +239,80 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                     }
                     // insert if not exists or increase if exists
                     if unliquidated > U256::from(0) {
-                        let entry = ctx.fuzz_state.get_execution_result_mut()
-                            .new_state.state.flashloan_data.unliquidated_tokens
+                        let entry = ctx
+                            .fuzz_state
+                            .get_execution_result_mut()
+                            .new_state
+                            .state
+                            .flashloan_data
+                            .unliquidated_tokens
                             .entry(token)
                             .or_insert(U256::from(0));
                         *entry += unliquidated;
                     }
                 }
-            };
+            }
         }
-
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
         exec_res.new_state.state.flashloan_data.prev_reserves = new_reserves.clone();
 
-        let liquidation_owed = liquidate_all_token(liquidations_owed.clone(), prev_reserves.clone());
+        let liquidation_owed =
+            liquidate_all_token(liquidations_owed.clone(), prev_reserves.clone());
         #[cfg(feature = "debug")]
         {
-            exec_res.new_state.state.flashloan_data.extra_info += format!("Liquidations owed: {:?} total: {}, old_reserve: {:?}\n", liquidations_owed, liquidation_owed, prev_reserves).as_str();
+            exec_res.new_state.state.flashloan_data.extra_info += format!(
+                "Liquidations owed: {:?} total: {}, old_reserve: {:?}\n",
+                liquidations_owed, liquidation_owed, prev_reserves
+            )
+            .as_str();
         }
 
-
-        unliquidated_tokens.iter().for_each(
-            |(token, amount)| {
-                let token_info = self.known_tokens.get(token).expect("Token not found");
-                let liq = *amount * U256::from(ctx.input.get_liquidation_percent()) / U256::from(10);
-                liquidations_earned.push((token_info, liq));
-                exec_res.new_state.state.flashloan_data.unliquidated_tokens.insert(*token, *amount - liq);
-            }
-        );
+        unliquidated_tokens.iter().for_each(|(token, amount)| {
+            let token_info = self.known_tokens.get(token).expect("Token not found");
+            let liq = *amount * U256::from(ctx.input.get_liquidation_percent()) / U256::from(10);
+            liquidations_earned.push((token_info, liq));
+            exec_res
+                .new_state
+                .state
+                .flashloan_data
+                .unliquidated_tokens
+                .insert(*token, *amount - liq);
+        });
 
         let liquidation_earned = liquidate_all_token(liquidations_earned, new_reserves);
 
-
         if liquidation_earned > liquidation_owed {
-            exec_res.new_state.state.flashloan_data.earned += U512::from(liquidation_earned - liquidation_owed);
+            exec_res.new_state.state.flashloan_data.earned +=
+                U512::from(liquidation_earned - liquidation_owed);
         } else {
-            exec_res.new_state.state.flashloan_data.owed += U512::from(liquidation_owed - liquidation_earned);
+            exec_res.new_state.state.flashloan_data.owed +=
+                U512::from(liquidation_owed - liquidation_earned);
         }
 
-        exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();
-        exec_res.new_state.state.flashloan_data.oracle_recheck_reserve.clear();
+        exec_res
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_balance
+            .clear();
+        exec_res
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_reserve
+            .clear();
 
-
-        if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed {
+        if exec_res.new_state.state.flashloan_data.earned
+            > exec_res.new_state.state.flashloan_data.owed
+        {
             unsafe {
                 #[cfg(not(feature = "debug"))]
                 {
                     FL_DATA = format!(
                         "[Flashloan] Earned {} more than owed {}",
-                        exec_res.new_state.state.flashloan_data.earned, exec_res.new_state.state.flashloan_data.owed,
+                        exec_res.new_state.state.flashloan_data.earned,
+                        exec_res.new_state.state.flashloan_data.owed,
                     );
                 }
 
@@ -265,7 +320,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 {
                     FL_DATA = format!(
                         "[Flashloan] Earned {} more than owed {}, extra: {:?}",
-                        exec_res.new_state.state.flashloan_data.earned, exec_res.new_state.state.flashloan_data.owed,
+                        exec_res.new_state.state.flashloan_data.earned,
+                        exec_res.new_state.state.flashloan_data.owed,
                         exec_res.new_state.state.flashloan_data.extra_info
                     );
                 }
