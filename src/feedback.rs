@@ -13,7 +13,7 @@ use crate::evm::{EVMExecutor, ExecutionResult};
 use crate::executor::FuzzExecutor;
 use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
-use crate::state::HasExecutionResult;
+use crate::state::{FuzzState, HasExecutionResult};
 
 pub struct InfantFeedback<I, S, O>
 where
@@ -189,7 +189,7 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        let mut oracle_ctx = OracleCtx::new(
+        let mut oracle_ctx: OracleCtx<I, S> = OracleCtx::new(
             input.get_state(),
             &state.get_execution_result().new_state.state,
             &mut self.executor,

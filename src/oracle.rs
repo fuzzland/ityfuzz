@@ -5,6 +5,7 @@ use bytes::Bytes;
 use hex;
 use libafl::prelude::{tuple_list, SerdeAnyMap};
 use primitive_types::H160;
+use crate::state::FuzzState;
 
 pub struct OracleCtx<'a, I, S>
 where
@@ -65,21 +66,21 @@ where
     fn oracle(&self, ctx: &mut OracleCtx<I, S>, stage: u64) -> bool;
 }
 
-struct NoOracle {}
+pub struct NoOracle {}
 
-impl Oracle<VMInput, VMState> for NoOracle {
-    fn transition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
+impl Oracle<VMInput, FuzzState> for NoOracle {
+    fn transition(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> u64 {
         0
     }
 
-    fn oracle(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> bool {
+    fn oracle(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> bool {
         false
     }
 }
 
 pub struct IERC20Oracle {
     pub address: H160,
-    pub precondition: fn(ctx: &mut OracleCtx<VMInput, VMState>, stage: u64) -> u64,
+    pub precondition: fn(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64,
 
     balance_of: Vec<u8>,
 }
@@ -87,7 +88,7 @@ pub struct IERC20Oracle {
 impl IERC20Oracle {
     pub fn new(
         address: H160,
-        precondition: fn(ctx: &mut OracleCtx<VMInput, VMState>, stage: u64) -> u64,
+        precondition: fn(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64,
     ) -> Self {
         Self {
             address,
@@ -97,12 +98,12 @@ impl IERC20Oracle {
     }
 }
 
-impl Oracle<VMInput, VMState> for IERC20Oracle {
-    fn transition(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> u64 {
+impl Oracle<VMInput, FuzzState> for IERC20Oracle {
+    fn transition(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
     }
 
-    fn oracle(&self, _ctx: &mut OracleCtx<VMInput, VMState>, _stage: u64) -> bool {
+    fn oracle(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> bool {
         let balance_of_txn =
             Bytes::from([self.balance_of.clone(), _ctx.input.caller.0.to_vec()].concat());
 
