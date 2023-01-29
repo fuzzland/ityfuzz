@@ -15,17 +15,17 @@ use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
-pub struct InfantFeedback<I, S, O>
+pub struct InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
 {
-    oracle: O,
+    oracle: &'a O,
     executor: EVMExecutor<I, S>,
     phantom: PhantomData<(I, S)>,
 }
 
-impl<I, S, O> Debug for InfantFeedback<I, S, O>
+impl<'a, I, S, O> Debug for InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<I, S, O> Named for InfantFeedback<I, S, O>
+impl<'a, I, S, O> Named for InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -47,12 +47,12 @@ where
     }
 }
 
-impl<I, S, O> InfantFeedback<I, S, O>
+impl<'a, I, S, O> InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
 {
-    pub fn new(oracle: O, executor: EVMExecutor<I, S>) -> Self {
+    pub fn new(oracle: &'a O, executor: EVMExecutor<I, S>) -> Self {
         Self {
             oracle,
             executor,
@@ -61,7 +61,7 @@ where
     }
 }
 
-impl<I, S, O> Feedback<I, S> for InfantFeedback<I, S, O>
+impl<'a, I, S, O> Feedback<I, S> for InfantFeedback<'a, I, S, O>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult,
     I: VMInputT,
@@ -119,17 +119,17 @@ where
     }
 }
 
-pub struct OracleFeedback<I, S, O>
+pub struct OracleFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
 {
-    oracle: O,
+    oracle: &'a O,
     executor: EVMExecutor<I, S>,
     phantom: PhantomData<(I, S)>,
 }
 
-impl<I, S, O> Debug for OracleFeedback<I, S, O>
+impl<'a, I, S, O> Debug for OracleFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -141,7 +141,7 @@ where
     }
 }
 
-impl<I, S, O> Named for OracleFeedback<I, S, O>
+impl<'a, I, S, O> Named for OracleFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
@@ -151,12 +151,12 @@ where
     }
 }
 
-impl<I, S, O> OracleFeedback<I, S, O>
+impl<'a, I, S, O> OracleFeedback<'a, I, S, O>
 where
     I: VMInputT,
     O: Oracle<I, S>,
 {
-    pub fn new(oracle: O, executor: EVMExecutor<I, S>) -> Self {
+    pub fn new(oracle: &'a O, executor: EVMExecutor<I, S>) -> Self {
         Self {
             oracle,
             executor,
@@ -165,7 +165,7 @@ where
     }
 }
 
-impl<I, S, O> Feedback<I, S> for OracleFeedback<I, S, O>
+impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult,
     I: VMInputT,
