@@ -86,7 +86,7 @@ where
     {
         // reverted states should be discarded as they are infeasible
         if state.get_execution_result().reverted {
-            return Ok(false)
+            return Ok(false);
         }
         let mut oracle_ctx = OracleCtx::new(
             input.get_state(),
