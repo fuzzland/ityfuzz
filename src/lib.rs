@@ -17,6 +17,7 @@ mod rand;
 mod state;
 mod state_input;
 mod types;
+mod contract_utils;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
