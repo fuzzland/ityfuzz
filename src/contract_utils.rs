@@ -31,6 +31,12 @@ pub struct ContractLoader {
     pub contracts: Vec<ContractInfo>,
 }
 
+pub fn set_hash(name: &str, out: &mut [u8]) {
+    let mut hasher = Sha3::keccak256();
+    hasher.input_str(name);
+    hasher.result(out)
+}
+
 impl ContractLoader {
     fn parse_abi(path: &Path) -> Vec<ABIConfig> {
         let mut file = File::open(path).unwrap();
@@ -42,8 +48,6 @@ impl ContractLoader {
             .filter(|x| x["type"] == "function")
             .map(|abi| {
                 let name = abi["name"].as_str().expect("failed to parse abi name");
-                let mut hasher = Sha3::keccak256();
-                hasher.input_str(name);
                 let mut abi_name: Vec<String> = vec![];
                 abi["inputs"]
                     .as_array()
@@ -57,7 +61,7 @@ impl ContractLoader {
                     function: [0; 4],
                     is_static: abi["stateMutability"].as_str().unwrap() != "view",
                 };
-                hasher.result(&mut abi_config.function);
+                set_hash(name, &mut abi_config.function);
                 abi_config
             })
             .collect()

@@ -85,6 +85,10 @@ pub struct IERC20Oracle {
     balance_of: Vec<u8>,
 }
 
+pub fn dummy_precondition(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64 {
+    99
+}
+
 impl IERC20Oracle {
     pub fn new(
         address: H160,
@@ -96,6 +100,16 @@ impl IERC20Oracle {
             balance_of: hex::decode("70a08231").unwrap(),
         }
     }
+
+    pub fn new_no_condition(
+        address: H160,
+    ) -> Self {
+        Self {
+            address,
+            precondition: dummy_precondition,
+            balance_of: hex::decode("70a08231").unwrap(),
+        }
+    }
 }
 
 impl Oracle<VMInput, FuzzState> for IERC20Oracle {
@@ -104,18 +118,76 @@ impl Oracle<VMInput, FuzzState> for IERC20Oracle {
     }
 
     fn oracle(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> bool {
-        let balance_of_txn =
-            Bytes::from([self.balance_of.clone(), _ctx.input.caller.0.to_vec()].concat());
+        if _stage == 99 {
+            let balance_of_txn =
+                Bytes::from([self.balance_of.clone(), _ctx.input.caller.0.to_vec()].concat());
 
-        // get caller balance
-        let pre_balance = _ctx
-            .call_pre(self.address, _ctx.input.caller, balance_of_txn.clone())
-            .output;
+            // get caller balance
+            let pre_balance = _ctx
+                .call_pre(self.address, _ctx.input.caller, balance_of_txn.clone())
+                .output;
 
-        let post_balance = _ctx
-            .call_post(self.address, _ctx.input.caller, balance_of_txn)
-            .output;
-        // has balance increased?
-        post_balance > pre_balance
+            let post_balance = _ctx
+                .call_post(self.address, _ctx.input.caller, balance_of_txn)
+                .output;
+            // has balance increased?
+            post_balance > pre_balance
+        } else {
+            false
+        }
+    }
+}
+
+
+pub struct FunctionHarnessOracle {
+    pub address: H160,
+    harness_func: Vec<u8>,
+    precondition: fn(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64,
+}
+
+impl FunctionHarnessOracle {
+    pub fn new(
+        address: H160,
+        harness_func: Vec<u8>,
+        precondition: fn(ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64,
+    ) -> Self {
+        Self {
+            address,
+            harness_func,
+            precondition
+        }
+    }
+
+    pub fn new_no_condition(
+        address: H160,
+        harness_func: Vec<u8>,
+    ) -> Self {
+        Self {
+            address,
+            precondition: dummy_precondition,
+            harness_func,
+        }
+    }
+}
+
+impl Oracle<VMInput, FuzzState> for FunctionHarnessOracle {
+    fn transition(&self, ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> u64 {
+        (self.precondition)(ctx, stage)
+    }
+
+    fn oracle(&self, ctx: &mut OracleCtx<VMInput, FuzzState>, stage: u64) -> bool {
+        if stage == 99 {
+            let harness_txn = Bytes::from(self.harness_func.clone());
+            let res = ctx
+                .call_post(if self.address.is_zero() {
+                    ctx.input.contract
+                } else {
+                    self.address
+                }, ctx.input.caller, harness_txn)
+                .output;
+            !res.iter().map(|x| *x == 0).all(|x| x)
+        } else {
+            false
+        }
     }
 }
