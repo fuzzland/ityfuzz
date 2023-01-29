@@ -4,7 +4,8 @@ pragma solidity ^0.8.15;
 contract main {
     mapping(uint256 => uint256) knownsec;
 
-    function process(uint8 a) public returns (string memory){
+    // solution: a = 1
+    function process(uint256 a) public returns (string memory){
         require(a < 2, "2");
         knownsec[2] = a;
         return 'Hello Contracts';

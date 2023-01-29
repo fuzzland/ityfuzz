@@ -132,17 +132,21 @@ where
             .post_exec_all(state, &input, &exitkind)?;
         mark_feature_time!(state, PerfFeature::PostExecObservers);
 
+        // todo(shou): may need to check about reverting here!
+
         let observers = executor.observers();
-        let is_solution = self
-            .objective
-            .is_interesting(state, manager, &input, observers, &exitkind)?;
 
+        // get new stage first
         let is_infant_interesting = self.infant_feedback.is_interesting(state, manager, &input, observers, &exitkind)?;
-
         if is_infant_interesting {
             let new_state = state.get_execution_result();
             state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
         }
+
+        let is_solution = self
+            .objective
+            .is_interesting(state, manager, &input, observers, &exitkind)?;
+
 
         let mut res = ExecuteInputResult::None;
         if is_solution {
