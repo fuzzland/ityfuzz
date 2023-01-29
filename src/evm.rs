@@ -118,9 +118,6 @@ impl Host for FuzzHost {
     }
 
     fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
-        unsafe {
-            println!("sload");
-        }
         match self.data.get(&address) {
             Some(account) => Some((account.get(&index).unwrap_or(&U256::zero()).clone(), true)),
             None => Some((U256::zero(), true)),
