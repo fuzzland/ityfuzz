@@ -89,8 +89,8 @@ impl FuzzState {
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<I, FuzzState>,
-    )
-        where I: Input
+    ) where
+        I: Input,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
@@ -102,8 +102,8 @@ impl FuzzState {
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<I, FuzzState>,
-    )
-    where I: Input
+    ) where
+        I: Input,
     {
         for contract in contracts {
             let deployed_address = executor.deploy(
@@ -121,18 +121,22 @@ impl FuzzState {
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
-                let idx = self.txn_corpus
-                    .add(tc)
-                    .expect("failed to add");
-                scheduler.on_add(self, idx).expect("failed to call scheduler on_add");
+                let idx = self.txn_corpus.add(tc).expect("failed to add");
+                scheduler
+                    .on_add(self, idx)
+                    .expect("failed to call scheduler on_add");
             }
         }
-        let mut tc = Testcase::new(
-            StagedVMState::new(executor.host.data.clone(), 0),
-        );
+        let mut tc = Testcase::new(StagedVMState::new(executor.host.data.clone(), 0));
         tc.set_exec_time(Duration::from_secs(0));
-        let idx = self.infant_states_state.corpus_mut().add(tc).expect("failed to add");
-        infant_scheduler.on_add(self, idx).expect("failed to call infant scheduler on_add");
+        let idx = self
+            .infant_states_state
+            .corpus_mut()
+            .add(tc)
+            .expect("failed to add");
+        infant_scheduler
+            .on_add(self, idx)
+            .expect("failed to call infant scheduler on_add");
     }
 
     pub fn setup_default_callers(&mut self, amount: usize) {

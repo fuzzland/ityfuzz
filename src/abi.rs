@@ -1,4 +1,4 @@
-use crate::abi::ABILossyType::{TArray, TDynamic, T256, TEmpty};
+use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, T256};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use bytes::Bytes;
 use libafl::inputs::{HasBytesVec, Input};
@@ -16,7 +16,7 @@ pub enum ABILossyType {
     T256,
     TArray,
     TDynamic,
-    TEmpty
+    TEmpty,
 }
 
 // how can we deserialize this trait?
@@ -101,9 +101,7 @@ impl BoxedABI {
         S: State + HasRand + HasMaxSize,
     {
         match self.get_type() {
-            TEmpty => {
-                MutationResult::Mutated
-            }
+            TEmpty => MutationResult::Mutated,
             T256 => {
                 let v = self.b.deref_mut().as_any();
                 let a256 = v.downcast_mut::<A256>().unwrap();
@@ -150,7 +148,6 @@ impl BoxedABI {
                 }
                 MutationResult::Mutated
             }
-
         }
     }
 }
@@ -162,8 +159,7 @@ impl Clone for Box<dyn ABI> {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct AEmpty {
-}
+pub struct AEmpty {}
 
 impl Input for AEmpty {
     fn generate_name(&self, idx: usize) -> String {
@@ -402,8 +398,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
     // tuple
     if abi_name_str == "()" {
-        return Box::new(AEmpty {
-        });
+        return Box::new(AEmpty {});
     }
     if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
         return Box::new(AArray {
@@ -481,7 +476,7 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
                 assert!(len % 8 == 0 && len >= 8);
                 return get_abi_type_basic("bytes", len / 8);
             } else if abi_name.len() == 0 {
-                return Box::new(AEmpty {  });
+                return Box::new(AEmpty {});
             } else {
                 panic!("unknown abi type {}", abi_name);
             }

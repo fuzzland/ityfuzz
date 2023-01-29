@@ -6,8 +6,12 @@ use crate::{
     input::{VMInput, VMInputT},
     mutator::FuzzMutator,
 };
-use libafl::prelude::{powersched::PowerSchedule, MapFeedback, SimpleEventManager, ObserversTuple, QueueScheduler};
+use libafl::feedbacks::Feedback;
+use libafl::prelude::{
+    powersched::PowerSchedule, MapFeedback, ObserversTuple, QueueScheduler, SimpleEventManager,
+};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
+use libafl::stages::CalibrationStage;
 use libafl::{
     prelude::{
         current_nanos, current_time, tuple_list, ConstFeedback, HitcountsMapObserver,
@@ -27,18 +31,16 @@ use std::{
     io,
     path::PathBuf,
 };
-use libafl::feedbacks::Feedback;
-use libafl::stages::CalibrationStage;
 
 use crate::contract_utils::ContractLoader;
+use crate::feedback::OracleFeedback;
 use crate::infant_state_stage::InfantStateStage;
+use crate::oracle::{IERC20Oracle, NoOracle};
 use crate::rand::generate_random_address;
 use crate::state::FuzzState;
 use nix::unistd::dup;
 use primitive_types::H160;
 use revm::EVM;
-use crate::feedback::OracleFeedback;
-use crate::oracle::{IERC20Oracle, NoOracle};
 
 struct ABIConfig {
     abi: String,
@@ -107,31 +109,33 @@ pub fn dummyfuzzer(
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let infant_state_stage = InfantStateStage::new(&infant_scheduler);
-    let mut stages = tuple_list!(
-        calibration,
-        std_stage,
-        infant_state_stage
-    );
+    let mut stages = tuple_list!(calibration, std_stage, infant_state_stage);
 
     // TODO: Fill EVMExecutor with real data?
-    let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), generate_random_address());
+    let evm_executor: EVMExecutor<VMInput, FuzzState> =
+        EVMExecutor::new(FuzzHost::new(), generate_random_address());
 
-    let mut executor = FuzzExecutor::new(
-        evm_executor,
-        tuple_list!(jmp_observer),
-    );
+    let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
 
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
-    state.initialize(contract_info, &mut executor.evm_executor, &mut scheduler, &infant_scheduler);
-    feedback.init_state(&mut state).expect("Failed to init state");
+    state.initialize(
+        contract_info,
+        &mut executor.evm_executor,
+        &mut scheduler,
+        &infant_scheduler,
+    );
+    feedback
+        .init_state(&mut state)
+        .expect("Failed to init state");
 
     // now evm executor is ready, we can clone it
-    let objective = OracleFeedback::new(NoOracle{}, executor.evm_executor.clone());
+    let objective = OracleFeedback::new(NoOracle {}, executor.evm_executor.clone());
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 
-    fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr).expect("Fuzzing failed");
-
+    fuzzer
+        .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+        .expect("Fuzzing failed");
 }
 
 #[cfg(test)]

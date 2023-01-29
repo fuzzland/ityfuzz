@@ -1,11 +1,11 @@
 use crate::evm::ExecutionResult;
 use crate::input::{VMInput, VMInputT};
+use crate::state::FuzzState;
 use crate::{EVMExecutor, VMState};
 use bytes::Bytes;
 use hex;
 use libafl::prelude::{tuple_list, SerdeAnyMap};
 use primitive_types::H160;
-use crate::state::FuzzState;
 
 pub struct OracleCtx<'a, I, S>
 where
