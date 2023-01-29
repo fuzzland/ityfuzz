@@ -27,6 +27,7 @@ use std::{
     io,
     path::PathBuf,
 };
+use libafl::stages::CalibrationStage;
 
 use crate::contract_utils::ContractLoader;
 use crate::infant_state_stage::InfantStateStage;
@@ -53,7 +54,7 @@ pub fn dummyfuzzer(
     objective_dir: PathBuf,
     logfile: PathBuf,
     contracts_glob: &String,
-) -> Result<(), Error> {
+) {
     // Fuzzbench style, which requires a host and can have many fuzzing client
     // let log = RefCell::new(
     //     OpenOptions::new()
@@ -90,8 +91,7 @@ pub fn dummyfuzzer(
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let infant_scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
-    let mutator = FuzzMutator::new(&infant_scheduler);
+    let mut infant_scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
 
     let jmps = unsafe { &mut JMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
@@ -100,13 +100,20 @@ pub fn dummyfuzzer(
     // let mut objective = ConstFeedback::new(false);
     // let mut feedback = ConstFeedback::new(false);
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
+    let calibration = CalibrationStage::new(&feedback);
     let mut state = FuzzState::new();
 
-    let scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
+    let mut scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
+
+    let mutator = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let infant_state_stage = InfantStateStage::new(&infant_scheduler);
-    let mut stages = tuple_list!(std_stage, infant_state_stage);
+    let mut stages = tuple_list!(
+        calibration,
+        std_stage,
+        infant_state_stage
+    );
 
     // TODO: Fill EVMExecutor with real data?
     let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), generate_random_address());
@@ -117,17 +124,15 @@ pub fn dummyfuzzer(
     );
 
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
-
-    state.initialize(contract_info, &mut executor.evm_executor);
+    state.initialize(contract_info, &mut executor.evm_executor, &mut scheduler, &infant_scheduler);
 
     // now evm executor is ready, we can clone it
     let objective = OracleFeedback::new(NoOracle{}, executor.evm_executor.clone());
 
     let mut fuzzer = ItyFuzzer::new(scheduler, feedback, objective);
 
-    fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+    fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr).expect("Fuzzing failed");
 
-    Ok(())
 }
 
 #[cfg(test)]
@@ -135,12 +140,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() -> Result<(), Error> {
-        // dummyfuzzer(
-        //     PathBuf::from("./tmp/corpus"),
-        //     PathBuf::from("./tmp/objective"),
-        //     PathBuf::from("./tmp/log"),
-        // )?;
-        Ok(())
+    fn dummy_fuzzer() {
+        dummyfuzzer(
+            PathBuf::from("./tmp/corpus"),
+            PathBuf::from("./tmp/objective"),
+            PathBuf::from("./tmp/log"),
+            &String::from("./demo/*"),
+        );
     }
 }

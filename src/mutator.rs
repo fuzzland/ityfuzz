@@ -44,6 +44,10 @@ where
         input: &mut I,
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
+        if !input.get_staged_state().initialized {
+            let concrete = state.get_infant_state(self.infant_scheduler).unwrap().1;
+            input.set_staged_state(concrete);
+        }
         match state.rand_mut().below(10) {
             0 => {
                 // mutate the caller

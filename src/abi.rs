@@ -1,4 +1,4 @@
-use crate::abi::ABILossyType::{TArray, TDynamic, T256};
+use crate::abi::ABILossyType::{TArray, TDynamic, T256, TEmpty};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use bytes::Bytes;
 use libafl::inputs::{HasBytesVec, Input};
@@ -11,10 +11,12 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::ops::DerefMut;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
     T256,
     TArray,
     TDynamic,
+    TEmpty
 }
 
 // how can we deserialize this trait?
@@ -99,6 +101,9 @@ impl BoxedABI {
         S: State + HasRand + HasMaxSize,
     {
         match self.get_type() {
+            TEmpty => {
+                MutationResult::Mutated
+            }
             T256 => {
                 let v = self.b.deref_mut().as_any();
                 let a256 = v.downcast_mut::<A256>().unwrap();
@@ -145,6 +150,7 @@ impl BoxedABI {
                 }
                 MutationResult::Mutated
             }
+
         }
     }
 }
@@ -152,6 +158,34 @@ impl BoxedABI {
 impl Clone for Box<dyn ABI> {
     fn clone(&self) -> Box<dyn ABI> {
         self.clone_box()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AEmpty {
+}
+
+impl Input for AEmpty {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("AEmpty_{}", idx)
+    }
+}
+
+impl ABI for AEmpty {
+    fn is_static(&self) -> bool {
+        panic!("unreachable");
+    }
+
+    fn get_bytes(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn get_type(&self) -> ABILossyType {
+        TEmpty
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -367,6 +401,10 @@ pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
 pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
     // tuple
+    if abi_name_str == "()" {
+        return Box::new(AEmpty {
+        });
+    }
     if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
         return Box::new(AArray {
             data: abi_name_str[1..abi_name_str.len() - 1]
@@ -442,6 +480,8 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
                 let len = abi_name[5..].parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
                 return get_abi_type_basic("bytes", len / 8);
+            } else if abi_name.len() == 0 {
+                return Box::new(AEmpty {  });
             } else {
                 panic!("unknown abi type {}", abi_name);
             }
@@ -567,6 +607,18 @@ mod tests {
     #[test]
     fn test_array_dyn() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[][]"));
+        let mut test_state = FuzzState::new();
+        let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abi.get_bytes())
+        );
+    }
+
+    #[test]
+    fn test_null() {
+        let mut abi = get_abi_type_boxed(&String::from("()"));
         let mut test_state = FuzzState::new();
         let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
         println!(
