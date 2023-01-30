@@ -101,9 +101,7 @@ impl IERC20Oracle {
         }
     }
 
-    pub fn new_no_condition(
-        address: H160,
-    ) -> Self {
+    pub fn new_no_condition(address: H160) -> Self {
         Self {
             address,
             precondition: dummy_precondition,
@@ -138,7 +136,6 @@ impl Oracle<VMInput, FuzzState> for IERC20Oracle {
     }
 }
 
-
 pub struct FunctionHarnessOracle {
     pub address: H160,
     harness_func: Vec<u8>,
@@ -154,14 +151,11 @@ impl FunctionHarnessOracle {
         Self {
             address,
             harness_func,
-            precondition
+            precondition,
         }
     }
 
-    pub fn new_no_condition(
-        address: H160,
-        harness_func: Vec<u8>,
-    ) -> Self {
+    pub fn new_no_condition(address: H160, harness_func: Vec<u8>) -> Self {
         Self {
             address,
             precondition: dummy_precondition,
@@ -179,11 +173,15 @@ impl Oracle<VMInput, FuzzState> for FunctionHarnessOracle {
         if stage == 99 {
             let harness_txn = Bytes::from(self.harness_func.clone());
             let res = ctx
-                .call_post(if self.address.is_zero() {
-                    ctx.input.contract
-                } else {
-                    self.address
-                }, ctx.input.caller, harness_txn)
+                .call_post(
+                    if self.address.is_zero() {
+                        ctx.input.contract
+                    } else {
+                        self.address
+                    },
+                    ctx.input.caller,
+                    harness_txn,
+                )
                 .output;
             !res.iter().map(|x| *x == 0).all(|x| x)
         } else {
