@@ -2,6 +2,12 @@
 Fast hybrid fuzzer for EVM, MoveVM, etc.
 
 
+### Building
+```bash
+cd cli/
+cargo build --release
+```
+
 ### Z3 Installation (macOS)
 ```bash
 git clone https://github.com/Z3Prover/z3 && cd z3
