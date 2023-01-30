@@ -8,6 +8,11 @@ cd cli/
 cargo build --release
 ```
 
+### Run
+```bash
+./cli --contract-glob './demo/*'
+```
+
 ### Z3 Installation (macOS)
 ```bash
 git clone https://github.com/Z3Prover/z3 && cd z3
