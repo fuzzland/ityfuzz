@@ -146,7 +146,7 @@ impl BVBox {
         box_bv!(self, rhs, ConcolicOp::SREM)
     }
     pub fn bvand(self, rhs: Box<BVBox>) -> Box<BVBox> {
-        box_bv!(self, rhs, ConcolicOp::ADD)
+        box_bv!(self, rhs, ConcolicOp::AND)
     }
     pub fn bvor(self, rhs: Box<BVBox>) -> Box<BVBox> {
         box_bv!(self, rhs, ConcolicOp::OR)
@@ -693,13 +693,13 @@ impl ConcolicHost {
             0x60..=0x7f => {
                 // push n bytes into stack
                 let n = (*interp.instruction_pointer) - 0x60 + 1;
-                // let mut data = vec![];
-                // for i in 0..n {
-                // data.push(
-                //     interp.contract().bytecode.bytecode()
-                //         [interp.program_counter() + i as usize + 1],
-                // );
-                // }
+                let mut data = vec![];
+                for i in 0..n {
+                    data.push(
+                        interp.contract().bytecode.bytecode()
+                            [interp.program_counter() + i as usize + 1],
+                    );
+                }
 
                 vec![
                     //todo!
