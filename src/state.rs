@@ -47,6 +47,10 @@ pub trait HasInfantStateState {
     fn get_infant_state_state(&mut self) -> &mut InfantStateState;
 }
 
+pub trait HasHashToAddress {
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], H160>;
+}
+
 pub trait HasExecutionResult {
     fn get_execution_result(&self) -> &ExecutionResult;
     fn get_execution_result_mut(&mut self) -> &mut ExecutionResult;
@@ -65,6 +69,7 @@ pub struct FuzzState {
     default_callers: Vec<H160>,
     pub rand_generator: StdRand,
     pub max_size: usize,
+    pub hash_to_address: std::collections::HashMap<[u8; 4], H160>,
 }
 
 impl FuzzState {
@@ -80,6 +85,7 @@ impl FuzzState {
             default_callers: vec![],
             rand_generator: StdRand::with_seed(current_nanos()),
             max_size: 1500,
+            hash_to_address: Default::default(),
         }
     }
 
@@ -111,6 +117,7 @@ impl FuzzState {
                 Bytes::from(contract.constructor_args),
             );
             for abi in contract.abi {
+                self.hash_to_address.insert(abi.function, deployed_address);
                 if abi.is_static {
                     continue;
                 }
@@ -162,6 +169,12 @@ impl InfantStateState {
             infant_state: InMemoryCorpus::new(),
             metadata: SerdeAnyMap::new(),
         }
+    }
+}
+
+impl HasHashToAddress for FuzzState {
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], H160> {
+        &self.hash_to_address
     }
 }
 
