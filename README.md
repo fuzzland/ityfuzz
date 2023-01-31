@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM, MoveVM, etc.
 ### Building
 ```bash
 cd cli/
-cargo make --makefile cargo-make.toml build-cli
+cargo make build-cli
 ```
 
 ### Run
@@ -16,6 +16,7 @@ cargo make --makefile cargo-make.toml run
 or -->
 ```bash
 # if cli binary exists
+cd cli/
 ./cli --contract-glob '../demo/*'
 ```
 
