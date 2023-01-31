@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use ityfuzz::fuzzers::basic_fuzzer;
 use clap::Parser;
+use ityfuzz::fuzzers::basic_fuzzer;
+use std::path::PathBuf;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -10,7 +10,6 @@ struct Args {
     #[arg(short, long)]
     contract_glob: String,
 }
-
 
 fn main() {
     let args = Args::parse();
