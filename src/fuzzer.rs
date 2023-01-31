@@ -116,7 +116,8 @@ where
         + HasSolutions<I>
         + HasInfantStateState
         + HasItyState
-        + HasExecutionResult,
+        + HasExecutionResult
+        + HasExecutions,
 {
     fn evaluate_input_events(
         &mut self,
@@ -133,6 +134,8 @@ where
         start_timer!(state);
         let exitkind = executor.run_target(self, state, manager, &input)?;
         mark_feature_time!(state, PerfFeature::TargetExecution);
+
+        *state.executions_mut() += 1;
 
         start_timer!(state);
         executor
