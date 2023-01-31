@@ -3,7 +3,7 @@ use crate::{
     state::{HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::state::HasExecutionResult;
 use libafl::{
@@ -19,6 +19,8 @@ use libafl::{
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
+
+const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
 pub struct ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
@@ -96,6 +98,22 @@ where
         manager.process(self, state, executor)?;
         Ok(idx)
     }
+
+    fn fuzz_loop(
+            &mut self,
+            stages: &mut ST,
+            executor: &mut E,
+            state: &mut S,
+            manager: &mut EM,
+        ) -> Result<usize, Error> {
+            let mut last = current_time();
+            // now report stats to manager every 0.1 sec
+            let monitor_timeout = STATS_TIMEOUT_DEFAULT;
+            loop {
+                self.fuzz_one(stages, executor, state, manager)?;
+                last = manager.maybe_report_progress(state, last, monitor_timeout)?;
+            }
+    }
 }
 
 // implement evaluator trait for ItyFuzzer
@@ -116,7 +134,8 @@ where
         + HasSolutions<I>
         + HasInfantStateState
         + HasItyState
-        + HasExecutionResult,
+        + HasExecutionResult
+        + HasExecutions,
 {
     fn evaluate_input_events(
         &mut self,
@@ -133,6 +152,9 @@ where
         start_timer!(state);
         let exitkind = executor.run_target(self, state, manager, &input)?;
         mark_feature_time!(state, PerfFeature::TargetExecution);
+
+        *state.executions_mut() += 1;
+        // println!("{}", *state.executions());
 
         start_timer!(state);
         executor
@@ -201,7 +223,7 @@ where
                             corpus_size: state.corpus().count(),
                             client_config: manager.configuration(),
                             time: current_time(),
-                            executions: 0,
+                            executions: *state.executions(),
                         },
                     )?;
                 }
