@@ -1,0 +1,29 @@
+[tasks.clean_bin]
+command = "rm"
+args = ["./cli"]
+
+[tasks.clean_cargo]
+command = "cargo"
+args = ["clean"]
+
+[tasks.clean]
+dependencies = ["clean_bin", "clean_cargo"]
+
+[tasks.compile]
+command = "cargo"
+args = ["build", "--release"]
+dependencies = ["clean"]
+
+[tasks.copy]
+command = "cp"
+args = ["target/release/cli", "./cli"]
+
+[tasks.build-cli]
+dependencies = [ "compile", "copy"]
+
+[tasks.run]
+command = "./cli"
+args = ["--contract-glob", "'../demo/*'" ]
+dependencies = ["build-cli"]
+
+
