@@ -15,6 +15,7 @@ use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
+// TODO: add hash table for stages
 pub struct InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
