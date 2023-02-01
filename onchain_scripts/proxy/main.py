@@ -4,6 +4,7 @@ import re
 import flask
 import requests
 from retry import retry
+from ratelimit import limits
 
 headers = {
     'authority': 'etherscan.io',
@@ -36,19 +37,22 @@ def get_endpoint(network):
     else:
         raise Exception("Unknown network")
 
+
 def get_rpc(network):
     if network == "eth":
         return "https://eth.llamarpc.com"
     elif network == "bsc":
         # BSC mod to geth make it no longer possible to use debug_storageRangeAt
         # so, we use our own node that supports eth_getStorageAll
-        return "https://blue-damp-glitter.bsc.discover.quiknode.pro/8364ed151b17ed4619e9effc6237600241c2e65c/"
+        # return "https://blue-damp-glitter.bsc.discover.quiknode.pro/8364ed151b17ed4619e9effc6237600241c2e65c/"
+        return "http://bsc.node1.infra.fuzz.land"
     elif network == "polygon":
         return "https://polygon-rpc.com/"
     elif network == "mumbai":
         return "https://rpc-mumbai.maticvigil.com"
     else:
         raise Exception("Unknown network")
+
 
 def get_uniswap_api(network) -> dict:
     if network == "eth":
@@ -63,7 +67,7 @@ def get_uniswap_api(network) -> dict:
     elif network == "bsc":
         return {
             "v2": {
-                "pancakeswap":'https://api.thegraph.com/subgraphs/name/pancakeswap/pairs',
+                "pancakeswap": 'https://api.thegraph.com/subgraphs/name/pancakeswap/pairs',
                 "biswap": 'https://api.thegraph.com/subgraphs/name/unchase/biswap'
             },
         }
@@ -77,6 +81,7 @@ def get_uniswap_api(network) -> dict:
         return {}
     else:
         raise Exception("Unknown network")
+
 
 def get_pegged_token(network):
     if network == "eth":
@@ -117,11 +122,16 @@ def get_pegged_token(network):
 data = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  \n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n}'
 
 
-reserve_cache = {}
+@retry(tries=100, delay=1, backoff=0.3)
+@limits(calls=4, period=2)
+def etherscan_get(url, ):
+    print(url)
+    return requests.get(url, headers=headers)
 
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
 def fetch_reserve(pair, network, block):
-    if pair in reserve_cache:
-        return reserve_cache[pair]
     url = f"{get_rpc(network)}"
     payload = {
         "jsonrpc": "2.0",
@@ -136,10 +146,11 @@ def fetch_reserve(pair, network, block):
     response.raise_for_status()
     result = response.json()["result"]
 
-    reserve_cache[pair] = (result[2:66], result[66:130])
     return result[2:66], result[66:130]
 
 
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
 def get_latest_block(network):
     url = f"{get_rpc(network)}"
     payload = {
@@ -153,6 +164,8 @@ def get_latest_block(network):
     return response.json()["result"]
 
 
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
 def get_pair(token, network, block):
     # -50 account for delay in api indexing
     block_int = int(block, 16) if block != "latest" else int(get_latest_block(network), 16) - 50
@@ -161,9 +174,9 @@ def get_pair(token, network, block):
     if "v2" in api:
         for name, i in api["v2"].items():
             res = requests.post(i, json={
-                    "query": data % (block_int, token.lower(), block_int, token.lower())}
-                ).json()["data"]
-                
+                "query": data % (block_int, token.lower(), block_int, token.lower())}
+                                ).json()["data"]
+
             for pair in res["p0"] + res["p1"]:
                 reserves = fetch_reserve(pair["id"], network, block)
                 next_tokens.append({
@@ -182,6 +195,8 @@ def get_pair(token, network, block):
 
 # max 2 hops
 MAX_HOPS = 1
+
+
 def get_all_hops(token, network, block, hop=0, known=set()):
     known.add(token)
     if hop > MAX_HOPS:
@@ -206,13 +221,12 @@ def get_pegged_next_hop(token, network):
     ] else int(1e6)}
 
 
-@functools.lru_cache(maxsize=10240)
-@retry(tries=10, delay=0.5, backoff=0.3)
 def find_path(network, token, block):
     if token in get_pegged_token(network).values():
         return [[get_pegged_next_hop(token, network)]]
     hops = get_all_hops(token, network, block)
     routes = []
+
     # do a DFS to find all routes
     def dfs(token, path, visited):
         if token in get_pegged_token(network).values():
@@ -225,6 +239,7 @@ def find_path(network, token, block):
             if i["next"] in visited:
                 continue
             dfs(i["next"], path + [i], visited.copy())
+
     dfs(token, [], set())
     return routes
 
@@ -237,7 +252,7 @@ def find_path(network, token, block):
 def fetch_etherscan_token_holder(network, token_address):
     finder = re.compile("/token/" + token_address + "\?a=0x[0-9a-f]{40}'")
     url = f"{get_endpoint(network)}/token/generic-tokenholders2?a={token_address}"
-    response = requests.get(url, headers=headers)
+    response = etherscan_get(url)
     response.raise_for_status()
     ret = []
     for i in finder.findall(response.text):
@@ -253,7 +268,7 @@ def fetch_etherscan_token_holder(network, token_address):
 def fetch_etherscan_contract_abi(network, token_address):
     finder = re.compile("id='js-copytextarea2' style='height: 200px; max-height: 400px; margin-top: 5px;'>(.+?)</pre>")
     url = f"{get_endpoint(network)}/address/{token_address}"
-    response = requests.get(url, headers=headers)
+    response = etherscan_get(url)
     response.raise_for_status()
     contract_abi = []
     for i in finder.findall(response.text):
@@ -287,7 +302,7 @@ def get_major_symbol(network):
 @retry(tries=3, delay=0.5, backoff=2)
 def fetch_token_price(network, token_address):
     url = f"{get_endpoint(network)}/token/{token_address}"
-    response = requests.get(url, headers=headers)
+    response = etherscan_get(url)
     response.raise_for_status()
     resp = response.text.replace("\r", "").replace("\t", "").replace("\n", "")
     price_finder = re.compile(f"text-nowrap\'> @ (.+?) {get_major_symbol(network)}</span>")
@@ -303,6 +318,7 @@ def fetch_token_price(network, token_address):
     else:
         price_scaled = float(price[0]) * (10 ** (18 - int(decimals[0])))
     return int(float(price[0]) * 1e6), int(decimals[0]), int(price_scaled * 1e6)
+
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
@@ -439,10 +455,11 @@ def storage_all(network, address, block):
 def price(network, token_address):
     return ",".join(map(str, fetch_token_price(network, token_address)))
 
+
 @app.route("/swap_path/<network>/<token_address>/<block>", methods=["GET"])
 def swap_path(network, token_address, block):
     return flask.jsonify(find_path(network, token_address, block))
 
-app.run(port=5003)
 
-
+if __name__ == "__main__":
+    app.run(port=5003)
