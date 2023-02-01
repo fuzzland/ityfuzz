@@ -15,7 +15,7 @@ use std::str::FromStr;
 use z3::ast::{Bool, BV};
 use z3::{ast, ast::Ast, Config, Context, Solver};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ConcolicOp {
     U256,
     ADD,
@@ -37,9 +37,7 @@ enum ConcolicOp {
     SLICEDINPUT,
     BALANCE,
     CALLVALUE,
-}
-
-pub enum ConstraintOp {
+    // constraint OP here
     EQ,
     LT,
     SLT,
@@ -55,12 +53,13 @@ pub struct BVBox {
     op: ConcolicOp,
 }
 
-pub struct Constraint {
-    pub lhs: Box<BVBox>,
-    pub rhs: Box<BVBox>,
-    pub op: ConstraintOp,
-}
+// pub struct Constraint {
+//     pub lhs: Box<BVBox>,
+//     pub rhs: Box<BVBox>,
+//     pub op: ConstraintOp,
+// }
 
+// TODO: if both operands are concrete we can do constant folding somewhere
 macro_rules! box_bv {
     ($lhs:expr, $rhs:expr, $op:expr) => {
         Box::new(BVBox {
@@ -145,7 +144,7 @@ impl BVBox {
         box_bv!(self, rhs, ConcolicOp::SREM)
     }
     pub fn bvand(self, rhs: Box<BVBox>) -> Box<BVBox> {
-        box_bv!(self, rhs, ConcolicOp::ADD)
+        box_bv!(self, rhs, ConcolicOp::AND)
     }
     pub fn bvor(self, rhs: Box<BVBox>) -> Box<BVBox> {
         box_bv!(self, rhs, ConcolicOp::OR)
@@ -171,42 +170,24 @@ impl BVBox {
         box_bv!(self, rhs, ConcolicOp::SAR)
     }
 
-    pub fn bvult(self, rhs: Box<BVBox>) -> Constraint {
-        Constraint {
-            lhs: Box::new(self),
-            rhs,
-            op: ConstraintOp::LT,
-        }
-    }
-    pub fn bvugt(self, rhs: Box<BVBox>) -> Constraint {
-        Constraint {
-            lhs: Box::new(self),
-            rhs,
-            op: ConstraintOp::GT,
-        }
+    pub fn bvult(self, rhs: Box<BVBox>) -> Box<BVBox> {
+        box_bv!(self, rhs, ConcolicOp::LT)
     }
 
-    pub fn bvslt(self, rhs: Box<BVBox>) -> Constraint {
-        Constraint {
-            lhs: Box::new(self),
-            rhs,
-            op: ConstraintOp::SLT,
-        }
-    }
-    pub fn bvsgt(self, rhs: Box<BVBox>) -> Constraint {
-        Constraint {
-            lhs: Box::new(self),
-            rhs,
-            op: ConstraintOp::SGT,
-        }
+    pub fn bvugt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+        box_bv!(self, rhs, ConcolicOp::GT)
     }
 
-    pub fn eq(self, rhs: Box<BVBox>) -> Constraint {
-        Constraint {
-            lhs: Box::new(self),
-            rhs,
-            op: ConstraintOp::EQ,
-        }
+    pub fn bvslt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+        box_bv!(self, rhs, ConcolicOp::SLT)
+    }
+
+    pub fn bvsgt(self, rhs: Box<BVBox>) -> Box<BVBox> {
+        box_bv!(self, rhs, ConcolicOp::SGT)
+    }
+
+    pub fn eq(self, rhs: Box<BVBox>) -> Box<BVBox> {
+        box_bv!(self, rhs, ConcolicOp::EQ)
     }
 }
 
@@ -295,6 +276,7 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::BALANCE => self.balance.clone(),
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
+            _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
 }
@@ -305,7 +287,7 @@ pub struct ConcolicHost {
     code: HashMap<H160, Bytecode>,
     symbolic_stack: Vec<Option<Box<BVBox>>>,
     shadow_inputs: Option<BVBox>,
-    constraints: Vec<Constraint>,
+    constraints: Vec<Box<BVBox>>,
     bits: u32,
 }
 
@@ -323,12 +305,15 @@ impl ConcolicHost {
     }
 
     pub unsafe fn on_step(&mut self, interp: &mut Interpreter) {
+
         macro_rules! stack_bv {
             ($idx:expr) => {{
-                match self.symbolic_stack[$idx].borrow() {
+                let real_loc_sym = self.symbolic_stack.len() - 1 - $idx;
+                match self.symbolic_stack[real_loc_sym].borrow() {
                     Some(bv) => bv.clone(),
                     None => {
-                        let u256 = interp.stack.peek($idx).expect("stack underflow");
+                        let real_loc_conc = interp.stack.len() - 1 - $idx;
+                        let u256 = interp.stack.peek(real_loc_conc).expect("stack underflow");
                         Box::new(BVBox {
                             lhs: None,
                             rhs: None,
@@ -340,48 +325,97 @@ impl ConcolicHost {
             }};
         }
 
+        macro_rules! stack_concrete {
+            ($idx:expr) => {{
+                let real_loc_conc = interp.stack.len() - 1 - $idx;
+                let u256 = interp.stack.peek(real_loc_conc).expect("stack underflow");
+                u256
+            }};
+        }
+
+        // TODO: the default implementation (noop) for arithmetic operations should be
+        //       performing the concrete execution and push to concolic stack
+        //       other operations should alter the OP as well
         let bv: Vec<Option<Box<BVBox>>> = match *interp.instruction_pointer {
             // ADD
             0x01 => {
-                vec![Some(stack_bv!(0).add(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).add(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // MUL
             0x02 => {
-                vec![Some(stack_bv!(0).mul(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).mul(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SUB
             0x03 => {
-                vec![Some(stack_bv!(0).sub(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).sub(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // DIV - is this signed?
             0x04 => {
-                vec![Some(stack_bv!(0).bvsdiv(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).div(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SDIV
             0x05 => {
-                vec![Some(stack_bv!(0).bvsdiv(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvsdiv(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // MOD
             0x06 => {
-                vec![Some(stack_bv!(0).bvurem(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvurem(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SMOD
+            // FIXME: should we use bvsrem or bvsmod?
             0x07 => {
-                vec![Some(stack_bv!(0).bvsrem(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvsrem(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // ADDMOD
             0x08 => {
-                vec![Some(stack_bv!(0).add(stack_bv!(1)).bvsrem(stack_bv!(2)))]
+                let res = Some(stack_bv!(0).add(stack_bv!(1)).bvsrem(stack_bv!(2)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // MULMOD
             0x09 => {
-                vec![Some(stack_bv!(0).mul(stack_bv!(1)).bvsrem(stack_bv!(2)))]
+                let res = Some(stack_bv!(0).mul(stack_bv!(1)).bvsrem(stack_bv!(2)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
-            // EXP - we can't support, cuz z3 is bad at it
+            // EXP - fallback to concrete due to poor Z3 performance support
             0x0a => {
-                vec![None]
+                let res = stack_concrete!(0).pow(stack_concrete!(1));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![Some(Box::new(BVBox {
+                    lhs: None,
+                    rhs: None,
+                    concrete: Some(res),
+                    op: ConcolicOp::U256,
+                }))]
             }
-            // SIGNEXTEND - need to check
+            // SIGNEXTEND - FIXME: need to check
             0x0b => {
                 // let bv = stack_bv!(0);
                 // let bv = bv.bvshl(&self.ctx.bv_val(248, 256));
@@ -390,54 +424,76 @@ impl ConcolicHost {
             }
             // LT
             0x10 => {
-                self.constraints.push(stack_bv!(0).bvult(stack_bv!(1)));
-                vec![None]
+                let res = Some(stack_bv!(0).bvult(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // GT
             0x11 => {
-                self.constraints.push(stack_bv!(0).bvugt(stack_bv!(1)));
-                vec![None]
+                let res = Some(stack_bv!(0).bvugt(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SLT
             0x12 => {
-                self.constraints.push(stack_bv!(0).bvslt(stack_bv!(1)));
-                vec![None]
+                let res = Some(stack_bv!(0).bvslt(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SGT
             0x13 => {
-                self.constraints.push(stack_bv!(0).bvsgt(stack_bv!(1)));
-                vec![None]
+                let res = Some(stack_bv!(0).bvsgt(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // EQ
             0x14 => {
-                self.constraints.push(stack_bv!(0).eq(stack_bv!(1)));
-                vec![None]
+                let res = Some(stack_bv!(0).eq(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // ISZERO
             0x15 => {
-                self.constraints.push(stack_bv!(0).eq(Box::new(BVBox {
+                let res = Some(stack_bv!(0).eq(Box::new(BVBox {
                     lhs: None,
                     rhs: None,
                     concrete: Some(U256::from(0)),
                     op: ConcolicOp::U256,
                 })));
-                vec![None]
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // AND
             0x16 => {
-                vec![Some(stack_bv!(0).bvand(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvand(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // OR
             0x17 => {
-                vec![Some(stack_bv!(0).bvor(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvor(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // XOR
             0x18 => {
-                vec![Some(stack_bv!(0).bvxor(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvxor(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // NOT
             0x19 => {
-                vec![Some(stack_bv!(0).bvnot())]
+                let res = Some(stack_bv!(0).bvnot());
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // BYTE
             0x1a => {
@@ -446,15 +502,24 @@ impl ConcolicHost {
             }
             // SHL
             0x1b => {
-                vec![Some(stack_bv!(0).bvshl(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvshl(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SHR
             0x1c => {
-                vec![Some(stack_bv!(0).bvlshr(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvlshr(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SAR
             0x1d => {
-                vec![Some(stack_bv!(0).bvsar(stack_bv!(1)))]
+                let res = Some(stack_bv!(0).bvsar(stack_bv!(1)));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![res]
             }
             // SHA3
             0x20 => {
@@ -465,6 +530,7 @@ impl ConcolicHost {
                 vec![None]
             }
             // BALANCE
+            // TODO: need to get value from a hashmap
             0x31 => {
                 vec![Some(Box::new(BVBox::new_balance()))]
             }
@@ -584,11 +650,16 @@ impl ConcolicHost {
             }
             // JUMP
             0x56 => {
-                vec![None]
+                self.symbolic_stack.pop();
+                vec![]
             }
             // JUMPI
             0x57 => {
-                vec![None]
+                // jumping only happens if the second element is false
+                self.constraints.push(stack_bv!(1));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![]
             }
             // PC
             0x58 => {
@@ -610,13 +681,13 @@ impl ConcolicHost {
             0x60..=0x7f => {
                 // push n bytes into stack
                 let n = (*interp.instruction_pointer) - 0x60 + 1;
-                // let mut data = vec![];
-                // for i in 0..n {
-                // data.push(
-                //     interp.contract().bytecode.bytecode()
-                //         [interp.program_counter() + i as usize + 1],
-                // );
-                // }
+                let mut data = vec![];
+                for i in 0..n {
+                    data.push(
+                        interp.contract().bytecode.bytecode()
+                            [interp.program_counter() + i as usize + 1],
+                    );
+                }
 
                 vec![
                     //todo!
@@ -658,13 +729,14 @@ impl ConcolicHost {
 
         let mut solving = Solving::new(&input, &balance, &callvalue, &solver);
         for cons in &self.constraints {
-            let bv: BV = solving.generate_z3_bv(&cons.lhs, &context);
+            let bv: BV = solving.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
-                ConstraintOp::GT => bv.bvugt(&solving.generate_z3_bv(&cons.rhs, &context)),
-                ConstraintOp::SGT => bv.bvsgt(&solving.generate_z3_bv(&cons.rhs, &context)),
-                ConstraintOp::EQ => bv._eq(&solving.generate_z3_bv(&cons.rhs, &context)),
-                ConstraintOp::LT => bv.bvult(&solving.generate_z3_bv(&cons.rhs, &context)),
-                ConstraintOp::SLT => bv.bvslt(&solving.generate_z3_bv(&cons.rhs, &context)),
+                ConcolicOp::GT => bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                ConcolicOp::SGT => bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                ConcolicOp::EQ => bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                ConcolicOp::LT => bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                ConcolicOp::SLT => bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)),
+                _ => panic!("{:?} not implemented for constraint solving", cons.op),
             });
         }
     }
