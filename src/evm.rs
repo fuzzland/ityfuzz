@@ -30,6 +30,7 @@ pub struct FuzzHost {
     pub data: VMState,
     code: HashMap<H160, Bytecode>,
     hash_to_address: HashMap<[u8; 4], H160>,
+    _pc: usize,
 }
 
 impl FuzzHost {
@@ -39,6 +40,7 @@ impl FuzzHost {
             data: VMState::new(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
+            _pc: 0,
         }
     }
 
@@ -72,6 +74,9 @@ impl Host for FuzzHost {
                     JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
                         (JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] + 1)
                             % 255;
+                }
+                0xf1 | 0xf2 | 0xf4 | 0xfa => {
+                    self._pc = interp.program_counter();
                 }
                 _ => {}
             }
