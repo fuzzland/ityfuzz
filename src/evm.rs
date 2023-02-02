@@ -18,7 +18,34 @@ use serde::{Deserialize, Serialize};
 
 pub const MAP_SIZE: usize = 256;
 
-pub type VMState = HashMap<H160, HashMap<U256, U256>>;
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VMState {
+    state: HashMap<H160, HashMap<U256, U256>>,
+    // If control leak happens, we add state with incomplete execution to the corpus
+    // For next execution, this needs to be
+    pub post_execution: Option<usize>
+}
+
+impl VMState {
+    pub(crate) fn new() -> Self {
+        Self {
+            state: HashMap::new(),
+            post_execution: None,
+        }
+    }
+
+    fn get(&self, address: &H160) -> Option<&HashMap<U256, U256>> {
+        self.state.get(address)
+    }
+
+    fn get_mut(&mut self, address: &H160) -> Option<&mut HashMap<U256, U256>> {
+        self.state.get_mut(address)
+    }
+
+    fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
+        self.state.insert(address, storage);
+    }
+}
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 use crate::state::{FuzzState, HasHashToAddress};
@@ -32,6 +59,13 @@ pub struct FuzzHost {
     hash_to_address: HashMap<[u8; 4], H160>,
     _pc: usize,
 }
+
+// hack: I don't want to change evm internal to add a new type of return
+// this return type is never used as we disabled gas
+const ControlLeak: Return = Return::GasMaxFeeGreaterThanPriorityFee;
+const ACTIVE_MATCH_EXT_CALL: bool = true;
+const CONTROL_LEAK: bool = true;
+
 
 impl FuzzHost {
     pub fn new() -> Self {
@@ -55,8 +89,6 @@ impl FuzzHost {
         self.code.insert(address, code.to_analysed::<LatestSpec>());
     }
 }
-
-const ACTIVE_MATCH_EXT_CALL: bool = true;
 
 impl Host for FuzzHost {
     const INSPECT: bool = true;
