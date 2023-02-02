@@ -62,9 +62,9 @@ pub struct FuzzHost {
 
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
-const ControlLeak: Return = Return::GasMaxFeeGreaterThanPriorityFee;
+const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = true;
-const CONTROL_LEAK: bool = true;
+const CONTROL_LEAK_DETECTION: bool = true;
 
 
 impl FuzzHost {
@@ -227,6 +227,10 @@ impl Host for FuzzHost {
             return (ret, Gas::new(0), interp.return_value());
         }
 
+        if CONTROL_LEAK_DETECTION {
+            return (ControlLeak, Gas::new(0), interp.return_value());
+        }
+
         // default behavior
         match self.code.get(&input.contract) {
             Some(code) => {
@@ -327,6 +331,12 @@ impl<I, S> EVMExecutor<I, S> {
         );
         let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        match r {
+            ControlLeak => {
+                self.host.data.post_execution = Some(interp.program_counter());
+            }
+            _ => {}
+        }
         return ExecutionResult {
             output: interp.return_value(),
             reverted: r != Return::Return,
