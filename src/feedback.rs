@@ -15,9 +15,8 @@ use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
-const MAX_SIZE: usize = 2000;
+const MAP_SIZE: usize = 2000;
 
-// TODO: add hash table for stages
 pub struct InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
@@ -25,7 +24,7 @@ where
 {
     oracle: &'a O,
     executor: EVMExecutor<I, S>,
-    map: [bool; MAX_SIZE],
+    map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S)>,
 }
 
@@ -60,7 +59,7 @@ where
         Self {
             oracle,
             executor,
-            map: [false; MAX_SIZE],
+            map: [false; MAP_SIZE],
             phantom: PhantomData,
         }
     }
@@ -76,7 +75,6 @@ where
         todo!()
     }
 
-    // TODO: fix stage and pre_condition
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
@@ -116,7 +114,7 @@ where
         }
 
         // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
-        let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAX_SIZE;
+        let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAP_SIZE;
         if !self.map[slot] {
             self.map[slot] = true;
             return Ok(true);
