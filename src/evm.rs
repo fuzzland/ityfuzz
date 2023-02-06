@@ -60,10 +60,10 @@ impl VMState {
 }
 
 use crate::state::{FuzzState, HasHashToAddress};
+pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-pub use cmp_map as CMP_MAP;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
@@ -164,7 +164,8 @@ impl Host for FuzzHost {
 
                 // todo(shou): support signed checking
                 #[cfg(feature = "cmp")]
-                0x10 | 0x12 => { // LT, SLT
+                0x10 | 0x12 => {
+                    // LT, SLT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
                     let abs_diff = if v1 > v2 { v1 - v2 } else { U256::zero() };
@@ -175,7 +176,8 @@ impl Host for FuzzHost {
                 }
 
                 #[cfg(feature = "cmp")]
-                0x11 | 0x13 => { // GT, SGT
+                0x11 | 0x13 => {
+                    // GT, SGT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
                     let abs_diff = if v1 < v2 { v2 - v1 } else { U256::zero() };
@@ -184,7 +186,6 @@ impl Host for FuzzHost {
                         CMP_MAP[idx] = abs_diff;
                     }
                 }
-
 
                 0xf1 | 0xf2 | 0xf4 | 0xfa => {
                     self._pc = interp.program_counter();
