@@ -304,6 +304,8 @@ impl<'a> Solving<'a> {
 //         else:
 //             bug
 
+// Q: Why do we need to make persistent memory symbolic?
+
 pub struct ConcolicHost {
     env: Env,
     data: HashMap<H160, HashMap<U256, U256>>,
