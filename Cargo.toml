@@ -12,8 +12,8 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp_waypoint", "dataflow"]
-cmp_waypoint = []
+default = ["cmp", "dataflow"]
+cmp = []
 dataflow = []
 
 [dependencies]

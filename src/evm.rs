@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::Into;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -19,8 +20,12 @@ use serde::{Deserialize, Serialize};
 pub const MAP_SIZE: usize = 1024;
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+// dataflow
 pub static mut read_map: [bool; MAP_SIZE] = [false; MAP_SIZE];
 pub static mut write_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+
+// cmp
+pub static mut cmp_map: [U256; MAP_SIZE] = [U256::max_value(); MAP_SIZE];
 
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
@@ -58,6 +63,7 @@ use crate::state::{FuzzState, HasHashToAddress};
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+pub use cmp_map as CMP_MAP;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
@@ -155,6 +161,30 @@ impl Host for FuzzHost {
                     let mut key = interp.stack.peek(0).expect("stack underflow");
                     READ_MAP[process_rw_key!(key)] = true;
                 }
+
+                // todo(shou): support signed checking
+                #[cfg(feature = "cmp")]
+                0x10 | 0x12 => { // LT, SLT
+                    let v1 = interp.stack.peek(0).expect("stack underflow");
+                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let abs_diff = if v1 > v2 { v1 - v2 } else { U256::zero() };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
+
+                #[cfg(feature = "cmp")]
+                0x11 | 0x13 => { // GT, SGT
+                    let v1 = interp.stack.peek(0).expect("stack underflow");
+                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let abs_diff = if v1 < v2 { v2 - v1 } else { U256::zero() };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
+
 
                 0xf1 | 0xf2 | 0xf4 | 0xfa => {
                     self._pc = interp.program_counter();
