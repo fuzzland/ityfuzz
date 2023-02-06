@@ -16,7 +16,6 @@ use crate::input::{VMInput, VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::{FuzzState, HasExecutionResult};
 
-
 pub struct InfantFeedback<'a, I, S, O>
 where
     I: VMInputT,
@@ -233,15 +232,13 @@ where
 /// Logic: Maintains read and write map, if a write map idx is true in the read map,
 /// and that item is greater than what we have, then the state is interesting.
 
-pub struct DataflowFeedback<'a>
-{
+pub struct DataflowFeedback<'a> {
     global_write_map: [u8; MAP_SIZE],
     read_map: &'a mut [bool],
-    write_map: &'a mut [u8]
+    write_map: &'a mut [u8],
 }
 
-impl<'a> Debug for DataflowFeedback<'a>
-{
+impl<'a> Debug for DataflowFeedback<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataflowFeedback")
             // .field("oracle", &self.oracle)
@@ -249,28 +246,26 @@ impl<'a> Debug for DataflowFeedback<'a>
     }
 }
 
-impl<'a> Named for DataflowFeedback<'a>
-{
+impl<'a> Named for DataflowFeedback<'a> {
     fn name(&self) -> &str {
         "DataflowFeedback"
     }
 }
 
-impl<'a> DataflowFeedback<'a>
-{
+impl<'a> DataflowFeedback<'a> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
             global_write_map: [0; MAP_SIZE],
             read_map,
-            write_map
+            write_map,
         }
     }
 }
 
 impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
-    where
-        S: State + HasClientPerfMonitor + HasExecutionResult,
-        I: VMInputT,
+where
+    S: State + HasClientPerfMonitor + HasExecutionResult,
+    I: VMInputT,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -284,9 +279,9 @@ impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
         observers: &OT,
         exit_kind: &ExitKind,
     ) -> Result<bool, Error>
-        where
-            EMI: EventFirer<I>,
-            OT: ObserversTuple<I, S>,
+    where
+        EMI: EventFirer<I>,
+        OT: ObserversTuple<I, S>,
     {
         for i in 0..MAP_SIZE {
             if self.read_map[i] && (self.global_write_map[i] < self.write_map[i]) {
@@ -309,6 +304,3 @@ impl<'a, I, S> Feedback<I, S> for DataflowFeedback<'a>
         Ok(())
     }
 }
-
-
-

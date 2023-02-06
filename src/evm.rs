@@ -128,7 +128,8 @@ impl Host for FuzzHost {
         unsafe {
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
-                0x57 => { // JUMPI
+                0x57 => {
+                    // JUMPI
                     let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
                         interp.stack.peek(1).expect("stack underflow").as_u64()
                     } else {
@@ -140,13 +141,15 @@ impl Host for FuzzHost {
                     }
                 }
 
-                0x55 => { // SSTORE
+                0x55 => {
+                    // SSTORE
                     let mut key = interp.stack.peek(0).expect("stack underflow");
                     let value = interp.stack.peek(1).expect("stack underflow");
                     WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
                 }
 
-                0x54 => { // SLOAD
+                0x54 => {
+                    // SLOAD
                     let mut key = interp.stack.peek(0).expect("stack underflow");
                     READ_MAP[process_rw_key!(key)] = true;
                 }
