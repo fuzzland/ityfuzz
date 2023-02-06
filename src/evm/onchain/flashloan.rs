@@ -436,7 +436,7 @@ where
                             }
                             Some(set) => {
                                 if set.len() > UNBOUND_TRANSFER_AMT {
-                                    host.evmstate.flashloan_data.earned += U512::max_value();
+                                    host.evmstate.flashloan_data.earned = U512::max_value();
                                 }
                                 set.insert(call_target);
                             }

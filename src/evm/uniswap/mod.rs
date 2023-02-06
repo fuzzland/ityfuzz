@@ -124,7 +124,11 @@ impl PairContext {
 
     pub fn get_amount_out(&self, amount_in: U256, reserve0: U256, reserve1: U256) -> SwapResult {
         self.uniswap_info.calculate_amounts_out(
-            amount_in,
+            if amount_in > U256::from(u128::MAX) {
+                U256::from(u128::MAX)
+            } else {
+                amount_in
+            },
             if self.side == 0 { reserve0 } else { reserve1 },
             if self.side == 0 { reserve1 } else { reserve0 },
         )

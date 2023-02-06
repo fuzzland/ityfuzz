@@ -68,7 +68,7 @@ def get_uniswap_api(network) -> dict:
         return {
             "v2": {
                 "pancakeswap": 'https://api.thegraph.com/subgraphs/name/pancakeswap/pairs',
-                "biswap": 'https://api.thegraph.com/subgraphs/name/unchase/biswap'
+                # "biswap": 'https://api.thegraph.com/subgraphs/name/unchase/biswap'
             },
         }
     elif network == "polygon":

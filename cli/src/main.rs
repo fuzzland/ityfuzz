@@ -1,6 +1,7 @@
 mod licensing;
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
@@ -81,7 +82,7 @@ struct Args {
     onchain_storage_fetching: String,
 
     /// Enable Concolic
-    #[arg(short, long, default_value = "false")]
+    #[arg(long, default_value = "false")]
     concolic: bool,
 
     /// Enable flashloan
@@ -209,9 +210,10 @@ fn main() {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
                 }
+                let addresses: Vec<H160> = args.target.split(",").map(|s| H160::from_str(s).unwrap()).collect();
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
-                    args.target.split(",").map(|s| H160::from_str(s).unwrap()).collect(),
+                    HashSet::from_iter(addresses),
                 )
                 .contracts
             }
