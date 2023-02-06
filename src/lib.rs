@@ -9,7 +9,6 @@ pub mod executor;
 pub mod feedback;
 pub mod fuzzer;
 pub mod fuzzers;
-pub mod infant_state_stage;
 pub mod input;
 pub mod mutation_utils;
 pub mod mutator;

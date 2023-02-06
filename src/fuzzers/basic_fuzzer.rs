@@ -34,7 +34,6 @@ use std::{
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::feedback::{InfantFeedback, OracleFeedback};
-use crate::infant_state_stage::InfantStateStage;
 use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
 use crate::rand::generate_random_address;
 use crate::state::FuzzState;
@@ -108,8 +107,7 @@ pub fn dummyfuzzer(
     let mutator = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
-    let infant_state_stage = InfantStateStage::new(&infant_scheduler);
-    let mut stages = tuple_list!(calibration, std_stage, infant_state_stage);
+    let mut stages = tuple_list!(calibration, std_stage);
 
     // TODO: Fill EVMExecutor with real data?
     let evm_executor: EVMExecutor<VMInput, FuzzState> =

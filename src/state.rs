@@ -1,7 +1,7 @@
 use crate::abi::get_abi_type_boxed;
 use crate::contract_utils::ContractInfo;
 use crate::evm::{ExecutionResult, VMState};
-use crate::input::VMInput;
+use crate::input::{VMInput, VMInputT};
 use crate::rand::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
@@ -96,7 +96,7 @@ impl FuzzState {
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<I, FuzzState>,
     ) where
-        I: Input,
+        I: Input + VMInputT,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
@@ -109,7 +109,7 @@ impl FuzzState {
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<I, FuzzState>,
     ) where
-        I: Input,
+        I: Input + VMInputT,
     {
         for contract in contracts {
             let deployed_address = executor.deploy(

@@ -163,6 +163,9 @@ where
         mark_feature_time!(state, PerfFeature::PostExecObservers);
 
         // todo(shou): may need to check about reverting here!
+        if state.get_execution_result().reverted {
+            return Ok((ExecuteInputResult::None, None));
+        }
 
         let observers = executor.observers();
 
