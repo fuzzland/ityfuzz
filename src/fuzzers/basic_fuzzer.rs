@@ -1,5 +1,4 @@
 use crate::{
-    corpus::InMemoryItyCorpus,
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
