@@ -11,6 +11,11 @@ criterion = "0.4.0"
 name = "ityfuzz"
 harness = false
 
+[features]
+default = ["cmp_waypoint", "dataflow"]
+cmp_waypoint = []
+dataflow = []
+
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
 revm = { version = "2.1.0", features = ["no_gas_measuring"] }
