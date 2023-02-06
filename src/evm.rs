@@ -16,7 +16,14 @@ use revm::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const MAP_SIZE: usize = 256;
+pub const MAP_SIZE: usize = 1024;
+
+pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+pub static mut read_map: [bool; MAP_SIZE] = [false; MAP_SIZE];
+pub static mut write_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+
+pub const RW_SKIPPER_PERCT_IDX: usize = 100;
+pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VMState {
@@ -47,9 +54,10 @@ impl VMState {
     }
 }
 
-pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 use crate::state::{FuzzState, HasHashToAddress};
 pub use jmp_map as JMP_MAP;
+pub use read_map as READ_MAP;
+pub use write_map as WRITE_MAP;
 
 #[derive(Clone, Debug)]
 pub struct FuzzHost {
@@ -95,6 +103,24 @@ impl FuzzHost {
     }
 }
 
+macro_rules! process_rw_key {
+    ($key:ident) => {
+        if $key > U256::from(RW_SKIPPER_PERCT_IDX) {
+            $key >>= 4;
+            $key %= U256::from(RW_SKIPPER_AMT);
+            $key += U256::from(RW_SKIPPER_PERCT_IDX);
+            $key.as_usize() % MAP_SIZE
+        } else {
+            $key.as_usize() % MAP_SIZE
+        }
+    };
+}
+
+macro_rules! u256_to_u8 {
+    ($key:ident) => {
+        ($key.as_u64() << 4 % 255) as u8
+    };
+}
 impl Host for FuzzHost {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
@@ -102,16 +128,29 @@ impl Host for FuzzHost {
         unsafe {
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
-                0x57 => {
+                0x57 => { // JUMPI
                     let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
                         interp.stack.peek(1).expect("stack underflow").as_u64()
                     } else {
                         1
                     };
-                    JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] =
-                        (JMP_MAP[(interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE] + 1)
-                            % 255;
+                    let idx = (interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE;
+                    if jmp_map[idx] < 255 {
+                        jmp_map[idx] += 1;
+                    }
                 }
+
+                0x55 => { // SSTORE
+                    let mut key = interp.stack.peek(0).expect("stack underflow");
+                    let value = interp.stack.peek(1).expect("stack underflow");
+                    WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
+                }
+
+                0x54 => { // SLOAD
+                    let mut key = interp.stack.peek(0).expect("stack underflow");
+                    READ_MAP[process_rw_key!(key)] = true;
+                }
+
                 0xf1 | 0xf2 | 0xf4 | 0xfa => {
                     self._pc = interp.program_counter();
                 }
