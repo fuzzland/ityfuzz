@@ -12,9 +12,10 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow"]
+default = ["cmp", "dataflow", "evaluation"]
 cmp = []
 dataflow = []
+evaluation = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

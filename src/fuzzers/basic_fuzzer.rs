@@ -130,7 +130,6 @@ pub fn dummyfuzzer(
     let harness_code = "oracle_harness()";
     let mut harness_hash: [u8; 4] = [0; 4];
     set_hash(harness_code, &mut harness_hash);
-    println!("{:?}", harness_hash);
     let oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
     let objective = OracleFeedback::new(&oracle, executor.evm_executor.clone());
 
