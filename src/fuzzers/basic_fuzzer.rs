@@ -50,7 +50,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn dummyfuzzer(
+pub fn basic_fuzzer(
     corpus_dir: PathBuf,
     objective_dir: PathBuf,
     logfile: PathBuf,

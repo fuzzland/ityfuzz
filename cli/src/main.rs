@@ -13,7 +13,7 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    basic_fuzzer::dummyfuzzer(
+    basic_fuzzer::basic_fuzzer(
         PathBuf::from("./tmp/corpus"),
         PathBuf::from("./tmp/objective"),
         PathBuf::from("./tmp/log"),

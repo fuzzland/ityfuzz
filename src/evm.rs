@@ -124,7 +124,7 @@ macro_rules! process_rw_key {
 
 macro_rules! u256_to_u8 {
     ($key:ident) => {
-        ($key.as_u64() << 4 % 255) as u8
+        (($key >> 4) % 255).as_u64() as u8
     };
 }
 impl Host for FuzzHost {
