@@ -24,7 +24,8 @@ pub trait VMInputT: Input {
     fn get_state_mut(&mut self) -> &mut VMState;
     fn set_state(&mut self, state: VMState);
     fn get_state(&self) -> &evm::VMState;
-    fn set_staged_state(&mut self, state: StagedVMState);
+    fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
+    fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;
 }
 
@@ -34,6 +35,7 @@ pub struct VMInput {
     pub contract: H160,
     pub data: BoxedABI,
     pub sstate: StagedVMState,
+    pub sstate_idx: usize,
 }
 
 impl HasLen for VMInput {
@@ -97,8 +99,12 @@ impl VMInputT for VMInput {
         &self.sstate.state
     }
 
-    fn set_staged_state(&mut self, state: StagedVMState) {
+    fn set_staged_state(&mut self, state: StagedVMState, idx: usize) {
         self.sstate = state;
+    }
+
+    fn get_state_idx(&self) -> usize {
+        self.sstate_idx
     }
 
     fn get_staged_state(&self) -> &StagedVMState {

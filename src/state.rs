@@ -134,6 +134,7 @@ impl FuzzState {
                     contract: deployed_address,
                     data: abi_instance,
                     sstate: StagedVMState::new_uninitialized(),
+                    sstate_idx: 0
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -167,6 +168,7 @@ impl FuzzState {
 pub struct InfantStateState {
     pub infant_state: InMemoryCorpus<StagedVMState>,
     metadata: SerdeAnyMap,
+    pub rand_generator: StdRand,
 }
 
 impl InfantStateState {
@@ -174,6 +176,7 @@ impl InfantStateState {
         Self {
             infant_state: InMemoryCorpus::new(),
             metadata: SerdeAnyMap::new(),
+            rand_generator: Default::default()
         }
     }
 }
@@ -205,6 +208,18 @@ impl HasMetadata for InfantStateState {
 
     fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
         &mut self.metadata
+    }
+}
+
+impl HasRand for InfantStateState {
+    type Rand = StdRand;
+
+    fn rand(&self) -> &Self::Rand {
+        &self.rand_generator
+    }
+
+    fn rand_mut(&mut self) -> &mut Self::Rand {
+        &mut self.rand_generator
     }
 }
 
