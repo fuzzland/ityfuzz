@@ -19,7 +19,17 @@ pub const PRUNE_AMT: usize = 500;
 pub const VISIT_IGNORE_THRESHOLD: usize = 10;
 pub const AMPLIFIER: usize = 10000;
 #[derive(Debug, Clone)]
-pub struct SortedDroppingScheduler {}
+pub struct SortedDroppingScheduler<I, S> {
+    phantom: std::marker::PhantomData<(I, S)>,
+}
+
+impl<I, S> SortedDroppingScheduler<I, S> {
+    pub fn new() -> Self {
+        Self {
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct VoteData {
@@ -29,7 +39,7 @@ struct VoteData {
 
 impl_serdeany!(VoteData);
 
-impl<I, S> Scheduler<I, S> for SortedDroppingScheduler
+impl<I, S> Scheduler<I, S> for SortedDroppingScheduler<I, S>
 where
     S: HasCorpus<I> + HasRand + HasMetadata,
     I: Input,
@@ -113,7 +123,7 @@ where
     }
 }
 
-impl<I, S> HasVote<I, S> for SortedDroppingScheduler
+impl<I, S> HasVote<I, S> for SortedDroppingScheduler<I, S>
 where
     S: HasCorpus<I> + HasRand + HasMetadata,
     I: Input,
