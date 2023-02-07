@@ -3,9 +3,10 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Executor, Feedback, Named};
+use libafl::prelude::{Executor, Feedback, HasCorpus, Named};
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
+use primitive_types::U256;
 use std::fmt::{Debug, Formatter};
 use std::iter::Map;
 use std::marker::PhantomData;
@@ -287,13 +288,89 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        let mut interesting = false;
         for i in 0..MAP_SIZE {
             if self.read_map[i] && (self.global_write_map[i] < self.write_map[i]) {
                 self.global_write_map[i] = self.write_map[i];
-                return Ok(true);
+                interesting = true;
             }
         }
-        return Ok(false);
+        return Ok(interesting);
+    }
+
+    fn append_metadata(
+        &mut self,
+        _state: &mut S,
+        _testcase: &mut Testcase<I>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "cmp")]
+pub struct CmpFeedback<'a> {
+    min_map: [U256; MAP_SIZE],
+    current_map: &'a mut [U256],
+}
+
+#[cfg(feature = "cmp")]
+impl<'a> CmpFeedback<'a> {
+    fn new(current_map: &'a mut [U256]) -> Self {
+        Self {
+            min_map: [U256::MAX; MAP_SIZE],
+            current_map,
+        }
+    }
+}
+
+#[cfg(feature = "cmp")]
+impl<'a> Named for CmpFeedback<'a> {
+    fn name(&self) -> &str {
+        "CmpFeedback"
+    }
+}
+
+#[cfg(feature = "cmp")]
+impl<'a> Debug for CmpFeedback<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CmpFeedback").finish()
+    }
+}
+
+#[cfg(feature = "cmp")]
+impl<'a, I, S> Feedback<I, S> for CmpFeedback<'a>
+where
+    S: State + HasClientPerfMonitor + HasExecutionResult,
+    I: Input,
+{
+    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn is_interesting<EMI, OT>(
+        &mut self,
+        state: &mut S,
+        manager: &mut EMI,
+        input: &I,
+        observers: &OT,
+        exit_kind: &ExitKind,
+    ) -> Result<bool, Error>
+    where
+        EMI: EventFirer<I>,
+        OT: ObserversTuple<I, S>,
+    {
+        let mut interesting = false;
+        for i in 0..MAP_SIZE {
+            if self.current_map[i] < self.min_map[i] {
+                self.min_map[i] = self.current_map[i];
+                interesting = true;
+            }
+        }
+        Ok(interesting)
     }
 
     fn append_metadata(
