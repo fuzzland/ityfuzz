@@ -152,12 +152,16 @@ impl Host for FuzzHost {
                 0x55 => {
                     // SSTORE
                     #[cfg(feature = "dataflow")]
+                    let value = interp.stack.peek(1).expect("stack underflow");
                     {
                         let mut key = interp.stack.peek(0).expect("stack underflow");
-                        let value = interp.stack.peek(1).expect("stack underflow");
                         WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
                     }
-                    state_change = true;
+                    let res = self.sload(
+                        interp.contract.address,
+                        interp.stack.peek(0).expect("stack underflow"),
+                    );
+                    state_change = res.expect("sload failed").0 != value;
                 }
 
                 #[cfg(feature = "dataflow")]
@@ -528,7 +532,7 @@ where
             }
         }
         unsafe {
-            state_change = true;
+            state_change = false;
         }
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         IntermediateExecutionResult {
