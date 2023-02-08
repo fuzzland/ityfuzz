@@ -101,6 +101,7 @@ impl VMInputT for VMInput {
 
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize) {
         self.sstate = state;
+        self.sstate_idx = idx;
     }
 
     fn get_state_idx(&self) -> usize {

@@ -33,7 +33,7 @@ pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VMState {
-    state: HashMap<H160, HashMap<U256, U256>>,
+    pub state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
     pub post_execution: Vec<(Vec<U256>, usize)>,
