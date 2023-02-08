@@ -9,19 +9,16 @@ use libafl::{
     Error,
 };
 
-pub trait HasIndexed {
-
-}
+pub trait HasIndexed {}
 
 impl<I> HasIndexed for IndexedInMemoryCorpus<I> where I: Input {}
-
 
 /// A corpus handling all in memory.
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "I: serde::de::DeserializeOwned")]
 pub struct IndexedInMemoryCorpus<I>
-    where
-        I: Input,
+where
+    I: Input,
 {
     entries: HashMap<usize, RefCell<Testcase<I>>>,
     current_idx: usize,
@@ -29,8 +26,8 @@ pub struct IndexedInMemoryCorpus<I>
 }
 
 impl<I> Corpus<I> for IndexedInMemoryCorpus<I>
-    where
-        I: Input,
+where
+    I: Input,
 {
     /// Returns the number of elements
     #[inline]
@@ -41,7 +38,8 @@ impl<I> Corpus<I> for IndexedInMemoryCorpus<I>
     /// Add an entry to the corpus and return its index
     #[inline]
     fn add(&mut self, testcase: Testcase<I>) -> Result<usize, Error> {
-        self.entries.insert(self.current_idx, RefCell::new(testcase));
+        self.entries
+            .insert(self.current_idx, RefCell::new(testcase));
         self.current_idx += 1;
         Ok(self.current_idx - 1)
     }
@@ -81,8 +79,8 @@ impl<I> Corpus<I> for IndexedInMemoryCorpus<I>
 }
 
 impl<I> IndexedInMemoryCorpus<I>
-    where
-        I: Input,
+where
+    I: Input,
 {
     #[must_use]
     pub fn new() -> Self {

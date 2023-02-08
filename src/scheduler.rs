@@ -66,10 +66,7 @@ where
             let data = state.metadata().get::<VoteData>().unwrap();
             if corpus_size > DROP_THRESHOLD {
                 // get top 100 entries sorted by votes (descending)
-                let mut sorted: Vec<_> = data
-                    .votes_and_visits
-                    .iter()
-                    .collect();
+                let mut sorted: Vec<_> = data.votes_and_visits.iter().collect();
                 sorted.sort_by(|(idx_1, (votes1, visits1)), (idx_2, (votes2, visits2))| {
                     let score_1 = (*votes1 as f64) / (*visits1 as f64);
                     let score_2 = (*votes2 as f64) / (*visits2 as f64);
@@ -103,7 +100,8 @@ where
 
     fn next(&self, state: &mut S) -> Result<usize, Error> {
         let corpus_size = state.corpus().count();
-        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0) * state.metadata().get::<VoteData>().unwrap().visits_total as f64;
+        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
+            * state.metadata().get::<VoteData>().unwrap().visits_total as f64;
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         if corpus_size == 0 {
             Err(Error::empty("No entries in corpus".to_owned()))
