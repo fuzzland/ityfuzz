@@ -34,7 +34,7 @@ use std::{
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::feedback::{InfantFeedback, OracleFeedback};
 use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
-use crate::rand::generate_random_address;
+use crate::rand_utils::generate_random_address;
 use crate::state::FuzzState;
 use nix::unistd::dup;
 use primitive_types::H160;
@@ -120,6 +120,7 @@ pub fn basic_fuzzer(
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
+        false
     );
     executor.evm_executor.host.initalize(&mut state);
     feedback

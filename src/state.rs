@@ -3,7 +3,7 @@ use crate::contract_utils::ContractInfo;
 use crate::evm::{ExecutionResult, VMState};
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{VMInput, VMInputT};
-use crate::rand::generate_random_address;
+use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
 use bytes::Bytes;
@@ -29,7 +29,7 @@ use std::cmp::max;
 use std::path::Path;
 use std::time::Duration;
 
-const ACCOUNT_AMT: u8 = 10;
+const ACCOUNT_AMT: u8 = 2;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
@@ -96,17 +96,22 @@ impl FuzzState {
         }
     }
 
+    pub fn add_deployer_to_callers(&mut self, deployer: H160) {
+        self.default_callers.push(deployer);
+    }
+
     pub fn initialize<I, S>(
         &mut self,
         contracts: Vec<ContractInfo>,
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
+        include_static: bool
     ) where
         I: Input + VMInputT,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
-        self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
+        self.initialize_corpus(contracts, executor, scheduler, infant_scheduler, include_static);
     }
 
     pub fn initialize_corpus<I, S>(
@@ -115,6 +120,7 @@ impl FuzzState {
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
+        include_static: bool,
     ) where
         I: Input + VMInputT,
     {
@@ -125,7 +131,7 @@ impl FuzzState {
             );
             for abi in contract.abi {
                 self.hash_to_address.insert(abi.function, deployed_address);
-                if abi.is_static {
+                if abi.is_static && !include_static{
                     continue;
                 }
                 let mut abi_instance = get_abi_type_boxed(&abi.abi);

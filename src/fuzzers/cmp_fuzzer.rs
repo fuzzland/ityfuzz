@@ -35,7 +35,7 @@ use crate::contract_utils::{set_hash, ContractLoader};
 use crate::evm::CMP_MAP;
 use crate::feedback::{CmpFeedback, InfantFeedback, OracleFeedback};
 use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
-use crate::rand::generate_random_address;
+use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
@@ -72,8 +72,9 @@ pub fn cmp_fuzzer(contracts_glob: &String) {
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
+    let deployer = generate_random_address();
     let evm_executor: EVMExecutor<VMInput, FuzzState> =
-        EVMExecutor::new(FuzzHost::new(), generate_random_address());
+        EVMExecutor::new(FuzzHost::new(), deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
     state.initialize(
@@ -81,7 +82,10 @@ pub fn cmp_fuzzer(contracts_glob: &String) {
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
+        true,
     );
+    #[cfg(feature = "deployer_is_attacker")]
+    state.add_deployer_to_callers(deployer);
     executor.evm_executor.host.initalize(&mut state);
     feedback
         .init_state(&mut state)

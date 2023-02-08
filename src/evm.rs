@@ -4,11 +4,12 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 
 use crate::input::VMInputT;
-use crate::rand;
+use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::ObserversTuple;
 use primitive_types::{H160, H256, U256};
+use rand::random;
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
 use revm::{
@@ -75,6 +76,8 @@ pub struct FuzzHost {
     hash_to_address: HashMap<[u8; 4], H160>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
+    #[cfg(feature = "record_instruction_coverage")]
+    pub pc_coverage: HashSet<(H160, usize)>,
 }
 
 // hack: I don't want to change evm internal to add a new type of return
@@ -95,6 +98,8 @@ impl FuzzHost {
             hash_to_address: HashMap::new(),
             _pc: 0,
             pc_to_addresses: HashMap::new(),
+            #[cfg(feature = "record_instruction_coverage")]
+            pc_coverage: Default::default(),
         }
     }
 
@@ -132,6 +137,12 @@ impl Host for FuzzHost {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
+        #[cfg(feature = "record_instruction_coverage")]
+        {
+            let address = interp.contract.address;
+            let pc = interp.program_counter().clone();
+            self.pc_coverage.insert((address, pc));
+        }
         unsafe {
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
@@ -299,7 +310,13 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
-        if CONTROL_LEAK_DETECTION {
+        let mut hash = input.input.to_vec();
+        hash.resize(4, 0);
+        let contract_loc_option = self
+            .hash_to_address
+            .get(hash.as_slice());
+
+        if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
             assert!(self._pc != 0);
             if !self.pc_to_addresses.contains_key(&self._pc) {
                 self.pc_to_addresses.insert(self._pc, HashSet::new());
@@ -313,15 +330,11 @@ impl Host for FuzzHost {
                 .insert(input.contract);
         }
 
-        if ACTIVE_MATCH_EXT_CALL == true {
-            let contract_loc = self
-                .hash_to_address
-                .get(input.input.slice(0..4).to_vec().as_slice())
-                .unwrap();
+        if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
             let mut interp = Interpreter::new::<LatestSpec>(
                 Contract::new_with_context::<LatestSpec>(
                     input.input.clone(),
-                    self.code.get(contract_loc).unwrap().clone(),
+                    self.code.get(contract_loc_option.unwrap()).unwrap().clone(),
                     &input.context,
                 ),
                 1e10 as u64,
@@ -449,7 +462,7 @@ where
     }
 
     pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> H160 {
-        let deployed_address = rand::generate_random_address();
+        let deployed_address = rand_utils::generate_random_address();
         let deployer = Contract::new::<LatestSpec>(
             constructor_args,
             code,
@@ -465,6 +478,21 @@ where
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
         );
         deployed_address
+    }
+
+    pub fn count_instructions(bytecode: &Bytecode) -> usize {
+        let mut count: usize = 0;
+        let mut i = 0;
+        let bytes = bytecode.bytes();
+        while i < bytes.len() {
+            let op = *bytes.get(i).unwrap();
+            i += 1;
+            count += 1;
+            if op >= 0x60 && op <= 0x7f {
+                i += op as usize - 0x5f;
+            }
+        }
+        count
     }
 
     pub fn execute<OT>(
@@ -484,6 +512,12 @@ where
                 self.host.data.post_execution.push((r.stack, r.pc));
             }
             _ => {}
+        }
+        #[cfg(feature = "record_instruction_coverage")]
+        {
+            if random::<i32>() % 1000 == 0 {
+                println!("coverage: {} out of {:?}", self.host.pc_coverage.len(), self.host.code.iter().map(|x| EVMExecutor::<I, S>::count_instructions(x.1)).collect::<Vec<usize>>());
+            }
         }
         return ExecutionResult {
             output: r.output,

@@ -99,7 +99,7 @@ mod tests {
     use crate::evm::JMP_MAP;
     use crate::evm::{FuzzHost, MAP_SIZE};
     use crate::input::VMInput;
-    use crate::rand::generate_random_address;
+    use crate::rand_utils::generate_random_address;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
     use crate::VMState;
