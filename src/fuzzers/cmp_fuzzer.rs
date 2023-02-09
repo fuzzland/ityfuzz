@@ -73,8 +73,7 @@ pub fn cmp_fuzzer(contracts_glob: &String) {
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = generate_random_address();
-    let evm_executor: EVMExecutor<VMInput, FuzzState> =
-        EVMExecutor::new(FuzzHost::new(), deployer);
+    let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
     state.initialize(
