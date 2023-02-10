@@ -19,18 +19,4 @@ pub mod state;
 pub mod state_input;
 pub mod types;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 use crate::evm::{EVMExecutor, VMState};

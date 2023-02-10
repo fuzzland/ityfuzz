@@ -61,7 +61,7 @@ impl VMState {
     }
 }
 
-use crate::state::{HasHashToAddress};
+use crate::state::HasHashToAddress;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;

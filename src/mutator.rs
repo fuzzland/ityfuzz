@@ -1,20 +1,13 @@
 use crate::input::VMInputT;
-use crate::state::{InfantStateState};
-use libafl::inputs::{Input};
-use libafl::mutators::{MutationResult};
-use libafl::prelude::{
-    HasMaxSize, HasRand,
-    Mutator, Rand, State,
-};
+use crate::state::InfantStateState;
+use libafl::inputs::Input;
+use libafl::mutators::MutationResult;
+use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
 
-
-
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
-
-
 
 pub struct FuzzMutator<'a, S> {
     pub infant_scheduler: &'a S,

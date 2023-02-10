@@ -2,36 +2,28 @@ use crate::{
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    input::{VMInput},
+    input::VMInput,
     mutator::FuzzMutator,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{
-    powersched::PowerSchedule, QueueScheduler, SimpleEventManager,
-};
+use libafl::prelude::{powersched::PowerSchedule, QueueScheduler, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::CalibrationStage;
 use libafl::{
-    prelude::{
-        tuple_list, MaxMapFeedback, SimpleMonitor,
-        StdMapObserver,
-    },
-    stages::StdPowerMutationalStage, Fuzzer,
+    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
+    stages::StdPowerMutationalStage,
+    Fuzzer,
 };
 
-
-use std::{
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::feedback::{InfantFeedback, OracleFeedback};
-use crate::oracle::{FunctionHarnessOracle};
+use crate::oracle::FunctionHarnessOracle;
 use crate::rand_utils::generate_random_address;
 use crate::state::FuzzState;
 
 use primitive_types::H160;
-
 
 struct ABIConfig {
     abi: String,

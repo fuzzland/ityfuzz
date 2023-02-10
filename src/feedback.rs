@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use crate::evm::{state_change, EVMExecutor, MAP_SIZE};
 
-use crate::input::{VMInputT};
+use crate::input::VMInputT;
 use crate::oracle::{Oracle, OracleCtx};
 use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};

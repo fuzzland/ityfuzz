@@ -10,7 +10,8 @@ use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
     prelude::{
-        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers, ObserversTuple, Testcase,
+        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
+        ObserversTuple, Testcase,
     },
     schedulers::Scheduler,
     stages::StagesTuple,

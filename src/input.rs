@@ -9,7 +9,6 @@ use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 
-
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;

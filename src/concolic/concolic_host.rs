@@ -1,4 +1,3 @@
-
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
@@ -8,11 +7,11 @@ use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
     Spec,
 };
-use std::borrow::{Borrow};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
-use z3::ast::{BV};
+use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
 
 #[derive(Clone, Debug)]
