@@ -1,22 +1,22 @@
 use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::{MutationResult, MutatorsTuple};
+use libafl::mutators::{MutationResult};
 use libafl::prelude::{
     tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasConstLen, Mutator, Prepend,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator,
     QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
 };
 use libafl::state::{HasMaxSize, HasRand, State};
-use primitive_types::H160;
-use rand::random;
+
+
 
 pub fn byte_mutator<I, S>(state: &mut S, input: &mut I) -> MutationResult
 where
     S: State + HasRand,
     I: HasBytesVec + Input,
 {
-    let mut mutations = tuple_list!(
+    let mutations = tuple_list!(
         BitFlipMutator::new(),
         ByteFlipMutator::new(),
         ByteIncMutator::new(),
@@ -46,7 +46,7 @@ where
     S: State + HasRand + HasMaxSize,
     I: HasBytesVec + Input,
 {
-    let mut mutations = tuple_list!(
+    let mutations = tuple_list!(
         BitFlipMutator::new(),
         ByteFlipMutator::new(),
         ByteIncMutator::new(),

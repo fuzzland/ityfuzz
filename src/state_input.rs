@@ -1,8 +1,8 @@
 use crate::VMState;
 use libafl::inputs::Input;
-use libafl::Error;
+
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StagedVMState {

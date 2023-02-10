@@ -2,46 +2,37 @@ use crate::{
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    input::{VMInput, VMInputT},
+    input::{VMInput},
     mutator::FuzzMutator,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{
-    powersched::PowerSchedule, MapFeedback, ObserversTuple, QueueScheduler, SimpleEventManager,
+    powersched::PowerSchedule, SimpleEventManager,
 };
-use libafl::prelude::{PowerQueueScheduler, ShMemProvider, StdShMemProvider};
+use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::CalibrationStage;
 use libafl::{
     prelude::{
-        current_nanos, current_time, tuple_list, ConstFeedback, HitcountsMapObserver,
-        InMemoryCorpus, MaxMapFeedback, OnDiskCorpus, SimpleMonitor, SimpleRestartingEventManager,
-        StdMapObserver, StdRand,
+        tuple_list, MaxMapFeedback, SimpleMonitor,
+        StdMapObserver,
     },
-    schedulers::StdScheduler,
-    stages::StdPowerMutationalStage,
-    state::StdState,
-    Error, Fuzzer,
+    stages::StdPowerMutationalStage, Fuzzer,
 };
-use std::io::Write;
-use std::os::unix::io::{AsRawFd, FromRawFd};
-use std::{
-    cell::RefCell,
-    fs::{File, OpenOptions},
-    io,
-    path::PathBuf,
-};
+
+
+
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::evm::CMP_MAP;
-use crate::feedback::{CmpFeedback, InfantFeedback, OracleFeedback};
-use crate::oracle::{FunctionHarnessOracle, IERC20Oracle, NoOracle};
+use crate::feedback::{CmpFeedback, OracleFeedback};
+use crate::oracle::{FunctionHarnessOracle};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
-use nix::unistd::dup;
+
 use primitive_types::H160;
-use revm::EVM;
+
 
 struct ABIConfig {
     abi: String,
@@ -56,7 +47,7 @@ struct ContractInfo {
 pub fn cmp_fuzzer(contracts_glob: &String) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let mut infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
+    let infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
         SortedDroppingScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };

@@ -3,21 +3,21 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Executor, Feedback, HasCorpus, HasMetadata, HasRand, Named};
+use libafl::prelude::{Feedback, Named};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, State};
 use libafl::Error;
 use primitive_types::U256;
 use std::fmt::{Debug, Formatter};
-use std::iter::Map;
+
 use std::marker::PhantomData;
 
-use crate::evm::{state_change, EVMExecutor, ExecutionResult, MAP_SIZE};
-use crate::executor::FuzzExecutor;
-use crate::input::{VMInput, VMInputT};
+use crate::evm::{state_change, EVMExecutor, MAP_SIZE};
+
+use crate::input::{VMInputT};
 use crate::oracle::{Oracle, OracleCtx};
 use crate::scheduler::HasVote;
-use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState, InfantStateState};
+use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
 use crate::state_input::StagedVMState;
 
 pub struct InfantFeedback<'a, I, S, O>
@@ -81,10 +81,10 @@ where
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
-        manager: &mut EMI,
+        _manager: &mut EMI,
         input: &I,
-        observers: &OT,
-        exit_kind: &ExitKind,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
         EMI: EventFirer<I>,
@@ -199,10 +199,10 @@ where
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
-        manager: &mut EMI,
+        _manager: &mut EMI,
         input: &I,
-        observers: &OT,
-        exit_kind: &ExitKind,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
         EMI: EventFirer<I>,
@@ -281,11 +281,11 @@ where
 
     fn is_interesting<EMI, OT>(
         &mut self,
-        state: &mut S,
-        manager: &mut EMI,
-        input: &I,
-        observers: &OT,
-        exit_kind: &ExitKind,
+        _state: &mut S,
+        _manager: &mut EMI,
+        _input: &I,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
         EMI: EventFirer<I>,
@@ -363,10 +363,10 @@ where
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S0,
-        manager: &mut EMI,
+        _manager: &mut EMI,
         input: &I0,
-        observers: &OT,
-        exit_kind: &ExitKind,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
         EMI: EventFirer<I0>,

@@ -1,19 +1,19 @@
-use crate::evm::ExecutionResult;
+
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
-use revm::opcode::CALL;
+
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
     Spec,
 };
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::{Borrow};
 use std::collections::HashMap;
-use std::ops::{Add, Deref, Mul, Sub};
+use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
-use z3::ast::{Bool, BV};
-use z3::{ast, ast::Ast, Config, Context, Solver};
+use z3::ast::{BV};
+use z3::{ast::Ast, Config, Context, Solver};
 
 #[derive(Clone, Debug)]
 enum ConcolicOp {
@@ -711,14 +711,14 @@ impl ConcolicHost {
             }
             // DUP
             0x80..=0x8f => {
-                let n = (*interp.instruction_pointer) - 0x80 + 1;
+                let _n = (*interp.instruction_pointer) - 0x80 + 1;
                 vec![
                     //todo!
                 ]
             }
             // SWAP
             0x90..=0x9f => {
-                let n = (*interp.instruction_pointer) - 0x90 + 1;
+                let _n = (*interp.instruction_pointer) - 0x90 + 1;
                 vec![
                     //todo!
                 ]
@@ -738,7 +738,7 @@ impl ConcolicHost {
 
     pub fn solve(&self) {
         let context = Context::new(&Config::default());
-        let mut solver = Solver::new(&context);
+        let solver = Solver::new(&context);
         let input = BV::new_const(&context, "input", self.bits);
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let balance = BV::new_const(&context, "balance", 256);
@@ -773,14 +773,14 @@ impl Host for ConcolicHost {
     type DB = BenchmarkDB;
     // type DB = BenchmarkDB;
 
-    fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
+    fn step(&mut self, interp: &mut Interpreter, _is_static: bool) -> Return {
         unsafe {
             self.on_step(interp);
         }
         return Continue;
     }
 
-    fn step_end(&mut self, interp: &mut Interpreter, is_static: bool, ret: Return) -> Return {
+    fn step_end(&mut self, _interp: &mut Interpreter, _is_static: bool, _ret: Return) -> Return {
         return Continue;
     }
 
@@ -808,7 +808,7 @@ impl Host for ConcolicHost {
         )
     }
 
-    fn balance(&mut self, address: H160) -> Option<(U256, bool)> {
+    fn balance(&mut self, _address: H160) -> Option<(U256, bool)> {
         println!("balance");
 
         Some((U256::max_value(), true))
@@ -822,7 +822,7 @@ impl Host for ConcolicHost {
         }
     }
 
-    fn code_hash(&mut self, address: H160) -> Option<(H256, bool)> {
+    fn code_hash(&mut self, _address: H160) -> Option<(H256, bool)> {
         Some((
             H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
@@ -856,15 +856,15 @@ impl Host for ConcolicHost {
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
-    fn log(&mut self, address: H160, topics: Vec<H256>, data: Bytes) {}
+    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {}
 
-    fn selfdestruct(&mut self, address: H160, target: H160) -> Option<SelfDestructResult> {
+    fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
     }
 
     fn create<SPEC: Spec>(
         &mut self,
-        inputs: &mut CreateInputs,
+        _inputs: &mut CreateInputs,
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
             println!("create");
@@ -877,7 +877,7 @@ impl Host for ConcolicHost {
         );
     }
 
-    fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+    fn call<SPEC: Spec>(&mut self, _input: &mut CallInputs) -> (Return, Gas, Bytes) {
         unsafe {
             println!("call");
         }

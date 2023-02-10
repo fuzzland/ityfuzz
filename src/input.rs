@@ -1,14 +1,14 @@
 use crate::abi::BoxedABI;
-use crate::state::FuzzState;
+
 use crate::state_input::StagedVMState;
 use crate::{evm, VMState};
 use bytes::Bytes;
 use libafl::inputs::Input;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
-use libafl::Error;
+
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {

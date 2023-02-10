@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::convert::Into;
+
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -61,7 +61,7 @@ impl VMState {
     }
 }
 
-use crate::state::{FuzzState, HasHashToAddress};
+use crate::state::{HasHashToAddress};
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
@@ -136,7 +136,7 @@ macro_rules! u256_to_u8 {
 impl Host for FuzzHost {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
-    fn step(&mut self, interp: &mut Interpreter, is_static: bool) -> Return {
+    fn step(&mut self, interp: &mut Interpreter, _is_static: bool) -> Return {
         #[cfg(feature = "record_instruction_coverage")]
         {
             let address = interp.contract.address;
@@ -216,7 +216,7 @@ impl Host for FuzzHost {
         return Continue;
     }
 
-    fn step_end(&mut self, interp: &mut Interpreter, is_static: bool, ret: Return) -> Return {
+    fn step_end(&mut self, _interp: &mut Interpreter, _is_static: bool, _ret: Return) -> Return {
         return Continue;
     }
 
@@ -224,7 +224,7 @@ impl Host for FuzzHost {
         return &mut self.env;
     }
 
-    fn load_account(&mut self, address: H160) -> Option<(bool, bool)> {
+    fn load_account(&mut self, _address: H160) -> Option<(bool, bool)> {
         Some((
             true,
             true, // self.data.contains_key(&address) || self.code.contains_key(&address),
@@ -240,7 +240,7 @@ impl Host for FuzzHost {
         )
     }
 
-    fn balance(&mut self, address: H160) -> Option<(U256, bool)> {
+    fn balance(&mut self, _address: H160) -> Option<(U256, bool)> {
         println!("balance");
 
         Some((U256::max_value(), true))
@@ -254,7 +254,7 @@ impl Host for FuzzHost {
         }
     }
 
-    fn code_hash(&mut self, address: H160) -> Option<(H256, bool)> {
+    fn code_hash(&mut self, _address: H160) -> Option<(H256, bool)> {
         Some((
             H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
@@ -288,15 +288,15 @@ impl Host for FuzzHost {
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
-    fn log(&mut self, address: H160, topics: Vec<H256>, data: Bytes) {}
+    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {}
 
-    fn selfdestruct(&mut self, address: H160, target: H160) -> Option<SelfDestructResult> {
+    fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
     }
 
     fn create<SPEC: Spec>(
         &mut self,
-        inputs: &mut CreateInputs,
+        _inputs: &mut CreateInputs,
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
             println!("create");
@@ -410,7 +410,7 @@ where
     }
 
     pub fn finish_execution(&mut self, result: &ExecutionResult, input: &I) -> ExecutionResult {
-        let mut new_state = result.new_state.state.clone();
+        let new_state = result.new_state.state.clone();
         let mut last_output = result.output.clone();
         for post_exec in result.new_state.state.post_execution.clone() {
             // there are two cases
@@ -499,7 +499,7 @@ where
         caller: H160,
         state: &VMState,
         data: Bytes,
-        observers: &mut OT,
+        _observers: &mut OT,
     ) -> ExecutionResult
     where
         OT: ObserversTuple<I, S>,

@@ -133,7 +133,7 @@ impl BoxedABI {
                 if aarray.dynamic_size {
                     if (random::<u8>() % 2) == 0 {
                         let index: usize = random::<usize>() % data_len;
-                        let mut result = aarray.data[index].mutate(state);
+                        let result = aarray.data[index].mutate(state);
                         return result;
                     }
 
@@ -143,7 +143,7 @@ impl BoxedABI {
                         aarray.data.push(aarray.data[0].clone());
                     }
                 } else {
-                    let mut index: usize = random::<usize>() % data_len;
+                    let index: usize = random::<usize>() % data_len;
                     return aarray.data[index].mutate(state);
                 }
                 MutationResult::Mutated
@@ -424,7 +424,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
             dynamic_size: true,
         });
     } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
-        let mut split = abi_name_str.rsplit_once('[').unwrap();
+        let split = abi_name_str.rsplit_once('[').unwrap();
         let name = split.0;
         let len = split
             .1
