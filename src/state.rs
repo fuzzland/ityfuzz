@@ -143,6 +143,9 @@ impl FuzzState {
             };
 
             for abi in contract.abi {
+                if abi.is_constructor {
+                    continue;
+                }
                 self.hash_to_address.insert(abi.function, deployed_address);
                 if abi.is_static && !include_static {
                     continue;

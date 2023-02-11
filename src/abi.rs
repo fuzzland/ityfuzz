@@ -5,6 +5,7 @@ use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::Mutator;
 use libafl::state::{HasMaxSize, HasRand, State};
+use primitive_types::H160;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -389,12 +390,19 @@ impl ABI for AArray {
 
 pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
     return BoxedABI {
-        b: get_abi_type(abi_name),
+        b: get_abi_type(abi_name, &None),
         function: [0; 4],
     };
 }
 
-pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
+pub fn get_abi_type_boxed_with_address(abi_name: &String, address: Vec<u8>) -> BoxedABI {
+    return BoxedABI {
+        b: get_abi_type(abi_name, &Some(address)),
+        function: [0; 4],
+    };
+}
+
+pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
     // tuple
     if abi_name_str == "()" {
@@ -405,7 +413,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
             data: abi_name_str[1..abi_name_str.len() - 1]
                 .split(",")
                 .map(|x| BoxedABI {
-                    b: get_abi_type(&String::from(x)),
+                    b: get_abi_type(&String::from(x), with_address),
                     function: [0; 4],
                 })
                 .collect(),
@@ -416,7 +424,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string()),
+                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string(), with_address),
                     function: [0; 4]
                 };
                 1
@@ -436,7 +444,7 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(&String::from(name)),
+                    b: get_abi_type(&String::from(name), with_address),
                     function: [0; 4]
                 };
                 len
@@ -444,15 +452,15 @@ pub fn get_abi_type(abi_name: &String) -> Box<dyn ABI> {
             dynamic_size: false,
         });
     }
-    get_abi_type_basic(abi_name.as_str(), 0)
+    get_abi_type_basic(abi_name.as_str(), 0, with_address)
 }
 
-fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
+fn get_abi_type_basic(abi_name: &str, abi_bs: usize, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
     match abi_name {
         "uint" | "int" => Box::new(A256 {
             data: vec![0; abi_bs],
         }),
-        "address" => Box::new(A256 { data: vec![0; 20] }),
+        "address" => Box::new(A256 { data: with_address.to_owned().unwrap_or(vec![0; 20]) }),
         "bool" => Box::new(A256 { data: vec![0; 1] }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
@@ -466,15 +474,15 @@ fn get_abi_type_basic(abi_name: &str, abi_bs: usize) -> Box<dyn ABI> {
             if abi_name.starts_with("uint") {
                 let len = abi_name[4..].parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
-                return get_abi_type_basic("uint", len / 8);
+                return get_abi_type_basic("uint", len / 8, with_address);
             } else if abi_name.starts_with("int") {
                 let len = abi_name[3..].parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
-                return get_abi_type_basic("int", len / 8);
+                return get_abi_type_basic("int", len / 8, with_address);
             } else if abi_name.starts_with("bytes") {
                 let len = abi_name[5..].parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
-                return get_abi_type_basic("bytes", len / 8);
+                return get_abi_type_basic("bytes", len / 8, with_address);
             } else if abi_name.len() == 0 {
                 return Box::new(AEmpty {});
             } else {

@@ -1,9 +1,11 @@
+use std::str::FromStr;
+
 use crate::{
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::VMInput,
-    mutator::FuzzMutator,
+    mutator::FuzzMutator, rand_utils::fixed_address, contract_utils::FIX_DEPLOYER,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
@@ -55,7 +57,7 @@ pub fn cmp_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
-    let deployer = generate_random_address();
+    let deployer = fixed_address(FIX_DEPLOYER);
     let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     let contract_info = if let Some(target_contract) = target_contract {
