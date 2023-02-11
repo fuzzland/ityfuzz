@@ -459,7 +459,7 @@ where
         };
     }
 
-    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> H160 {
+    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> Option<H160> {
         let deployed_address = rand_utils::generate_random_address();
         let deployer = Contract::new::<LatestSpec>(
             constructor_args,
@@ -470,12 +470,16 @@ where
         );
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        if r != Return::Return {
+            println!("deploy failed: {:?}", r);
+            return None;
+        }
         assert_eq!(r, Return::Return);
         self.host.set_code(
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
         );
-        deployed_address
+        Some(deployed_address)
     }
 
     pub fn count_instructions(bytecode: &Bytecode) -> usize {

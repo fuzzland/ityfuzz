@@ -130,10 +130,18 @@ impl FuzzState {
     {
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
-            let deployed_address = executor.deploy(
+            let deployed_address = match executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
                 Bytes::from(contract.constructor_args),
-            );
+            ) {
+                Some(addr) => addr,
+                None => {
+                    println!("Failed to deploy contract: {}", contract.name);
+                    // we could also panic here
+                    continue;
+                }
+            };
+
             for abi in contract.abi {
                 self.hash_to_address.insert(abi.function, deployed_address);
                 if abi.is_static && !include_static {
