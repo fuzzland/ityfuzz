@@ -129,6 +129,7 @@ impl FuzzState {
         I: Input + VMInputT,
     {
         for contract in contracts {
+            println!("Deploying contract: {}", contract.name);
             let deployed_address = executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
                 Bytes::from(contract.constructor_args),
