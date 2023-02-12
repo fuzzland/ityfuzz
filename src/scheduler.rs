@@ -54,7 +54,7 @@ where
 
         {
             let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-            data.votes_and_visits.insert(idx, (0, 1));
+            data.votes_and_visits.insert(idx, (0, data.visits_total / (data.votes_and_visits.len() + 1)));
             data.visits_total += 1;
         }
 

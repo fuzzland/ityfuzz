@@ -2,6 +2,7 @@ use clap::Parser;
 use ityfuzz::fuzzers::basic_fuzzer;
 use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
 use std::path::PathBuf;
+use ityfuzz::fuzzers::df_fuzzer::df_fuzzer;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -23,5 +24,5 @@ fn main() {
     //     PathBuf::from("./tmp/log"),
     //     &String::from(args.contract_glob),
     // );
-    cmp_fuzzer(&String::from(args.contract_glob), args.target_contract);
+    df_fuzzer(&String::from(args.contract_glob), args.target_contract);
 }

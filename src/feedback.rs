@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use libafl::corpus::Testcase;
 use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
@@ -237,7 +238,7 @@ where
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
 pub struct DataflowFeedback<'a> {
-    global_write_map: [u8; MAP_SIZE],
+    global_write_map: [[bool; 4]; MAP_SIZE],
     read_map: &'a mut [bool],
     write_map: &'a mut [u8],
 }
@@ -262,7 +263,7 @@ impl<'a> Named for DataflowFeedback<'a> {
 impl<'a> DataflowFeedback<'a> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
-            global_write_map: [0; MAP_SIZE],
+            global_write_map: [[false; 4]; MAP_SIZE],
             read_map,
             write_map,
         }
@@ -292,10 +293,24 @@ where
         OT: ObserversTuple<I, S>,
     {
         let mut interesting = false;
+        let mut seq: usize = 0;
         for i in 0..MAP_SIZE {
-            if self.read_map[i] && (self.global_write_map[i] < self.write_map[i]) {
-                self.global_write_map[i] = self.write_map[i];
-                interesting = true;
+            if self.read_map[i] && self.write_map[i] != 0 {
+                seq += i;
+                let category = if self.write_map[i] < (2 << 2) {
+                    0
+                } else if self.write_map[i] < (2 << 4) {
+                    1
+                } else if self.write_map[i] < (2 << 6) {
+                    2
+                } else {
+                    3
+                };
+                if !self.global_write_map[seq % MAP_SIZE][category] {
+                    // println!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
+                    interesting = true;
+                    self.global_write_map[seq % MAP_SIZE][category] = true;
+                }
             }
         }
         return Ok(interesting);
@@ -318,6 +333,7 @@ where
 pub struct CmpFeedback<'a, SC> {
     min_map: [U256; MAP_SIZE],
     current_map: &'a mut [U256],
+    known_states: HashSet<u64>,
     scheduler: &'a SC,
 }
 
@@ -330,6 +346,7 @@ where
         Self {
             min_map: [U256::MAX; MAP_SIZE],
             current_map,
+            known_states: Default::default(),
             scheduler,
         }
     }
@@ -386,6 +403,11 @@ where
 
         unsafe {
             if state_change {
+                let hash = input.get_state().get_hash();
+                if self.known_states.contains(&hash) {
+                    return Ok(false);
+                }
+                self.known_states.insert(hash);
                 return Ok(true);
             }
         }
