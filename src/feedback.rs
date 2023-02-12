@@ -313,6 +313,9 @@ where
                 }
             }
         }
+        for i in 0..MAP_SIZE {
+            self.write_map[i] = 0;
+        }
         return Ok(interesting);
     }
 
