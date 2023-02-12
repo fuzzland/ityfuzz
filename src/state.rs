@@ -160,6 +160,7 @@ impl FuzzState {
                     data: abi_instance,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
+                    txn_value: 0
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
