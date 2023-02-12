@@ -10,10 +10,8 @@ use bytes::Bytes;
 use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
-
-use libafl::prelude::{
-    current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, Scheduler, SerdeAnyMap, StdRand,
-};
+use libafl::prelude::RandomSeed;
+use libafl::prelude::{current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap, StdRand};
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -69,13 +67,16 @@ pub struct FuzzState {
     named_metadata: NamedSerdeAnyMap,
     execution_result: ExecutionResult,
     default_callers: Vec<H160>,
-    pub rand_generator: StdRand,
+    pub rand_generator: RomuDuoJrRand,
+    pub rand_generator2: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], H160>,
 }
 
 impl FuzzState {
     pub fn new() -> Self {
+        let seed = current_nanos();
+        println!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
             #[cfg(not(feature = "evaluation"))]
@@ -88,7 +89,8 @@ impl FuzzState {
             named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
             default_callers: vec![],
-            rand_generator: StdRand::with_seed(current_nanos()),
+            rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
+            rand_generator2: RomuDuoJrRand::with_seed(1),
             max_size: 1500,
             hash_to_address: Default::default(),
         }

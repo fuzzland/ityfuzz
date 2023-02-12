@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use std::i64::MAX;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -39,6 +41,20 @@ pub struct VMState {
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
     pub post_execution: Vec<(Vec<U256>, usize)>,
+}
+
+impl VMState {
+    pub fn get_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        for i in self.state.iter() {
+            i.0.0.hash(&mut s);
+            for j in i.1.iter() {
+                j.0.hash(&mut s);
+                j.1.hash(&mut s);
+            }
+        }
+        s.finish()
+    }
 }
 
 impl VMState {
@@ -123,7 +139,7 @@ impl FuzzHost {
 macro_rules! process_rw_key {
     ($key:ident) => {
         if $key > U256::from(RW_SKIPPER_PERCT_IDX) {
-            $key >>= 4;
+            // $key >>= 4;
             $key %= U256::from(RW_SKIPPER_AMT);
             $key += U256::from(RW_SKIPPER_PERCT_IDX);
             $key.as_usize() % MAP_SIZE
@@ -293,7 +309,11 @@ impl Host for FuzzHost {
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
-    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {}
+    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
+        if _topics.len() == 1 {
+            println!("log, {:?} - {:?}", hex::encode(_data), _topics);
+        }
+    }
 
     fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
