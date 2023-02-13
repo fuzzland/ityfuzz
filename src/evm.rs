@@ -151,7 +151,7 @@ macro_rules! process_rw_key {
 
 macro_rules! u256_to_u8 {
     ($key:ident) => {
-        (($key >> 4) % 255).as_u64() as u8
+        (($key >> 4) % 254).as_u64() as u8
     };
 }
 impl Host for FuzzHost {
@@ -187,7 +187,8 @@ impl Host for FuzzHost {
                     let value = interp.stack.peek(1).expect("stack underflow");
                     {
                         let mut key = interp.stack.peek(0).expect("stack underflow");
-                        WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
+                        let v = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = v;
                     }
                     let res = self.sload(
                         interp.contract.address,
@@ -366,6 +367,11 @@ impl Host for FuzzHost {
             return (ret, Gas::new(0), interp.return_value());
         }
 
+        // transfer txn
+        if hash == [0x00, 0x00, 0x00, 0x00] {
+            return (Continue, Gas::new(0), Bytes::new());
+        }
+
         // default behavior
         match self.code.get(&input.contract) {
             Some(code) => {
@@ -453,6 +459,8 @@ where
                 input.to_bytes(),
                 // todo(@shou !important) do we need to increase pc?
                 Some((recovering_stack, post_exec.1 + 1)),
+                // todo(@shou !important) whats value
+                0
             );
             last_output = r.output;
             if r.ret == Return::Return {
@@ -500,6 +508,7 @@ where
             return None;
         }
         assert_eq!(r, Return::Return);
+        // println!("contract = {:?}", hex::encode(interp.return_value()));
         self.host.set_code(
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
@@ -517,14 +526,18 @@ where
         let mut count: usize = 0;
         let mut i = 0;
         let bytes = bytecode.bytes();
+        let mut complete_bytes = vec![];
+
         while i < bytes.len() {
             let op = *bytes.get(i).unwrap();
+            complete_bytes.push(i);
             i += 1;
             count += 1;
             if op >= 0x60 && op <= 0x7f {
                 i += op as usize - 0x5f;
             }
         }
+        println!("complete bytes: {:?}", complete_bytes);
         count
     }
 
@@ -534,12 +547,13 @@ where
         caller: H160,
         state: &VMState,
         data: Bytes,
+        value: usize,
         _observers: &mut OT,
     ) -> ExecutionResult
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(contract_address, caller, state, data, None);
+        let r = self.execute_from_pc(contract_address, caller, state, data, None, value);
         match r.ret {
             ControlLeak => {
                 self.host.data.post_execution.push((r.stack, r.pc));
@@ -553,6 +567,7 @@ where
                     "coverage: {} out of {:?}",
                     self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
                         if self.host.total_instr.contains_key(x.0) {
+                            // println!("{:?}", x.1);
                             x.1.len()
                         } else {
                             0
@@ -575,7 +590,7 @@ where
         }
         return ExecutionResult {
             output: r.output,
-            reverted: r.ret != Return::Return,
+            reverted: r.ret != Return::Return && r.ret != Return::Stop,
             new_state: StagedVMState::new_with_state(r.new_state),
         };
     }
@@ -587,6 +602,7 @@ where
         state: &VMState,
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
+        value: usize
     ) -> IntermediateExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
