@@ -105,8 +105,8 @@ const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = true;
 const CONTROL_LEAK_DETECTION: bool = true;
 
-// if a PC transfers control to >10 addresses, we consider call at this PC to be unbounded
-const CONTROL_LEAK_THRESHOLD: usize = 10;
+// if a PC transfers control to >1 addresses, we consider call at this PC to be unbounded
+const CONTROL_LEAK_THRESHOLD: usize = 1;
 
 impl FuzzHost {
     pub fn new() -> Self {
@@ -178,6 +178,16 @@ impl Host for FuzzHost {
                     if jmp_map[idx] < 255 {
                         jmp_map[idx] += 1;
                     }
+
+                    #[cfg(feature = "cmp")]
+                    {
+                        let idx = (interp.program_counter()) % MAP_SIZE;
+                        if jump_dest != 1 {
+                            CMP_MAP[idx] = U256::zero();
+                        } else {
+                            CMP_MAP[idx] = U256::from(1);
+                        }
+                    }
                 }
 
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
@@ -210,7 +220,7 @@ impl Host for FuzzHost {
                     // LT, SLT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 > v2 { v1 - v2 } else { U256::zero() };
+                    let abs_diff = if v1 > v2 { v1 - v2 + 1 } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -222,7 +232,7 @@ impl Host for FuzzHost {
                     // GT, SGT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 < v2 { v2 - v1 } else { U256::zero() };
+                    let abs_diff = if v1 < v2 { v2 - v1 + 1 } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -312,7 +322,7 @@ impl Host for FuzzHost {
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
         if _topics.len() == 1 {
-            // println!("log, {:?} - {:?}", hex::encode(_data), _topics);
+            println!("log, {:?} - {:?}", hex::encode(_data), _topics);
         }
     }
 
@@ -571,7 +581,7 @@ where
                     "coverage: {} out of {:?}",
                     self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
                         if self.host.total_instr.contains_key(x.0) {
-                            println!("{:?}", x.1);
+                            // println!("{:?}", x.1);
                             x.1.len()
                         } else {
                             0
@@ -594,7 +604,7 @@ where
         }
         return ExecutionResult {
             output: r.output,
-            reverted: r.ret != Return::Return && r.ret != Return::Stop,
+            reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
             new_state: StagedVMState::new_with_state(r.new_state),
         };
     }

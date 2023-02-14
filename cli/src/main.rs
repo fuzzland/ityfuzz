@@ -14,6 +14,10 @@ struct Args {
     // target single contract -- Optional
     #[arg(short, long)]
     target_contract: Option<String>,
+
+    // Fuzzer type -- Optional
+    #[arg(short, long)]
+    fuzzer_type: Option<String>,
 }
 
 fn main() {
@@ -24,5 +28,22 @@ fn main() {
     //     PathBuf::from("./tmp/log"),
     //     &String::from(args.contract_glob),
     // );
-    df_fuzzer(&String::from(args.contract_glob), args.target_contract);
+    match args.fuzzer_type {
+        Some(v) => {
+            match v.as_str() {
+                "cmp" => {
+                    cmp_fuzzer(&String::from(args.contract_glob), args.target_contract);
+                }
+                "df" => {
+                    df_fuzzer(&String::from(args.contract_glob), args.target_contract);
+                }
+                _ => {
+                    println!("Fuzzer type not supported");
+                }
+            }
+        },
+        _ => {
+            df_fuzzer(&String::from(args.contract_glob), args.target_contract);
+        }
+    }
 }
