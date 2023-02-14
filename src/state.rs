@@ -7,7 +7,7 @@ use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
 use bytes::Bytes;
-use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
+use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::RandomSeed;
@@ -58,9 +58,9 @@ pub trait HasExecutionResult {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FuzzState {
     infant_states_state: InfantStateState,
-    #[cfg(not(feature = "evaluation"))]
+    #[cfg(not(feature = "ondisk_corpus"))]
     txn_corpus: InMemoryCorpus<VMInput>,
-    #[cfg(feature = "evaluation")]
+    #[cfg(feature = "ondisk_corpus")]
     txn_corpus: OnDiskCorpus<VMInput>,
     solutions: OnDiskCorpus<VMInput>,
     executions: usize,
@@ -80,9 +80,9 @@ impl FuzzState {
         println!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
-            #[cfg(not(feature = "evaluation"))]
+            #[cfg(not(feature = "ondisk_corpus"))]
             txn_corpus: InMemoryCorpus::new(),
-            #[cfg(feature = "evaluation")]
+            #[cfg(feature = "ondisk_corpus")]
             txn_corpus: OnDiskCorpus::new(Path::new("corpus")).unwrap(),
             solutions: OnDiskCorpus::new(Path::new("solutions")).unwrap(),
             executions: 0,
@@ -137,6 +137,7 @@ impl FuzzState {
             let deployed_address = match executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
                 Bytes::from(contract.constructor_args),
+                generate_random_address()
             ) {
                 Some(addr) => addr,
                 None => {
@@ -362,9 +363,9 @@ impl HasMetadata for FuzzState {
 }
 
 impl HasCorpus<VMInput> for FuzzState {
-    #[cfg(not(feature = "evaluation"))]
+    #[cfg(not(feature = "ondisk_corpus"))]
     type Corpus = InMemoryCorpus<VMInput>;
-    #[cfg(feature = "evaluation")]
+    #[cfg(feature = "ondisk_corpus")]
     type Corpus = OnDiskCorpus<VMInput>;
 
     fn corpus(&self) -> &Self::Corpus {

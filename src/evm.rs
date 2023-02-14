@@ -93,6 +93,7 @@ pub struct FuzzHost {
     hash_to_address: HashMap<[u8; 4], H160>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
+    pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -103,7 +104,8 @@ pub struct FuzzHost {
 // this return type is never used as we disabled gas
 const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = true;
-const CONTROL_LEAK_DETECTION: bool = true;
+const CONTROL_LEAK_DETECTION: bool = false;
+const UNBOUND_CALL_THRESHOLD: usize = 10;
 
 // if a PC transfers control to >1 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 1;
@@ -117,6 +119,7 @@ impl FuzzHost {
             hash_to_address: HashMap::new(),
             _pc: 0,
             pc_to_addresses: HashMap::new(),
+            pc_to_call_hash: HashMap::new(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -220,7 +223,7 @@ impl Host for FuzzHost {
                     // LT, SLT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 > v2 { v1 - v2 + 1 } else { U256::zero() };
+                    let abs_diff = if v1 > v2 { (v1 - v2) % (U256::max_value() - 1) + 1 } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -232,7 +235,7 @@ impl Host for FuzzHost {
                     // GT, SGT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 < v2 { v2 - v1 + 1 } else { U256::zero() };
+                    let abs_diff = if v1 < v2 { (v2 - v1) % (U256::max_value() - 1) + 1 } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -321,8 +324,8 @@ impl Host for FuzzHost {
     }
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
-        if _topics.len() == 1 {
-            println!("log, {:?} - {:?}", hex::encode(_data), _topics);
+        if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
+            panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
         }
     }
 
@@ -348,6 +351,26 @@ impl Host for FuzzHost {
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
+
+        let mut input_seq = input.input.to_vec();
+        // check unbound call
+        if !self.pc_to_call_hash.contains_key(&self._pc) {
+            self.pc_to_call_hash.insert(self._pc, HashSet::new());
+        }
+        self.pc_to_call_hash.get_mut(&self._pc).unwrap().insert(hash.to_vec());
+        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD && input_seq.len() >= 4 {
+            // random sample a key from hash_to_address
+            let mut keys: Vec<&[u8; 4]> = self.hash_to_address.keys().collect();
+            let selected_key = keys[hash.iter().map(|x| (*x) as usize).sum::<usize>() % keys.len()];
+            hash = selected_key.to_vec();
+            for i in 0..4 {
+                input_seq[i] = hash[i];
+            }
+        }
+
+        let input_bytes = Bytes::from(input_seq);
+
+        // find the contract wrt the hash
         let contract_loc_option = self.hash_to_address.get(hash.as_slice());
 
         if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
@@ -355,6 +378,7 @@ impl Host for FuzzHost {
             if !self.pc_to_addresses.contains_key(&self._pc) {
                 self.pc_to_addresses.insert(self._pc, HashSet::new());
             }
+
             if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
@@ -367,12 +391,13 @@ impl Host for FuzzHost {
         if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
             let mut interp = Interpreter::new::<LatestSpec>(
                 Contract::new_with_context::<LatestSpec>(
-                    input.input.clone(),
+                    input_bytes,
                     self.code.get(contract_loc_option.unwrap()).unwrap().clone(),
                     &input.context,
                 ),
                 1e10 as u64,
             );
+
             let ret = interp.run::<FuzzHost, LatestSpec>(self);
             return (ret, Gas::new(0), interp.return_value());
         }
@@ -387,7 +412,7 @@ impl Host for FuzzHost {
             Some(code) => {
                 let mut interp = Interpreter::new::<LatestSpec>(
                     Contract::new_with_context::<LatestSpec>(
-                        input.input.clone(),
+                        input_bytes,
                         code.clone(),
                         &input.context,
                     ),
@@ -502,8 +527,7 @@ where
         };
     }
 
-    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> Option<H160> {
-        let deployed_address = rand_utils::generate_random_address();
+    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes, deployed_address: H160) -> Option<H160> {
         let deployer = Contract::new::<LatestSpec>(
             constructor_args,
             code,
@@ -628,7 +652,7 @@ where
                 .clone(),
             contract_address,
             caller,
-            U256::from(0),
+            U256::from(value),
         );
         let mut new_bytecode: Option<*const u8> = None;
         let mut new_pc: Option<usize> = None;
