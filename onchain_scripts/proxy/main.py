@@ -368,8 +368,10 @@ def fetch_blk_hash(network, num):
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=10, delay=0.5, backoff=0.3)
-def fetch_rpc_storage_dump(network, address, block, offset=""):
+def fetch_rpc_storage_dump(network, address, block, offset="", amt=0):
     print(f"fetching {address} {block} {offset}")
+    if amt > 1:
+        return "defer"
     url = f"{get_rpc(network)}"
     payload = {
         "jsonrpc": "2.0",
@@ -392,7 +394,9 @@ def fetch_rpc_storage_dump(network, address, block, offset=""):
 
     res = {}
     if "nextKey" in j["result"] and j["result"]["nextKey"]:
-        res = fetch_rpc_storage_dump(network, address, block, offset=j["result"]["nextKey"])
+        res = fetch_rpc_storage_dump(network, address, block, offset=j["result"]["nextKey"], amt=amt+1)
+    if res == "defer":
+        return {}
     # this rpc is likely going to fail for a few times
     return {**res, **j["result"]["storage"]}
 

@@ -212,6 +212,7 @@ where
     env: Env,
     pub code: HashMap<H160, Bytecode>,
     hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
+    address_to_hash: HashMap<H160, Vec<[u8; 4]>>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
@@ -252,6 +253,7 @@ where
             .field("env", &self.env)
             .field("code", &self.code)
             .field("hash_to_address", &self.hash_to_address)
+            .field("address_to_hash", &self.address_to_hash)
             .field("_pc", &self._pc)
             .field("pc_to_addresses", &self.pc_to_addresses)
             .field("pc_to_call_hash", &self.pc_to_call_hash)
@@ -280,6 +282,7 @@ where
             env: self.env.clone(),
             code: self.code.clone(),
             hash_to_address: self.hash_to_address.clone(),
+            address_to_hash: self.address_to_hash.clone(),
             _pc: self._pc,
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
@@ -308,7 +311,7 @@ where
 const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = true;
-const UNBOUND_CALL_THRESHOLD: usize = 10;
+const UNBOUND_CALL_THRESHOLD: usize = 3;
 
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
@@ -341,6 +344,7 @@ where
             env: Env::default(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
+            address_to_hash: HashMap::new(),
             _pc: 0,
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
@@ -392,6 +396,35 @@ where
         S: HasHashToAddress,
     {
         self.hash_to_address = state.get_hash_to_address().clone();
+        for key in self.hash_to_address.keys() {
+            let addresses = self.hash_to_address.get(key).unwrap();
+            for addr in addresses {
+                match self.address_to_hash.get_mut(addr) {
+                    Some(s) => {
+                        s.push(*key);
+                    }
+                    None => {
+                        self.address_to_hash.insert(*addr, vec![*key]);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn add_hashes(&mut self, address: H160, hashes: Vec<[u8; 4]>) {
+        self.address_to_hash.insert(address, hashes.clone());
+
+        for hash in hashes {
+            // insert if exists or create new
+            match self.hash_to_address.get_mut(&hash) {
+                Some(s) => {
+                    s.insert(address);
+                }
+                None => {
+                    self.hash_to_address.insert(hash, HashSet::from([address]));
+                }
+            }
+        }
     }
 
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
@@ -826,11 +859,15 @@ where
             && input_seq.len() >= 4
         {
             // random sample a key from hash_to_address
-            let mut keys: Vec<&[u8; 4]> = self.hash_to_address.keys().collect();
-            let selected_key = keys[hash.iter().map(|x| (*x) as usize).sum::<usize>() % keys.len()];
-            hash = selected_key.to_vec();
-            for i in 0..4 {
-                input_seq[i] = hash[i];
+            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+            match self.address_to_hash.get_mut(&input.context.code_address) {
+                None => {}
+                Some(hashes) => {
+                    let selected_key = hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
+                    for i in 0..4 {
+                        input_seq[i] = selected_key[i];
+                    }
+                }
             }
         }
 
@@ -1345,6 +1382,7 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            liquidation_percent: 0,
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),
@@ -1379,6 +1417,7 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            liquidation_percent: 0,
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),

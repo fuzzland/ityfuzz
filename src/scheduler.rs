@@ -195,7 +195,7 @@ where
 {
     fn vote(&self, state: &mut S, idx: usize) {
         let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        let mut increment = data.votes_total / data.votes_and_visits.len();
+        let mut increment = 3; //data.votes_total / data.votes_and_visits.len();
         if increment < 1 {
             increment = 1;
         }

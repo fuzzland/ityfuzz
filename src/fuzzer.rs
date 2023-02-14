@@ -194,7 +194,7 @@ where
 }
 
 #[cfg(feature = "print_txn_corpus")]
-pub static mut DUMP_FILE_COUNT: u8 = 0;
+pub static mut DUMP_FILE_COUNT: usize = 0;
 
 // implement evaluator trait for ItyFuzzer
 impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>

@@ -43,6 +43,7 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn to_string(&self) -> String;
     fn as_any(&mut self) -> &mut dyn Any;
     fn get_concolic(&self) -> Vec<Box<Expr>>;
+    fn get_size(&self) -> usize;
 }
 
 impl Debug for dyn ABI {
@@ -288,19 +289,32 @@ impl BoxedABI {
                     return MutationResult::Skipped;
                 }
                 if aarray.dynamic_size {
-                    if (state.rand_mut().below(100)) < 80 {
-                        let index: usize = state.rand_mut().next() as usize % data_len;
-                        let result = aarray.data[index].mutate_with_vm_slots(state, vm_slots);
-                        return result;
+                    match state.rand_mut().below(100) {
+                        0..=80 => {
+                            let index: usize = state.rand_mut().next() as usize % data_len;
+                            let result = aarray.data[index].mutate_with_vm_slots(state, vm_slots);
+                            return result;
+                        }
+                        81..=90 => {
+                            // increase size
+                            if state.max_size() <= aarray.data.len() {
+                                return MutationResult::Skipped;
+                            }
+                            for _ in 0..state.rand_mut().next() as usize % state.max_size() {
+                                aarray.data.push(aarray.data[0].clone());
+                            }
+                        }
+                        91..=100 => {
+                            // decrease size
+                            if aarray.data.len() < 1 {
+                                return MutationResult::Skipped;
+                            }
+                            let index: usize = state.rand_mut().next() as usize % data_len;
+                            aarray.data.remove(index);
+                        }
+                        _ => {unreachable!()}
                     }
 
-                    // increase size
-                    if state.max_size() <= aarray.data.len() {
-                        return MutationResult::Skipped;
-                    }
-                    for _ in 0..state.rand_mut().next() as usize % state.max_size() {
-                        aarray.data.push(aarray.data[0].clone());
-                    }
                 } else {
                     let index: usize = state.rand_mut().next() as usize % data_len;
                     return aarray.data[index].mutate_with_vm_slots(state, vm_slots);
@@ -375,6 +389,10 @@ impl ABI for AEmpty {
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
         Vec::new()
+    }
+
+    fn get_size(&self) -> usize {
+        0
     }
 }
 
@@ -458,6 +476,10 @@ impl ABI for A256 {
         }
         bytes
     }
+
+    fn get_size(&self) -> usize {
+        32
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -537,6 +559,10 @@ impl ABI for ADynamic {
             }
         }
         bytes
+    }
+
+    fn get_size(&self) -> usize {
+        self.data.len() + 32
     }
 }
 
@@ -670,7 +696,32 @@ impl ABI for AArray {
     fn set_bytes(&mut self, bytes: Vec<u8>) {
         // TODO: here we need to able to perform
         // the inverse of get_bytes
-        todo!()
+
+        if self.dynamic_size {
+            // to usize
+            let size: usize = bytes[0..32].iter().fold(0, |acc, x| (acc << 8) + *x as usize);
+            if size != self.data.len() {
+                unreachable!("Array size mismatch");
+            }
+        }
+
+        let mut offset = if self.dynamic_size { 32 } else { 0 };
+        //
+        // let head_offsets = vec![];
+        // let tail_offsets = vec![];
+        //
+        // for mut item in self.data {
+        //     if item.is_static() {
+        //         // let len = item.b.get_size();
+        //         // let mut new_bytes = vec![0; len];
+        //         // new_bytes.copy_from_slice(&bytes[offset..offset + len]);
+        //         // item.b.set_bytes(new_bytes);
+        //         // head_offsets.push();
+        //     } else {
+        //
+        //     }
+        // }
+
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -768,6 +819,15 @@ impl ABI for AArray {
             }
         }
         bytes
+    }
+
+    fn get_size(&self) -> usize {
+        let data_size = self.data.iter().map(|x| x.b.get_size()).sum::<usize>();
+        if self.dynamic_size {
+            32 + data_size
+        } else {
+            data_size
+        }
     }
 }
 
@@ -897,6 +957,14 @@ fn get_abi_type_basic(
                 let len = abi_name[3..].parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
                 return get_abi_type_basic("int", len / 8, with_address);
+            } else if abi_name == "unknown" {
+                return Box::new(AUnknown {
+                    concrete_type: BoxedABI {
+                        b: get_abi_type_basic("uint", 32, with_address),
+                        function: [0; 4],
+                    },
+                    size: 0,
+                });
             } else if abi_name.starts_with("bytes") {
                 let len = abi_name[5..].parse::<usize>().unwrap();
                 return get_abi_type_basic("bytes", len, with_address);
@@ -948,6 +1016,10 @@ impl ABI for AUnknown {
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
         panic!("[Concolic] sAUnknown not supported")
+    }
+
+    fn get_size(&self) -> usize {
+        self.concrete_type.b.get_size()
     }
 }
 

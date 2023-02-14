@@ -32,6 +32,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
@@ -87,6 +88,10 @@ where
                 H160::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
                 H160::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap(),
                 H160::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
+                // uniswap router
+                H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+                // pancake router
+                H160::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
             ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),
@@ -166,16 +171,22 @@ where
                         if !self.$stor.contains_key(&address) {
                             let storage = self
                                 .endpoint
-                                .$func(address)
-                                .unwrap_or(Arc::new(HashMap::new()));
-                            self.$stor.insert(address, storage);
+                                .$func(address);
+                            if storage.is_some() {
+                                self.$stor.insert(address, storage.unwrap());
+                            }
                         }
-                        self.$stor
-                            .get(&address)
-                            .unwrap()
-                            .get(&$key)
-                            .unwrap_or(&U256::zero())
-                            .clone()
+                        match self.$stor
+                                .get(&address) {
+                            Some(v) => v.get(&$key).unwrap_or(&U256::zero()).clone(),
+                            None => {
+                                self.endpoint.get_contract_slot(
+                                    address,
+                                    slot_idx,
+                                    force_cache!(self.locs, slot_idx),
+                                )
+                            },
+                        }
                     }};
                     () => {};
                 }
@@ -237,57 +248,67 @@ where
                 {
                     let abi = self.endpoint.fetch_abi(address_h160);
                     self.loaded_code.insert(address_h160);
-                    match abi {
+
+                    let parsed_abi = match abi {
                         Some(ref abi_ins) => {
-                            state.add_address(&address_h160);
-                            let abis = ContractLoader::parse_abi_str(abi_ins);
-                            #[cfg(feature = "flashloan_v2")]
-                            match host.flashloan_middleware {
-                                Some(ref middleware) => {
-                                    let blacklists = middleware
-                                        .deref()
-                                        .borrow_mut()
-                                        .on_contract_insertion(&address_h160, &abis, state);
-                                    for addr in blacklists {
-                                        self.add_blacklist(addr);
-                                    }
-                                }
-                                None => {}
+                            ContractLoader::parse_abi_str(abi_ins)
+                        }
+                        None => {
+                            fetch_abi_heimdall(hex::encode(contract_code.bytes()))
+                        }
+                    };
+
+                    // set up host
+                    host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
+                    state.add_address(&address_h160);
+
+                    // notify flashloan and blacklisting flashloan addresses
+                    #[cfg(feature = "flashloan_v2")]
+                    match host.flashloan_middleware {
+                        Some(ref middleware) => {
+                            let blacklists = middleware
+                                .deref()
+                                .borrow_mut()
+                                .on_contract_insertion(&address_h160, &parsed_abi, state);
+                            for addr in blacklists {
+                                self.add_blacklist(addr);
                             }
-                            abis.iter().filter(|v| !v.is_constructor).for_each(|abi| {
-                                #[cfg(not(feature = "fuzz_static"))]
-                                if abi.is_static {
-                                    return;
-                                }
-
-                                let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                                abi_instance
-                                    .set_func_with_name(abi.function, abi.function_name.clone());
-                                let input = EVMInput {
-                                    caller: state.get_rand_caller(),
-                                    contract: address_h160.clone(),
-                                    data: Some(abi_instance),
-                                    sstate: StagedVMState::new_uninitialized(),
-                                    sstate_idx: 0,
-                                    txn_value: if abi.is_payable {
-                                        Some(U256::zero())
-                                    } else {
-                                        None
-                                    },
-                                    step: false,
-
-                                    env: Default::default(),
-                                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                                    #[cfg(feature = "flashloan_v2")]
-                                    liquidation_percent: 0,
-                                    #[cfg(any(test, feature = "debug"))]
-                                    direct_data: Default::default(),
-                                };
-                                add_corpus(host, state, &input);
-                            });
                         }
                         None => {}
                     }
+
+                    // add abi to corpus
+                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
+                        #[cfg(not(feature = "fuzz_static"))]
+                        if abi.is_static {
+                            return;
+                        }
+
+                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                        abi_instance
+                            .set_func_with_name(abi.function, abi.function_name.clone());
+                        let input = EVMInput {
+                            caller: state.get_rand_caller(),
+                            contract: address_h160.clone(),
+                            data: Some(abi_instance),
+                            sstate: StagedVMState::new_uninitialized(),
+                            sstate_idx: 0,
+                            txn_value: if abi.is_payable {
+                                Some(U256::zero())
+                            } else {
+                                None
+                            },
+                            step: false,
+
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent: 0,
+                            #[cfg(any(test, feature = "debug"))]
+                            direct_data: Default::default(),
+                        };
+                        add_corpus(host, state, &input);
+                    });
                 }
 
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
