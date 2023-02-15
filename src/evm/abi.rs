@@ -963,7 +963,7 @@ fn get_abi_type_basic(
                         b: get_abi_type_basic("uint", 32, with_address),
                         function: [0; 4],
                     },
-                    size: 0,
+                    size: 1,
                 });
             } else if abi_name.starts_with("bytes") {
                 let len = abi_name[5..].parse::<usize>().unwrap();
