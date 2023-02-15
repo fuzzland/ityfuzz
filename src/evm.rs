@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 
 use std::i64::MAX;
@@ -46,7 +47,7 @@ pub struct VMState {
 impl VMState {
     pub fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
-        for i in self.state.iter() {
+        for i in self.state.iter().sorted_by_key(|k| k.0) {
             i.0.0.hash(&mut s);
             for j in i.1.iter() {
                 j.0.hash(&mut s);
