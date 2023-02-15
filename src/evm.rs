@@ -215,12 +215,16 @@ impl Host for FuzzHost {
         }
 
         unsafe {
-            let all_mutation_ops = self.middlewares.iter_mut().map(|m| m.on_step(interp)).collect::<Vec<_>>();
-            all_mutation_ops.iter().for_each(
-                |ops| {
-                    ops.iter().for_each(|op| {op.execute(self);})
-                }
-            );
+            let all_mutation_ops = self
+                .middlewares
+                .iter_mut()
+                .map(|m| m.on_step(interp))
+                .collect::<Vec<_>>();
+            all_mutation_ops.iter().for_each(|ops| {
+                ops.iter().for_each(|op| {
+                    op.execute(self);
+                })
+            });
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
                 0x57 => {
