@@ -14,9 +14,9 @@ pub struct OnChainConfig {
     //
     // code_cache: HashMap<H160, Bytecode>,
     // slot_cache: HashMap<(H160, U256), U256>,
-    client: reqwest::blocking::Client,
-    chain_id: u32,
-    block_number: String,
+    pub client: reqwest::blocking::Client,
+    pub chain_id: u32,
+    pub block_number: String,
 }
 
 impl OnChainConfig {

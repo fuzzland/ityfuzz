@@ -25,6 +25,7 @@ use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
+use crate::config::Config;
 use primitive_types::H160;
 
 struct ABIConfig {
@@ -37,7 +38,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn df_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
+pub fn df_fuzzer(config: Config<VMInput, FuzzState>) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = QueueScheduler::new();
@@ -60,13 +61,8 @@ pub fn df_fuzzer(contracts_glob: &String, target_contract: Option<String>) {
     let deployer = generate_random_address();
     let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(FuzzHost::new(), deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
-    let contract_info = if let Some(target_contract) = target_contract {
-        ContractLoader::from_glob_target(contracts_glob, &target_contract).contracts
-    } else {
-        ContractLoader::from_glob(contracts_glob).contracts
-    };
     state.initialize(
-        contract_info,
+        config.contract_info,
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,

@@ -1,2 +1,2 @@
-mod endpoints;
-mod onchain;
+pub mod endpoints;
+pub mod onchain;
