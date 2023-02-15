@@ -6,9 +6,9 @@ use bytes::Bytes;
 use libafl::inputs::Input;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
 
+use crate::state::HasItyState;
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
-use crate::state::HasItyState;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
@@ -74,12 +74,8 @@ impl VMInputT for VMInput {
         S: State + HasRand + HasMaxSize + HasItyState,
     {
         match self.data {
-            Some(ref mut data) => {
-                data.mutate(state)
-            }
-            None => {
-                MutationResult::Skipped
-            }
+            Some(ref mut data) => data.mutate(state),
+            None => MutationResult::Skipped,
         }
     }
 
@@ -145,7 +141,7 @@ impl Input for VMInput {
     // fn to_file<P>(&self, path: P) -> Result<(), libafl::Error>
     //     where
     //         P: AsRef<std::path::Path>, {
-        
+
     // }
 
     fn wrapped_as_testcase(&mut self) {

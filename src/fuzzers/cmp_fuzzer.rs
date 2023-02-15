@@ -1,11 +1,13 @@
 use std::str::FromStr;
 
 use crate::{
+    contract_utils::FIX_DEPLOYER,
     evm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::VMInput,
-    mutator::FuzzMutator, rand_utils::fixed_address, contract_utils::FIX_DEPLOYER,
+    mutator::FuzzMutator,
+    rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};

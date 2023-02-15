@@ -4,14 +4,14 @@ use std::collections::HashMap;
 
 use std::fs::File;
 
+use primitive_types::H160;
 use std::io::Read;
 use std::path::Path;
-use primitive_types::H160;
 
 extern crate crypto;
 
 use crate::abi::get_abi_type_boxed_with_address;
-use crate::rand_utils::{generate_random_address, fixed_address};
+use crate::rand_utils::{fixed_address, generate_random_address};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
@@ -102,7 +102,7 @@ impl ContractLoader {
             abi: vec![],
             code: vec![],
             constructor_args: vec![], // todo: fill this
-            deployed_address: generate_random_address()
+            deployed_address: generate_random_address(),
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {
@@ -117,7 +117,10 @@ impl ContractLoader {
                         result.code = Self::parse_hex_file(&path);
                     } else if path.to_str().unwrap().ends_with(".address") {
                         // this is deployed address
-                        result.deployed_address.0.clone_from_slice(Self::parse_hex_file(&path).as_slice());
+                        result
+                            .deployed_address
+                            .0
+                            .clone_from_slice(Self::parse_hex_file(&path).as_slice());
                     } else {
                         println!("Found unknown file: {:?}", path.display())
                     }
@@ -127,7 +130,8 @@ impl ContractLoader {
         }
 
         if let Some(abi) = result.abi.iter().find(|abi| abi.is_constructor) {
-            let mut abi_instance = get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
+            let mut abi_instance =
+                get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
             abi_instance.set_func(abi.function);
             // since this is constructor args, we ingore the function hash
             // Note (Shangyin): this may still non-deployable, need futher improvement

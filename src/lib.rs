@@ -10,6 +10,7 @@ pub mod fuzzer;
 pub mod fuzzers;
 pub mod indexed_corpus;
 pub mod input;
+pub mod middleware;
 pub mod mutation_utils;
 pub mod mutator;
 pub mod oracle;
@@ -18,6 +19,5 @@ pub mod scheduler;
 pub mod state;
 pub mod state_input;
 pub mod types;
-pub mod middleware;
 
 use crate::evm::{EVMExecutor, VMState};

@@ -1,5 +1,6 @@
 use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, T256};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
+use crate::state::HasItyState;
 use bytes::Bytes;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
@@ -11,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::DerefMut;
-use crate::state::HasItyState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -448,7 +448,10 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2].to_string(), with_address),
+                    b: get_abi_type(
+                        &abi_name[..abi_name_str.len() - 2].to_string(),
+                        with_address
+                    ),
                     function: [0; 4]
                 };
                 1
@@ -479,14 +482,24 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
     get_abi_type_basic(abi_name.as_str(), 0, with_address)
 }
 
-fn get_abi_type_basic(abi_name: &str, abi_bs: usize, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
+fn get_abi_type_basic(
+    abi_name: &str,
+    abi_bs: usize,
+    with_address: &Option<Vec<u8>>,
+) -> Box<dyn ABI> {
     match abi_name {
         "uint" | "int" => Box::new(A256 {
             data: vec![0; abi_bs],
             is_address: false,
         }),
-        "address" => Box::new(A256 { data: with_address.to_owned().unwrap_or(vec![0; 20]), is_address: true }),
-        "bool" => Box::new(A256 { data: vec![0; 1], is_address: false }),
+        "address" => Box::new(A256 {
+            data: with_address.to_owned().unwrap_or(vec![0; 20]),
+            is_address: true,
+        }),
+        "bool" => Box::new(A256 {
+            data: vec![0; 1],
+            is_address: false,
+        }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
             multiplier: 32,

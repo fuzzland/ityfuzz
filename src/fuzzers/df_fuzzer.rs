@@ -8,13 +8,13 @@ use crate::{
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
+use libafl::schedulers::QueueScheduler;
 use libafl::stages::CalibrationStage;
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     stages::StdPowerMutationalStage,
     Fuzzer,
 };
-use libafl::schedulers::QueueScheduler;
 
 use crate::contract_utils::{set_hash, ContractLoader};
 use crate::evm::{CMP_MAP, READ_MAP, WRITE_MAP};
