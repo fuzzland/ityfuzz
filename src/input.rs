@@ -142,6 +142,12 @@ impl Input for VMInput {
         format!("input-{:06}.bin", idx)
     }
 
+    // fn to_file<P>(&self, path: P) -> Result<(), libafl::Error>
+    //     where
+    //         P: AsRef<std::path::Path>, {
+        
+    // }
+
     fn wrapped_as_testcase(&mut self) {
         // todo!()
     }
