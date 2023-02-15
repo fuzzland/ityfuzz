@@ -8,13 +8,14 @@ use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
 
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
+use crate::state::HasItyState;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT: Input {
     fn to_bytes(&self) -> Bytes;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize;
+        S: State + HasRand + HasMaxSize + HasItyState;
     fn get_caller_mut(&mut self) -> &mut H160;
     fn get_caller(&self) -> H160;
     fn set_caller(&mut self, caller: H160);
@@ -26,20 +27,26 @@ pub trait VMInputT: Input {
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;
+    fn get_txn_value(&self) -> usize;
+    fn set_txn_value(&mut self, v: usize);
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VMInput {
     pub caller: H160,
     pub contract: H160,
-    pub data: BoxedABI,
+    pub data: Option<BoxedABI>,
     pub sstate: StagedVMState,
     pub sstate_idx: usize,
+    pub txn_value: usize,
 }
 
 impl HasLen for VMInput {
     fn len(&self) -> usize {
-        self.data.get_bytes().len()
+        match self.data {
+            Some(ref d) => d.get_bytes().len(),
+            None => 0,
+        }
     }
 }
 
@@ -56,14 +63,24 @@ impl std::fmt::Debug for VMInput {
 
 impl VMInputT for VMInput {
     fn to_bytes(&self) -> Bytes {
-        self.data.get_bytes()
+        match self.data {
+            Some(ref d) => d.get_bytes(),
+            None => Bytes::new(),
+        }
     }
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize,
+        S: State + HasRand + HasMaxSize + HasItyState,
     {
-        self.data.mutate(state)
+        match self.data {
+            Some(ref mut data) => {
+                data.mutate(state)
+            }
+            None => {
+                MutationResult::Skipped
+            }
+        }
     }
 
     fn get_caller_mut(&mut self) -> &mut H160 {
@@ -110,12 +127,26 @@ impl VMInputT for VMInput {
     fn get_staged_state(&self) -> &StagedVMState {
         &self.sstate
     }
+
+    fn get_txn_value(&self) -> usize {
+        self.txn_value
+    }
+
+    fn set_txn_value(&mut self, v: usize) {
+        self.txn_value = v;
+    }
 }
 
 impl Input for VMInput {
     fn generate_name(&self, idx: usize) -> String {
         format!("input-{:06}.bin", idx)
     }
+
+    // fn to_file<P>(&self, path: P) -> Result<(), libafl::Error>
+    //     where
+    //         P: AsRef<std::path::Path>, {
+        
+    // }
 
     fn wrapped_as_testcase(&mut self) {
         // todo!()

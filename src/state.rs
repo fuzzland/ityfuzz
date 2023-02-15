@@ -10,10 +10,8 @@ use bytes::Bytes;
 use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
-
-use libafl::prelude::{
-    current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, Scheduler, SerdeAnyMap, StdRand,
-};
+use libafl::prelude::RandomSeed;
+use libafl::prelude::{current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap, StdRand};
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -28,17 +26,18 @@ use std::path::Path;
 use std::time::Duration;
 
 const ACCOUNT_AMT: u8 = 2;
+const CONTRACT_AMT: u8 = 2;
 
 // Note: Probably a better design is to use StdState with a custom corpus?
 // What are other metadata we need?
 // shou: may need intermediate info for future adding concolic execution
 pub trait HasItyState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>;
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>;
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>;
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
 }
 
@@ -69,13 +68,16 @@ pub struct FuzzState {
     named_metadata: NamedSerdeAnyMap,
     execution_result: ExecutionResult,
     default_callers: Vec<H160>,
-    pub rand_generator: StdRand,
+    pub rand_generator: RomuDuoJrRand,
+    pub rand_generator2: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], H160>,
 }
 
 impl FuzzState {
     pub fn new() -> Self {
+        let seed = current_nanos();
+        println!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
             #[cfg(not(feature = "evaluation"))]
@@ -88,7 +90,8 @@ impl FuzzState {
             named_metadata: Default::default(),
             execution_result: ExecutionResult::empty_result(),
             default_callers: vec![],
-            rand_generator: StdRand::with_seed(current_nanos()),
+            rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
+            rand_generator2: RomuDuoJrRand::with_seed(1),
             max_size: 1500,
             hash_to_address: Default::default(),
         }
@@ -109,6 +112,7 @@ impl FuzzState {
         I: Input + VMInputT,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
+        self.setup_contract_callers(CONTRACT_AMT as usize, executor);
         self.initialize_corpus(
             contracts,
             executor,
@@ -133,6 +137,7 @@ impl FuzzState {
             let deployed_address = match executor.deploy(
                 Bytecode::new_raw(Bytes::from(contract.code)),
                 Bytes::from(contract.constructor_args),
+                generate_random_address()
             ) {
                 Some(addr) => addr,
                 None => {
@@ -155,9 +160,27 @@ impl FuzzState {
                 let input = VMInput {
                     caller: self.get_rand_caller(),
                     contract: deployed_address,
-                    data: abi_instance,
+                    data: Some(abi_instance),
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
+                    txn_value: 0
+                };
+                let mut tc = Testcase::new(input);
+                tc.set_exec_time(Duration::from_secs(0));
+                let idx = self.txn_corpus.add(tc).expect("failed to add");
+                scheduler
+                    .on_add(self, idx)
+                    .expect("failed to call scheduler on_add");
+            }
+            // add transfer txn
+            {
+                let input = VMInput {
+                    caller: self.get_rand_caller(),
+                    contract: deployed_address,
+                    data: None,
+                    sstate: StagedVMState::new_uninitialized(),
+                    sstate_idx: 0,
+                    txn_value: 1
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -182,6 +205,14 @@ impl FuzzState {
     pub fn setup_default_callers(&mut self, amount: usize) {
         for _ in 0..amount {
             self.default_callers.push(generate_random_address());
+        }
+    }
+
+    pub fn setup_contract_callers<I, S>(&mut self, amount: usize, executor: &mut EVMExecutor<I, S>) {
+        for _ in 0..amount {
+            let address = generate_random_address();
+            self.default_callers.push(address);
+            executor.host.set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
         }
     }
 }
@@ -248,8 +279,8 @@ impl HasRand for InfantStateState {
 
 impl HasItyState for FuzzState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -265,8 +296,8 @@ impl HasItyState for FuzzState {
     }
 
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = self
             .infant_states_state

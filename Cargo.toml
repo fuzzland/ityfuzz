@@ -16,6 +16,8 @@ default = ["cmp", "dataflow", "evaluation", "deployer_is_attacker", "record_inst
 cmp = []
 dataflow = []
 evaluation = []
+ondisk_corpus = []
+# need to turn off when running DV contracts
 deployer_is_attacker = []
 record_instruction_coverage = []
 
@@ -34,3 +36,4 @@ z3 = "0.11.2"
 z3-sys = "0.7.1"
 glob = "0.3.0"
 rust-crypto = "0.2"
+itertools = "0.10.2"

@@ -38,24 +38,34 @@ where
             let concrete = state.get_infant_state(self.infant_scheduler).unwrap();
             input.set_staged_state(concrete.1, concrete.0);
         }
-        match state.rand_mut().below(10) {
-            0 => {
-                // mutate the caller
-                let caller = state.get_rand_caller();
-                if caller == input.get_caller() {
-                    return Ok(MutationResult::Skipped);
+        for i in 0..state.rand_mut().below(10) {
+            match state.rand_mut().below(10) {
+                0 => {
+                    // mutate the caller
+                    let caller = state.get_rand_caller();
+                    if caller == input.get_caller() {
+                        return Ok(MutationResult::Skipped);
+                    }
+                    input.set_caller(caller);
                 }
-                input.set_caller(caller);
+                1 => {
+                    // cross over infant state
+                    // we need power schedule here for infant states
+                    let mutant = state.get_infant_state(self.infant_scheduler).unwrap();
+                    input.set_staged_state(mutant.1, mutant.0);
+                }
+                2 => {
+                    if state.rand_mut().next() % 100 == 0 {
+                        input.set_txn_value(state.rand_mut().next() as usize);
+                    } else {
+                        input.set_txn_value(0);
+                    }
+                }
+                _ => {
+                    input.mutate(state);
+                }
             }
-            1 => {
-                // cross over infant state
-                // we need power schedule here for infant states
-                let mutant = state.get_infant_state(self.infant_scheduler).unwrap();
-                input.set_staged_state(mutant.1, mutant.0);
-            }
-            _ => {
-                input.mutate(state);
-            }
+
         }
         return Ok(MutationResult::Mutated);
     }

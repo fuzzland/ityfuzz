@@ -1,6 +1,9 @@
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 
 use std::i64::MAX;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -42,6 +45,20 @@ pub struct VMState {
 }
 
 impl VMState {
+    pub fn get_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        for i in self.state.iter().sorted_by_key(|k| k.0) {
+            i.0.0.hash(&mut s);
+            for j in i.1.iter() {
+                j.0.hash(&mut s);
+                j.1.hash(&mut s);
+            }
+        }
+        s.finish()
+    }
+}
+
+impl VMState {
     pub(crate) fn new() -> Self {
         Self {
             state: HashMap::new(),
@@ -77,6 +94,7 @@ pub struct FuzzHost {
     hash_to_address: HashMap<[u8; 4], H160>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
+    pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -87,10 +105,11 @@ pub struct FuzzHost {
 // this return type is never used as we disabled gas
 const ControlLeak: Return = Return::FatalExternalError;
 const ACTIVE_MATCH_EXT_CALL: bool = true;
-const CONTROL_LEAK_DETECTION: bool = true;
+const CONTROL_LEAK_DETECTION: bool = false;
+const UNBOUND_CALL_THRESHOLD: usize = 10;
 
-// if a PC transfers control to >10 addresses, we consider call at this PC to be unbounded
-const CONTROL_LEAK_THRESHOLD: usize = 10;
+// if a PC transfers control to >1 addresses, we consider call at this PC to be unbounded
+const CONTROL_LEAK_THRESHOLD: usize = 1;
 
 impl FuzzHost {
     pub fn new() -> Self {
@@ -101,6 +120,7 @@ impl FuzzHost {
             hash_to_address: HashMap::new(),
             _pc: 0,
             pc_to_addresses: HashMap::new(),
+            pc_to_call_hash: HashMap::new(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -118,12 +138,39 @@ impl FuzzHost {
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
         self.code.insert(address, code.to_analysed::<LatestSpec>());
     }
+
+    #[cfg(feature = "record_instruction_coverage")]
+    fn record_instruction_coverage(&mut self) {
+                println!(
+                    "coverage: {} out of {:?}",
+                    self.pc_coverage.iter().fold(0, |acc, x| acc + {
+                        if self.total_instr.contains_key(x.0) {
+                            println!("{:?}", x.1);
+                            x.1.len()
+                        } else {
+                            0
+                        }
+                    }),
+                    self
+                        .total_instr
+                        .keys()
+                        .map(|k| (
+                            self
+                                .pc_coverage
+                                .get(k)
+                                .unwrap_or(&Default::default())
+                                .len(),
+                            self.total_instr.get(k).unwrap()
+                        ))
+                        .collect::<Vec<_>>()
+                );
+        }
 }
 
 macro_rules! process_rw_key {
     ($key:ident) => {
         if $key > U256::from(RW_SKIPPER_PERCT_IDX) {
-            $key >>= 4;
+            // $key >>= 4;
             $key %= U256::from(RW_SKIPPER_AMT);
             $key += U256::from(RW_SKIPPER_PERCT_IDX);
             $key.as_usize() % MAP_SIZE
@@ -135,7 +182,7 @@ macro_rules! process_rw_key {
 
 macro_rules! u256_to_u8 {
     ($key:ident) => {
-        (($key >> 4) % 255).as_u64() as u8
+        (($key >> 4) % 254).as_u64() as u8
     };
 }
 impl Host for FuzzHost {
@@ -162,6 +209,16 @@ impl Host for FuzzHost {
                     if jmp_map[idx] < 255 {
                         jmp_map[idx] += 1;
                     }
+
+                    #[cfg(feature = "cmp")]
+                    {
+                        let idx = (interp.program_counter()) % MAP_SIZE;
+                        if jump_dest != 1 {
+                            CMP_MAP[idx] = U256::zero();
+                        } else {
+                            CMP_MAP[idx] = U256::from(1);
+                        }
+                    }
                 }
 
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
@@ -171,7 +228,8 @@ impl Host for FuzzHost {
                     let value = interp.stack.peek(1).expect("stack underflow");
                     {
                         let mut key = interp.stack.peek(0).expect("stack underflow");
-                        WRITE_MAP[process_rw_key!(key)] = u256_to_u8!(value);
+                        let v = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = v;
                     }
                     let res = self.sload(
                         interp.contract.address,
@@ -193,7 +251,11 @@ impl Host for FuzzHost {
                     // LT, SLT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 > v2 { v1 - v2 } else { U256::zero() };
+                    let abs_diff = if v1 >= v2 {
+                        if v1 - v2 != U256::zero() {
+                            (v1 - v2)
+                        } else { U256::from(1) }
+                    } else { U256::zero() };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -205,7 +267,23 @@ impl Host for FuzzHost {
                     // GT, SGT
                     let v1 = interp.stack.peek(0).expect("stack underflow");
                     let v2 = interp.stack.peek(1).expect("stack underflow");
-                    let abs_diff = if v1 < v2 { v2 - v1 } else { U256::zero() };
+                    let abs_diff = if v1 <= v2 {
+                        if v2 - v1 != U256::zero() {
+                            (v2 - v1)
+                        } else { U256::from(1) }
+                    } else { U256::zero() };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
+
+                #[cfg(feature = "cmp")]
+                0x14 => {
+                    // EQ
+                    let v1 = interp.stack.peek(0).expect("stack underflow");
+                    let v2 = interp.stack.peek(1).expect("stack underflow");
+                    let abs_diff = if v1 < v2 { (v2 - v1) % (U256::max_value() - 1) + 1 } else { (v1 - v2) % (U256::max_value() - 1) + 1 };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -293,7 +371,15 @@ impl Host for FuzzHost {
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }
 
-    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {}
+    fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
+
+        if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
+            #[cfg(feature = "record_instruction_coverage")]
+            self.record_instruction_coverage();
+            println!("shit");
+            panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
+        }
+    }
 
     fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
@@ -317,6 +403,26 @@ impl Host for FuzzHost {
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
+
+        let mut input_seq = input.input.to_vec();
+        // check unbound call
+        if !self.pc_to_call_hash.contains_key(&self._pc) {
+            self.pc_to_call_hash.insert(self._pc, HashSet::new());
+        }
+        self.pc_to_call_hash.get_mut(&self._pc).unwrap().insert(hash.to_vec());
+        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD && input_seq.len() >= 4 {
+            // random sample a key from hash_to_address
+            let mut keys: Vec<&[u8; 4]> = self.hash_to_address.keys().collect();
+            let selected_key = keys[hash.iter().map(|x| (*x) as usize).sum::<usize>() % keys.len()];
+            hash = selected_key.to_vec();
+            for i in 0..4 {
+                input_seq[i] = hash[i];
+            }
+        }
+
+        let input_bytes = Bytes::from(input_seq);
+
+        // find the contract wrt the hash
         let contract_loc_option = self.hash_to_address.get(hash.as_slice());
 
         if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
@@ -324,6 +430,7 @@ impl Host for FuzzHost {
             if !self.pc_to_addresses.contains_key(&self._pc) {
                 self.pc_to_addresses.insert(self._pc, HashSet::new());
             }
+
             if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
@@ -336,14 +443,20 @@ impl Host for FuzzHost {
         if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
             let mut interp = Interpreter::new::<LatestSpec>(
                 Contract::new_with_context::<LatestSpec>(
-                    input.input.clone(),
+                    input_bytes,
                     self.code.get(contract_loc_option.unwrap()).unwrap().clone(),
                     &input.context,
                 ),
                 1e10 as u64,
             );
+
             let ret = interp.run::<FuzzHost, LatestSpec>(self);
             return (ret, Gas::new(0), interp.return_value());
+        }
+
+        // transfer txn
+        if hash == [0x00, 0x00, 0x00, 0x00] {
+            return (Continue, Gas::new(0), Bytes::new());
         }
 
         // default behavior
@@ -351,7 +464,7 @@ impl Host for FuzzHost {
             Some(code) => {
                 let mut interp = Interpreter::new::<LatestSpec>(
                     Contract::new_with_context::<LatestSpec>(
-                        input.input.clone(),
+                        input_bytes,
                         code.clone(),
                         &input.context,
                     ),
@@ -433,6 +546,8 @@ where
                 input.to_bytes(),
                 // todo(@shou !important) do we need to increase pc?
                 Some((recovering_stack, post_exec.1 + 1)),
+                // todo(@shou !important) whats value
+                0
             );
             last_output = r.output;
             if r.ret == Return::Return {
@@ -464,8 +579,7 @@ where
         };
     }
 
-    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes) -> Option<H160> {
-        let deployed_address = rand_utils::generate_random_address();
+    pub fn deploy(&mut self, code: Bytecode, constructor_args: Bytes, deployed_address: H160) -> Option<H160> {
         let deployer = Contract::new::<LatestSpec>(
             constructor_args,
             code,
@@ -475,11 +589,16 @@ where
         );
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        #[cfg(feature = "evaluation")]
+        {
+            self.host.pc_coverage = Default::default();
+        }
         if r != Return::Return {
             println!("deploy failed: {:?}", r);
             return None;
         }
         assert_eq!(r, Return::Return);
+        println!("contract = {:?}", hex::encode(interp.return_value()));
         self.host.set_code(
             deployed_address,
             Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
@@ -494,17 +613,23 @@ where
     }
 
     pub fn count_instructions(bytecode: &Bytecode) -> usize {
+        // println!("bytecode = {:?}", bytecode.len());
         let mut count: usize = 0;
         let mut i = 0;
         let bytes = bytecode.bytes();
+        let mut complete_bytes = vec![];
+
         while i < bytes.len() {
             let op = *bytes.get(i).unwrap();
+            complete_bytes.push(i);
             i += 1;
             count += 1;
             if op >= 0x60 && op <= 0x7f {
                 i += op as usize - 0x5f;
             }
         }
+        // println!("count = {:?}", count);
+        // println!("complete bytes: {:?}", complete_bytes);
         count
     }
 
@@ -514,12 +639,13 @@ where
         caller: H160,
         state: &VMState,
         data: Bytes,
+        value: usize,
         _observers: &mut OT,
     ) -> ExecutionResult
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(contract_address, caller, state, data, None);
+        let r = self.execute_from_pc(contract_address, caller, state, data, None, value);
         match r.ret {
             ControlLeak => {
                 self.host.data.post_execution.push((r.stack, r.pc));
@@ -527,35 +653,12 @@ where
             _ => {}
         }
         #[cfg(feature = "record_instruction_coverage")]
-        {
-            if random::<i32>() % 10000 == 0 {
-                println!(
-                    "coverage: {} out of {:?}",
-                    self.host.pc_coverage.iter().fold(0, |acc, x| acc + {
-                        if self.host.total_instr.contains_key(x.0) {
-                            x.1.len()
-                        } else {
-                            0
-                        }
-                    }),
-                    self.host
-                        .total_instr
-                        .keys()
-                        .map(|k| (
-                            self.host
-                                .pc_coverage
-                                .get(k)
-                                .unwrap_or(&Default::default())
-                                .len(),
-                            self.host.total_instr.get(k).unwrap()
-                        ))
-                        .collect::<Vec<_>>()
-                );
-            }
+        if random::<i32>() % 10000 == 0 {
+            self.host.record_instruction_coverage();
         }
         return ExecutionResult {
             output: r.output,
-            reverted: r.ret != Return::Return,
+            reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
             new_state: StagedVMState::new_with_state(r.new_state),
         };
     }
@@ -567,6 +670,7 @@ where
         state: &VMState,
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
+        value: usize
     ) -> IntermediateExecutionResult {
         self.host.data = state.clone();
         let call = Contract::new::<LatestSpec>(
@@ -578,7 +682,7 @@ where
                 .clone(),
             contract_address,
             caller,
-            U256::from(0),
+            U256::from(value),
         );
         let mut new_bytecode: Option<*const u8> = None;
         let mut new_pc: Option<usize> = None;
