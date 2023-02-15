@@ -7,7 +7,7 @@ use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
 use bytes::Bytes;
-use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
+use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::RandomSeed;
@@ -33,11 +33,11 @@ const CONTRACT_AMT: u8 = 2;
 // shou: may need intermediate info for future adding concolic execution
 pub trait HasItyState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>;
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>;
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>;
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
 }
 
@@ -58,9 +58,9 @@ pub trait HasExecutionResult {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FuzzState {
     infant_states_state: InfantStateState,
-    #[cfg(not(feature = "ondisk_corpus"))]
+    #[cfg(not(feature = "evaluation"))]
     txn_corpus: InMemoryCorpus<VMInput>,
-    #[cfg(feature = "ondisk_corpus")]
+    #[cfg(feature = "evaluation")]
     txn_corpus: OnDiskCorpus<VMInput>,
     solutions: OnDiskCorpus<VMInput>,
     executions: usize,
@@ -80,9 +80,9 @@ impl FuzzState {
         println!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
-            #[cfg(not(feature = "ondisk_corpus"))]
+            #[cfg(not(feature = "evaluation"))]
             txn_corpus: InMemoryCorpus::new(),
-            #[cfg(feature = "ondisk_corpus")]
+            #[cfg(feature = "evaluation")]
             txn_corpus: OnDiskCorpus::new(Path::new("corpus")).unwrap(),
             solutions: OnDiskCorpus::new(Path::new("solutions")).unwrap(),
             executions: 0,
@@ -279,8 +279,8 @@ impl HasRand for InfantStateState {
 
 impl HasItyState for FuzzState {
     fn get_infant_state<SC>(&mut self, scheduler: &SC) -> Option<(usize, StagedVMState)>
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -296,8 +296,8 @@ impl HasItyState for FuzzState {
     }
 
     fn add_infant_state<SC>(&mut self, state: &StagedVMState, scheduler: &SC)
-    where
-        SC: Scheduler<StagedVMState, InfantStateState>,
+        where
+            SC: Scheduler<StagedVMState, InfantStateState>,
     {
         let idx = self
             .infant_states_state
@@ -363,9 +363,9 @@ impl HasMetadata for FuzzState {
 }
 
 impl HasCorpus<VMInput> for FuzzState {
-    #[cfg(not(feature = "ondisk_corpus"))]
+    #[cfg(not(feature = "evaluation"))]
     type Corpus = InMemoryCorpus<VMInput>;
-    #[cfg(feature = "ondisk_corpus")]
+    #[cfg(feature = "evaluation")]
     type Corpus = OnDiskCorpus<VMInput>;
 
     fn corpus(&self) -> &Self::Corpus {
