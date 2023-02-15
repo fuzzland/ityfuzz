@@ -34,14 +34,14 @@ impl Middleware for OnChain {
                 let slot_idx = interp.stack.peek(0).unwrap();
                 let address = interp.contract.address;
                 if self.loaded_data.contains(&(address, slot_idx)) {
-                    return vec![];
+                    vec![]
                 } else {
                     self.loaded_data.insert((address, slot_idx));
-                    return vec![UpdateSlot(
+                    vec![UpdateSlot(
                         address,
                         slot_idx,
                         self.endpoint.get_contract_slot(address, slot_idx),
-                    )];
+                    )]
                 }
             }
 
@@ -49,17 +49,17 @@ impl Middleware for OnChain {
                 let address = interp.stack.peek(1).unwrap();
                 let address_h160 = convert_u256_to_h160(address);
                 if self.loaded_code.contains(&address_h160) {
-                    return vec![];
+                    vec![]
                 } else {
                     self.loaded_code.insert(address_h160);
-                    return vec![UpdateCode(
+                    vec![UpdateCode(
                         address_h160,
                         self.endpoint.get_contract_code(address_h160),
-                    )];
+                    )]
                 }
             }
             _ => {
-                return vec![];
+                vec![]
             }
         }
     }
