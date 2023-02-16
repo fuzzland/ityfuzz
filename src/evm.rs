@@ -691,7 +691,7 @@ where
         &mut self,
         contract_address: H160,
         caller: H160,
-        state: &VMState,
+        vm_state: &VMState,
         data: Bytes,
         value: usize,
         _observers: &mut OT,
@@ -699,7 +699,7 @@ where
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(contract_address, caller, state, data, None, value);
+        let r = self.execute_from_pc(contract_address, caller, vm_state, data, None, value);
         match r.ret {
             ControlLeak => {
                 self.host.data.post_execution.push((r.stack, r.pc));
@@ -721,12 +721,12 @@ where
         &mut self,
         contract_address: H160,
         caller: H160,
-        state: &VMState,
+        vm_state: &VMState,
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
         value: usize,
     ) -> IntermediateExecutionResult {
-        self.host.data = state.clone();
+        self.host.data = vm_state.clone();
         let call = Contract::new::<LatestSpec>(
             data,
             self.host
