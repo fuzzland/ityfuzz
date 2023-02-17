@@ -74,7 +74,6 @@ pub struct FuzzState {
     execution_result: ExecutionResult,
     default_callers: Vec<H160>,
     pub rand_generator: RomuDuoJrRand,
-    pub rand_generator2: RomuDuoJrRand,
     pub max_size: usize,
     pub hash_to_address: std::collections::HashMap<[u8; 4], H160>,
 }
@@ -96,7 +95,6 @@ impl FuzzState {
             execution_result: ExecutionResult::empty_result(),
             default_callers: vec![],
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
-            rand_generator2: RomuDuoJrRand::with_seed(1),
             max_size: 1500,
             hash_to_address: Default::default(),
         }
