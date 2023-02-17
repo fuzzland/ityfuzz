@@ -188,7 +188,7 @@ where
 impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasItyState + 'static,
-    I: VMInputT+ 'static,
+    I: VMInputT + 'static,
     O: Oracle<I, S>,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle

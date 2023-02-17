@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 use libafl::executors::{Executor, ExitKind};
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasObservers, ObserversTuple};
+use libafl::state::State;
 use libafl::Error;
 use std::fmt::Debug;
-use libafl::state::State;
 
 use crate::input::VMInputT;
 use crate::state::{HasExecutionResult, HasItyState};

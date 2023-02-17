@@ -66,16 +66,15 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let mut fuzz_host = FuzzHost::new();
     match config.onchain {
         Some(onchain) => {
-            fuzz_host.add_middlewares(Box::new(
-                OnChain::<VMInput, FuzzState>::new(
-                    // scheduler can be cloned because it never uses &mut self
-                    onchain, scheduler.clone())
-            ));
+            fuzz_host.add_middlewares(Box::new(OnChain::<VMInput, FuzzState>::new(
+                // scheduler can be cloned because it never uses &mut self
+                onchain,
+                scheduler.clone(),
+            )));
         }
         None => {}
     };
-    let evm_executor: EVMExecutor<VMInput, FuzzState> =
-        EVMExecutor::new(fuzz_host, deployer);
+    let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(fuzz_host, deployer);
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
     state.initialize(
         config.contract_info,

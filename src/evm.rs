@@ -1,5 +1,5 @@
-use std::borrow::{Borrow, BorrowMut};
 use itertools::Itertools;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 
 use std::collections::hash_map::DefaultHasher;
@@ -13,8 +13,8 @@ use crate::input::{VMInput, VMInputT};
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
-use libafl::prelude::ObserversTuple;
 use libafl::prelude::powersched::PowerSchedule;
+use libafl::prelude::ObserversTuple;
 use libafl::state::{HasCorpus, State};
 use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
@@ -25,8 +25,8 @@ use revm::{
     Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return,
     SelfDestructResult, Spec,
 };
-use serde::{Deserialize, Serialize};
 use serde::__private::de::Borrowed;
+use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
 pub const MAP_SIZE: usize = 1024;
@@ -87,12 +87,12 @@ impl VMState {
 }
 
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::onchain::onchain::OnChain;
 use crate::state::{FuzzState, HasHashToAddress, HasItyState};
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::onchain::onchain::OnChain;
 
 #[derive(Debug)]
 pub struct FuzzHost {
@@ -167,7 +167,8 @@ impl FuzzHost {
 
     pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware>) {
         self.middlewares_enabled = true;
-        self.middlewares_deferred_actions.insert(middlewares.get_type(), vec![]);
+        self.middlewares_deferred_actions
+            .insert(middlewares.get_type(), vec![]);
         self.middlewares.insert(middlewares.get_type(), middlewares);
     }
 
@@ -792,28 +793,32 @@ where
 
         // cleanup the deferred actions map
         if self.host.middlewares_enabled {
-            self.host.middlewares_deferred_actions.iter_mut().for_each(|(_, v)| {
-                v.clear();
-            });
+            self.host
+                .middlewares_deferred_actions
+                .iter_mut()
+                .for_each(|(_, v)| {
+                    v.clear();
+                });
         }
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         if self.host.middlewares_enabled {
-            self.host.middlewares_deferred_actions
+            self.host
+                .middlewares_deferred_actions
                 .iter()
-                .for_each(|f| {
-                    match f.0 {
-                        MiddlewareType::OnChain => {
-                            for op in f.1 {
-                                self.host.middlewares
-                                    .get_mut(&MiddlewareType::OnChain)
-                                    .expect("middleware not found")
-                                    .as_any()
-                                    .downcast_mut::<OnChain<I, S>>().unwrap()
-                                    .handle_deferred_actions(op, state.as_mut().unwrap());
-                            }
+                .for_each(|f| match f.0 {
+                    MiddlewareType::OnChain => {
+                        for op in f.1 {
+                            self.host
+                                .middlewares
+                                .get_mut(&MiddlewareType::OnChain)
+                                .expect("middleware not found")
+                                .as_any()
+                                .downcast_mut::<OnChain<I, S>>()
+                                .unwrap()
+                                .handle_deferred_actions(op, state.as_mut().unwrap());
                         }
-                        MiddlewareType::Concolic => {}
                     }
+                    MiddlewareType::Concolic => {}
                 });
         }
         IntermediateExecutionResult {

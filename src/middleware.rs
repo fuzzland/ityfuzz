@@ -1,4 +1,3 @@
-use std::any::Any;
 use crate::evm::FuzzHost;
 use crate::input::{VMInput, VMInputT};
 use libafl::corpus::{Corpus, Testcase};
@@ -7,6 +6,7 @@ use libafl::state::State;
 use primitive_types::{H160, U256};
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::time::Duration;
