@@ -7,7 +7,7 @@ use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
 use crate::EVMExecutor;
 use bytes::Bytes;
-use libafl::corpus::{Corpus, OnDiskCorpus, Testcase};
+use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
 use libafl::prelude::RandomSeed;
