@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
 
+import "../../solidity_utils/lib.sol";
+
 interface X {
     function fx() external returns (uint);
 }
@@ -18,6 +20,8 @@ contract main {
     }
 
     function oracle_harness() public view returns (bool) {
-        return knownsec[2] > 0;
+        require(knownsec[2] > 0);
+        bug();
+        return true;
     }
 }
