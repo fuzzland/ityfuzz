@@ -1,8 +1,9 @@
+use std::any::Any;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 
-use crate::middleware::{Middleware, MiddlewareOp};
+use crate::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -15,6 +16,7 @@ use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::middleware::MiddlewareType::Concolic;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
@@ -764,5 +766,13 @@ impl Middleware for ConcolicHost {
             self.symbolic_stack.push(v);
         }
         vec![]
+    }
+
+    fn get_type(&self) -> MiddlewareType {
+        Concolic
+    }
+
+    fn as_any(&mut self) -> &mut (dyn Any + 'static) {
+        self
     }
 }

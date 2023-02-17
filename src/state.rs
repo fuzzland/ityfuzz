@@ -42,6 +42,8 @@ pub trait HasItyState {
     where
         SC: Scheduler<StagedVMState, InfantStateState>;
     fn get_rand_caller(&mut self) -> H160;
+
+    fn add_vm_input(&mut self, input: VMInput) -> usize;
 }
 
 pub trait HasInfantStateState {
@@ -112,8 +114,8 @@ impl FuzzState {
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
         include_static: bool,
     ) where
-        I: Input + VMInputT,
-        S: State + HasCorpus<I>,
+        I: Input + VMInputT+ 'static,
+        S: State + HasCorpus<I> + HasItyState+ 'static,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.setup_contract_callers(CONTRACT_AMT as usize, executor);
@@ -134,8 +136,8 @@ impl FuzzState {
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
         include_static: bool,
     ) where
-        I: Input + VMInputT,
-        S: State + HasCorpus<I>
+        I: Input + VMInputT+ 'static,
+        S: State + HasCorpus<I> + HasItyState+ 'static,
     {
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
@@ -322,6 +324,13 @@ impl HasItyState for FuzzState {
 
     fn get_rand_caller(&mut self) -> H160 {
         self.default_callers[self.rand_generator.below(self.default_callers.len() as u64) as usize]
+    }
+
+    fn add_vm_input(&mut self, input: VMInput) -> usize {
+        let mut tc = Testcase::new(input);
+        tc.set_exec_time(Duration::from_secs(0));
+        let idx = self.txn_corpus.add(tc).expect("failed to add");
+        idx
     }
 }
 

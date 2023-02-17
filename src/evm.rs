@@ -1,3 +1,4 @@
+use std::borrow::{Borrow, BorrowMut};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 
@@ -5,13 +6,15 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::i64::MAX;
 use std::marker::PhantomData;
+use std::ops::DerefMut;
 use std::str::FromStr;
 
-use crate::input::VMInputT;
+use crate::input::{VMInput, VMInputT};
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::ObserversTuple;
+use libafl::prelude::powersched::PowerSchedule;
 use libafl::state::{HasCorpus, State};
 use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
@@ -23,6 +26,8 @@ use revm::{
     SelfDestructResult, Spec,
 };
 use serde::{Deserialize, Serialize};
+use serde::__private::de::Borrowed;
+use serde_traitobject::Any;
 
 pub const MAP_SIZE: usize = 1024;
 
@@ -81,12 +86,13 @@ impl VMState {
     }
 }
 
-use crate::middleware::{Middleware, MiddlewareOp};
-use crate::state::{FuzzState, HasHashToAddress};
+use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::state::{FuzzState, HasHashToAddress, HasItyState};
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+use crate::onchain::onchain::OnChain;
 
 #[derive(Debug)]
 pub struct FuzzHost {
@@ -98,8 +104,9 @@ pub struct FuzzHost {
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
-    middlewares: Vec<Box<dyn Middleware>>,
-    pub middlewares_deferred_actions: Vec<MiddlewareOp>,
+    middlewares_enabled: bool,
+    middlewares: HashMap<MiddlewareType, Box<dyn Middleware>>,
+    pub middlewares_deferred_actions: HashMap<MiddlewareType, Vec<MiddlewareOp>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -117,8 +124,9 @@ impl Clone for FuzzHost {
             _pc: self._pc,
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
-            middlewares: vec![],
-            middlewares_deferred_actions: vec![],
+            middlewares_enabled: false,
+            middlewares: Default::default(),
+            middlewares_deferred_actions: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: self.pc_coverage.clone(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -139,10 +147,6 @@ const CONTROL_LEAK_THRESHOLD: usize = 1;
 
 impl FuzzHost {
     pub fn new() -> Self {
-        return FuzzHost::with_middlewares(vec![]);
-    }
-
-    pub fn with_middlewares(middlewares: Vec<Box<dyn Middleware>>) -> Self {
         Self {
             data: VMState::new(),
             env: Env::default(),
@@ -151,13 +155,20 @@ impl FuzzHost {
             _pc: 0,
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
-            middlewares,
-            middlewares_deferred_actions: vec![],
+            middlewares_enabled: false,
+            middlewares: Default::default(),
+            middlewares_deferred_actions: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             total_instr: Default::default(),
         }
+    }
+
+    pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware>) {
+        self.middlewares_enabled = true;
+        self.middlewares_deferred_actions.insert(middlewares.get_type(), vec![]);
+        self.middlewares.insert(middlewares.get_type(), middlewares);
     }
 
     pub fn initialize<S>(&mut self, state: &S)
@@ -224,16 +235,18 @@ impl Host for FuzzHost {
         }
 
         unsafe {
-            let all_mutation_ops = self
-                .middlewares
-                .iter_mut()
-                .map(|m| m.on_step(interp))
-                .collect::<Vec<_>>();
-            all_mutation_ops.iter().for_each(|ops| {
-                ops.iter().for_each(|op| {
-                    op.execute(self);
-                })
-            });
+            if self.middlewares_enabled {
+                let all_mutation_ops = self
+                    .middlewares
+                    .iter_mut()
+                    .map(|m| m.1.on_step(interp))
+                    .collect::<Vec<_>>();
+                all_mutation_ops.iter().for_each(|ops| {
+                    ops.iter().for_each(|op| {
+                        op.execute(self);
+                    })
+                });
+            }
             // println!("{}", *interp.instruction_pointer);
             match *interp.instruction_pointer {
                 0x57 => {
@@ -571,8 +584,8 @@ impl ExecutionResult {
 
 impl<I, S> EVMExecutor<I, S>
 where
-    I: VMInputT,
-    S: HasCorpus<I>,
+    I: VMInputT + 'static,
+    S: State + HasCorpus<I> + HasItyState + 'static,
 {
     pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
         Self {
@@ -648,7 +661,11 @@ where
             self.deployer,
             U256::from(0),
         );
+        let middleware_status = self.host.middlewares_enabled;
+        // disable middleware for deployment
+        self.host.middlewares_enabled = false;
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
+        self.host.middlewares_enabled = middleware_status;
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
         #[cfg(feature = "evaluation")]
         {
@@ -733,7 +750,7 @@ where
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
         value: usize,
-        state: Option<&mut S>,
+        mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
         let call = Contract::new::<LatestSpec>(
@@ -769,7 +786,33 @@ where
         unsafe {
             state_change = false;
         }
+
+        // cleanup the deferred actions map
+        if self.host.middlewares_enabled {
+            self.host.middlewares_deferred_actions.iter_mut().for_each(|(_, v)| {
+                v.clear();
+            });
+        }
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
+        if self.host.middlewares_enabled {
+            self.host.middlewares_deferred_actions
+                .iter()
+                .for_each(|f| {
+                    match f.0 {
+                        MiddlewareType::OnChain => {
+                            for op in f.1 {
+                                self.host.middlewares
+                                    .get_mut(&MiddlewareType::OnChain)
+                                    .expect("middleware not found")
+                                    .as_any()
+                                    .downcast_mut::<OnChain<I, S>>().unwrap()
+                                    .handle_deferred_actions(op, state.as_mut().unwrap());
+                            }
+                        }
+                        MiddlewareType::Concolic => {}
+                    }
+                });
+        }
         IntermediateExecutionResult {
             output: interp.return_value(),
             new_state: self.host.data.clone(),
