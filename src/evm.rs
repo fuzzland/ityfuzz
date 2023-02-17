@@ -439,7 +439,6 @@ impl Host for FuzzHost {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
             #[cfg(feature = "record_instruction_coverage")]
             self.record_instruction_coverage();
-            println!("shit");
             panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
         }
     }
