@@ -107,7 +107,7 @@ pub fn basic_fuzzer(
         &infant_scheduler,
         false,
     );
-    executor.evm_executor.host.initalize(&mut state);
+    executor.evm_executor.host.initialize(&mut state);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");

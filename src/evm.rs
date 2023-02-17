@@ -12,6 +12,8 @@ use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::ObserversTuple;
+use libafl::state::{HasCorpus, State};
+use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
 use rand::random;
 use revm::db::BenchmarkDB;
@@ -80,7 +82,7 @@ impl VMState {
 }
 
 use crate::middleware::Middleware;
-use crate::state::HasHashToAddress;
+use crate::state::{FuzzState, HasHashToAddress};
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
@@ -103,7 +105,7 @@ pub struct FuzzHost {
     pub total_instr: HashMap<H160, usize>,
 }
 
-// all clones would not include middlewares
+// all clones would not include middlewares and states
 impl Clone for FuzzHost {
     fn clone(&self) -> Self {
         Self {
@@ -155,9 +157,9 @@ impl FuzzHost {
         }
     }
 
-    pub fn initalize<S>(&mut self, state: &S)
-    where
-        S: HasHashToAddress,
+    pub fn initialize<S>(&mut self, state: &S)
+        where
+            S: HasHashToAddress
     {
         self.hash_to_address = state.get_hash_to_address().clone();
     }
@@ -567,10 +569,11 @@ impl ExecutionResult {
 impl<I, S> EVMExecutor<I, S>
 where
     I: VMInputT,
+    S: HasCorpus<I>
 {
-    pub fn new(FuzzHost: FuzzHost, deployer: H160) -> Self {
+    pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
         Self {
-            host: FuzzHost,
+            host: fuzz_host,
             deployer,
             phandom: PhantomData,
         }
@@ -597,6 +600,7 @@ where
                 Some((recovering_stack, post_exec.1 + 1)),
                 // todo(@shou !important) whats value
                 0,
+                None
             );
             last_output = r.output;
             if r.ret == Return::Return {
@@ -695,11 +699,14 @@ where
         data: Bytes,
         value: usize,
         _observers: &mut OT,
+        state: Option<&mut S>,
     ) -> ExecutionResult
     where
         OT: ObserversTuple<I, S>,
     {
-        let r = self.execute_from_pc(contract_address, caller, vm_state, data, None, value);
+        let r = self.execute_from_pc(
+            contract_address, caller, vm_state, data, None, value, state
+        );
         match r.ret {
             ControlLeak => {
                 self.host.data.post_execution.push((r.stack, r.pc));
@@ -725,6 +732,7 @@ where
         data: Bytes,
         post_exec: Option<(Vec<U256>, usize)>,
         value: usize,
+        state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
         let call = Contract::new::<LatestSpec>(

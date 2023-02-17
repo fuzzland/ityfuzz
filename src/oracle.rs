@@ -4,10 +4,10 @@ use crate::state::FuzzState;
 use crate::{EVMExecutor, VMState};
 use bytes::Bytes;
 use hex;
-use libafl::prelude::{tuple_list, SerdeAnyMap};
+use libafl::prelude::{tuple_list, SerdeAnyMap, HasCorpus};
 use primitive_types::H160;
 
-pub struct OracleCtx<'a, I, S>
+pub struct OracleCtx<'a, I, S: 'static>
 where
     I: VMInputT,
 {
@@ -21,6 +21,7 @@ where
 impl<'a, I, S> OracleCtx<'a, I, S>
 where
     I: VMInputT,
+    S: HasCorpus<I>
 {
     pub fn new(
         pre_state: &'a VMState,
@@ -45,6 +46,7 @@ where
             data,
             0,
             &mut tuple_list!(),
+            None
         )
     }
 
@@ -56,6 +58,7 @@ where
             data,
             0,
             &mut tuple_list!(),
+            None
         )
     }
 }

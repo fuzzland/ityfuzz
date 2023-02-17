@@ -70,7 +70,7 @@ pub fn df_fuzzer(config: Config<VMInput, FuzzState>) {
     );
     #[cfg(feature = "deployer_is_attacker")]
     state.add_deployer_to_callers(deployer);
-    executor.evm_executor.host.initalize(&mut state);
+    executor.evm_executor.host.initialize(&mut state);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");

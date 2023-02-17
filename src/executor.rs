@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use libafl::executors::{Executor, ExitKind};
 use libafl::inputs::Input;
-use libafl::prelude::{HasObservers, ObserversTuple};
+use libafl::prelude::{HasCorpus, HasObservers, ObserversTuple};
 use libafl::Error;
 use std::fmt::Debug;
 
@@ -55,7 +55,7 @@ impl<EM, I, S, Z, OT> Executor<EM, I, S, Z> for FuzzExecutor<I, S, OT>
 where
     I: VMInputT + Input,
     OT: ObserversTuple<I, S>,
-    S: HasExecutionResult,
+    S: HasExecutionResult + HasCorpus<I>,
 {
     fn run_target(
         &mut self,
@@ -71,6 +71,7 @@ where
             input.to_bytes().clone(),
             input.get_txn_value(),
             &mut self.observers,
+            Some(state),
         );
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
@@ -155,6 +156,7 @@ mod tests {
             ),
             0,
             &mut observers,
+            None,
         );
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
 
@@ -179,6 +181,7 @@ mod tests {
             ),
             0,
             &mut observers,
+            None
         );
 
         // checking cmp map about coverage
