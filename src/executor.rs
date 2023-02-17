@@ -181,7 +181,7 @@ mod tests {
             ),
             0,
             &mut observers,
-            None
+            None,
         );
 
         // checking cmp map about coverage
