@@ -8,9 +8,10 @@ use libafl::state::State;
 use libafl::Error;
 use std::fmt::Debug;
 
-use crate::input::VMInputT;
+use crate::input::{VMInput, VMInputT};
 use crate::state::{HasExecutionResult, HasItyState};
 use crate::EVMExecutor;
+use crate::state_input::{BasicTxn, build_basic_txn, TxnTrace};
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
@@ -65,7 +66,7 @@ where
         _mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
-        let res = self.evm_executor.execute(
+        let mut res = self.evm_executor.execute(
             input.get_contract(),
             input.get_caller(),
             input.get_state(),
@@ -74,6 +75,12 @@ where
             &mut self.observers,
             Some(state),
         );
+        let mut trace = TxnTrace {
+            transactions: vec![build_basic_txn(input)],
+            from_idx: input.get_state_idx(),
+        };
+        res.new_state.trace = trace;
+
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
         state.set_execution_result(res);

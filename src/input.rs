@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::abi::BoxedABI;
 
 use crate::state_input::StagedVMState;
@@ -11,7 +12,7 @@ use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 
 // ST: Should VMInputT be the generic type for both inputs?
-pub trait VMInputT: Input {
+pub trait VMInputT: Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize {
     fn to_bytes(&self) -> Bytes;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
@@ -21,14 +22,13 @@ pub trait VMInputT: Input {
     fn set_caller(&mut self, caller: H160);
     fn get_contract_mut(&mut self) -> &mut H160;
     fn get_contract(&self) -> H160;
-    fn get_state_mut(&mut self) -> &mut VMState;
-    fn set_state(&mut self, state: VMState);
     fn get_state(&self) -> &evm::VMState;
     fn set_staged_state(&mut self, state: StagedVMState, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState;
     fn get_txn_value(&self) -> usize;
     fn set_txn_value(&mut self, v: usize);
+    fn get_abi_cloned(&self) -> Option<BoxedABI>;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -99,14 +99,6 @@ impl VMInputT for VMInput {
         self.contract.clone()
     }
 
-    fn get_state_mut(&mut self) -> &mut VMState {
-        &mut self.sstate.state
-    }
-
-    fn set_state(&mut self, state: VMState) {
-        self.sstate = self.sstate.with_state(state);
-    }
-
     fn get_state(&self) -> &VMState {
         &self.sstate.state
     }
@@ -130,6 +122,10 @@ impl VMInputT for VMInput {
 
     fn set_txn_value(&mut self, v: usize) {
         self.txn_value = v;
+    }
+
+    fn get_abi_cloned(&self) -> Option<BoxedABI> {
+        self.data.clone()
     }
 }
 
