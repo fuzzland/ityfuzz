@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 use crate::abi::BoxedABI;
+use std::fmt::Debug;
 
 use crate::state_input::StagedVMState;
 use crate::{evm, VMState};
@@ -12,7 +12,9 @@ use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 
 // ST: Should VMInputT be the generic type for both inputs?
-pub trait VMInputT: Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize {
+pub trait VMInputT:
+    Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize
+{
     fn to_bytes(&self) -> Bytes;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where

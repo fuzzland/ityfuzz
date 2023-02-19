@@ -10,8 +10,8 @@ use std::fmt::Debug;
 
 use crate::input::{VMInput, VMInputT};
 use crate::state::{HasExecutionResult, HasItyState};
+use crate::state_input::{build_basic_txn, BasicTxn, TxnTrace};
 use crate::EVMExecutor;
-use crate::state_input::{BasicTxn, build_basic_txn, TxnTrace};
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract

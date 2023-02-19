@@ -2,6 +2,7 @@ use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, T256};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::HasItyState;
 use bytes::Bytes;
+use itertools::Itertools;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{Mutator, Rand};
@@ -12,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
-use itertools::Itertools;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -435,7 +435,10 @@ impl ABI for AArray {
     }
 
     fn to_string(&self) -> String {
-        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(","))
+        format!(
+            "({})",
+            self.data.iter().map(|x| x.b.deref().to_string()).join(",")
+        )
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
