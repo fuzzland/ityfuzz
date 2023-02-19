@@ -100,7 +100,7 @@ pub struct FuzzHost {
     // these are internal to the host
     env: Env,
     code: HashMap<H160, Bytecode>,
-    hash_to_address: HashMap<[u8; 4], H160>,
+    hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
@@ -467,7 +467,7 @@ impl Host for FuzzHost {
         hash.resize(4, 0);
 
         let mut input_seq = input.input.to_vec();
-        // check unbound call
+        // check whether the whole CALLDATAVALUE can be arbitrary
         if !self.pc_to_call_hash.contains_key(&self._pc) {
             self.pc_to_call_hash.insert(self._pc, HashSet::new());
         }
@@ -492,6 +492,7 @@ impl Host for FuzzHost {
         // find the contract wrt the hash
         let contract_loc_option = self.hash_to_address.get(hash.as_slice());
 
+        // if the contract is not found or control leak is enabled, return controlleak if it is unbounded call
         if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
             assert!(self._pc != 0);
             if !self.pc_to_addresses.contains_key(&self._pc) {
@@ -507,18 +508,27 @@ impl Host for FuzzHost {
                 .insert(input.contract);
         }
 
+        // find contracts that have this function hash
         if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
-            let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(
-                    input_bytes,
-                    self.code.get(contract_loc_option.unwrap()).unwrap().clone(),
-                    &input.context,
-                ),
-                1e10 as u64,
-            );
+            let loc = contract_loc_option.unwrap();
+            // if there is such a location known, then we can use exact call
+            if !loc.contains(&input.contract) {
+                // todo(@shou): resolve multi locs
+                if loc.len() != 1 {
+                    panic!("more than one contract found for the same hash");
+                }
+                let mut interp = Interpreter::new::<LatestSpec>(
+                    Contract::new_with_context::<LatestSpec>(
+                        input_bytes,
+                        self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
+                        &input.context,
+                    ),
+                    1e10 as u64,
+                );
 
-            let ret = interp.run::<FuzzHost, LatestSpec>(self);
-            return (ret, Gas::new(0), interp.return_value());
+                let ret = interp.run::<FuzzHost, LatestSpec>(self);
+                return (ret, Gas::new(0), interp.return_value());
+            }
         }
 
         // transfer txn
