@@ -11,6 +11,7 @@ use std::path::Path;
 extern crate crypto;
 
 use crate::abi::get_abi_type_boxed_with_address;
+use crate::onchain::endpoints::OnChainConfig;
 use crate::rand_utils::{fixed_address, generate_random_address};
 
 use self::crypto::digest::Digest;
@@ -53,6 +54,10 @@ impl ContractLoader {
         let mut data = String::new();
         file.read_to_string(&mut data)
             .expect("failed to read abi file");
+        return Self::parse_abi_str(&data);
+    }
+
+    fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
         let json: Vec<Value> = serde_json::from_str(&data).expect("failed to parse abi file");
         json.iter()
             .flat_map(|abi| {
@@ -210,14 +215,53 @@ impl ContractLoader {
 
         Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
     }
+
+    pub fn from_address(onchain: &OnChainConfig, address: Vec<H160>) -> Self {
+        let mut contracts: Vec<ContractInfo> = vec![];
+        for addr in address {
+            let abi = onchain.fetch_abi(addr);
+            if abi.is_none() {
+                println!("ABI not found for {}", addr);
+                continue;
+            }
+            let mut contract = ContractInfo {
+                name: addr.to_string(),
+                abi: Self::parse_abi_str(&abi.unwrap()),
+                code: onchain.get_contract_code(addr).bytes().to_vec(),
+                constructor_args: vec![], // todo: fill this
+                deployed_address: addr,
+            };
+            contracts.push(contract);
+        }
+        Self { contracts }
+    }
 }
 
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_load() {
         let loader = ContractLoader::from_glob("demo/*");
+        println!(
+            "{:?}",
+            loader
+                .contracts
+                .iter()
+                .map(|x| x.name.clone())
+                .collect::<Vec<String>>()
+        );
+    }
+
+    #[test]
+    fn test_remote_load() {
+        let onchain = OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+
+        let loader = ContractLoader::from_address(
+            &onchain,
+            vec![H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
+        );
         println!(
             "{:?}",
             loader
