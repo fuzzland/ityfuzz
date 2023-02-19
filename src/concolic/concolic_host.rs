@@ -775,4 +775,8 @@ impl Middleware for ConcolicHost {
     fn as_any(&mut self) -> &mut (dyn Any + 'static) {
         self
     }
+
+    fn box_clone(&self) -> Box<dyn Middleware> {
+        Box::new(self.clone())
+    }
 }
