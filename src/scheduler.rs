@@ -1,12 +1,17 @@
+use crate::config::DEBUG_PRINT_PERCENT;
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use libafl::{impl_serdeany, Error};
+use rand::random;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::ops::Deref;
+
 pub trait HasVote<I, S>
 where
     S: HasCorpus<I> + HasRand + HasMetadata,
@@ -45,7 +50,7 @@ impl_serdeany!(VoteData);
 impl<I, S> Scheduler<I, S> for SortedDroppingScheduler<I, S>
 where
     S: HasCorpus<I> + HasRand + HasMetadata,
-    I: Input,
+    I: Input + Debug,
 {
     fn on_add(&self, state: &mut S, idx: usize) -> Result<(), Error> {
         if !state.has_metadata::<VoteData>() {
@@ -109,6 +114,32 @@ where
 
     fn next(&self, state: &mut S) -> Result<usize, Error> {
         let corpus_size = state.corpus().count();
+
+        #[cfg(feature = "print_corpus")]
+        {
+            let data = state.metadata().get::<VoteData>().unwrap();
+            if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
+                println!(
+                    "======================= corpus size: {} =======================",
+                    corpus_size
+                );
+                for idx in &data.sorted_votes {
+                    let (votes, visits) = data.votes_and_visits.get(&idx).unwrap();
+                    let inp = state.corpus().get(*idx).unwrap().clone();
+                    match inp.into_inner().input() {
+                        Some(x) => {
+                            println!(
+                                "idx: {}, votes: {}, visits: {}: {:?}",
+                                idx, votes, visits, x
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                println!("======================= corpus  =======================");
+            }
+        }
+
         let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
             * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
 

@@ -2,6 +2,8 @@ use crate::contract_utils::ContractInfo;
 use crate::onchain::endpoints::OnChainConfig;
 use crate::oracle::Oracle;
 
+pub const DEBUG_PRINT_PERCENT: usize = 8000;
+
 pub enum FuzzerTypes {
     CMP,
     DATAFLOW,

@@ -86,6 +86,7 @@ impl VMState {
     }
 }
 
+use crate::config::DEBUG_PRINT_PERCENT;
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::onchain::onchain::OnChain;
 use crate::state::{FuzzState, HasHashToAddress, HasItyState};
@@ -743,7 +744,7 @@ where
             _ => {}
         }
         #[cfg(feature = "record_instruction_coverage")]
-        if random::<i32>() % 10000 == 0 {
+        if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
             self.host.record_instruction_coverage();
         }
         return ExecutionResult {
