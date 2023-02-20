@@ -140,17 +140,23 @@ impl FuzzState {
     {
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
-            let deployed_address = match executor.deploy(
-                Bytecode::new_raw(Bytes::from(contract.code)),
-                Bytes::from(contract.constructor_args),
-                generate_random_address(),
-            ) {
-                Some(addr) => addr,
-                None => {
-                    println!("Failed to deploy contract: {}", contract.name);
-                    // we could also panic here
-                    continue;
+            let deployed_address = if !contract.is_code_deployed {
+                match executor.deploy(
+                    Bytecode::new_raw(Bytes::from(contract.code)),
+                    Bytes::from(contract.constructor_args),
+                    contract.deployed_address,
+                ) {
+                    Some(addr) => addr,
+                    None => {
+                        println!("Failed to deploy contract: {}", contract.name);
+                        // we could also panic here
+                        continue;
+                    }
                 }
+            } else {
+                // directly set bytecode
+                executor.set_code(contract.deployed_address, contract.code);
+                contract.deployed_address
             };
 
             for abi in contract.abi {
