@@ -5,8 +5,11 @@ Fast hybrid fuzzer for EVM, MoveVM, etc.
 ### Building
 ```bash
 cd cli/
-cargo make build-cli
+cargo build --release
 ```
+
+You can enable certain debug gates in `Cargo.toml`
+
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
 
