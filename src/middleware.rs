@@ -28,7 +28,16 @@ impl MiddlewareOp {
     pub fn execute(&self, host: &mut FuzzHost) {
         match self {
             MiddlewareOp::UpdateSlot(.., addr, slot, val) => {
-                host.data.get_mut(&addr).unwrap().insert(*slot, *val);
+                match host.data.get_mut(&addr) {
+                    Some(data) => {
+                        data.insert(*slot, *val);
+                    }
+                    None => {
+                        let mut data = std::collections::HashMap::new();
+                        data.insert(*slot, *val);
+                        host.data.insert(*addr, data);
+                    }
+                }
             }
             MiddlewareOp::UpdateCode(.., addr, code) => {
                 host.set_code(*addr, code.clone());
