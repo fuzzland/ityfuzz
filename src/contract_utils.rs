@@ -257,21 +257,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_remote_load() {
-        let onchain = OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
-
-        let loader = ContractLoader::from_address(
-            &onchain,
-            vec![H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
-        );
-        println!(
-            "{:?}",
-            loader
-                .contracts
-                .iter()
-                .map(|x| x.name.clone())
-                .collect::<Vec<String>>()
-        );
-    }
+    // #[test]
+    // fn test_remote_load() {
+    //     let onchain = OnChainConfig::new("https://bsc-dataseed1.binance.org/".to_string(), 56, 0);
+    //
+    //     let loader = ContractLoader::from_address(
+    //         &onchain,
+    //         vec![H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
+    //     );
+    //     println!(
+    //         "{:?}",
+    //         loader
+    //             .contracts
+    //             .iter()
+    //             .map(|x| x.name.clone())
+    //             .collect::<Vec<String>>()
+    //     );
+    // }
 }
