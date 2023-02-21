@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 ityfuzz = {path = "../", version = "0.1.0"}
 clap = {version = "4.0.18", features = ["derive"]}
+primitive-types = { version = "0.11", features = ["rlp", "serde"] }
