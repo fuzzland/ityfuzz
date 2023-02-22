@@ -16,13 +16,13 @@ pub enum Chain {
 }
 
 impl Chain {
-    pub fn from_str(s: &String) -> Self {
+    pub fn from_str(s: &String) -> Option<Self> {
         match s.as_str() {
-            "ETH" => Chain::ETH,
-            "BSC" => Chain::BSC,
-            "POLYGON" => Chain::POLYGON,
-            "MUMBAI" => Chain::MUMBAI,
-            _ => panic!("Unknown chain"),
+            "ETH" => Some(Self::ETH),
+            "BSC" => Some(Self::BSC),
+            "POLYGON" => Some(Self::POLYGON),
+            "MUMBAI" => Some(Self::MUMBAI),
+            _ => None,
         }
     }
 
