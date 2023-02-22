@@ -3,7 +3,7 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Feedback, Named};
+use libafl::prelude::{Feedback, HasMetadata, Named};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
@@ -71,7 +71,7 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for InfantFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasItyState,
+    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasMetadata + HasItyState,
     I: Input + VMInputT + 'static,
     O: Oracle<I, S>,
 {
@@ -187,7 +187,13 @@ where
 
 impl<'a, I, S, O> Feedback<I, S> for OracleFeedback<'a, I, S, O>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult + HasCorpus<I> + HasItyState + 'static,
+    S: State
+        + HasClientPerfMonitor
+        + HasExecutionResult
+        + HasCorpus<I>
+        + HasMetadata
+        + HasItyState
+        + 'static,
     I: VMInputT + 'static,
     O: Oracle<I, S>,
 {
