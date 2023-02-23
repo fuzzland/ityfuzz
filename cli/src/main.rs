@@ -9,7 +9,7 @@ use ityfuzz::onchain::endpoints::{Chain, OnChainConfig};
 use primitive_types::H160;
 use std::path::PathBuf;
 use std::str::FromStr;
-use ityfuzz::onchain::flashloan::FlashloanConfig;
+use ityfuzz::onchain::flashloan::Flashloan;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -140,7 +140,7 @@ fn main() {
         onchain,
         oracle: None,
         flashloan: if args.flashloan {
-            Some(FlashloanConfig::new())
+            Some(Flashloan::new())
         } else {
             None
         }

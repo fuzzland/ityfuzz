@@ -4,7 +4,8 @@ use revm::{Bytecode, LatestSpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fmt::format;
+use std::fmt::{format, Debug};
+use std::panic;
 use std::str::FromStr;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
@@ -13,6 +14,10 @@ pub enum Chain {
     BSC,
     POLYGON,
     MUMBAI,
+}
+
+pub trait PriceOracle: Debug {
+    fn fetch_token_price(&self, token_address: H160) -> Option<(f64, u32)>;
 }
 
 impl Chain {
@@ -167,54 +172,6 @@ impl OnChainConfig {
         }
     }
 
-    fn fetch_token_price(&self, token_address: H160) -> Option<f64> {
-        let endpoint = format!(
-            "https://deep-index.moralis.io/api/v2/erc20/0x{}/price?chain={}",
-            hex::encode(token_address),
-            self.moralis_handle
-        );
-        println!("fetching token price from {}", endpoint);
-        match self
-            .client
-            .get(endpoint.clone())
-            .header(
-                "X-API-Key",
-                if self.moralis_api_key.len() > 0 {
-                    self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
-                        .clone()
-                } else {
-                    "".to_string()
-                },
-            )
-            .send()
-        {
-            Ok(resp) => {
-                let resp = resp.text();
-                match resp {
-                    Ok(resp) => {
-                        let json = serde_json::from_str::<Value>(&resp);
-                        if json.is_err() {
-                            return None;
-                        }
-                        let result = json.unwrap()["usdPrice"].as_f64();
-                        if result.is_none() {
-                            return None;
-                        }
-                        Some(result.unwrap())
-                    }
-                    Err(e) => {
-                        println!("{:?}", e);
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                println!("Error: {}", e);
-                None
-            }
-        }
-    }
-
     fn _request(&self, method: String, params: String) -> Option<Value> {
         let data = format!(
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
@@ -289,6 +246,79 @@ impl OnChainConfig {
     }
 }
 
+impl PriceOracle for OnChainConfig {
+    fn fetch_token_price(&self, token_address: H160) -> Option<(f64, u32)> {
+        let endpoint = format!(
+            "https://deep-index.moralis.io/api/v2/erc20/0x{}/price?chain={}",
+            hex::encode(token_address),
+            self.moralis_handle
+        );
+        println!("fetching token price from {}", endpoint);
+        match self
+            .client
+            .get(endpoint.clone())
+            .header(
+                "X-API-Key",
+                if self.moralis_api_key.len() > 0 {
+                    self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
+                        .clone()
+                } else {
+                    "".to_string()
+                },
+            )
+            .send()
+        {
+            Ok(resp) => {
+                let resp = resp.text();
+                match resp {
+                    Ok(resp) => {
+                        let json = serde_json::from_str::<Value>(&resp);
+                        if json.is_err() {
+                            return None;
+                        }
+                        let json_v = json.unwrap();
+                        let price = json_v["usdPrice"].as_f64();
+                        if price.is_none() {
+                            return None;
+                        }
+                        unsafe {
+                            let decimals_res = panic::catch_unwind(|| {
+                                json_v
+                                    .get("nativePrice")
+                                    .unwrap()
+                                    .get("decimals")
+                                    .unwrap()
+                                    .as_u64()
+                                    .unwrap();
+                            });
+                            if decimals_res.is_err() {
+                                return None;
+                            }
+                        }
+
+                        let decimals = json_v
+                            .get("nativePrice")
+                            .unwrap()
+                            .get("decimals")
+                            .unwrap()
+                            .as_u64()
+                            .unwrap();
+                        Some((price.unwrap(), decimals as u32))
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                None
+            }
+        }
+    }
+}
+
 mod tests {
     use super::*;
     use crate::onchain::endpoints::Chain::BSC;
@@ -333,7 +363,9 @@ mod tests {
     #[test]
     fn test_fetch_token_price() {
         let mut config = OnChainConfig::new(BSC, 0);
-        config.add_moralis_api_key("[API Key]".to_string());
+        config.add_moralis_api_key(
+            "ocJtTEZWOJZjYOMAQjRmWcHpvUdieMLJDAtUjycFNTdSxgFGofNJhdiRX0Kk1h1O".to_string(),
+        );
         let v = config.fetch_token_price(
             H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
         );

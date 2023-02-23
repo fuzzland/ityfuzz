@@ -289,7 +289,11 @@ impl Host for FuzzHost {
                 });
             }
             // println!("{}", *interp.instruction_pointer);
+            // println!("pc: {}", interp.program_counter());
             match *interp.instruction_pointer {
+                0xfd => {
+                    // println!("fd {}", interp.program_counter());
+                }
                 0x57 => {
                     // JUMPI
                     let jump_dest = if interp.stack.peek(0).expect("stack underflow").is_zero() {
@@ -503,18 +507,26 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+        let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
             match action {
                 CallMiddlewareReturn::Continue => {}
                 CallMiddlewareReturn::ReturnRevert => {
-                    return (Revert, Gas::new(0), Bytes::new());
+                    middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
                 }
                 CallMiddlewareReturn::ReturnSuccess(b) => {
-                    return (Continue, Gas::new(0), b.clone());
+                    middleware_result = Some((Continue, Gas::new(0), b.clone()));
                 }
+            }
+            if middleware_result.is_some() {
+                break;
             }
         }
         self.middlewares_latent_call_actions.clear();
+
+        if middleware_result.is_some() {
+            return middleware_result.unwrap();
+        }
 
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
