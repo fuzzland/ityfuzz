@@ -63,25 +63,16 @@ impl Default for TxnTrace {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StagedVMState {
     pub state: VMState,
-    pub stage: u64,
+    pub stage: Vec<u64>,
     pub initialized: bool,
     pub trace: TxnTrace,
 }
 
 impl StagedVMState {
-    pub fn new(state: VMState, stage: u64) -> Self {
-        Self {
-            state,
-            stage,
-            initialized: true,
-            trace: TxnTrace::new(),
-        }
-    }
-
     pub fn new_with_state(state: VMState) -> Self {
         Self {
             state,
-            stage: 0,
+            stage: vec![],
             initialized: true,
             trace: TxnTrace::new(),
         }
@@ -90,13 +81,13 @@ impl StagedVMState {
     pub fn new_uninitialized() -> Self {
         Self {
             state: VMState::new(),
-            stage: 0,
+            stage: vec![],
             initialized: false,
             trace: TxnTrace::new(),
         }
     }
 
-    pub fn update_stage(&mut self, stage: u64) {
+    pub fn update_stage(&mut self, stage: Vec<u64>) {
         self.stage = stage;
         self.initialized = true;
     }

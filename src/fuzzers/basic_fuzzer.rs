@@ -23,6 +23,7 @@ use crate::oracle::FunctionHarnessOracle;
 use crate::rand_utils::generate_random_address;
 use crate::state::FuzzState;
 
+use crate::config::Config;
 use primitive_types::H160;
 
 struct ABIConfig {
@@ -35,12 +36,7 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn basic_fuzzer(
-    _corpus_dir: PathBuf,
-    _objective_dir: PathBuf,
-    _logfile: PathBuf,
-    contracts_glob: &String,
-) {
+pub fn basic_fuzzer(config: Config<VMInput, FuzzState>) {
     // Fuzzbench style, which requires a host and can have many fuzzing client
     // let log = RefCell::new(
     //     OpenOptions::new()
@@ -99,7 +95,7 @@ pub fn basic_fuzzer(
 
     let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
 
-    let contract_info = ContractLoader::from_glob(contracts_glob).contracts;
+    let contract_info = config.contract_info;
     state.initialize(
         contract_info,
         &mut executor.evm_executor,
@@ -113,13 +109,8 @@ pub fn basic_fuzzer(
         .expect("Failed to init state");
 
     // now evm executor is ready, we can clone it
-    let harness_code = "oracle_harness()";
-    let mut harness_hash: [u8; 4] = [0; 4];
-    set_hash(harness_code, &mut harness_hash);
-    let oracle = FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
-    let objective = OracleFeedback::new(&oracle, executor.evm_executor.clone());
-
-    let infant_feedback = InfantFeedback::new(&oracle, executor.evm_executor.clone());
+    let infant_feedback = InfantFeedback::new(&config.oracle, executor.evm_executor.clone());
+    let objective = OracleFeedback::new(&config.oracle, executor.evm_executor.clone());
 
     let mut fuzzer = ItyFuzzer::new(
         scheduler,

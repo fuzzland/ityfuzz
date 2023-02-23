@@ -14,7 +14,7 @@ use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::prelude::powersched::PowerSchedule;
-use libafl::prelude::{HasMetadata, ObserversTuple};
+use libafl::prelude::{HasMetadata, ObserversTuple, SerdeAnyMap};
 use libafl::state::{HasCorpus, State};
 use nix::libc::stat;
 use primitive_types::{H160, H256, U256};
@@ -49,6 +49,7 @@ pub struct VMState {
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
     pub post_execution: Vec<(Vec<U256>, usize)>,
+    pub metadata: SerdeAnyMap,
 }
 
 impl VMState {
@@ -70,6 +71,7 @@ impl VMState {
         Self {
             state: HashMap::new(),
             post_execution: vec![],
+            metadata: Default::default(),
         }
     }
 
@@ -83,6 +85,16 @@ impl VMState {
 
     pub fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
         self.state.insert(address, storage);
+    }
+}
+
+impl HasMetadata for VMState {
+    fn metadata(&self) -> &SerdeAnyMap {
+        &self.metadata
+    }
+
+    fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
+        &mut self.metadata
     }
 }
 
@@ -710,7 +722,7 @@ where
             reverted: false,
             new_state: StagedVMState {
                 state: new_state,
-                stage: result.new_state.stage,
+                stage: result.new_state.stage.clone(),
                 initialized: result.new_state.initialized,
                 trace: result.new_state.trace.clone(),
             },
@@ -884,6 +896,13 @@ where
         let r = interp.run::<FuzzHost, LatestSpec>(&mut self.host);
 
         // For each middleware, execute the deferred actions
+        let mut result = IntermediateExecutionResult {
+            output: interp.return_value(),
+            new_state: self.host.data.clone(),
+            pc: interp.program_counter(),
+            ret: r,
+            stack: interp.stack.data().clone(),
+        };
         if self.host.middlewares_enabled {
             self.host.middlewares_deferred_actions.iter().for_each(|f| {
                 macro_rules! define_deferred_handler {
@@ -896,7 +915,7 @@ where
                                 .as_any()
                                 .downcast_mut::<$t>()
                                 .unwrap()
-                                .handle_deferred_actions(op, state.as_mut().unwrap());
+                                .handle_deferred_actions(op, state.as_mut().unwrap(), &mut result);
                         }
                     };
                 };
@@ -911,12 +930,6 @@ where
                 }
             });
         }
-        IntermediateExecutionResult {
-            output: interp.return_value(),
-            new_state: self.host.data.clone(),
-            pc: interp.program_counter(),
-            ret: r,
-            stack: interp.stack.data().clone(),
-        }
+        result
     }
 }

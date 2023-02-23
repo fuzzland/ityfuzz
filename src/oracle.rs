@@ -1,5 +1,6 @@
 use crate::evm::ExecutionResult;
 use crate::input::{VMInput, VMInputT};
+use crate::onchain::flashloan::FlashloanData;
 use crate::state::{FuzzState, HasItyState};
 use crate::{EVMExecutor, VMState};
 use bytes::Bytes;
@@ -12,6 +13,7 @@ pub struct OracleCtx<'a, I, S: 'static>
 where
     I: VMInputT,
 {
+    pub fuzz_state: &'a S,
     pub pre_state: &'a VMState,
     pub post_state: &'a VMState,
     pub metadata: SerdeAnyMap,
@@ -25,12 +27,14 @@ where
     S: State + HasCorpus<I> + HasMetadata + HasItyState,
 {
     pub fn new(
+        fuzz_state: &'a S,
         pre_state: &'a VMState,
         post_state: &'a VMState,
         executor: &'a mut EVMExecutor<I, S>,
         input: &'a I,
     ) -> Self {
         Self {
+            fuzz_state,
             pre_state,
             post_state,
             metadata: SerdeAnyMap::new(),
@@ -139,6 +143,26 @@ impl Oracle<VMInput, FuzzState> for IERC20Oracle {
         } else {
             false
         }
+    }
+}
+
+pub struct IERC20OracleFlashloan {}
+
+impl IERC20OracleFlashloan {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Oracle<VMInput, FuzzState> for IERC20OracleFlashloan {
+    fn transition(&self, _ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> u64 {
+        0
+    }
+
+    fn oracle(&self, ctx: &mut OracleCtx<VMInput, FuzzState>, _stage: u64) -> bool {
+        // has balance increased?
+        let flashloan_info = ctx.post_state.metadata().get::<FlashloanData>().unwrap();
+        return flashloan_info.earned > flashloan_info.owed;
     }
 }
 
