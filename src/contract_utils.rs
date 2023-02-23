@@ -24,7 +24,9 @@ pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
 pub struct ABIConfig {
     pub abi: String,
     pub function: [u8; 4],
+    pub function_name: String,
     pub is_static: bool,
+    pub is_payable: bool,
     pub is_constructor: bool,
 }
 
@@ -58,7 +60,7 @@ impl ContractLoader {
         return Self::parse_abi_str(&data);
     }
 
-    fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
+    pub fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
         let json: Vec<Value> = serde_json::from_str(&data).expect("failed to parse abi file");
         json.iter()
             .flat_map(|abi| {
@@ -79,7 +81,9 @@ impl ContractLoader {
                     let mut abi_config = ABIConfig {
                         abi: format!("({})", abi_name.join(",")),
                         function: [0; 4],
+                        function_name: name.to_string(),
                         is_static: abi["stateMutability"].as_str().unwrap() == "view",
+                        is_payable: abi["stateMutability"].as_str().unwrap() == "payable",
                         is_constructor: abi["type"] == "constructor",
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
@@ -218,7 +222,7 @@ impl ContractLoader {
         Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
     }
 
-    pub fn from_address(onchain: &OnChainConfig, address: Vec<H160>) -> Self {
+    pub fn from_address(onchain: &mut OnChainConfig, address: Vec<H160>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         for addr in address {
             let abi = onchain.fetch_abi(addr);

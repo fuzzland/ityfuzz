@@ -21,6 +21,7 @@ ondisk_corpus = []
 deployer_is_attacker = []
 record_instruction_coverage = []
 print_corpus = []
+fuzz_static = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

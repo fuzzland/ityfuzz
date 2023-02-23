@@ -4,11 +4,13 @@ use crate::{
     state_input::StagedVMState,
 };
 use std::ops::Deref;
+use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
 use crate::config::DEBUG_PRINT_PERCENT;
 use crate::evm::RW_SKIPPER_PERCT_IDX;
 use crate::state::HasExecutionResult;
+use crate::state_input::TxnTrace;
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -249,6 +251,12 @@ where
                 Ok((res, Some(idx)))
             }
             ExecuteInputResult::Solution => {
+                println!(
+                    "trace: {}",
+                    TxnTrace::to_string(&input.get_staged_state().trace, state)
+                );
+                println!("Found a solution! {}", input.to_string());
+                exit(0);
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
 

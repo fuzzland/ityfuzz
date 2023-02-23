@@ -66,7 +66,6 @@ pub fn df_fuzzer(config: Config<VMInput, FuzzState>) {
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        true,
     );
     #[cfg(feature = "deployer_is_attacker")]
     state.add_deployer_to_callers(deployer);

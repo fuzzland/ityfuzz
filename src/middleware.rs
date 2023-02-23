@@ -3,7 +3,7 @@ use crate::input::{VMInput, VMInputT};
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::state::State;
-use primitive_types::{H160, U256};
+use primitive_types::{H160, U256, U512};
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -36,9 +36,9 @@ pub enum CallMiddlewareReturn {
 pub enum MiddlewareOp {
     UpdateSlot(MiddlewareType, H160, U256, U256),
     UpdateCode(MiddlewareType, H160, Bytecode),
-    AddCorpus(MiddlewareType, VMInput),
-    Owed(MiddlewareType, U256),
-    Earned(MiddlewareType, U256),
+    AddCorpus(MiddlewareType, String, H160),
+    Owed(MiddlewareType, U512),
+    Earned(MiddlewareType, U512),
     MakeSubsequentCallSuccess(Bytes),
 }
 
@@ -47,7 +47,9 @@ impl MiddlewareOp {
         match self {
             MiddlewareOp::UpdateSlot(.., addr, slot, val) => match host.data.get_mut(&addr) {
                 Some(data) => {
-                    data.insert(*slot, *val);
+                    if data.get(&slot).is_none() {
+                        data.insert(*slot, *val);
+                    }
                 }
                 None => {
                     let mut data = std::collections::HashMap::new();

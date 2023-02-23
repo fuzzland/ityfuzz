@@ -6,18 +6,21 @@
 use crate::evm::IntermediateExecutionResult;
 use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::oracle::Oracle;
 use crate::state::HasItyState;
-use crate::types::{convert_u256_to_h160, float_scale_to_u256};
+use crate::types::{convert_u256_to_h160, float_scale_to_u512};
 use bytes::Bytes;
 use libafl::impl_serdeany;
 use libafl::prelude::State;
 use libafl::state::HasMetadata;
-use primitive_types::{H160, U256};
+use primitive_types::{H160, U256, U512};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::process::exit;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct Flashloan<S> {
@@ -44,17 +47,25 @@ impl<S> Flashloan<S> {
         }
     }
 
-    fn calculate_usd_value((usd_price, decimals): (f64, u32), amount: U256) -> U256 {
+    pub fn new_with_oracle(oracle: Box<dyn PriceOracle>) -> Self {
+        Self {
+            phantom: PhantomData,
+            oracle,
+            use_contract_value: false,
+        }
+    }
+
+    fn calculate_usd_value((usd_price, decimals): (f64, u32), amount: U256) -> U512 {
         let amount = if decimals > 18 {
             amount / U256::from(10u64.pow(decimals - 18))
         } else {
             amount * U256::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return amount * float_scale_to_u256(usd_price, 5);
+        return U512::from(amount) * float_scale_to_u512(usd_price, 5);
     }
 
-    fn calculate_usd_value_from_addr(&self, addr: H160, amount: U256) -> Option<U256> {
+    fn calculate_usd_value_from_addr(&self, addr: H160, amount: U256) -> Option<U512> {
         match self.oracle.fetch_token_price(addr) {
             Some(price) => Some(Self::calculate_usd_value(price, amount)),
             _ => None,
@@ -81,14 +92,11 @@ where
             return vec![];
         }
         let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
+        // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
         macro_rules! earned {
             ($amount:expr) => {
-                MiddlewareOp::Earned(
-                    MiddlewareType::Flashloan,
-                    self.calculate_usd_value_from_addr(call_target, $amount)
-                        .unwrap_or(U256::from(0)),
-                )
+                MiddlewareOp::Earned(MiddlewareType::Flashloan, $amount)
             };
         }
 
@@ -139,11 +147,23 @@ where
                 let make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
                     [vec![0x0; 31], vec![0x1]].concat(),
                 ));
-                if dst == interp.contract.caller {
-                    handle_dst_is_attacker!(amount)
-                } else {
-                    handle_contract_contract_transfer!()
+                match self.calculate_usd_value_from_addr(call_target, amount) {
+                    Some(value) => {
+                        if H160::from_str("0xBcF6e9d27bf95F3F5eDDB93C38656D684317D5b4").unwrap()
+                            == interp.contract.address
+                        {
+                            println!("Flashloan from {:?} amount {:?}", call_target, amount);
+                            exit(1);
+                        }
+                        if dst == interp.contract.caller {
+                            return handle_dst_is_attacker!(value);
+                        }
+                    }
+                    // if no value, we can't borrow it!
+                    // bypass by explicitly returning value for every token
+                    _ => {}
                 }
+                handle_contract_contract_transfer!()
             }
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
@@ -153,20 +173,25 @@ where
                 let make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
                     [vec![0x0; 31], vec![0x1]].concat(),
                 ));
-                if src == interp.contract.caller {
-                    match self.calculate_usd_value_from_addr(call_target, amount) {
-                        Some(value) => vec![
-                            make_success,
-                            MiddlewareOp::Owed(MiddlewareType::Flashloan, value),
-                        ],
-                        // if no value, we can't borrow it!
-                        // bypass by explicitly returning value for every token
-                        _ => vec![],
+                match self.calculate_usd_value_from_addr(call_target, amount) {
+                    Some(value) => {
+                        if src == interp.contract.caller {
+                            return vec![
+                                make_success,
+                                MiddlewareOp::Owed(MiddlewareType::Flashloan, value),
+                            ];
+                        } else if dst == interp.contract.caller {
+                            return handle_dst_is_attacker!(value);
+                        }
                     }
-                } else if dst == interp.contract.caller {
-                    handle_dst_is_attacker!(amount)
-                } else {
+                    // if no value, we can't borrow it!
+                    // bypass by explicitly returning value for every token
+                    _ => {}
+                }
+                if src != interp.contract.caller && dst != interp.contract.caller {
                     handle_contract_contract_transfer!()
+                } else {
+                    vec![]
                 }
             }
             _ => {
@@ -186,8 +211,8 @@ where
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
-    pub owed: U256,
-    pub earned: U256,
+    pub owed: U512,
+    pub earned: U512,
 }
 
 impl_serdeany!(FlashloanData);
@@ -205,8 +230,8 @@ where
         // todo(shou): move init to else where to avoid overhead
         if !result.new_state.has_metadata::<FlashloanData>() {
             result.new_state.add_metadata(FlashloanData {
-                owed: U256::from(0),
-                earned: U256::from(0),
+                owed: U512::from(0),
+                earned: U512::from(0),
             });
         }
         match op {

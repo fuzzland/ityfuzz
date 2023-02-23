@@ -1,5 +1,5 @@
 use crate::abi::get_abi_type_boxed;
-use crate::contract_utils::ContractInfo;
+use crate::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::ExecutionResult;
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{VMInput, VMInputT};
@@ -45,6 +45,13 @@ pub trait HasItyState {
     fn get_rand_caller(&mut self) -> H160;
 
     fn add_vm_input(&mut self, input: VMInput) -> usize;
+    fn add_abi<I>(
+        &mut self,
+        abi: &ABIConfig,
+        scheduler: &dyn Scheduler<I, FuzzState>,
+        address: H160,
+    ) where
+        I: Input + VMInputT + 'static;
 }
 
 pub trait HasInfantStateState {
@@ -111,20 +118,13 @@ impl FuzzState {
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
-        include_static: bool,
     ) where
         I: Input + VMInputT + 'static,
         S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
     {
         self.setup_default_callers(ACCOUNT_AMT as usize);
         self.setup_contract_callers(CONTRACT_AMT as usize, executor);
-        self.initialize_corpus(
-            contracts,
-            executor,
-            scheduler,
-            infant_scheduler,
-            include_static,
-        );
+        self.initialize_corpus(contracts, executor, scheduler, infant_scheduler);
     }
 
     pub fn initialize_corpus<I, S>(
@@ -133,7 +133,6 @@ impl FuzzState {
         executor: &mut EVMExecutor<I, S>,
         scheduler: &dyn Scheduler<I, FuzzState>,
         infant_scheduler: &dyn Scheduler<StagedVMState, InfantStateState>,
-        include_static: bool,
     ) where
         I: Input + VMInputT + 'static,
         S: State + HasCorpus<I> + HasMetadata + HasItyState + 'static,
@@ -160,41 +159,7 @@ impl FuzzState {
             };
 
             for abi in contract.abi {
-                if abi.is_constructor {
-                    continue;
-                }
-
-                match self
-                    .hash_to_address
-                    .get_mut(abi.function.clone().as_slice())
-                {
-                    Some(addrs) => {
-                        addrs.insert(deployed_address);
-                    }
-                    None => {
-                        self.hash_to_address
-                            .insert(abi.function.clone(), HashSet::from([deployed_address]));
-                    }
-                }
-                if abi.is_static && !include_static {
-                    continue;
-                }
-                let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                abi_instance.set_func(abi.function);
-                let input = VMInput {
-                    caller: self.get_rand_caller(),
-                    contract: deployed_address,
-                    data: Some(abi_instance),
-                    sstate: StagedVMState::new_uninitialized(),
-                    sstate_idx: 0,
-                    txn_value: 0,
-                };
-                let mut tc = Testcase::new(input);
-                tc.set_exec_time(Duration::from_secs(0));
-                let idx = self.txn_corpus.add(tc).expect("failed to add");
-                scheduler
-                    .on_add(self, idx)
-                    .expect("failed to call scheduler on_add");
+                self.add_abi(&abi, scheduler, deployed_address);
             }
             // add transfer txn
             {
@@ -204,7 +169,7 @@ impl FuzzState {
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: 1,
+                    txn_value: Some(1),
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -348,6 +313,52 @@ impl HasItyState for FuzzState {
         tc.set_exec_time(Duration::from_secs(0));
         let idx = self.txn_corpus.add(tc).expect("failed to add");
         idx
+    }
+
+    fn add_abi<I>(
+        &mut self,
+        abi: &ABIConfig,
+        scheduler: &dyn Scheduler<I, FuzzState>,
+        deployed_address: H160,
+    ) where
+        I: Input + VMInputT + 'static,
+    {
+        if abi.is_constructor {
+            return;
+        }
+
+        match self
+            .hash_to_address
+            .get_mut(abi.function.clone().as_slice())
+        {
+            Some(addrs) => {
+                addrs.insert(deployed_address);
+            }
+            None => {
+                self.hash_to_address
+                    .insert(abi.function.clone(), HashSet::from([deployed_address]));
+            }
+        }
+        #[cfg(feature = "fuzz_static")]
+        if abi.is_static {
+            return;
+        }
+        let mut abi_instance = get_abi_type_boxed(&abi.abi);
+        abi_instance.set_func(abi.function);
+        let input = VMInput {
+            caller: self.get_rand_caller(),
+            contract: deployed_address,
+            data: Some(abi_instance),
+            sstate: StagedVMState::new_uninitialized(),
+            sstate_idx: 0,
+            txn_value: if abi.is_payable { Some(0) } else { None },
+        };
+        let mut tc = Testcase::new(input);
+        tc.set_exec_time(Duration::from_secs(0));
+        let idx = self.txn_corpus.add(tc).expect("failed to add");
+        scheduler
+            .on_add(self, idx)
+            .expect("failed to call scheduler on_add");
     }
 }
 

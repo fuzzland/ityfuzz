@@ -432,7 +432,7 @@ where
 
         unsafe {
             if state_change {
-                let hash = input.get_state().get_hash();
+                let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
                 }

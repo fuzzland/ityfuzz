@@ -66,14 +66,13 @@ where
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
                 }
-                2 => {
-                    if state.rand_mut().next() % 100 == 0 {
+                2 => match input.get_txn_value() {
+                    Some(_) => {
                         input.set_txn_value(state.rand_mut().next() as usize);
-                    } else {
-                        input.set_txn_value(0);
+                        MutationResult::Mutated
                     }
-                    MutationResult::Mutated
-                }
+                    None => MutationResult::Skipped,
+                },
                 _ => input.mutate(state),
             }
         };

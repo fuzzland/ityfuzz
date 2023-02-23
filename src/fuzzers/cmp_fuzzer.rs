@@ -67,11 +67,12 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let mut fuzz_host = FuzzHost::new();
     match config.onchain {
         Some(onchain) => {
-            fuzz_host.add_middlewares(Box::new(OnChain::<VMInput, FuzzState>::new(
+            let mut mid = Box::new(OnChain::<VMInput, FuzzState>::new(
                 // scheduler can be cloned because it never uses &mut self
                 onchain,
                 scheduler.clone(),
-            )));
+            ));
+            fuzz_host.add_middlewares(mid);
         }
         None => {}
     };
@@ -89,7 +90,6 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
         &mut executor.evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        true,
     );
     #[cfg(feature = "deployer_is_attacker")]
     state.add_deployer_to_callers(deployer);
