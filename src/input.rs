@@ -31,6 +31,7 @@ pub trait VMInputT:
     fn get_txn_value(&self) -> usize;
     fn set_txn_value(&mut self, v: usize);
     fn get_abi_cloned(&self) -> Option<BoxedABI>;
+    fn to_string(&self) -> String;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -128,6 +129,13 @@ impl VMInputT for VMInput {
 
     fn get_abi_cloned(&self) -> Option<BoxedABI> {
         self.data.clone()
+    }
+
+    fn to_string(&self) -> String {
+        match self.data {
+            Some(ref d) => d.to_string(),
+            None => String::new(),
+        }
     }
 }
 

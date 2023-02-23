@@ -96,7 +96,7 @@ impl FuzzState {
             execution_result: ExecutionResult::empty_result(),
             default_callers: vec![],
             rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
-            max_size: 1500,
+            max_size: 20,
             hash_to_address: Default::default(),
         }
     }

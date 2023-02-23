@@ -38,21 +38,33 @@ where
             let concrete = state.get_infant_state(self.infant_scheduler).unwrap();
             input.set_staged_state(concrete.1, concrete.0);
         }
-        for i in 0..state.rand_mut().below(10) {
-            match state.rand_mut().below(10) {
+        let should_havoc = state.rand_mut().below(100) < 70;
+        let havoc_times = if should_havoc {
+            state.rand_mut().below(10) + 1
+        } else {
+            1
+        };
+        let mut mutator = || -> MutationResult {
+            match state.rand_mut().below(100) {
                 0 => {
                     // mutate the caller
                     let caller = state.get_rand_caller();
                     if caller == input.get_caller() {
-                        return Ok(MutationResult::Skipped);
+                        return MutationResult::Skipped;
                     }
                     input.set_caller(caller);
+                    MutationResult::Mutated
                 }
                 1 => {
                     // cross over infant state
                     // we need power schedule here for infant states
-                    let mutant = state.get_infant_state(self.infant_scheduler).unwrap();
-                    input.set_staged_state(mutant.1, mutant.0);
+                    let old_idx = input.get_state_idx();
+                    let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
+                    if idx == old_idx {
+                        return MutationResult::Skipped;
+                    }
+                    input.set_staged_state(new_state, idx);
+                    MutationResult::Mutated
                 }
                 2 => {
                     if state.rand_mut().next() % 100 == 0 {
@@ -60,13 +72,19 @@ where
                     } else {
                         input.set_txn_value(0);
                     }
+                    MutationResult::Mutated
                 }
-                _ => {
-                    input.mutate(state);
-                }
+                _ => input.mutate(state),
+            }
+        };
+
+        let mut res = MutationResult::Skipped;
+        for _ in 0..havoc_times {
+            if mutator() == MutationResult::Mutated {
+                res = MutationResult::Mutated;
             }
         }
-        return Ok(MutationResult::Mutated);
+        Ok(res)
     }
 
     fn post_exec(
