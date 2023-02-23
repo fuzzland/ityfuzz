@@ -111,7 +111,7 @@ pub struct FuzzHost {
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     middlewares_enabled: bool,
     // middleware sets are available empty middlewares for each type
-    middleware_sets: HashMap<MiddlewareType, Box<dyn Middleware>>,
+    middleware_indvidual_enabled: HashMap<MiddlewareType, bool>,
     middlewares: HashMap<MiddlewareType, Box<dyn Middleware>>,
     // for some middlewares, it appears in the execution based on some probability
     // see set_prob_middlewares for more details
@@ -136,7 +136,7 @@ impl Clone for FuzzHost {
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             middlewares_enabled: false,
-            middleware_sets: Default::default(),
+            middleware_indvidual_enabled: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
@@ -170,7 +170,7 @@ impl FuzzHost {
             pc_to_addresses: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
             middlewares_enabled: false,
-            middleware_sets: Default::default(),
+            middleware_indvidual_enabled: Default::default(),
             middlewares: Default::default(),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
@@ -183,20 +183,16 @@ impl FuzzHost {
     }
 
     pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware>) {
-        self.middlewares_enabled = true;
-        self.middlewares_deferred_actions
-            .insert(middlewares.get_type(), vec![]);
-        self.middlewares
-            .insert(middlewares.get_type(), middlewares.box_clone());
-        self.middleware_sets
-            .insert(middlewares.get_type(), middlewares);
+        self.add_middlewares_with_prob(middlewares, 1.0);
     }
 
     pub fn add_middlewares_with_prob(&mut self, middlewares: Box<dyn Middleware>, prob: f32) {
         self.middlewares_enabled = true;
-        let middleware_type = middlewares.get_type();
-        self.add_middlewares(middlewares);
-        self.middleware_probs.insert(middleware_type, prob);
+        let ty = middlewares.get_type();
+        self.middlewares_deferred_actions.insert(ty, vec![]);
+        self.middlewares.insert(ty, middlewares);
+        self.middleware_indvidual_enabled.insert(ty, true);
+        self.middleware_probs.insert(ty, prob);
     }
 
     pub fn set_prob_middlewares(&mut self) {
@@ -204,10 +200,9 @@ impl FuzzHost {
             // random number between 0 and 1
             let rand = rand::random::<f32>();
             if rand < *prob {
-                self.middlewares
-                    .insert(*ty, self.middleware_sets[ty].box_clone());
+                self.middleware_indvidual_enabled.insert(*ty, true);
             } else {
-                self.middlewares.remove(ty);
+                self.middleware_indvidual_enabled.insert(*ty, false);
             }
         }
     }
@@ -280,6 +275,7 @@ impl Host for FuzzHost {
                 let all_mutation_ops = self
                     .middlewares
                     .iter_mut()
+                    .filter(|(ty, _)| self.middleware_indvidual_enabled[ty])
                     .map(|m| m.1.on_step(interp))
                     .collect::<Vec<_>>();
                 all_mutation_ops.iter().for_each(|ops| {

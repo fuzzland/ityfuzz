@@ -31,22 +31,6 @@ where
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
 }
 
-impl<I, S> Clone for OnChain<I, S>
-where
-    I: Input + VMInputT,
-    S: State,
-{
-    fn clone(&self) -> Self {
-        Self {
-            loaded_data: self.loaded_data.clone(),
-            loaded_code: self.loaded_code.clone(),
-            calls: self.calls.clone(),
-            endpoint: self.endpoint.clone(),
-            scheduler: None,
-        }
-    }
-}
-
 impl<I, S> Debug for OnChain<I, S>
 where
     I: Input + VMInputT,
@@ -143,10 +127,6 @@ where
 
     fn as_any(&mut self) -> &mut (dyn Any + 'static) {
         self
-    }
-
-    fn box_clone(&self) -> Box<dyn Middleware> {
-        Box::new(self.clone())
     }
 }
 
