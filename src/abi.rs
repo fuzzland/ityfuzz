@@ -1,4 +1,4 @@
-use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, T256};
+use crate::abi::ABILossyType::{TArray, TDynamic, TEmpty, T256, TUnknown};
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::HasItyState;
 use bytes::Bytes;
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
+use crate::evm::abi_max_size;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -20,6 +21,7 @@ pub enum ABILossyType {
     TArray,
     TDynamic,
     TEmpty,
+    TUnknown,
 }
 
 // how can we deserialize this trait?
@@ -103,6 +105,52 @@ impl BoxedABI {
     }
 }
 
+fn sample_abi<S>(state: &mut S, size: usize) -> BoxedABI
+where S: State + HasRand + HasItyState + HasMaxSize {
+    // TODO(@shou): use a better sampling strategy
+    if size != 0 && size % 32 == 0 {
+        // sample a static type
+        match state.rand_mut().below(100) % 2 {
+            0 => BoxedABI::new(Box::new(A256 { data: vec![0; 32], is_address: false })),
+            1 => BoxedABI::new(Box::new(A256 { data: state.get_rand_caller().0.into(), is_address: true })),
+            _ => unreachable!()
+        }
+    } else {
+        // sample a dynamic type
+        let max_size = state.max_size();
+        let vec_size = state.rand_mut().below(max_size as u64) as usize;
+        match state.rand_mut().below(100) % 4 {
+            // dynamic
+            0 => BoxedABI::new(Box::new(ADynamic { data: vec![
+                state.rand_mut().below(255) as u8;
+                vec_size
+            ], multiplier: 32 })),
+            // tuple
+            1 => BoxedABI::new(Box::new(AArray { data: vec![
+                sample_abi(state, 2);
+                vec_size
+            ], dynamic_size: false })),
+            // array[]
+            2 => {
+                let abi = sample_abi(state, 2);
+                BoxedABI::new(Box::new(AArray {
+                    data: vec![abi; vec_size],
+                    dynamic_size: false,
+                }))
+            },
+            // array[...]
+            3 => {
+                let abi = sample_abi(state, 2);
+                BoxedABI::new(Box::new(AArray {
+                    data: vec![abi; vec_size],
+                    dynamic_size: true,
+                }))
+            },
+            _ => unreachable!()
+        }
+    }
+}
+
 impl BoxedABI {
     pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
@@ -167,6 +215,29 @@ impl BoxedABI {
                     return aarray.data[index].mutate(state);
                 }
                 MutationResult::Mutated
+            }
+            TUnknown => {
+                let a_unknown = self
+                    .b
+                    .deref_mut()
+                    .as_any()
+                    .downcast_mut::<AUnknown>()
+                    .unwrap();
+                unsafe {
+                    let size = abi_max_size[a_unknown.size_idx];
+                    if size == 0 {
+                        a_unknown.concrete_type = BoxedABI::new(Box::new(AEmpty {}));
+                        return MutationResult::Skipped;
+                    }
+                    if (state.rand_mut().below(100)) < 80 {
+                        a_unknown.concrete_type.mutate(state)
+                    } else {
+                        a_unknown.concrete_type = sample_abi(state, size);
+                        MutationResult::Mutated
+                    }
+
+                }
+
             }
         }
     }
@@ -551,6 +622,41 @@ fn get_abi_type_basic(
                 panic!("unknown abi type {}", abi_name);
             }
         }
+    }
+}
+
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AUnknown {
+    pub concrete_type: BoxedABI,
+    pub size_idx: usize,
+}
+
+impl Input for AUnknown {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("AUnknown_{}", idx)
+    }
+}
+
+impl ABI for AUnknown {
+    fn is_static(&self) -> bool {
+        self.concrete_type.is_static()
+    }
+
+    fn get_bytes(&self) -> Vec<u8> {
+        self.concrete_type.b.get_bytes()
+    }
+
+    fn get_type(&self) -> ABILossyType {
+        TUnknown
+    }
+
+    fn to_string(&self) -> String {
+        self.concrete_type.b.to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
