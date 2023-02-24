@@ -32,6 +32,29 @@ cd ./cli/
 ```
 
 
+### Demo
+
+**Verilog CTF Challenge 2**
+`tests/verilog-2/`
+
+Flashloan attack + Reentrancy. The target is to reach line 34 in `Bounty.sol`. 
+
+Exact Exploit:
+```
+0. Borrow k MATIC such that k > balance() / 10
+1. depositMATIC() with 1000 MATIC
+2. redeem(k * 1e18) -- reentrancy contract --> getBounty()
+3. Return k MATIC
+```
+
+Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s):
+```bash
+```bash
+./cli -f -t "./tests/verilog-2/*"
+```
+
+`-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance. 
+
 ### Fuzz a Project (Offline)
 You can fuzz a project by providing a path to the project directory. 
 ```bash
