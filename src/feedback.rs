@@ -200,6 +200,17 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        // ensure the execution is finished
+        if state
+            .get_execution_result()
+            .new_state
+            .state
+            .post_execution
+            .len()
+            > 0
+        {
+            return Ok(false);
+        }
         let mut oracle_ctx: OracleCtx<I, S> = OracleCtx::new(
             state,
             input.get_state(),

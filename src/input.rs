@@ -1,4 +1,4 @@
-use crate::abi::{A256, ABILossyType, ADynamic, BoxedABI};
+use crate::abi::{ABILossyType, ADynamic, BoxedABI, A256};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
@@ -9,11 +9,11 @@ use libafl::inputs::Input;
 use libafl::mutators::Mutator;
 use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 
+use crate::mutation_utils::VMStateHintedMutator;
 use crate::state::HasItyState;
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
-use crate::mutation_utils::VMStateHintedMutator;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT:
@@ -40,6 +40,7 @@ pub trait VMInputT:
     fn get_txn_value(&self) -> Option<usize>;
     fn set_txn_value(&mut self, v: usize);
     fn get_abi_cloned(&self) -> Option<BoxedABI>;
+    fn set_abi(&mut self, abi: BoxedABI);
     fn is_step(&self) -> bool;
     fn set_step(&mut self, gate: bool);
     fn to_string(&self) -> String;
@@ -88,16 +89,13 @@ impl VMInputT for VMInput {
     where
         S: State + HasRand + HasMaxSize + HasItyState,
     {
-        let vm_slots = if let Some(s) =
-        self.get_state().get(&self.get_contract()) {
+        let vm_slots = if let Some(s) = self.get_state().get(&self.get_contract()) {
             Some(s.clone())
         } else {
             None
         };
         match self.data {
-            Some(ref mut data) => {
-                data.mutate_with_vm_slots(state, vm_slots)
-            },
+            Some(ref mut data) => data.mutate_with_vm_slots(state, vm_slots),
             None => MutationResult::Skipped,
         }
     }
@@ -149,6 +147,10 @@ impl VMInputT for VMInput {
 
     fn get_abi_cloned(&self) -> Option<BoxedABI> {
         self.data.clone()
+    }
+
+    fn set_abi(&mut self, abi: BoxedABI) {
+        self.data = Some(abi);
     }
 
     fn is_step(&self) -> bool {

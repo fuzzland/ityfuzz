@@ -1,11 +1,12 @@
+use crate::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::input::VMInputT;
+use crate::mutation_utils::VMStateHintedMutator;
 use crate::state::InfantStateState;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
-use crate::mutation_utils::VMStateHintedMutator;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -46,8 +47,8 @@ where
             1
         };
         let mut mutator = || -> MutationResult {
-            match state.rand_mut().below(30) {
-                0 => {
+            match state.rand_mut().below(100) {
+                1..=5 => {
                     // mutate the caller
                     let caller = state.get_rand_caller();
                     if caller == input.get_caller() {
@@ -56,24 +57,45 @@ where
                     input.set_caller(caller);
                     MutationResult::Mutated
                 }
-                1 => {
+                6..=10 => {
                     // cross over infant state
                     // we need power schedule here for infant states
-                    let old_idx = input.get_state_idx();
-                    let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
-                    if idx == old_idx {
-                        return MutationResult::Skipped;
+                    if !input.is_step() {
+                        let old_idx = input.get_state_idx();
+                        let (idx, new_state) =
+                            state.get_infant_state(self.infant_scheduler).unwrap();
+                        if idx == old_idx {
+                            return MutationResult::Skipped;
+                        }
+                        input.set_staged_state(new_state, idx);
+                        MutationResult::Mutated
+                    } else {
+                        // we are in step mode, replacing a state is not gonna work
+                        MutationResult::Skipped
                     }
-                    input.set_staged_state(new_state, idx);
-                    MutationResult::Mutated
                 }
-                2 => match input.get_txn_value() {
+                11..=15 => match input.get_txn_value() {
                     Some(_) => {
                         input.set_txn_value(state.rand_mut().next() as usize);
                         MutationResult::Mutated
                     }
                     None => MutationResult::Skipped,
                 },
+                16 => {
+                    // make it a step forward to pop one post execution
+                    // todo(@shou): fix the sizing of return
+                    if input.get_staged_state().state.post_execution.len() > 0 && !input.is_step() {
+                        input.set_step(true);
+                        input.set_abi(BoxedABI::new(Box::new(AUnknown {
+                            concrete_type: BoxedABI::new(Box::new(AEmpty {})),
+                            size: input.get_state().post_execution.last().unwrap().output_len
+                                as usize,
+                        })));
+                        MutationResult::Mutated
+                    } else {
+                        MutationResult::Skipped
+                    }
+                }
                 _ => input.mutate(state),
             }
         };

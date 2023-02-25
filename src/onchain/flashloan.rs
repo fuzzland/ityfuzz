@@ -87,18 +87,18 @@ where
         };
 
         let value_transfer = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => {
-                interp.stack.peek(2).unwrap()
-            },
-            _ => { U256::zero() }
+            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
+            _ => U256::zero(),
         };
 
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         let value_transfer_ops = if value_transfer > U256::zero() {
             if call_target == interp.contract.caller {
-                vec![MiddlewareOp::Earned(MiddlewareType::Flashloan, U512::from(
-                    value_transfer) * float_scale_to_u512(1.0, 5))]
+                vec![MiddlewareOp::Earned(
+                    MiddlewareType::Flashloan,
+                    U512::from(value_transfer) * float_scale_to_u512(1.0, 5),
+                )]
             } else {
                 vec![]
             }
@@ -151,9 +151,13 @@ where
         let erc20_ops = match data[0..4] {
             // balanceOf / approval
             [0x70, 0xa0, 0x82, 0x31] | [0x09, 0x5e, 0xa7, 0xb3] => {
-                vec![MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                    vec![0xff; 32],
-                ))]
+                if !self.use_contract_value {
+                    vec![MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
+                        vec![0xff; 32],
+                    ))]
+                } else {
+                    vec![]
+                }
             }
             // transfer
             [0xa9, 0x05, 0x9c, 0xbb] => {
@@ -169,12 +173,6 @@ where
                 ));
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
-                        if H160::from_str("0xBcF6e9d27bf95F3F5eDDB93C38656D684317D5b4").unwrap()
-                            == interp.contract.address
-                        {
-                            println!("Flashloan from {:?} amount {:?}", call_target, amount);
-                            exit(1);
-                        }
                         if dst == interp.contract.caller {
                             return handle_dst_is_attacker!(value);
                         }
