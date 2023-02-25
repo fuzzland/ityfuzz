@@ -584,7 +584,7 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
             dynamic_size: false,
         });
     }
-    get_abi_type_basic(abi_name.as_str(), 0, with_address)
+    get_abi_type_basic(abi_name.as_str(), 32, with_address)
 }
 
 fn get_abi_type_basic(

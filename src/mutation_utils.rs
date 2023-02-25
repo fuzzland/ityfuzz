@@ -30,15 +30,22 @@ impl<'a, I, S> Mutator<I, S> for VMStateHintedMutator<'a>
 where S: State + HasRand,
       I: Input + HasBytesVec {
     fn mutate(&mut self, state: &mut S, input: &mut I, stage_idx: i32) -> Result<MutationResult, Error> {
+        let bm = input.bytes_mut();
+        let bm_len = bm.len();
+        if bm_len < 8 {
+            return Ok(MutationResult::Skipped);
+        }
+        let mut data = vec![0u8; 32];
         // sample a key from the vm_state.state
         let idx = state.rand_mut().below(self.vm_slots.len() as u64) as usize;
         let key = self.vm_slots.keys().nth(idx).unwrap();
         if state.rand_mut().below(100) < 80 {
             let value = self.vm_slots.get(key).unwrap();
-            value.to_big_endian(input.bytes_mut());
+            value.to_big_endian(&mut data);
         } else {
-            key.to_big_endian(input.bytes_mut());
+            key.to_big_endian(&mut data);
         }
+        bm.copy_from_slice(&data[(32 - bm_len)..]);
         Ok(MutationResult::Mutated)
     }
 }
