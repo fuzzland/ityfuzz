@@ -50,12 +50,16 @@ where
             match state.rand_mut().below(100) {
                 1..=5 => {
                     // mutate the caller
-                    let caller = state.get_rand_caller();
-                    if caller == input.get_caller() {
-                        return MutationResult::Skipped;
+                    if !input.is_step() {
+                        let caller = state.get_rand_caller();
+                        if caller == input.get_caller() {
+                            return MutationResult::Skipped;
+                        }
+                        input.set_caller(caller);
+                        MutationResult::Mutated
+                    } else {
+                        MutationResult::Skipped
                     }
-                    input.set_caller(caller);
-                    MutationResult::Mutated
                 }
                 6..=10 => {
                     // cross over infant state
@@ -74,13 +78,19 @@ where
                         MutationResult::Skipped
                     }
                 }
-                11..=15 => match input.get_txn_value() {
-                    Some(_) => {
-                        input.set_txn_value(state.rand_mut().next() as usize);
-                        MutationResult::Mutated
+                11..=15 => {
+                    if !input.is_step() {
+                        match input.get_txn_value() {
+                            Some(_) => {
+                                input.set_txn_value(state.rand_mut().next() as usize);
+                                MutationResult::Mutated
+                            }
+                            None => MutationResult::Skipped,
+                        }
+                    } else {
+                        MutationResult::Skipped
                     }
-                    None => MutationResult::Skipped,
-                },
+                }
                 16 => {
                     // make it a step forward to pop one post execution
                     // todo(@shou): fix the sizing of return

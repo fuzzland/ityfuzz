@@ -351,6 +351,7 @@ pub struct CmpFeedback<'a, SC> {
     current_map: &'a mut [U256],
     known_jmp_map: [u8; MAP_SIZE],
     known_states: HashSet<u64>,
+    known_pcs: HashSet<usize>,
     scheduler: &'a SC,
 }
 
@@ -365,6 +366,7 @@ where
             current_map,
             known_jmp_map: [0; MAP_SIZE],
             known_states: Default::default(),
+            known_pcs: Default::default(),
             scheduler,
         }
     }
@@ -432,11 +434,26 @@ where
         }
 
         unsafe {
-            if state_change {
+            // hack to account for saving reentrancy without dataflow
+            let post_exec = state.get_execution_result().get_post_execution();
+            let mut pc_interesting = if post_exec.len() > 0 {
+                let pc = post_exec.last().unwrap().pc;
+                if self.known_pcs.contains(&pc) {
+                    false
+                } else {
+                    self.known_pcs.insert(pc);
+                    true
+                }
+            } else {
+                false
+            };
+
+            if state_change || pc_interesting {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
                 }
+
                 let mut df_interesting = false;
                 for i in 0..MAP_SIZE {
                     if READ_MAP[i] && WRITE_MAP[i] != 0 {
@@ -447,7 +464,7 @@ where
                 for i in 0..MAP_SIZE {
                     WRITE_MAP[i] = 0;
                 }
-                if df_interesting {
+                if df_interesting || pc_interesting {
                     self.known_states.insert(hash);
                     return Ok(true);
                 }

@@ -111,7 +111,7 @@ where
     S: State + HasRand + HasItyState + HasMaxSize,
 {
     // TODO(@shou): use a better sampling strategy
-    if size != 0 && size % 32 == 0 {
+    if size == 32 {
         // sample a static type
         match state.rand_mut().below(100) % 2 {
             0 => BoxedABI::new(Box::new(A256 {
@@ -136,12 +136,12 @@ where
             })),
             // tuple
             1 => BoxedABI::new(Box::new(AArray {
-                data: vec![sample_abi(state, 2); vec_size],
+                data: vec![sample_abi(state, 32); vec_size],
                 dynamic_size: false,
             })),
             // array[]
             2 => {
-                let abi = sample_abi(state, 2);
+                let abi = sample_abi(state, 32);
                 BoxedABI::new(Box::new(AArray {
                     data: vec![abi; vec_size],
                     dynamic_size: false,
@@ -149,7 +149,7 @@ where
             }
             // array[...]
             3 => {
-                let abi = sample_abi(state, 2);
+                let abi = sample_abi(state, 32);
                 BoxedABI::new(Box::new(AArray {
                     data: vec![abi; vec_size],
                     dynamic_size: true,
@@ -248,7 +248,7 @@ impl BoxedABI {
                         a_unknown.concrete_type = BoxedABI::new(Box::new(AEmpty {}));
                         return MutationResult::Skipped;
                     }
-                    if (state.rand_mut().below(100)) < 80 {
+                    if (state.rand_mut().below(100)) < 90 {
                         a_unknown
                             .concrete_type
                             .mutate_with_vm_slots(state, vm_slots)
