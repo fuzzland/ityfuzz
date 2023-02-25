@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use std::borrow::{Borrow, BorrowMut};
+use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 
 use std::collections::hash_map::DefaultHasher;
@@ -14,6 +15,7 @@ use crate::input::{VMInput, VMInputT};
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
+use libafl::impl_serdeany;
 use libafl::prelude::powersched::PowerSchedule;
 use libafl::prelude::{HasMetadata, ObserversTuple, SerdeAnyMap};
 use libafl::state::{HasCorpus, State};
@@ -22,10 +24,7 @@ use primitive_types::{H160, H256, U256, U512};
 use rand::random;
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
-use revm::{
-    Bytecode, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return,
-    SelfDestructResult, Spec,
-};
+use revm::{Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
 use serde::__private::de::Borrowed;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
@@ -39,17 +38,51 @@ pub static mut write_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 // cmp
 pub static mut cmp_map: [U256; MAP_SIZE] = [U256::max_value(); MAP_SIZE];
+pub static mut abi_max_size: [usize; MAP_SIZE] = [0; MAP_SIZE];
 pub static mut state_change: bool = false;
 
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
+
+pub static mut ret_size: usize = 0;
+pub static mut ret_offset: usize = 0;
+pub static mut global_call_context: Option<CallContext> = None;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PostExecutionCtx {
+    pub stack: Vec<U256>,
+    pub pc: usize,
+    pub output_offset: usize,
+    pub output_len: usize,
+
+    pub call_data: Bytes,
+
+    pub address: H160,
+    pub caller: H160,
+    pub code_address: H160,
+    pub apparent_value: U256,
+}
+
+impl PostExecutionCtx {
+    fn get_call_ctx(&self) -> CallContext {
+        CallContext {
+            address: self.address,
+            caller: self.caller,
+            apparent_value: self.apparent_value,
+            code_address: self.code_address,
+            scheme: CallScheme::Call,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VMState {
     pub state: HashMap<H160, HashMap<U256, U256>>,
     // If control leak happens, we add state with incomplete execution to the corpus
     // More than one when the control is leaked again with the call based on the incomplete state
-    pub post_execution: Vec<(Vec<U256>, usize)>,
+
+    pub post_execution: Vec<PostExecutionCtx>,
+    pub leaked_func_hash: Option<u64>,
     pub metadata: SerdeAnyMap,
 }
 
@@ -72,6 +105,7 @@ impl VMState {
         Self {
             state: HashMap::new(),
             post_execution: vec![],
+            leaked_func_hash: None,
             metadata: Default::default(),
         }
     }
@@ -136,7 +170,6 @@ pub struct FuzzHost {
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub total_instr: HashMap<H160, usize>,
-
     pub origin: H160,
 }
 
@@ -413,6 +446,21 @@ impl Host for FuzzHost {
                 }
 
                 0xf1 | 0xf2 | 0xf4 | 0xfa => {
+                    let offset_of_ret_size: usize = match *interp.instruction_pointer {
+                        0xf1 | 0xf2 => 6,
+                        0xf4 | 0xfa => 5,
+                        _ => unreachable!()
+                    };
+                    unsafe {
+                        ret_offset = interp.stack
+                            .peek(offset_of_ret_size - 1)
+                            .expect("stack underflow")
+                            .as_usize();
+                        ret_size = interp.stack
+                            .peek(offset_of_ret_size)
+                            .expect("stack underflow")
+                            .as_usize();
+                    }
                     self._pc = interp.program_counter();
                 }
                 _ => {}
@@ -521,7 +569,25 @@ impl Host for FuzzHost {
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs) -> (Return, Gas, Bytes) {
+        let mut hash = input.input.to_vec();
+        hash.resize(4, 0);
+
+        macro_rules! record_func_hash {
+            () => {
+                unsafe {
+                    let mut s = DefaultHasher::new();
+                    hash.hash(&mut s);
+                    let _hash = s.finish();
+                    abi_max_size[(_hash as usize) % MAP_SIZE] = ret_size;
+                    self.data.leaked_func_hash = Some(_hash);
+                }
+            };
+        }
+
+        self.data.leaked_func_hash = None;
+
         if self.origin == input.contract {
+            record_func_hash!();
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
@@ -545,8 +611,6 @@ impl Host for FuzzHost {
             return middleware_result.unwrap();
         }
 
-        let mut hash = input.input.to_vec();
-        hash.resize(4, 0);
 
         let mut input_seq = input.input.to_vec();
         // check whether the whole CALLDATAVALUE can be arbitrary
@@ -576,19 +640,24 @@ impl Host for FuzzHost {
 
         // if the contract is not found or control leak is enabled, return controlleak if it is unbounded call
         if CONTROL_LEAK_DETECTION || contract_loc_option.is_none() {
-            assert!(self._pc != 0);
+            assert_ne!(self._pc, 0);
             if !self.pc_to_addresses.contains_key(&self._pc) {
                 self.pc_to_addresses.insert(self._pc, HashSet::new());
             }
 
             if self.pc_to_addresses.get(&self._pc).unwrap().len() > CONTROL_LEAK_THRESHOLD {
                 // println!("control leak");
+                record_func_hash!();
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             self.pc_to_addresses
                 .get_mut(&self._pc)
                 .unwrap()
                 .insert(input.contract);
+        }
+
+        unsafe {
+            global_call_context = Some(input.context.clone());
         }
 
         // find contracts that have this function hash
@@ -688,57 +757,6 @@ where
         }
     }
 
-    pub fn finish_execution(&mut self, result: &ExecutionResult, input: &I) -> ExecutionResult {
-        let new_state = result.new_state.state.clone();
-        let mut last_output = result.output.clone();
-        for post_exec in result.new_state.state.post_execution.clone() {
-            // there are two cases
-            // / 1. the post_exec finishes
-            // / 2. the post_exec leads to a new control leak (i.e., there are more than 1
-            //      control leak in this function)
-
-            let mut recovering_stack = post_exec.0;
-            // we need push the output of CALL instruction
-            recovering_stack.push(U256::from(1));
-            let r = self.execute_from_pc(
-                input.get_contract(),
-                input.get_caller(),
-                &new_state,
-                input.to_bytes(),
-                // todo(@shou !important) do we need to increase pc?
-                Some((recovering_stack, post_exec.1 + 1)),
-                // todo(@shou !important) whats value
-                0,
-                None,
-            );
-            last_output = r.output;
-            if r.ret == Return::Return {
-                continue;
-            }
-            if r.ret == ControlLeak {
-                panic!("more than one reentrancy in a function! not supported yet");
-            }
-            if r.ret != Return::Return || r.ret != Return::Stop {
-                return ExecutionResult {
-                    output: last_output,
-                    reverted: true,
-                    // we dont need to init because this reverts and is discarded anyways
-                    new_state: StagedVMState::new_uninitialized(),
-                };
-            }
-        }
-        return ExecutionResult {
-            output: last_output,
-            reverted: false,
-            new_state: StagedVMState {
-                state: new_state,
-                stage: result.new_state.stage.clone(),
-                initialized: result.new_state.initialized,
-                trace: result.new_state.trace.clone(),
-            },
-        };
-    }
-
     pub fn deploy(
         &mut self,
         code: Bytecode,
@@ -823,17 +841,53 @@ where
         vm_state: &VMState,
         data: Bytes,
         value: usize,
+        is_step: bool,
         _observers: &mut OT,
         state: Option<&mut S>,
     ) -> ExecutionResult
     where
         OT: ObserversTuple<I, S>,
     {
-        let mut r =
-            self.execute_from_pc(contract_address, caller, vm_state, data, None, value, state);
+        let mut _vm_state = vm_state.clone();
+        // todo(@shou): is this correct?
+        let mut r = if is_step {
+            let mut post_exec = _vm_state.post_execution.pop().unwrap().clone();
+            self.host.origin = post_exec.caller;
+            // we need push the output of CALL instruction
+            post_exec.stack.push(U256::one());
+            post_exec.pc += 1;
+            self.execute_from_pc(&post_exec.get_call_ctx(),
+                                 &_vm_state, data,
+                                 Some(post_exec), state)
+
+        } else {
+            self.host.origin = caller;
+            self.execute_from_pc(&CallContext {
+                address: contract_address,
+                caller,
+                code_address: contract_address,
+                apparent_value: U256::from(value),
+                scheme: CallScheme::Call
+            }, &_vm_state, data, None, state)
+        };
         match r.ret {
             ControlLeak => {
-                r.new_state.post_execution.push((r.stack, r.pc));
+                unsafe {
+                    let global_ctx = global_call_context.clone().expect("global call context should be set");
+                    r.new_state.post_execution.push(PostExecutionCtx {
+                        stack: r.stack,
+                        pc: r.pc,
+                        output_offset: ret_offset,
+                        output_len: ret_size,
+
+                        call_data: Default::default(),
+
+                        address: global_ctx.address,
+                        caller: global_ctx.caller,
+                        code_address: global_ctx.code_address,
+                        apparent_value: global_ctx.apparent_value
+                    });
+                }
             }
             _ => {}
         }
@@ -850,48 +904,52 @@ where
 
     pub fn execute_from_pc(
         &mut self,
-        contract_address: H160,
-        caller: H160,
+        call_ctx: &CallContext,
         vm_state: &VMState,
         data: Bytes,
-        post_exec: Option<(Vec<U256>, usize)>,
-        value: usize,
+        post_exec: Option<PostExecutionCtx>,
         mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
         // setup available middlewares
         self.host.set_prob_middlewares();
-        self.host.origin = caller;
         self.host.data = vm_state.clone();
-        let call = Contract::new::<LatestSpec>(
-            data,
-            self.host
-                .code
-                .get(&contract_address)
-                .expect("no code")
-                .clone(),
-            contract_address,
-            caller,
-            U256::from(value),
-        );
-        let mut new_bytecode: Option<*const u8> = None;
-        let mut new_pc: Option<usize> = None;
-        let mut new_stack: Option<Vec<U256>> = None;
-        if post_exec.is_some() {
-            unsafe {
-                new_pc = Some(post_exec.as_ref().unwrap().1);
-                new_bytecode = Some(call.bytecode.as_ptr().add(new_pc.unwrap()));
-                new_stack = Some(post_exec.unwrap().0);
-            }
+
+        unsafe {
+            global_call_context = Some(call_ctx.clone());
         }
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        if new_stack.is_some() {
+
+        let mut bytecode = self.host
+            .code
+            .get(&call_ctx.code_address)
+            .expect("no code")
+            .clone();
+
+        let mut interp = if let Some(ref post_exec_ctx) = post_exec {
             unsafe {
-                for v in new_stack.unwrap() {
+                let new_pc = post_exec_ctx.pc;
+                let call = Contract::new_with_context::<LatestSpec>(
+                    post_exec_ctx.call_data.clone(),
+                    bytecode,
+                    call_ctx
+                );
+                let new_ip = call.bytecode.as_ptr().add(new_pc);
+                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+                for v in post_exec_ctx.stack.clone() {
                     interp.stack.push(v);
                 }
-                interp.instruction_pointer = new_bytecode.unwrap();
+                interp.instruction_pointer = new_ip;
+                interp.memory.set(post_exec_ctx.output_offset,
+                                  &data[..post_exec_ctx.output_len]);
+                interp
             }
-        }
+        } else {
+            let call = Contract::new_with_context::<LatestSpec>(
+                data,
+                bytecode,
+                call_ctx
+            );
+            Interpreter::new::<LatestSpec>(call, 1e10 as u64)
+        };
         unsafe {
             state_change = false;
         }
@@ -923,7 +981,7 @@ where
                 .handle_deferred_actions(
                     &MiddlewareOp::Owed(
                         MiddlewareType::Flashloan,
-                        U512::from(value) * float_scale_to_u512(1.0, 5),
+                        U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5),
                     ),
                     state.as_mut().unwrap(),
                     &mut result,
