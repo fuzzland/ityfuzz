@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use std::borrow::{Borrow, BorrowMut};
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 
 use std::collections::hash_map::DefaultHasher;
@@ -951,9 +951,10 @@ where
                     interp.stack.push(v);
                 }
                 interp.instruction_pointer = new_ip;
+                interp.memory.resize(post_exec_ctx.output_offset + post_exec_ctx.output_len);
                 interp.memory.set(
                     post_exec_ctx.output_offset,
-                    &data[..post_exec_ctx.output_len],
+                    &data[..min(post_exec_ctx.output_len, data.len())],
                 );
                 interp
             }
