@@ -5,6 +5,7 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
+use crate::mutation_utils::VMStateHintedMutator;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -78,9 +79,11 @@ where
         };
 
         let mut res = MutationResult::Skipped;
-        for _ in 0..havoc_times {
-            if mutator() == MutationResult::Mutated {
-                res = MutationResult::Mutated;
+        while res != MutationResult::Mutated {
+            for _ in 0..havoc_times {
+                if mutator() == MutationResult::Mutated {
+                    res = MutationResult::Mutated;
+                }
             }
         }
         Ok(res)

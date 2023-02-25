@@ -1,15 +1,50 @@
+use std::collections::HashMap;
+use libafl::Error;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{
-    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
-    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
-    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator, QwordAddMutator,
-    StdScheduledMutator, WordAddMutator, WordInterestingMutator,
-};
+use libafl::prelude::{tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator, ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator, QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator, Rand, Named};
 use libafl::state::{HasMaxSize, HasRand, State};
+use primitive_types::U256;
+use crate::input::VMInputT;
+use crate::VMState;
 
-pub fn byte_mutator<I, S>(state: &mut S, input: &mut I) -> MutationResult
+
+pub struct VMStateHintedMutator<'a> {
+    pub vm_slots: &'a HashMap<U256, U256>,
+}
+
+
+impl Named for VMStateHintedMutator<'_> {
+    fn name(&self) -> &str {
+        "VMStateHintedMutator"
+    }
+}
+
+impl<'a> VMStateHintedMutator<'a> {
+    pub fn new(vm_slots: &'a HashMap<U256, U256>) -> Self {
+        Self { vm_slots }
+    }
+}
+
+impl<'a, I, S> Mutator<I, S> for VMStateHintedMutator<'a>
+where S: State + HasRand,
+      I: Input + HasBytesVec {
+    fn mutate(&mut self, state: &mut S, input: &mut I, stage_idx: i32) -> Result<MutationResult, Error> {
+        // sample a key from the vm_state.state
+        let idx = state.rand_mut().below(self.vm_slots.len() as u64) as usize;
+        let key = self.vm_slots.keys().nth(idx).unwrap();
+        if state.rand_mut().below(100) < 80 {
+            let value = self.vm_slots.get(key).unwrap();
+            value.to_big_endian(input.bytes_mut());
+        } else {
+            key.to_big_endian(input.bytes_mut());
+        }
+        Ok(MutationResult::Mutated)
+    }
+}
+
+pub fn byte_mutator<I, S>(state: &mut S, input: &mut I,
+                          vm_slots: Option<HashMap<U256, U256>>) -> MutationResult
 where
     S: State + HasRand,
     I: HasBytesVec + Input,
@@ -32,14 +67,21 @@ where
         BytesRandSetMutator::new(),
         BytesSwapMutator::new(),
     );
-    let mut scheduled_mutator = StdScheduledMutator::new(mutations);
-    scheduled_mutator.mutate(state, input, 0).unwrap()
-    // mutations
-    //     .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
-    //     .unwrap()
+
+    if let Some(vm_slots) = vm_slots {
+        let mut mutator = StdScheduledMutator::new((
+            VMStateHintedMutator::new(&vm_slots),
+            mutations,
+        ));
+        mutator.mutate(state, input, 0).unwrap()
+    } else {
+        let mut mutator = StdScheduledMutator::new(mutations);
+        mutator.mutate(state, input, 0).unwrap()
+    }
 }
 
-pub fn byte_mutator_with_expansion<I, S>(state: &mut S, input: &mut I) -> MutationResult
+pub fn byte_mutator_with_expansion<I, S>(state: &mut S, input: &mut I,
+                                         vm_slots: Option<HashMap<U256, U256>>) -> MutationResult
 where
     S: State + HasRand + HasMaxSize,
     I: HasBytesVec + Input,
@@ -66,9 +108,15 @@ where
         BytesCopyMutator::new(),
         BytesSwapMutator::new(),
     );
-    let mut scheduled_mutator = StdScheduledMutator::new(mutations);
-    scheduled_mutator.mutate(state, input, 0).unwrap()
-    // mutations
-    //     .get_and_mutate(random::<usize>() % mutations.len(), state, input, 0)
-    //     .unwrap()
+
+    if let Some(vm_slots) = vm_slots {
+        let mut mutator = StdScheduledMutator::new((
+            VMStateHintedMutator::new(&vm_slots),
+            mutations,
+        ));
+        mutator.mutate(state, input, 0).unwrap()
+    } else {
+        let mut mutator = StdScheduledMutator::new(mutations);
+        mutator.mutate(state, input, 0).unwrap()
+    }
 }

@@ -1,15 +1,19 @@
-use crate::abi::BoxedABI;
+use crate::abi::{A256, ABILossyType, ADynamic, BoxedABI};
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 
 use crate::state_input::StagedVMState;
 use crate::{evm, VMState};
 use bytes::Bytes;
 use libafl::inputs::Input;
-use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, State};
+use libafl::mutators::Mutator;
+use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 
 use crate::state::HasItyState;
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
+use serde_traitobject::Any;
+use crate::mutation_utils::VMStateHintedMutator;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT:
@@ -84,8 +88,16 @@ impl VMInputT for VMInput {
     where
         S: State + HasRand + HasMaxSize + HasItyState,
     {
+        let vm_slots = if let Some(s) =
+        self.get_state().get(&self.get_contract()) {
+            Some(s.clone())
+        } else {
+            None
+        };
         match self.data {
-            Some(ref mut data) => data.mutate(state),
+            Some(ref mut data) => {
+                data.mutate_with_vm_slots(state, vm_slots)
+            },
             None => MutationResult::Skipped,
         }
     }
