@@ -73,6 +73,9 @@ impl std::fmt::Debug for VMInput {
             .field("contract", &self.contract)
             // .field("data", &self.data)
             .field("state", &self.sstate)
+            .field("state_idx", &self.sstate_idx)
+            .field("txn_value", &self.txn_value)
+            .field("step", &self.step)
             .finish()
     }
 }

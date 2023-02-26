@@ -540,6 +540,27 @@ pub fn get_abi_type_boxed_with_address(abi_name: &String, address: Vec<u8>) -> B
     };
 }
 
+fn split_with_parenthesis(s: &str) -> Vec<String> {
+    let mut result: Vec<String> = Vec::new();
+    let mut current: String = String::new();
+    let mut parenthesis: i32 = 0;
+    for c in s.chars() {
+        if c == '(' {
+            parenthesis += 1;
+        } else if c == ')' {
+            parenthesis -= 1;
+        }
+        if c == ',' && parenthesis == 0 {
+            result.push(current);
+            current = String::new();
+        } else {
+            current.push(c);
+        }
+    }
+    result.push(current);
+    result
+}
+
 pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
     let abi_name_str = abi_name.as_str();
     // tuple
@@ -548,8 +569,8 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
     }
     if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
         return Box::new(AArray {
-            data: abi_name_str[1..abi_name_str.len() - 1]
-                .split(",")
+            data: split_with_parenthesis(&abi_name_str[1..abi_name_str.len() - 1])
+                .iter()
                 .map(|x| BoxedABI {
                     b: get_abi_type(&String::from(x), with_address),
                     function: [0; 4],
@@ -807,7 +828,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let mut abi = get_abi_type_boxed(&String::from("()"));
+        let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
         let mut test_state = FuzzState::new();
         let mutation_result = abi.mutate::<FuzzState>(&mut test_state);
         println!(

@@ -47,48 +47,38 @@ where
             1
         };
         let mut mutator = || -> MutationResult {
+            if input.is_step() {
+                return input.mutate(state);
+            }
             match state.rand_mut().below(100) {
                 1..=5 => {
                     // mutate the caller
-                    if !input.is_step() {
-                        let caller = state.get_rand_caller();
-                        if caller == input.get_caller() {
-                            return MutationResult::Skipped;
-                        }
-                        input.set_caller(caller);
-                        MutationResult::Mutated
-                    } else {
-                        MutationResult::Skipped
+                    let caller = state.get_rand_caller();
+                    if caller == input.get_caller() {
+                        return MutationResult::Skipped;
                     }
+                    input.set_caller(caller);
+                    MutationResult::Mutated
                 }
                 6..=10 => {
                     // cross over infant state
                     // we need power schedule here for infant states
-                    if !input.is_step() {
-                        let old_idx = input.get_state_idx();
-                        let (idx, new_state) =
-                            state.get_infant_state(self.infant_scheduler).unwrap();
-                        if idx == old_idx {
-                            return MutationResult::Skipped;
-                        }
-                        input.set_staged_state(new_state, idx);
-                        MutationResult::Mutated
-                    } else {
-                        // we are in step mode, replacing a state is not gonna work
-                        MutationResult::Skipped
+                    let old_idx = input.get_state_idx();
+                    let (idx, new_state) =
+                        state.get_infant_state(self.infant_scheduler).unwrap();
+                    if idx == old_idx {
+                        return MutationResult::Skipped;
                     }
+                    input.set_staged_state(new_state, idx);
+                    MutationResult::Mutated
                 }
                 11..=15 => {
-                    if !input.is_step() {
-                        match input.get_txn_value() {
-                            Some(_) => {
-                                input.set_txn_value(state.rand_mut().next() as usize);
-                                MutationResult::Mutated
-                            }
-                            None => MutationResult::Skipped,
+                    match input.get_txn_value() {
+                        Some(_) => {
+                            input.set_txn_value(state.rand_mut().next() as usize);
+                            MutationResult::Mutated
                         }
-                    } else {
-                        MutationResult::Skipped
+                        None => MutationResult::Skipped,
                     }
                 }
                 16 => {
@@ -111,12 +101,14 @@ where
         };
 
         let mut res = MutationResult::Skipped;
-        while res != MutationResult::Mutated {
+        let mut tries = 0;
+        while res != MutationResult::Mutated && tries < 20 {
             for _ in 0..havoc_times {
                 if mutator() == MutationResult::Mutated {
                     res = MutationResult::Mutated;
                 }
             }
+            tries += 1;
         }
         Ok(res)
     }
