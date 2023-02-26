@@ -50,7 +50,7 @@ where
         // sample a key from the vm_state.state
         let idx = state.rand_mut().below(self.vm_slots.len() as u64) as usize;
         let key = self.vm_slots.keys().nth(idx).unwrap();
-        if state.rand_mut().below(100) < 80 {
+        if state.rand_mut().below(100) < 90 {
             let value = self.vm_slots.get(key).unwrap();
             value.to_big_endian(&mut data);
         } else {

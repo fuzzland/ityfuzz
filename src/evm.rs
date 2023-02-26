@@ -597,10 +597,7 @@ impl Host for FuzzHost {
 
         self.data.leaked_func_hash = None;
 
-        if self.origin == input.contract {
-            record_func_hash!();
-            return (ControlLeak, Gas::new(0), Bytes::new());
-        }
+
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
             match action {
@@ -620,6 +617,11 @@ impl Host for FuzzHost {
 
         if middleware_result.is_some() {
             return middleware_result.unwrap();
+        }
+
+        if self.origin == input.contract {
+            record_func_hash!();
+            return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
         let mut input_seq = input.input.to_vec();
