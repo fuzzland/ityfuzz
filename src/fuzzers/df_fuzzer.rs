@@ -1,5 +1,5 @@
 use crate::{
-    evm::{EVMExecutor, FuzzHost, JMP_MAP},
+    evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::VMInput,
@@ -16,8 +16,8 @@ use libafl::{
     Fuzzer,
 };
 
-use crate::contract_utils::{set_hash, ContractLoader};
-use crate::evm::{CMP_MAP, READ_MAP, WRITE_MAP};
+use crate::evm::contract_utils::{set_hash, ContractLoader};
+use crate::evm::vm::{CMP_MAP, READ_MAP, WRITE_MAP};
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::oracle::FunctionHarnessOracle;
 use crate::rand_utils::generate_random_address;
@@ -25,7 +25,7 @@ use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
-use crate::config::Config;
+use crate::evm::config::Config;
 use primitive_types::H160;
 
 struct ABIConfig {

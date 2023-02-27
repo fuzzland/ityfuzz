@@ -1,11 +1,11 @@
-use crate::abi::get_abi_type_boxed;
-use crate::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::ExecutionResult;
+use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::contract_utils::{ABIConfig, ContractInfo};
+use crate::evm::vm::ExecutionResult;
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{VMInput, VMInputT};
 use crate::rand_utils::generate_random_address;
 use crate::state_input::StagedVMState;
-use crate::EVMExecutor;
+use crate::evm::vm::EVMExecutor;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;

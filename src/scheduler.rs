@@ -1,4 +1,4 @@
-use crate::config::DEBUG_PRINT_PERCENT;
+use crate::evm::config::DEBUG_PRINT_PERCENT;
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};

@@ -1,10 +1,10 @@
-use crate::abi::get_abi_type_boxed;
-use crate::contract_utils::ContractLoader;
-use crate::evm::{FuzzHost, IntermediateExecutionResult};
+use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::contract_utils::ContractLoader;
+use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::input::{VMInput, VMInputT};
-use crate::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
-use crate::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
-use crate::onchain::endpoints::OnChainConfig;
+use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
+use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::state::{FuzzState, HasItyState};
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;

@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use crate::{
-    contract_utils::FIX_DEPLOYER,
-    evm::{EVMExecutor, FuzzHost, JMP_MAP},
+    evm::contract_utils::FIX_DEPLOYER,
+    evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     input::VMInput,
@@ -19,8 +19,8 @@ use libafl::{
     Fuzzer,
 };
 
-use crate::contract_utils::{set_hash, ContractLoader};
-use crate::evm::CMP_MAP;
+use crate::evm::contract_utils::{set_hash, ContractLoader};
+use crate::evm::vm::CMP_MAP;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 use crate::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan, Oracle};
 use crate::rand_utils::generate_random_address;
@@ -28,10 +28,10 @@ use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
-use crate::config::Config;
-use crate::middleware::Middleware;
-use crate::onchain::flashloan::Flashloan;
-use crate::onchain::onchain::OnChain;
+use crate::evm::config::Config;
+use crate::evm::middleware::Middleware;
+use crate::evm::onchain::flashloan::Flashloan;
+use crate::evm::onchain::onchain::OnChain;
 use primitive_types::H160;
 
 struct ABIConfig {
@@ -72,6 +72,7 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
                 onchain,
                 scheduler.clone(),
             ));
+            mid.add_blacklist(H160::from_str("6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap());
             fuzz_host.add_middlewares(mid);
         }
         None => {}

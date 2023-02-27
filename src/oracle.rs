@@ -1,8 +1,8 @@
-use crate::evm::ExecutionResult;
+use crate::evm::vm::ExecutionResult;
 use crate::input::{VMInput, VMInputT};
-use crate::onchain::flashloan::FlashloanData;
+use crate::evm::onchain::flashloan::FlashloanData;
 use crate::state::{FuzzState, HasItyState};
-use crate::{EVMExecutor, VMState};
+use crate::evm::vm::{EVMExecutor, VMState};
 use bytes::Bytes;
 use hex;
 use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};

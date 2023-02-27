@@ -1,6 +1,6 @@
-use crate::contract_utils::ContractInfo;
-use crate::onchain::endpoints::OnChainConfig;
-use crate::onchain::flashloan::Flashloan;
+use crate::evm::contract_utils::ContractInfo;
+use crate::evm::onchain::endpoints::OnChainConfig;
+use crate::evm::onchain::flashloan::Flashloan;
 use crate::oracle::Oracle;
 
 pub const DEBUG_PRINT_PERCENT: usize = 8000;

@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use crate::input::{VMInput, VMInputT};
 use crate::state::{HasExecutionResult, HasItyState};
 use crate::state_input::{build_basic_txn, BasicTxn, TxnTrace};
-use crate::EVMExecutor;
+use crate::evm::vm::EVMExecutor;
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
@@ -106,14 +106,13 @@ where
 
 mod tests {
     use super::*;
-    use crate::abi::get_abi_type;
-    use crate::evm::JMP_MAP;
-    use crate::evm::{FuzzHost, MAP_SIZE};
+    use crate::evm::abi::get_abi_type;
+    use crate::evm::vm::{JMP_MAP, FuzzHost, MAP_SIZE};
     use crate::input::VMInput;
     use crate::rand_utils::generate_random_address;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
-    use crate::VMState;
+    use crate::evm::vm::VMState;
     use bytes::Bytes;
     use libafl::observers::StdMapObserver;
     use libafl::prelude::{tuple_list, HitcountsMapObserver};

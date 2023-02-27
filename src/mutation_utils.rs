@@ -1,5 +1,5 @@
 use crate::input::VMInputT;
-use crate::VMState;
+use crate::evm::vm::VMState;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{
