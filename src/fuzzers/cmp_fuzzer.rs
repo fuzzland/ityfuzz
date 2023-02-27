@@ -1,18 +1,19 @@
+use bytes::Bytes;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER,
     evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
-    input::VMInput,
     mutator::FuzzMutator,
     rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
-use libafl::stages::CalibrationStage;
+use libafl::stages::{CalibrationStage, Stage};
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     stages::StdPowerMutationalStage,
@@ -20,9 +21,9 @@ use libafl::{
 };
 
 use crate::evm::contract_utils::{set_hash, ContractLoader};
-use crate::evm::vm::CMP_MAP;
+use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
+use crate::evm::vm::{EVMState, CMP_MAP};
 use crate::feedback::{CmpFeedback, OracleFeedback};
-use crate::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan, Oracle};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
@@ -32,7 +33,10 @@ use crate::evm::config::Config;
 use crate::evm::middleware::Middleware;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
-use primitive_types::H160;
+use primitive_types::{H160, U256};
+use revm::Bytecode;
+use crate::evm::input::EVMInput;
+use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 
 struct ABIConfig {
     abi: String,
@@ -44,22 +48,23 @@ struct ContractInfo {
     abi: Vec<ABIConfig>,
 }
 
-pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
+pub fn cmp_fuzzer(
+    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
+) {
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let infant_scheduler: SortedDroppingScheduler<StagedVMState, InfantStateState> =
-        SortedDroppingScheduler::new();
+    let infant_scheduler = SortedDroppingScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let calibration = CalibrationStage::new(&feedback);
-    let mut state = FuzzState::new();
+    let mut state: EVMFuzzState = FuzzState::new();
 
     let mut scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
 
-    let mutator = FuzzMutator::new(&infant_scheduler);
+    let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
     let mut stages = tuple_list!(calibration, std_stage);
@@ -67,11 +72,13 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
     let mut fuzz_host = FuzzHost::new();
     match config.onchain {
         Some(onchain) => {
-            let mut mid = Box::new(OnChain::<VMInput, FuzzState>::new(
-                // scheduler can be cloned because it never uses &mut self
-                onchain,
-                scheduler.clone(),
-            ));
+            let mut mid = Box::new(
+                OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                    // scheduler can be cloned because it never uses &mut self
+                    onchain,
+                    scheduler.clone(),
+                ),
+            );
             mid.add_blacklist(H160::from_str("6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap());
             fuzz_host.add_middlewares(mid);
         }
@@ -84,27 +91,33 @@ pub fn cmp_fuzzer(config: Config<VMInput, FuzzState>) {
         }
         None => {}
     };
-    let evm_executor: EVMExecutor<VMInput, FuzzState> = EVMExecutor::new(fuzz_host, deployer);
-    let mut executor = FuzzExecutor::new(evm_executor, tuple_list!(jmp_observer));
-    state.initialize(
-        config.contract_info,
-        &mut executor.evm_executor,
-        &mut scheduler,
-        &infant_scheduler,
-    );
+    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
+        EVMExecutor::new(fuzz_host, deployer);
+    //
+    // state.initialize(
+    //     config.contract_info,
+    //     &mut evm_executor,
+    //     &mut scheduler,
+    //     &infant_scheduler,
+    // );
+    evm_executor.host.initialize(&mut state);
+
+    // now evm executor is ready, we can clone it
+    let cloned_evm = evm_executor.clone();
+    let cloned_evm2 = evm_executor.clone();
+
+    let mut executor = FuzzExecutor::new(Box::new(evm_executor), tuple_list!(jmp_observer));
+
     #[cfg(feature = "deployer_is_attacker")]
     state.add_deployer_to_callers(deployer);
-    executor.evm_executor.host.initialize(&mut state);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
-    let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler);
-
-    // now evm executor is ready, we can clone it
+    let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, Box::new(cloned_evm2));
 
     let oracles = config.oracle;
 
-    let objective = OracleFeedback::new(&oracles, executor.evm_executor.clone());
+    let objective = OracleFeedback::new(&oracles, Box::new(cloned_evm));
 
     ItyFuzzer::new(
         scheduler,

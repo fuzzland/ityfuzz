@@ -3,8 +3,6 @@ use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::oracle::Oracle;
 
-pub const DEBUG_PRINT_PERCENT: usize = 8000;
-
 pub enum FuzzerTypes {
     CMP,
     DATAFLOW,
@@ -22,10 +20,10 @@ impl FuzzerTypes {
     }
 }
 
-pub struct Config<I, S> {
+pub struct Config<VS, Addr, Code, By, Loc, SlotTy, I, S> {
     pub onchain: Option<OnChainConfig>,
     pub flashloan: Option<Flashloan<S>>,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
-    pub oracle: Vec<Box<dyn Oracle<I, S>>>,
+    pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
 }

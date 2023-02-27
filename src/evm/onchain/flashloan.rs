@@ -3,9 +3,10 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::vm::IntermediateExecutionResult;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::evm::vm::IntermediateExecutionResult;
+use crate::generic_vm::vm_state::VMStateT;
 use crate::oracle::Oracle;
 use crate::state::HasItyState;
 use crate::types::{convert_u256_to_h160, float_scale_to_u512};
@@ -51,8 +52,7 @@ impl<S> Flashloan<S> {
         Self {
             phantom: PhantomData,
             oracle,
-            use_contract_value: false
-            ,
+            use_contract_value: false,
         }
     }
 
@@ -238,9 +238,10 @@ pub struct FlashloanData {
 
 impl_serdeany!(FlashloanData);
 
-impl<S> CanHandleDeferredActions<S> for Flashloan<S>
+impl<VS, S> CanHandleDeferredActions<VS, S> for Flashloan<S>
 where
-    S: HasItyState,
+    S: HasItyState<VS>,
+    VS: VMStateT + Default,
 {
     fn handle_deferred_actions(
         &self,

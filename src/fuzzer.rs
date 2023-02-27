@@ -7,10 +7,11 @@ use std::ops::Deref;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
-use crate::evm::config::DEBUG_PRINT_PERCENT;
-use crate::evm::vm::RW_SKIPPER_PERCT_IDX;
+use crate::generic_vm::vm_state::VMStateT;
+#[cfg(feature = "record_instruction_coverage")]
+use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
-use crate::state_input::TxnTrace;
+use crate::tracer::TxnTrace;
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -29,33 +30,35 @@ use rand::random;
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
-pub struct ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+pub struct ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState, InfantStateState>,
+    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
+    VS: Default + VMStateT,
 {
     scheduler: CS,
     feedback: F,
     infant_feedback: IF,
     infant_scheduler: &'a IS,
     objective: OF,
-    phantom: PhantomData<(I, S, OT)>,
+    phantom: PhantomData<(I, S, OT, VS, Addr)>,
 }
 
-impl<'a, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState, InfantStateState>,
+    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
+    VS: Default + VMStateT,
 {
     pub fn new(
         scheduler: CS,
@@ -77,18 +80,19 @@ where
 
 // implement fuzzer trait for ItyFuzzer
 // Seems that we can get rid of this impl and just use StdFuzzer?
-impl<'a, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
-    for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Addr, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
+    for ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState, InfantStateState>,
+    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor + HasExecutions + HasMetadata,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
+    VS: Default + VMStateT,
 {
     fn fuzz_one(
         &mut self,
@@ -123,25 +127,26 @@ where
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<'a, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
-    for ItyFuzzer<'a, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
+    for ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState, InfantStateState>,
+    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
     OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
     EM: EventManager<E, I, S, Self>,
-    I: VMInputT,
+    I: VMInputT<VS, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor
         + HasCorpus<I>
         + HasSolutions<I>
-        + HasInfantStateState
-        + HasItyState
-        + HasExecutionResult
+        + HasInfantStateState<VS>
+        + HasItyState<VS>
+        + HasExecutionResult<VS>
         + HasExecutions,
+    VS: Default + VMStateT,
 {
     fn evaluate_input_events(
         &mut self,

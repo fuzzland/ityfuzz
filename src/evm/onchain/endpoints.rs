@@ -376,7 +376,7 @@ mod tests {
         let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_code(
             H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            false
+            false,
         );
         println!("{:?}", v)
     }
@@ -387,7 +387,7 @@ mod tests {
         let v = config.get_contract_slot(
             H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
             U256::from(3),
-            false
+            false,
         );
         println!("{:?}", v)
     }

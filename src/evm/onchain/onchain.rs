@@ -1,11 +1,12 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::ContractLoader;
-use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
-use crate::input::{VMInput, VMInputT};
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::state::{FuzzState, HasItyState};
+use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
+use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
+use crate::state::{FuzzState, HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;
 use libafl::corpus::{Corpus, Testcase};
@@ -19,13 +20,15 @@ use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
+use crate::evm::input::EVMInput;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
-pub struct OnChain<I, S>
+pub struct OnChain<VS, I, S>
 where
-    I: Input + VMInputT,
+    I: Input + VMInputT<VS, H160>,
     S: State,
+    VS: VMStateT + Default,
 {
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
@@ -34,12 +37,14 @@ where
     pub endpoint: OnChainConfig,
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
     pub blacklist: HashSet<H160>,
+    pub phantom: std::marker::PhantomData<VS>,
 }
 
-impl<I, S> Debug for OnChain<I, S>
+impl<VS, I, S> Debug for OnChain<VS, I, S>
 where
-    I: Input + VMInputT,
+    I: Input + VMInputT<VS, H160>,
     S: State,
+    VS: VMStateT + Default,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OnChain")
@@ -50,10 +55,11 @@ where
     }
 }
 
-impl<I, S> OnChain<I, S>
+impl<VS, I, S> OnChain<VS, I, S>
 where
-    I: Input + VMInputT,
+    I: Input + VMInputT<VS, H160>,
     S: State,
+    VS: VMStateT + Default,
 {
     pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC) -> Self
     where
@@ -67,6 +73,7 @@ where
             endpoint,
             scheduler: Some(Box::new(scheduler)),
             blacklist: Default::default(),
+            phantom: Default::default(),
         }
     }
 
@@ -75,10 +82,11 @@ where
     }
 }
 
-impl<I, S> Middleware for OnChain<I, S>
+impl<VS, I, S> Middleware for OnChain<VS, I, S>
 where
-    I: Input + VMInputT + 'static,
+    I: Input + VMInputT<VS, H160> + 'static,
     S: State + std::fmt::Debug + 'static,
+    VS: VMStateT + Default + 'static,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
         let pc = interp.program_counter();
@@ -108,20 +116,18 @@ where
                     MiddlewareType::OnChain,
                     address,
                     slot_idx,
-                    self.endpoint.get_contract_slot(address, slot_idx, force_cache!(
-                        self.locs,
-                        slot_idx
-                    )),
+                    self.endpoint.get_contract_slot(
+                        address,
+                        slot_idx,
+                        force_cache!(self.locs, slot_idx),
+                    ),
                 )]
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {
                 let address = interp.stack.peek(1).unwrap();
                 let address_h160 = convert_u256_to_h160(address);
-                let force_cache = force_cache!(
-                    self.calls,
-                    address_h160
-                );
+                let force_cache = force_cache!(self.calls, address_h160);
 
                 let code_update = UpdateCode(
                     MiddlewareType::OnChain,
@@ -169,10 +175,11 @@ where
     }
 }
 
-impl<I, S> CanHandleDeferredActions<S> for OnChain<I, S>
+impl<VS, I, S> CanHandleDeferredActions<VS, S> for OnChain<VS, I, S>
 where
-    I: Input + VMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState + HasMetadata + 'static,
+    I: Input + VMInputT<VS, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    VS: VMStateT + Default,
 {
     fn handle_deferred_actions(
         &self,
@@ -188,7 +195,7 @@ where
                     .for_each(|abi| {
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
                         abi_instance.set_func(abi.function);
-                        let input = VMInput {
+                        let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: address.clone(),
                             data: Some(abi_instance),
@@ -197,7 +204,9 @@ where
                             txn_value: if abi.is_payable { Some(0) } else { None },
                             step: false,
                         };
-                        let mut tc = Testcase::new(input) as Testcase<I>;
+                        let mut tc = Testcase::new(
+                            input.as_any().downcast_ref::<I>().unwrap().clone()
+                        ) as Testcase<I>;
                         tc.set_exec_time(Duration::from_secs(0));
                         let idx = state.corpus_mut().add(tc).expect("failed to add");
                         self.scheduler

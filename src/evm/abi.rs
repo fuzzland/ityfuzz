@@ -1,5 +1,6 @@
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
-use crate::evm::vm::{abi_max_size, MAP_SIZE};
+use crate::evm::vm::abi_max_size;
+use crate::generic_vm::vm_state::VMStateT;
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::HasItyState;
 use bytes::Bytes;
@@ -81,8 +82,8 @@ impl BoxedABI {
         &mut self.b
     }
 
-    pub fn get_bytes(&self) -> Bytes {
-        Bytes::from([Vec::from(self.function), self.b.get_bytes()].concat())
+    pub fn get_bytes(&self) -> Vec<u8> {
+        [Vec::from(self.function), self.b.get_bytes()].concat()
     }
 
     pub fn get_bytes_vec(&self) -> Vec<u8> {
@@ -106,9 +107,10 @@ impl BoxedABI {
     }
 }
 
-fn sample_abi<S>(state: &mut S, size: usize) -> BoxedABI
+fn sample_abi<VS, S>(state: &mut S, size: usize) -> BoxedABI
 where
-    S: State + HasRand + HasItyState + HasMaxSize,
+    S: State + HasRand + HasItyState<VS> + HasMaxSize,
+    VS: VMStateT + Default,
 {
     // TODO(@shou): use a better sampling strategy
     if size == 32 {
@@ -118,10 +120,10 @@ where
                 data: vec![0; 32],
                 is_address: false,
             })),
-            1 => BoxedABI::new(Box::new(A256 {
-                data: state.get_rand_caller().0.into(),
-                is_address: true,
-            })),
+            // 1 => BoxedABI::new(Box::new(A256 {
+            //     data: state.get_rand_caller().0.into(),
+            //     is_address: true,
+            // })),
             _ => unreachable!(),
         }
     } else {
@@ -161,20 +163,22 @@ where
 }
 
 impl BoxedABI {
-    pub fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+    pub fn mutate<VS, S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState,
+        S: State + HasRand + HasMaxSize + HasItyState<VS>,
+        VS: VMStateT + Default,
     {
         self.mutate_with_vm_slots(state, None)
     }
 
-    pub fn mutate_with_vm_slots<S>(
+    pub fn mutate_with_vm_slots<VS, S>(
         &mut self,
         state: &mut S,
         vm_slots: Option<HashMap<U256, U256>>,
     ) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState,
+        S: State + HasRand + HasMaxSize + HasItyState<VS>,
+        VS: VMStateT + Default,
     {
         match self.get_type() {
             TEmpty => MutationResult::Skipped,
@@ -183,8 +187,8 @@ impl BoxedABI {
                 let a256 = v.downcast_mut::<A256>().unwrap();
                 if a256.is_address {
                     if state.rand_mut().below(100) < 90 {
-                        let new_caller = state.get_rand_caller();
-                        a256.data = new_caller.0.to_vec();
+                        // let new_caller = state.get_rand_caller();
+                        // a256.data = new_caller.0.to_vec();
                     } else {
                         a256.data = [0; 20].to_vec();
                     }
