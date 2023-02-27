@@ -64,23 +64,20 @@ where
                     // cross over infant state
                     // we need power schedule here for infant states
                     let old_idx = input.get_state_idx();
-                    let (idx, new_state) =
-                        state.get_infant_state(self.infant_scheduler).unwrap();
+                    let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
                 }
-                11..=15 => {
-                    match input.get_txn_value() {
-                        Some(_) => {
-                            input.set_txn_value(state.rand_mut().next() as usize);
-                            MutationResult::Mutated
-                        }
-                        None => MutationResult::Skipped,
+                11..=15 => match input.get_txn_value() {
+                    Some(_) => {
+                        input.set_txn_value(state.rand_mut().next() as usize);
+                        MutationResult::Mutated
                     }
-                }
+                    None => MutationResult::Skipped,
+                },
                 16 => {
                     // make it a step forward to pop one post execution
                     // todo(@shou): fix the sizing of return
