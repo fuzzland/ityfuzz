@@ -224,10 +224,14 @@ impl OnChainConfig {
         }
     }
 
-    pub fn get_contract_code(&mut self, address: H160) -> Bytecode {
+    pub fn get_contract_code(&mut self, address: H160, force_cache: bool) -> Bytecode {
         if self.code_cache.contains_key(&address) {
             return self.code_cache[&address].clone();
         }
+        if force_cache {
+            return Bytecode::default();
+        }
+
         println!("fetching code from {}", hex::encode(address));
         let mut params = String::from("[");
         params.push_str(&format!("\"0x{:x}\",", address));
@@ -251,9 +255,12 @@ impl OnChainConfig {
         }
     }
 
-    pub fn get_contract_slot(&mut self, address: H160, slot: U256) -> U256 {
+    pub fn get_contract_slot(&mut self, address: H160, slot: U256, force_cache: bool) -> U256 {
         if self.slot_cache.contains_key(&(address, slot)) {
             return self.slot_cache[&(address, slot)];
+        }
+        if force_cache {
+            return U256::zero();
         }
         let mut params = String::from("[");
         params.push_str(&format!("\"0x{:x}\",", address));
@@ -369,6 +376,7 @@ mod tests {
         let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_code(
             H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            false
         );
         println!("{:?}", v)
     }
@@ -379,6 +387,7 @@ mod tests {
         let v = config.get_contract_slot(
             H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
             U256::from(3),
+            false
         );
         println!("{:?}", v)
     }
