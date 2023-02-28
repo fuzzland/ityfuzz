@@ -9,7 +9,7 @@ use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 
 use crate::generic_vm::vm_state::VMStateT;
 use crate::mutation_utils::VMStateHintedMutator;
-use crate::state::HasItyState;
+use crate::state::{HasCaller, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
@@ -26,7 +26,7 @@ where
     fn to_bytes(&self) -> Vec<u8>;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<VS>;
+        S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>;
     fn get_caller_mut(&mut self) -> &mut Addr;
     fn get_caller(&self) -> Addr;
     fn set_caller(&mut self, caller: Addr);

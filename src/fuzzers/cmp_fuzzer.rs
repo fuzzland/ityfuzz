@@ -35,6 +35,7 @@ use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
 use primitive_types::{H160, U256};
 use revm::Bytecode;
+use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::EVMInput;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 
@@ -93,13 +94,14 @@ pub fn cmp_fuzzer(
     };
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);
-    //
-    // state.initialize(
-    //     config.contract_info,
-    //     &mut evm_executor,
-    //     &mut scheduler,
-    //     &infant_scheduler,
-    // );
+
+    EVMCorpusInitializer::new(
+        &mut evm_executor,
+        &mut scheduler,
+        &infant_scheduler,
+        &mut state
+    ).initialize(config.contract_info);
+
     evm_executor.host.initialize(&mut state);
 
     // now evm executor is ready, we can clone it
