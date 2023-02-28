@@ -15,11 +15,7 @@ use serde_traitobject::Any;
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT<VS, Addr>:
-    Input
-    + Debug
-    + Clone
-    + serde_traitobject::Serialize
-    + serde_traitobject::Deserialize
+    Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize
 where
     VS: Default + VMStateT,
 {

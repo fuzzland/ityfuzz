@@ -18,7 +18,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 
-
 pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
     I: VMInputT<VS, Addr>,
@@ -54,7 +53,8 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
+    InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
     I: VMInputT<VS, Addr>,
     VS: Default + VMStateT,
@@ -176,7 +176,8 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
+    OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
     I: VMInputT<VS, Addr>,
     VS: Default + VMStateT,
@@ -373,7 +374,8 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> {
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
+    CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
     SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>
         + HasVote<StagedVMState<VS>, InfantStateState<VS>>,
@@ -393,7 +395,7 @@ where
             known_pcs: Default::default(),
             scheduler,
             vm,
-            phantom: Default::default()
+            phantom: Default::default(),
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::ContractLoader;
+use crate::evm::input::EVMInput;
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::OnChainConfig;
@@ -20,7 +21,6 @@ use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
-use crate::evm::input::EVMInput;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
@@ -204,9 +204,9 @@ where
                             txn_value: if abi.is_payable { Some(0) } else { None },
                             step: false,
                         };
-                        let mut tc = Testcase::new(
-                            input.as_any().downcast_ref::<I>().unwrap().clone()
-                        ) as Testcase<I>;
+                        let mut tc =
+                            Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone())
+                                as Testcase<I>;
                         tc.set_exec_time(Duration::from_secs(0));
                         let idx = state.corpus_mut().add(tc).expect("failed to add");
                         self.scheduler

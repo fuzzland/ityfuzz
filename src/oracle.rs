@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -7,6 +6,7 @@ use crate::state_input::StagedVMState;
 use hex;
 use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;
+use std::marker::PhantomData;
 
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
@@ -42,7 +42,7 @@ where
             metadata: SerdeAnyMap::new(),
             executor,
             input,
-            phantom: Default::default()
+            phantom: Default::default(),
         }
     }
     //
@@ -92,6 +92,14 @@ where
     I: VMInputT<VS, Addr>,
     VS: Default + VMStateT,
 {
-    fn transition(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>, stage: u64) -> u64;
-    fn oracle(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>, stage: u64) -> bool;
+    fn transition(
+        &self,
+        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>,
+        stage: u64,
+    ) -> u64;
+    fn oracle(
+        &self,
+        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>,
+        stage: u64,
+    ) -> bool;
 }

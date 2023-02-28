@@ -41,7 +41,8 @@ where
     }
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT> FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+    FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
 where
     I: VMInputT<VS, Addr>,
     OT: ObserversTuple<I, S>,
@@ -75,7 +76,6 @@ where
         input: &I,
     ) -> Result<ExitKind, Error> {
         let mut res = self.vm.execute(input, Some(state));
-
 
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result

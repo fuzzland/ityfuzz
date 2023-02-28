@@ -30,14 +30,14 @@ use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
+use crate::evm::corpus_initializer::EVMCorpusInitializer;
+use crate::evm::input::EVMInput;
 use crate::evm::middleware::Middleware;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
+use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::Bytecode;
-use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::EVMInput;
-use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 
 struct ABIConfig {
     abi: String,
@@ -73,13 +73,11 @@ pub fn cmp_fuzzer(
     let mut fuzz_host = FuzzHost::new();
     match config.onchain {
         Some(onchain) => {
-            let mut mid = Box::new(
-                OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
-                    // scheduler can be cloned because it never uses &mut self
-                    onchain,
-                    scheduler.clone(),
-                ),
-            );
+            let mut mid = Box::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                // scheduler can be cloned because it never uses &mut self
+                onchain,
+                scheduler.clone(),
+            ));
             mid.add_blacklist(H160::from_str("6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap());
             fuzz_host.add_middlewares(mid);
         }
@@ -99,8 +97,9 @@ pub fn cmp_fuzzer(
         &mut evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        &mut state
-    ).initialize(config.contract_info);
+        &mut state,
+    )
+    .initialize(config.contract_info);
 
     evm_executor.host.initialize(&mut state);
 

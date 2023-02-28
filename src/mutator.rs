@@ -1,4 +1,3 @@
-use std::ops::Add;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::mutation_utils::VMStateHintedMutator;
@@ -8,6 +7,7 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
+use std::ops::Add;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -40,7 +40,7 @@ where
     S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>,
     SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
     VS: Default + VMStateT,
-    Addr: PartialEq
+    Addr: PartialEq,
 {
     fn mutate(
         &mut self,
@@ -96,7 +96,9 @@ where
                     if input.get_staged_state().state.has_post_execution() && !input.is_step() {
                         input.set_step(true);
                         // todo(@shou): move args into
-                        input.set_as_post_exec(input.get_state().get_post_execution_needed_len() as usize);
+                        input.set_as_post_exec(
+                            input.get_state().get_post_execution_needed_len() as usize
+                        );
                         MutationResult::Mutated
                     } else {
                         MutationResult::Skipped

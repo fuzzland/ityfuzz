@@ -1,4 +1,6 @@
+use crate::evm::input::EVMInput;
 use crate::evm::onchain::flashloan::FlashloanData;
+use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::oracle::{Oracle, OracleCtx};
@@ -7,57 +9,34 @@ use bytes::Bytes;
 use libafl::state::HasMetadata;
 use primitive_types::{H160, U256};
 use revm::Bytecode;
-use crate::evm::input::EVMInput;
-use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 
 pub struct NoOracle {}
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
-    for NoOracle
-{
-    fn transition(
-        &self,
-        _ctx: &mut EVMOracleCtx<'_>,
-        _stage: u64,
-    ) -> u64 {
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState> for NoOracle {
+    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
     }
 
-    fn oracle(
-        &self,
-        _ctx: &mut EVMOracleCtx<'_>,
-        _stage: u64,
-    ) -> bool {
+    fn oracle(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         false
     }
 }
 
 pub struct IERC20Oracle {
     pub address: H160,
-    pub precondition: fn(
-        ctx: &mut EVMOracleCtx<'_>,
-        stage: u64,
-    ) -> u64,
+    pub precondition: fn(ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64,
 
     balance_of: Vec<u8>,
 }
 
-pub fn dummy_precondition(
-    _ctx: &mut EVMOracleCtx<'_>,
-
-    _stage: u64,
-) -> u64 {
+pub fn dummy_precondition(_ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
     99
 }
 
 impl IERC20Oracle {
     pub fn new(
         address: H160,
-        precondition: fn(
-            ctx: &mut EVMOracleCtx<'_>,
-
-            stage: u64,
-        ) -> u64,
+        precondition: fn(ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64,
     ) -> Self {
         Self {
             address,
@@ -75,24 +54,12 @@ impl IERC20Oracle {
     }
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
-    for IERC20Oracle
-{
-    fn transition(
-        &self,
-        _ctx: &mut EVMOracleCtx<'_>,
-
-        _stage: u64,
-    ) -> u64 {
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState> for IERC20Oracle {
+    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
     }
 
-    fn oracle(
-        &self,
-        ctx: &mut EVMOracleCtx<'_>,
-
-        _stage: u64,
-    ) -> bool {
+    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         if _stage == 99 {
             let balance_of_txn =
                 Bytes::from([self.balance_of.clone(), ctx.input.caller.0.to_vec()].concat());
@@ -125,19 +92,11 @@ impl IERC20OracleFlashloan {
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
     for IERC20OracleFlashloan
 {
-    fn transition(
-        &self,
-        _ctx: &mut EVMOracleCtx<'_>,
-        _stage: u64,
-    ) -> u64 {
+    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
     }
 
-    fn oracle(
-        &self,
-        ctx: &mut EVMOracleCtx<'_>,
-        _stage: u64,
-    ) -> bool {
+    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         // has balance increased?
         match ctx.post_state.metadata().get::<FlashloanData>() {
             Some(flashloan_info) => flashloan_info.earned > flashloan_info.owed,
@@ -150,16 +109,7 @@ pub struct FunctionHarnessOracle {
     pub address: H160,
     harness_func: Vec<u8>,
     precondition: fn(
-        ctx: &mut OracleCtx<
-            EVMState,
-            H160,
-            Bytecode,
-            Bytes,
-            H160,
-            U256,
-            EVMInput,
-            EVMFuzzState,
-        >,
+        ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
         stage: u64,
     ) -> u64,
 }
@@ -168,10 +118,7 @@ impl FunctionHarnessOracle {
     pub fn new(
         address: H160,
         harness_func: Vec<u8>,
-        precondition: fn(
-            ctx: &mut EVMOracleCtx<'_>,
-            stage: u64,
-        ) -> u64,
+        precondition: fn(ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64,
     ) -> Self {
         Self {
             address,
@@ -192,26 +139,13 @@ impl FunctionHarnessOracle {
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
     for FunctionHarnessOracle
 {
-    fn transition(
-        &self,
-        ctx: &mut EVMOracleCtx<'_>,
-        stage: u64,
-    ) -> u64 {
+    fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
         (self.precondition)(ctx, stage)
     }
 
     fn oracle(
         &self,
-        ctx: &mut OracleCtx<
-            EVMState,
-            H160,
-            Bytecode,
-            Bytes,
-            H160,
-            U256,
-            EVMInput,
-            EVMFuzzState,
-        >,
+        ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
         stage: u64,
     ) -> bool {
         if stage == 99 {

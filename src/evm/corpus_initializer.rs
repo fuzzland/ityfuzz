@@ -1,23 +1,25 @@
-use std::collections::HashSet;
+use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
+use crate::evm::input::EVMInput;
+use crate::evm::types::EVMFuzzState;
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::rand_utils::generate_random_address;
-use crate::state::{FuzzState, HasItyState, InfantStateState, ACCOUNT_AMT, CONTRACT_AMT, HasCaller};
+use crate::state::{
+    FuzzState, HasCaller, HasItyState, InfantStateState, ACCOUNT_AMT, CONTRACT_AMT,
+};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
-use revm::Bytecode;
-use std::time::Duration;
 use primitive_types::H160;
-use crate::evm::abi::get_abi_type_boxed;
-use crate::evm::input::EVMInput;
-use crate::evm::types::EVMFuzzState;
+use revm::Bytecode;
+use std::collections::HashSet;
+use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -30,10 +32,7 @@ impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
         executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
         scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
-        infant_scheduler: &'a dyn Scheduler<
-            StagedVMState<EVMState>,
-            InfantStateState<EVMState>,
-        >,
+        infant_scheduler: &'a dyn Scheduler<StagedVMState<EVMState>, InfantStateState<EVMState>>,
         state: &'a mut EVMFuzzState,
     ) -> Self {
         Self {
@@ -145,7 +144,8 @@ impl<'a> EVMCorpusInitializer<'a> {
                 addrs.insert(deployed_address);
             }
             None => {
-                self.state.hash_to_address
+                self.state
+                    .hash_to_address
                     .insert(abi.function.clone(), HashSet::from([deployed_address]));
             }
         }
@@ -171,6 +171,4 @@ impl<'a> EVMCorpusInitializer<'a> {
             .on_add(self.state, idx)
             .expect("failed to call scheduler on_add");
     }
-
-
 }
