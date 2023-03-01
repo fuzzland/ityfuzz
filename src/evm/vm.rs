@@ -998,7 +998,15 @@ where
         // todo(@shou): is this correct?
         let is_step = input.is_step();
         let caller = input.get_caller();
+        #[cfg(test)]
+        let mut data = Bytes::from(input.to_bytes());
+        #[cfg(not(test))]
         let data = Bytes::from(input.to_bytes());
+        #[cfg(test)]
+        if data.len() == 0 {
+            data = Bytes::from(input.get_direct_data());
+        }
+
         let value = input.get_txn_value().unwrap_or(0);
         let contract_address = input.get_contract();
 
@@ -1106,10 +1114,12 @@ mod tests {
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
     use libafl::state::State;
     use revm::Bytecode;
+    use crate::evm::input::EVMInput;
+    use crate::evm::types::EVMFuzzState;
 
     #[test]
     fn test_fuzz_executor() {
-        let mut evm_executor = EVMExecutor::new(FuzzHost::new(), generate_random_address());
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(FuzzHost::new(), generate_random_address());
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 
@@ -1134,22 +1144,27 @@ mod tests {
 
         let function_hash = hex::decode("90b6e333").unwrap();
 
-        // process(0)
-        let execution_result_0 = evm_executor.execute(
-            deployment_loc,
-            generate_random_address(),
-            &vm_state,
-            Bytes::from(
+        let input_0 = EVMInput {
+            caller: generate_random_address(),
+            contract: deployment_loc,
+            data: None,
+            sstate: StagedVMState::new_uninitialized(),
+            sstate_idx: 0,
+            txn_value: Some(0),
+            step: false,
+            direct_data: Bytes::from(
                 [
                     function_hash.clone(),
                     hex::decode("0000000000000000000000000000000000000000000000000000000000000000")
                         .unwrap(),
                 ]
-                .concat(),
-            ),
-            0,
-            false,
-            &mut observers,
+                    .concat(),
+            )
+        };
+
+        // process(0)
+        let execution_result_0 = evm_executor.execute(
+            &input_0,
             None,
         );
         let mut know_map: Vec<u8> = vec![0; MAP_SIZE];
@@ -1161,23 +1176,26 @@ mod tests {
         assert_eq!(execution_result_0.reverted, false);
 
         // process(5)
-        let execution_result_5 = evm_executor.execute(
-            deployment_loc,
-            generate_random_address(),
-            &vm_state,
-            Bytes::from(
+
+        let input_5 = EVMInput {
+            caller: generate_random_address(),
+            contract: deployment_loc,
+            data: None,
+            sstate: StagedVMState::new_uninitialized(),
+            sstate_idx: 0,
+            txn_value: Some(0),
+            step: false,
+            direct_data: Bytes::from(
                 [
                     function_hash.clone(),
                     hex::decode("0000000000000000000000000000000000000000000000000000000000000005")
                         .unwrap(),
                 ]
-                .concat(),
-            ),
-            0,
-            false,
-            &mut observers,
-            None,
-        );
+                    .concat(),
+            )
+        };
+
+        let execution_result_5 = evm_executor.execute(&input_5, None);
 
         // checking cmp map about coverage
         let mut cov_changed = false;

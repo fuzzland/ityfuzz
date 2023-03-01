@@ -203,6 +203,9 @@ where
                             sstate_idx: 0,
                             txn_value: if abi.is_payable { Some(0) } else { None },
                             step: false,
+
+                            #[cfg(test)]
+                            direct_data: Default::default(),
                         };
                         let mut tc =
                             Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone())

@@ -40,4 +40,7 @@ where
     fn set_step(&mut self, gate: bool);
     fn to_string(&self) -> String;
     fn as_any(&self) -> &dyn any::Any;
+
+    #[cfg(test)]
+    fn get_direct_data(&self) -> Vec<u8>;
 }
