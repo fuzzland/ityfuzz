@@ -1,6 +1,6 @@
 use crate::evm::input::EVMInput;
-use crate::evm::vm::EVMState;
 use crate::evm::mutator::FuzzMutator;
+use crate::evm::vm::EVMState;
 use crate::oracle::OracleCtx;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};

@@ -1,6 +1,6 @@
+use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::state::{HasCaller, InfantStateState};
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
