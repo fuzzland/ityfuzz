@@ -19,7 +19,6 @@ pub trait VMInputT<VS, Addr>:
 where
     VS: Default + VMStateT,
 {
-    fn to_bytes(&self) -> Vec<u8>;
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>;

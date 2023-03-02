@@ -12,6 +12,10 @@ use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
+pub trait EVMInputT {
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EVMInput {
     pub caller: H160,
@@ -50,13 +54,16 @@ impl std::fmt::Debug for EVMInput {
     }
 }
 
-impl VMInputT<EVMState, H160> for EVMInput {
+impl EVMInputT for EVMInput {
     fn to_bytes(&self) -> Vec<u8> {
         match self.data {
             Some(ref d) => d.get_bytes(),
             None => vec![],
         }
     }
+}
+
+impl VMInputT<EVMState, H160> for EVMInput {
 
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
