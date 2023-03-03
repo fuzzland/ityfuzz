@@ -1,0 +1,3 @@
+[submodule "move"]
+	path = externals/move
+	url = https://github.com/fuzzland/move.git
