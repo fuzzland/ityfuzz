@@ -1,5 +1,6 @@
 use std::any;
 use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
 use libafl::inputs::Input;
 use libafl::prelude::{HasMaxSize, MutationResult, State};
 use libafl::state::HasRand;
@@ -7,9 +8,11 @@ use move_binary_format::normalized::Module;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::value::MoveTypeLayout;
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_types::values::Value;
+use move_vm_types::values::{Value, ValueImpl};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::DeserializeOwned;
 use crate::input::VMInputT;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state::{HasCaller, HasItyState};
@@ -18,7 +21,7 @@ use crate::state_input::StagedVMState;
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
     fn function_name(&self) -> &Identifier;
-    fn args(&self) -> &Vec<Vec<u8>>;
+    fn args(&self) -> &Vec<CloneableValue>;
     fn ty_args(&self) -> &Vec<TypeTag>;
 }
 
@@ -26,13 +29,47 @@ pub trait MoveFunctionInputT {
 pub struct MoveFunctionInput {
     pub module: ModuleId,
     pub function: Identifier,
-    pub args: Vec<Vec<u8>>,
+    pub args: Vec<CloneableValue>,
     pub ty_args: Vec<TypeTag>,
 
     pub caller: AccountAddress,
 
     pub vm_state: StagedVMState<MoveVMState>,
     pub vm_state_idx: usize,
+}
+
+#[derive(Debug)]
+pub struct CloneableValue {
+    pub value: Value,
+}
+
+
+impl Clone for CloneableValue {
+    fn clone(&self) -> Self {
+        let Value(v) = &self.value;
+
+        CloneableValue {
+            value: Value(v.copy_value().unwrap()),
+        }
+    }
+}
+
+impl Serialize for CloneableValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        unreachable!()
+    }
+}
+
+impl<'de> Deserialize<'de> for CloneableValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        unreachable!()
+    }
 }
 
 impl MoveFunctionInputT for MoveFunctionInput {
@@ -44,7 +81,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
         &self.function
     }
 
-    fn args(&self) -> &Vec<Vec<u8>> {
+    fn args(&self) -> &Vec<CloneableValue> {
         &self.args
     }
 
