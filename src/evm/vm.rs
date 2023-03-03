@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 
@@ -7,8 +8,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::i64::MAX;
 use std::marker::PhantomData;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::process::exit;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::input::VMInputT;
@@ -189,7 +191,7 @@ pub struct FuzzHost {
     middlewares_enabled: bool,
     // middleware sets are available empty middlewares for each type
     middleware_individual_enabled: HashMap<MiddlewareType, bool>,
-    middlewares: HashMap<MiddlewareType, Box<dyn Middleware>>,
+    middlewares: Rc<RefCell<HashMap<MiddlewareType, Box<dyn Middleware>>>>,
     // for some middlewares, it appears in the execution based on some probability
     // see set_prob_middlewares for more details
     middleware_probs: HashMap<MiddlewareType, f32>,
@@ -215,7 +217,7 @@ impl Clone for FuzzHost {
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             middlewares_enabled: false,
             middleware_individual_enabled: Default::default(),
-            middlewares: Default::default(),
+            middlewares: Rc::new(RefCell::new(HashMap::new())),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -250,7 +252,7 @@ impl FuzzHost {
             pc_to_call_hash: HashMap::new(),
             middlewares_enabled: false,
             middleware_individual_enabled: Default::default(),
-            middlewares: Default::default(),
+            middlewares: Rc::new(RefCell::new(HashMap::new())),
             middlewares_deferred_actions: Default::default(),
             middleware_probs: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
@@ -270,7 +272,7 @@ impl FuzzHost {
         self.middlewares_enabled = true;
         let ty = middlewares.get_type();
         self.middlewares_deferred_actions.insert(ty, vec![]);
-        self.middlewares.insert(ty, middlewares);
+        self.middlewares.deref().borrow_mut().insert(ty, middlewares);
         self.middleware_individual_enabled.insert(ty, true);
         self.middleware_probs.insert(ty, prob);
     }
@@ -352,20 +354,17 @@ impl Host for FuzzHost {
 
         unsafe {
             if self.middlewares_enabled {
-                let all_mutation_ops = self
-                    .middlewares
+                for (_, middleware) in &mut self.middlewares
+                    .clone()
+                    .deref()
+                    .borrow_mut()
                     .iter_mut()
-                    .filter(|(ty, _)| self.middleware_individual_enabled[ty])
-                    .map(|m| m.1.on_step(interp))
-                    .collect::<Vec<_>>();
-                all_mutation_ops.iter().for_each(|ops| {
-                    ops.iter().for_each(|op| {
+                {
+                    for op in middleware.on_step(interp) {
                         op.execute(self);
-                    })
-                });
+                    }
+                }
             }
-            // println!("{}", *interp.instruction_pointer);
-            // println!("pc: {}", interp.program_counter());
 
             macro_rules! fast_peek {
                 ($idx:expr) => {
@@ -880,7 +879,7 @@ where
             memory: interp.memory.data().clone(),
         };
         // hack to record txn value
-        if let Some(mid) = self.host.middlewares.get_mut(&MiddlewareType::Flashloan) {
+        if let Some(mid) = self.host.middlewares.deref().borrow_mut().get_mut(&MiddlewareType::Flashloan) {
             unsafe {
                 mid.as_any()
                     .downcast_mut_unchecked::<Flashloan<S>>()
@@ -902,6 +901,7 @@ where
                         for op in f.1 {
                             self.host
                                 .middlewares
+                                .deref().borrow_mut()
                                 .get_mut(f.0)
                                 .expect("middleware not found")
                                 .as_any()
