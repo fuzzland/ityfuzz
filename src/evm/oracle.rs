@@ -98,10 +98,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
 
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         // has balance increased?
-        match ctx.post_state.metadata().get::<FlashloanData>() {
-            Some(flashloan_info) => flashloan_info.earned > flashloan_info.owed,
-            None => false,
-        }
+        ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed
     }
 }
 

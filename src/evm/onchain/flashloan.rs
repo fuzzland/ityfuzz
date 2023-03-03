@@ -236,6 +236,15 @@ pub struct FlashloanData {
     pub earned: U512,
 }
 
+impl FlashloanData {
+    pub fn new() -> Self {
+        Self {
+            owed: U512::from(0),
+            earned: U512::from(0),
+        }
+    }
+}
+
 impl_serdeany!(FlashloanData);
 
 impl<VS, S> CanHandleDeferredActions<VS, S> for Flashloan<S>
@@ -249,21 +258,12 @@ where
         state: &mut S,
         result: &mut IntermediateExecutionResult,
     ) {
-        // todo(shou): move init to else where to avoid overhead
-        if !result.new_state.has_metadata::<FlashloanData>() {
-            result.new_state.add_metadata(FlashloanData {
-                owed: U512::from(0),
-                earned: U512::from(0),
-            });
-        }
         match op {
             MiddlewareOp::Owed(.., amount) => {
-                let mut data = result.new_state.metadata_mut().get_mut::<FlashloanData>();
-                data.as_mut().unwrap().owed += *amount;
+                result.new_state.flashloan_data.owed += *amount;
             }
             MiddlewareOp::Earned(.., amount) => {
-                let mut data = result.new_state.metadata_mut().get_mut::<FlashloanData>();
-                data.as_mut().unwrap().earned += *amount;
+                result.new_state.flashloan_data.earned += *amount;
             }
             _ => {}
         }
