@@ -2,19 +2,19 @@ use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
-use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
+use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::Flashloan;
+use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
+use ityfuzz::evm::types::EVMFuzzState;
+use ityfuzz::evm::vm::EVMState;
+use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
+use ityfuzz::oracle::Oracle;
 use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
 use std::path::PathBuf;
 use std::str::FromStr;
-use ityfuzz::evm::input::EVMInput;
-use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
-use ityfuzz::evm::types::EVMFuzzState;
-use ityfuzz::evm::vm::EVMState;
-use ityfuzz::oracle::Oracle;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -139,7 +139,9 @@ fn main() {
     let mut function_oracle =
         FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
 
-    let mut oracles: Vec<Box<dyn Oracle<EVMState, H160, _, _, H160, U256, EVMInput, EVMFuzzState>>> = vec![];
+    let mut oracles: Vec<
+        Box<dyn Oracle<EVMState, H160, _, _, H160, U256, EVMInput, EVMFuzzState>>,
+    > = vec![];
     if args.ierc20_oracle {
         oracles.push(Box::new(flashloan_oracle));
     }
