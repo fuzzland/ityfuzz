@@ -90,10 +90,6 @@ impl VMInputT<EVMState, H160> for EVMInput {
         self.caller = caller;
     }
 
-    fn get_contract_mut(&mut self) -> &mut H160 {
-        &mut self.contract
-    }
-
     fn get_contract(&self) -> H160 {
         self.contract.clone()
     }
