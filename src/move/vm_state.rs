@@ -1,15 +1,12 @@
 use crate::generic_vm::vm_state::VMStateT;
 use crate::r#move::types::MoveAddress;
+use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::effects::Op;
+use move_core_types::gas_algebra::NumBytes;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::any::Any;
-use std::collections::HashMap;
-use move_binary_format::errors::{PartialVMResult, VMResult};
-use move_core_types::effects::Op;
-use move_core_types::gas_algebra::NumBytes;
 use move_core_types::value::MoveTypeLayout;
 use move_vm_runtime::interpreter::Frame;
 use move_vm_runtime::loader::Loader;
@@ -17,6 +14,9 @@ use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::data_store::DataStore;
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::values::{GlobalValue, Value};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::any::Any;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct MoveVMState {
@@ -43,11 +43,10 @@ impl Clone for MoveVMState {
     }
 }
 
-
 impl Serialize for MoveVMState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         unreachable!()
     }
@@ -55,8 +54,8 @@ impl Serialize for MoveVMState {
 
 impl<'de> Deserialize<'de> for MoveVMState {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         unreachable!()
     }
@@ -68,28 +67,26 @@ impl MoveVMState {
         for ((addr, ty), gv) in self._gv_slot.iter() {
             match gv.clone().into_effect() {
                 None => {}
-                Some(op) => {
-                    match op {
-                        Op::New(val) => {
-                            self.resources
-                                .entry(addr.clone())
-                                .or_insert(HashMap::new())
-                                .insert(ty.clone(), val.clone());
-                        }
-                        Op::Modify(val) => {
-                            self.resources
-                                .entry(addr.clone())
-                                .or_insert(HashMap::new())
-                                .insert(ty.clone(), val.clone());
-                        }
-                        Op::Delete => {
-                            self.resources
-                                .entry(addr.clone())
-                                .or_insert(HashMap::new())
-                                .remove(&ty);
-                        }
+                Some(op) => match op {
+                    Op::New(val) => {
+                        self.resources
+                            .entry(addr.clone())
+                            .or_insert(HashMap::new())
+                            .insert(ty.clone(), val.clone());
                     }
-                }
+                    Op::Modify(val) => {
+                        self.resources
+                            .entry(addr.clone())
+                            .or_insert(HashMap::new())
+                            .insert(ty.clone(), val.clone());
+                    }
+                    Op::Delete => {
+                        self.resources
+                            .entry(addr.clone())
+                            .or_insert(HashMap::new())
+                            .remove(&ty);
+                    }
+                },
             }
             idx += 1;
         }
@@ -98,14 +95,17 @@ impl MoveVMState {
 }
 
 impl DataStore for MoveVMState {
-    fn load_resource(&mut self, addr: AccountAddress, ty: &Type) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
-        let data = self.resources.get(&addr)
-            .unwrap()
-            .get(ty)
-            .unwrap();
+    fn load_resource(
+        &mut self,
+        addr: AccountAddress,
+        ty: &Type,
+    ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
+        let data = self.resources.get(&addr).unwrap().get(ty).unwrap();
 
-        self._gv_slot.insert((addr, ty.clone()), GlobalValue::cached(data.clone()).unwrap());
-
+        self._gv_slot.insert(
+            (addr, ty.clone()),
+            GlobalValue::cached(data.clone()).unwrap(),
+        );
 
         return Ok((self._gv_slot.get_mut(&(addr, ty.clone())).unwrap(), None));
     }
@@ -114,7 +114,12 @@ impl DataStore for MoveVMState {
         unreachable!()
     }
 
-    fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>, is_republishing: bool) -> VMResult<()> {
+    fn publish_module(
+        &mut self,
+        module_id: &ModuleId,
+        blob: Vec<u8>,
+        is_republishing: bool,
+    ) -> VMResult<()> {
         unreachable!()
     }
 
@@ -122,7 +127,13 @@ impl DataStore for MoveVMState {
         unreachable!()
     }
 
-    fn emit_event(&mut self, guid: Vec<u8>, seq_num: u64, ty: Type, val: Value) -> PartialVMResult<()> {
+    fn emit_event(
+        &mut self,
+        guid: Vec<u8>,
+        seq_num: u64,
+        ty: Type,
+        val: Value,
+    ) -> PartialVMResult<()> {
         unreachable!()
     }
 

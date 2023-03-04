@@ -4,23 +4,23 @@ use crate::input::VMInputT;
 use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
 use move_binary_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
+use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
+use move_vm_runtime::loader::BinaryType::Module;
+use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
+use move_vm_runtime::native_functions::{NativeFunction, NativeFunctions};
 use move_vm_runtime::{loader, move_vm};
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
+use move_vm_types::values::Locals;
 use std::collections::HashMap;
 use std::sync::Arc;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
-use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::{Identifier, IdentStr};
-use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
-use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
-use move_vm_runtime::loader::BinaryType::Module;
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctions};
-use move_vm_types::values::Locals;
 
 struct MoveVM<I, S> {
     modules: HashMap<ModuleId, Arc<loader::Module>>,
@@ -39,7 +39,7 @@ impl<I, S> MoveVM<I, S> {
             modules,
             _module_cache,
             functions,
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
 
@@ -50,7 +50,8 @@ impl<I, S> MoveVM<I, S> {
     }
 }
 
-impl<I, S> GenericVM<MoveVMState, CompiledModule, MoveFunctionInput, AccountAddress, values::Value, I, S>
+impl<I, S>
+    GenericVM<MoveVMState, CompiledModule, MoveFunctionInput, AccountAddress, values::Value, I, S>
     for MoveVM<I, S>
 where
     I: VMInputT<MoveVMState, AccountAddress> + MoveFunctionInputT,
@@ -63,15 +64,20 @@ where
     ) -> Option<AccountAddress> {
         let pre_mc_func_idx = self._module_cache.functions.len();
         self._module_cache
-            .insert(&self.get_natives(), module.self_id(),module.clone())
+            .insert(&self.get_natives(), module.self_id(), module.clone())
             .expect("internal deploy error");
         self.modules.insert(
             module.self_id(),
-            Arc::new(loader::Module::new(module.clone(), &self._module_cache)
-                .expect("module failed")),
+            Arc::new(
+                loader::Module::new(module.clone(), &self._module_cache).expect("module failed"),
+            ),
         );
-        for (idx, (func_def, func_handle)) in
-            module.function_defs().iter().zip(module.function_handles()).enumerate() {
+        for (idx, (func_def, func_handle)) in module
+            .function_defs()
+            .iter()
+            .zip(module.function_handles())
+            .enumerate()
+        {
             let name = module.identifier_at(func_handle.name);
             let function: Arc<Function> = self._module_cache.function_at(pre_mc_func_idx + idx);
             self.functions
@@ -87,7 +93,8 @@ where
         MoveVMState: VMStateT,
     {
         let module = self.modules.get(&input.module_id()).unwrap();
-        let function = self.functions
+        let function = self
+            .functions
             .get(&input.module_id())
             .unwrap()
             .get(input.function_name())
@@ -102,19 +109,16 @@ where
             pc: 0,
             locals,
             function: function.clone(),
-            ty_args: vec![]
+            ty_args: vec![],
         };
 
         let mut interp = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
-            paranoid_type_checks: false
+            paranoid_type_checks: false,
         };
 
-        let loader = Loader::new(
-            NativeFunctions::new(vec![]).unwrap(),
-            Default::default(),
-        );
+        let loader = Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default());
 
         let resolver = Resolver {
             loader: &loader,
@@ -123,12 +127,8 @@ where
 
         let mut state = input.get_state().clone();
 
-        let ret = current_frame.execute_code(
-            &resolver,
-            &mut interp,
-            &mut state,
-            &mut UnmeteredGasMeter
-        );
+        let ret =
+            current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
 
         //
         // match ret {
@@ -178,21 +178,22 @@ where
     }
 }
 
-
-
 mod tests {
-    use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
-    use move_vm_types::values::Value;
+    use super::*;
     use crate::r#move::input::CloneableValue;
     use crate::state::FuzzState;
-    use super::*;
+    use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
+    use move_vm_types::values::Value;
 
     #[test]
     fn test_move_vm_simple() {
         let module_hex = "a11ceb0b0500000006010002030205050703070a0e0818200c38130000000100000001030007546573744d6f6405746573743100000000000000000000000000000000000000000000000000000000000000030001000001040b00060200000000000000180200";
         let module_bytecode = hex::decode(module_hex).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
-        let mut mv = MoveVM::<MoveFunctionInput, FuzzState<MoveFunctionInput, MoveVMState, AccountAddress>>::new();
+        let mut mv = MoveVM::<
+            MoveFunctionInput,
+            FuzzState<MoveFunctionInput, MoveVMState, AccountAddress>,
+        >::new();
         let loc = mv.deploy(module, None, AccountAddress::new([0; 32]));
 
         assert_eq!(mv.modules.len(), 1);
@@ -209,19 +210,16 @@ mod tests {
             vm_state: StagedVMState {
                 state: MoveVMState {
                     resources: Default::default(),
-                    _gv_slot: Default::default()
+                    _gv_slot: Default::default(),
                 },
                 stage: vec![],
                 initialized: false,
-                trace: Default::default()
+                trace: Default::default(),
             },
-            vm_state_idx: 0
+            vm_state_idx: 0,
         };
 
-        let res = mv.execute(
-            &input, None
-        );
+        let res = mv.execute(&input, None);
         println!("{:?}", res);
-
     }
 }
