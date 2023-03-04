@@ -195,29 +195,33 @@ impl BVBox {
 }
 
 pub struct Solving<'a> {
+    context: & 'a Context,
     input: &'a BV<'a>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
-    solver: &'a Solver<'a>,
+    constraints: &'a Vec<Box<BVBox>>,
 }
 
 impl<'a> Solving<'a> {
     fn new(
+        context: &'a Context,
         input: &'a BV<'a>,
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
-        solver: &'a Solver<'a>,
+        constraints: &'a Vec<Box<BVBox>>,
     ) -> Self {
         Solving {
+            context,
             input,
             balance,
             calldatavalue,
-            solver,
+            constraints
         }
     }
 }
 
 impl<'a> Solving<'a> {
+
     pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
@@ -282,6 +286,43 @@ impl<'a> Solving<'a> {
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
+
+    pub fn solve(&mut self) -> Option<String> {
+        let context = self.context;
+        let solver = Solver::new(&context);
+        for cons in self.constraints {
+            let bv: BV = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
+            solver.assert(&match cons.op {
+                ConcolicOp::GT => {
+                    bv.bvugt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SGT => {
+                    bv.bvsgt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::EQ => {
+                    bv._eq(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::LT => {
+                    bv.bvult(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                ConcolicOp::SLT => {
+                    bv.bvslt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                }
+                _ => panic!("{:?} not implemented for constraint solving", cons.op),
+            });
+        }
+
+        let result = solver.check();
+        match result {
+            z3::SatResult::Sat => {
+                Some(solver.get_model().unwrap().eval(self.input, true).unwrap().to_string())
+            }
+            z3::SatResult::Unsat => {
+                None
+            }
+            z3::SatResult::Unknown => todo!(),
+        }
+    }
 }
 
 // Note: To model concolic memory, we need to remember previous constraints as well.
@@ -327,35 +368,27 @@ impl ConcolicHost {
         }
     }
 
-    pub fn solve(&self) {
+    fn string_to_bytes(s: &str) -> Vec<u8> {
+        // s: #x....
+        hex::decode(&s[2..]).unwrap()
+    }
+
+    pub fn solve(&self) -> Option<Vec<u8>> {
         let context = Context::new(&Config::default());
-        let solver = Solver::new(&context);
         let input = BV::new_const(&context, "input", self.bits);
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let balance = BV::new_const(&context, "balance", 256);
 
-        let mut solving = Solving::new(&input, &balance, &callvalue, &solver);
-        for cons in &self.constraints {
-            let bv: BV = solving.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
-            solver.assert(&match cons.op {
-                ConcolicOp::GT => {
-                    bv.bvugt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::SGT => {
-                    bv.bvsgt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::EQ => {
-                    bv._eq(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::LT => {
-                    bv.bvult(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                ConcolicOp::SLT => {
-                    bv.bvslt(&solving.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
-                }
-                _ => panic!("{:?} not implemented for constraint solving", cons.op),
-            });
+        let mut solving = Solving::new(&context, &input, &balance, &callvalue, &self.constraints);
+        let input_str = solving.solve();
+        match input_str {
+            Some(s) => {
+                let bytes = Self::string_to_bytes(&s);
+                Some(bytes)
+            },
+            None => None,
         }
+
     }
 }
 
