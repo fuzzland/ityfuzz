@@ -936,11 +936,11 @@ where
     fn deploy(
         &mut self,
         code: Bytecode,
-        constructor_args: Bytes,
+        constructor_args: Option<Bytes>,
         deployed_address: H160,
     ) -> Option<H160> {
         let deployer = Contract::new::<LatestSpec>(
-            constructor_args,
+            constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
             self.deployer,
@@ -1127,7 +1127,7 @@ mod tests {
         let deployment_loc = evm_executor
             .deploy(
                 Bytecode::new_raw(Bytes::from(deployment_bytecode)),
-                Bytes::from(vec![]),
+                None,
                 generate_random_address(),
             )
             .unwrap();

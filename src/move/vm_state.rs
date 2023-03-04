@@ -24,6 +24,15 @@ pub struct MoveVMState {
     pub _gv_slot: HashMap<(AccountAddress, Type), GlobalValue>,
 }
 
+impl MoveVMState {
+    pub fn new() -> Self {
+        Self {
+            resources: HashMap::new(),
+            _gv_slot: HashMap::new(),
+        }
+    }
+}
+
 impl Clone for MoveVMState {
     fn clone(&self) -> Self {
         assert!(self._gv_slot.is_empty());
