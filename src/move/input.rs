@@ -154,8 +154,11 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
         todo!()
     }
 
-    fn to_string(&self) -> String {
-        format!("{}::{}({:?})", self.module, self.function, self.args)
+    fn pretty_txn(&self) -> Option<String> {
+        Some(format!(
+            "{}::{}({:?})",
+            self.module, self.function, self.args
+        ))
     }
     fn as_any(&self) -> &dyn any::Any {
         self

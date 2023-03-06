@@ -104,7 +104,7 @@ impl BoxedABI {
     }
 
     pub fn to_string(&self) -> String {
-        format!("{}{}", hex::encode(self.function), self.b.to_string())
+        format!("{}{}\n", hex::encode(self.function), self.b.to_string())
     }
 }
 

@@ -221,7 +221,7 @@ where
                 for i in 0..state.corpus().count() {
                     match state.corpus().get(i) {
                         Ok(v) => {
-                            println!("{}", v.borrow().input().as_ref().unwrap().to_string());
+                            println!("{:?}", v.borrow().input().as_ref().unwrap().pretty_txn());
                         }
                         _ => {}
                     }
@@ -273,7 +273,7 @@ where
                     "trace: {}",
                     TxnTrace::to_string(&input.get_staged_state().trace, state)
                 );
-                println!("Found a solution! {}", input.to_string());
+                println!("Found a solution! {:?}", input.pretty_txn());
                 exit(0);
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;

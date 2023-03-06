@@ -135,12 +135,11 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         self.step = gate;
     }
 
-    fn to_string(&self) -> String {
-        let current_txn = match self.data {
-            Some(ref d) => d.to_string(),
-            None => String::new(),
-        };
-        format!("{:?}", self.sstate) + &current_txn
+    fn pretty_txn(&self) -> Option<String> {
+        match self.data {
+            Some(ref d) => Some(d.to_string()),
+            None => None,
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
