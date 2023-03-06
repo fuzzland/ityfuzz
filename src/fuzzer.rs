@@ -3,10 +3,10 @@ use crate::{
     state::{HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
-use std::fmt::Debug;
 
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -43,8 +43,8 @@ where
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     scheduler: CS,
     feedback: F,
@@ -54,7 +54,8 @@ where
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr)>,
 }
 
-impl<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+    ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -64,8 +65,8 @@ where
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc:Serialize + DeserializeOwned +  Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
         scheduler: CS,
@@ -100,8 +101,8 @@ where
     S: HasClientPerfMonitor + HasExecutions + HasMetadata,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn fuzz_one(
         &mut self,
@@ -140,7 +141,7 @@ impl<'a, VS, Loc, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, 
     for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr,VS>, InfantStateState<Loc, Addr,VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,

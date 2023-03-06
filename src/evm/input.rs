@@ -1,4 +1,5 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
+use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
@@ -11,7 +12,6 @@ use libafl::prelude::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
-use crate::evm::types::EVMStagedVMState;
 
 pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;

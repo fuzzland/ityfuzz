@@ -51,8 +51,16 @@ impl<I, S> MoveVM<I, S> {
 }
 
 impl<I, S>
-    GenericVM<MoveVMState, CompiledModule, MoveFunctionInput, ModuleId, AccountAddress, values::Value, I, S>
-    for MoveVM<I, S>
+    GenericVM<
+        MoveVMState,
+        CompiledModule,
+        MoveFunctionInput,
+        ModuleId,
+        AccountAddress,
+        values::Value,
+        I,
+        S,
+    > for MoveVM<I, S>
 where
     I: VMInputT<MoveVMState, ModuleId, AccountAddress> + MoveFunctionInputT,
 {
@@ -88,7 +96,11 @@ where
         Some(module.self_id().address().clone())
     }
 
-    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState>
+    fn execute(
+        &mut self,
+        input: &I,
+        state: Option<&mut S>,
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState>
     where
         MoveVMState: VMStateT,
     {
@@ -194,7 +206,9 @@ mod tests {
             MoveFunctionInput,
             FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress>,
         >::new();
-        let loc = mv.deploy(module, None, AccountAddress::new([0;32])).unwrap();
+        let loc = mv
+            .deploy(module, None, AccountAddress::new([0; 32]))
+            .unwrap();
 
         assert_eq!(mv.modules.len(), 1);
         assert_eq!(mv.functions.len(), 1);

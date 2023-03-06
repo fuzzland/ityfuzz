@@ -1,4 +1,5 @@
 use crate::input::VMInputT;
+use crate::r#move::types::MoveStagedVMState;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
@@ -17,7 +18,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use crate::r#move::types::MoveStagedVMState;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -99,7 +99,11 @@ impl Input for MoveFunctionInput {
 impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<ModuleId, AccountAddress, MoveVMState> + HasCaller<AccountAddress>,
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<ModuleId, AccountAddress, MoveVMState>
+            + HasCaller<AccountAddress>,
     {
         unimplemented!()
     }

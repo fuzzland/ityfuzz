@@ -11,12 +11,12 @@ use libafl::prelude::{Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use primitive_types::{H160, U256};
 use rand::random;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
-use serde::de::DeserializeOwned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {

@@ -10,8 +10,8 @@ use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
 // ST: Should VMInputT be the generic type for both inputs?

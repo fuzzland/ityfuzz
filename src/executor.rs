@@ -6,9 +6,9 @@ use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, HasObservers, ObserversTuple};
 use libafl::state::State;
 use libafl::Error;
-use std::fmt::Debug;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
 
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
@@ -75,7 +75,7 @@ where
     OT: ObserversTuple<I, S>,
     S: State + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata + 'static,
     VS: Default + VMStateT,
-    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn run_target(
@@ -101,8 +101,8 @@ where
     I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn observers(&self) -> &OT {
         &self.observers

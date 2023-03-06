@@ -74,7 +74,7 @@ pub fn cmp_fuzzer(
 
     match config.concolic_prob {
         Some(prob) => fuzz_host.set_concolic_prob(prob),
-        None => {},
+        None => {}
     }
 
     match config.onchain {

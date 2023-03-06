@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -7,16 +6,17 @@ use crate::state_input::StagedVMState;
 use hex;
 use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;
-use std::marker::PhantomData;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
+use std::marker::PhantomData;
 
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fuzz_state: &'a S,
     pub pre_state: &'a VS,
@@ -32,8 +32,8 @@ where
     I: VMInputT<VS, Loc, Addr> + 'static,
     S: State + HasCorpus<I> + HasMetadata,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
         fuzz_state: &'a S,
@@ -98,8 +98,8 @@ pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug+ Clone,
-    Loc: Serialize + DeserializeOwned + Debug+ Clone,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn transition(
         &self,
