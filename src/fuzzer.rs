@@ -6,6 +6,7 @@ use crate::{
 use std::ops::Deref;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
+use std::fmt::Debug;
 
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -26,39 +27,45 @@ use libafl::{
     Error, Evaluator, ExecuteInputResult,
 };
 use rand::random;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
-pub struct ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
+pub struct ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     scheduler: CS,
     feedback: F,
     infant_feedback: IF,
     infant_scheduler: &'a IS,
     objective: OF,
-    phantom: PhantomData<(I, S, OT, VS, Addr)>,
+    phantom: PhantomData<(I, S, OT, VS, Loc, Addr)>,
 }
 
-impl<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT> ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc:Serialize + DeserializeOwned +  Debug+ Clone,
 {
     pub fn new(
         scheduler: CS,
@@ -80,19 +87,21 @@ where
 
 // implement fuzzer trait for ItyFuzzer
 // Seems that we can get rid of this impl and just use StdFuzzer?
-impl<'a, VS, Addr, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
-    for ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
+    for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor + HasExecutions + HasMetadata,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     fn fuzz_one(
         &mut self,
@@ -127,26 +136,28 @@ where
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<'a, VS, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
-    for ItyFuzzer<'a, VS, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
+    for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr,VS>, InfantStateState<Loc, Addr,VS>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
     OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
     EM: EventManager<E, I, S, Self>,
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor
         + HasCorpus<I>
         + HasSolutions<I>
-        + HasInfantStateState<VS>
-        + HasItyState<VS>
-        + HasExecutionResult<VS>
+        + HasInfantStateState<Loc, Addr, VS>
+        + HasItyState<Loc, Addr, VS>
+        + HasExecutionResult<Loc, Addr, VS>
         + HasExecutions,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn evaluate_input_events(
         &mut self,

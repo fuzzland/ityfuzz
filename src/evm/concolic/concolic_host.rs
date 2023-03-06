@@ -816,7 +816,7 @@ impl Middleware for ConcolicHost {
 
 impl<VS, S> CanHandleDeferredActions<VS, &mut S> for ConcolicHost
 where
-    S: HasItyState<VS>,
+    S: HasItyState<H160, H160, VS>,
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(

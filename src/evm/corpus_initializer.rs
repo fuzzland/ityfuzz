@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::EVMInput;
-use crate::evm::types::EVMFuzzState;
+use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
@@ -24,7 +24,7 @@ use std::time::Duration;
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
     scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
-    infant_scheduler: &'a dyn Scheduler<StagedVMState<EVMState>, InfantStateState<EVMState>>,
+    infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
     state: &'a mut EVMFuzzState,
 }
 
@@ -32,7 +32,7 @@ impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
         executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
         scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
-        infant_scheduler: &'a dyn Scheduler<StagedVMState<EVMState>, InfantStateState<EVMState>>,
+        infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
         state: &'a mut EVMFuzzState,
     ) -> Self {
         Self {

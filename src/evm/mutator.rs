@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -8,23 +9,29 @@ use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::Error;
 use std::ops::Add;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
 
-pub struct FuzzMutator<'a, VS, Addr, SC>
+pub struct FuzzMutator<'a, VS, Loc, Addr, SC>
 where
     VS: Default + VMStateT,
-    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub infant_scheduler: &'a SC,
-    pub phantom: std::marker::PhantomData<(VS, Addr)>,
+    pub phantom: std::marker::PhantomData<(VS, Loc, Addr)>,
 }
 
-impl<'a, VS, Addr, SC> FuzzMutator<'a, VS, Addr, SC>
+impl<'a, VS, Loc, Addr, SC> FuzzMutator<'a, VS, Loc, Addr, SC>
 where
     VS: Default + VMStateT,
-    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(infant_scheduler: &'a SC) -> Self {
         Self {
@@ -34,13 +41,14 @@ where
     }
 }
 
-impl<'a, VS, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Addr, SC>
+impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC>
 where
-    I: VMInputT<VS, Addr> + Input,
-    S: State + HasRand + HasMaxSize + HasItyState<VS> + HasCaller<Addr>,
-    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>,
+    I: VMInputT<VS, Loc, Addr> + Input,
+    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT,
-    Addr: PartialEq,
+    Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn mutate(
         &mut self,

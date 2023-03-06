@@ -11,6 +11,7 @@ use libafl::prelude::{HasMaxSize, HasRand, State};
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
+use crate::evm::types::EVMStagedVMState;
 
 pub trait EVMInputT {
     fn to_bytes(&self) -> Vec<u8>;
@@ -21,7 +22,7 @@ pub struct EVMInput {
     pub caller: H160,
     pub contract: H160,
     pub data: Option<BoxedABI>,
-    pub sstate: StagedVMState<EVMState>,
+    pub sstate: StagedVMState<H160, H160, EVMState>,
     pub sstate_idx: usize,
     pub txn_value: Option<usize>,
     pub step: bool,
@@ -62,10 +63,10 @@ impl EVMInputT for EVMInput {
     }
 }
 
-impl VMInputT<EVMState, H160> for EVMInput {
+impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<EVMState> + HasCaller<H160>,
+        S: State + HasRand + HasMaxSize + HasItyState<H160, H160, EVMState> + HasCaller<H160>,
     {
         let vm_slots = if let Some(s) = self.get_state().get(&self.get_contract()) {
             Some(s.clone())
@@ -98,7 +99,7 @@ impl VMInputT<EVMState, H160> for EVMInput {
         &self.sstate.state
     }
 
-    fn set_staged_state(&mut self, state: StagedVMState<EVMState>, idx: usize) {
+    fn set_staged_state(&mut self, state: EVMStagedVMState, idx: usize) {
         self.sstate = state;
         self.sstate_idx = idx;
     }
@@ -107,7 +108,7 @@ impl VMInputT<EVMState, H160> for EVMInput {
         self.sstate_idx
     }
 
-    fn get_staged_state(&self) -> &StagedVMState<EVMState> {
+    fn get_staged_state(&self) -> &EVMStagedVMState {
         &self.sstate
     }
 

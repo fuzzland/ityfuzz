@@ -17,14 +17,18 @@ use libafl::Error;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
-    executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     map: [bool; MAP_SIZE],
     phantom: PhantomData<(I, S)>,
 }
@@ -32,8 +36,10 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Debug
     for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InfantFeedback")
@@ -45,8 +51,10 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Named
     for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     fn name(&self) -> &str {
         "InfantFeedback"
@@ -56,12 +64,14 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
     InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug+ Clone,
+    Loc: Serialize + DeserializeOwned + Debug+ Clone,
 {
     pub fn new(
         oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
-        executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+        executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     ) -> Self {
         Self {
             oracle,
@@ -75,9 +85,11 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
     for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<VS> + HasCorpus<I> + HasMetadata,
-    I: Input + VMInputT<VS, Addr> + 'static,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata,
+    I: Input + VMInputT<VS, Loc, Addr> + 'static,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
@@ -145,18 +157,22 @@ where
 
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
-    executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Debug
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OracleFeedback")
@@ -168,8 +184,10 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Named
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn name(&self) -> &str {
         "OracleFeedback"
@@ -179,12 +197,14 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
     OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    I: VMInputT<VS, Addr>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
         oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>>>,
-        executor: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+        executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     ) -> Self {
         Self { oracle, executor }
     }
@@ -193,9 +213,11 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> Feedback<I, S>
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<VS> + HasCorpus<I> + HasMetadata + 'static,
-    I: VMInputT<VS, Addr> + 'static,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata + 'static,
+    I: VMInputT<VS, Loc, Addr> + 'static,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
@@ -263,15 +285,15 @@ where
 /// Logic: Maintains read and write map, if a write map idx is true in the read map,
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
-pub struct DataflowFeedback<'a, VS, Addr> {
+pub struct DataflowFeedback<'a, VS, Loc, Addr> {
     global_write_map: [[bool; 4]; MAP_SIZE],
     read_map: &'a mut [bool],
     write_map: &'a mut [u8],
-    phantom: PhantomData<(VS, Addr)>,
+    phantom: PhantomData<(VS, Loc, Addr)>,
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Addr> Debug for DataflowFeedback<'a, VS, Addr> {
+impl<'a, VS, Loc, Addr> Debug for DataflowFeedback<'a, VS, Loc, Addr> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataflowFeedback")
             // .field("oracle", &self.oracle)
@@ -280,14 +302,14 @@ impl<'a, VS, Addr> Debug for DataflowFeedback<'a, VS, Addr> {
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Addr> Named for DataflowFeedback<'a, VS, Addr> {
+impl<'a, VS, Loc, Addr> Named for DataflowFeedback<'a, VS, Loc, Addr> {
     fn name(&self) -> &str {
         "DataflowFeedback"
     }
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Addr> DataflowFeedback<'a, VS, Addr> {
+impl<'a, VS, Loc, Addr> DataflowFeedback<'a, VS, Loc, Addr> {
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
             global_write_map: [[false; 4]; MAP_SIZE],
@@ -299,11 +321,13 @@ impl<'a, VS, Addr> DataflowFeedback<'a, VS, Addr> {
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Addr, I, S> Feedback<I, S> for DataflowFeedback<'a, VS, Addr>
+impl<'a, VS, Loc, Addr, I, S> Feedback<I, S> for DataflowFeedback<'a, VS, Loc, Addr>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<VS>,
-    I: VMInputT<VS, Addr>,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS>,
+    I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -369,7 +393,7 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> {
     known_states: HashSet<u64>,
     known_pcs: HashSet<usize>,
     scheduler: &'a SC,
-    vm: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+    vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     phantom: PhantomData<(Addr)>,
 }
 
@@ -377,15 +401,17 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> {
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
     CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
-    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>
-        + HasVote<StagedVMState<VS>, InfantStateState<VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
+        + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT,
     SlotTy: PartialOrd + Copy + From<u128>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
         scheduler: &'a SC,
-        vm: Box<dyn GenericVM<VS, Code, By, Loc, SlotTy, I, S>>,
+        vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
     ) -> Self {
         Self {
             min_map: [SlotTy::from(u128::MAX); MAP_SIZE],
@@ -422,12 +448,14 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC> Debug
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, I0, S0, SC> Feedback<I0, S0>
     for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, I, S, SC>
 where
-    S0: State + HasClientPerfMonitor + HasInfantStateState<VS> + HasExecutionResult<VS>,
-    I0: Input + VMInputT<VS, Addr>,
-    SC: Scheduler<StagedVMState<VS>, InfantStateState<VS>>
-        + HasVote<StagedVMState<VS>, InfantStateState<VS>>,
+    S0: State + HasClientPerfMonitor + HasInfantStateState<Loc, Addr, VS> + HasExecutionResult<Loc, Addr, VS>,
+    I0: Input + VMInputT<VS, Loc, Addr>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
+        + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
+    Addr:Serialize + DeserializeOwned +  Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())

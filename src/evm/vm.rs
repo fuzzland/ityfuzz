@@ -742,8 +742,8 @@ pub struct IntermediateExecutionResult {
 
 impl<VS, I, S> EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160> + 'static,
-    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    I: VMInputT<VS, H160, H160> + 'static,
+    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + 'static,
     VS: Default + VMStateT + 'static,
 {
     pub fn new(fuzz_host: FuzzHost, deployer: H160) -> Self {
@@ -938,10 +938,10 @@ where
     }
 }
 
-impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, U256, I, S> for EVMExecutor<I, S, VS>
+impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, I, S> for EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160> + EVMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState<VS> + HasMetadata + HasCaller<H160> + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + 'static,
     VS: VMStateT + Default + 'static,
 {
     fn deploy(
@@ -989,7 +989,7 @@ where
         Some(deployed_address)
     }
 
-    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<VS> {
+    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<H160, H160, VS> {
         let mut _vm_state = unsafe {
             input
                 .get_state()
