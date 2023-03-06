@@ -425,9 +425,9 @@ impl Middleware for ConcolicHost {
             }};
         }
 
-        // TODO: the default implementation (noop) for arithmetic operations should be
-        //       performing the concrete execution and push to concolic stack
-        //       other operations should alter the OP as well
+        // TODO: Figure out the corresponding MiddlewareOp to add
+        // We may need coverage map here to decide whether to add a new input to the
+        // corpus or not.
         let bv: Vec<Option<Box<BVBox>>> = match *interp.instruction_pointer {
             // ADD
             0x01 => {
