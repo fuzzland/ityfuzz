@@ -4,9 +4,9 @@ Fast hybrid fuzzer for EVM, MoveVM, etc.
 
 ### Building
 ```bash
+git submodule update --recursive --init
 cd cli/
 # download move dependencies
-git submodule update --recursive --init
 cargo build --release
 ```
 
