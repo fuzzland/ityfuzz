@@ -137,7 +137,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
 
     fn pretty_txn(&self) -> Option<String> {
         match self.data {
-            Some(ref d) => Some(d.to_string()),
+            Some(ref d) => Some(format!("{} with {:?} ETH", d.to_string(), self.txn_value)),
             None => None,
         }
     }
