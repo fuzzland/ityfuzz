@@ -69,7 +69,7 @@ struct Args {
     onchain_etherscan_api_key: Option<String>,
 
     /// Enable Concolic
-    #[arg(short, long, default_value = "false")]
+    #[arg(long, default_value = "false")]
     concolic: bool,
 
     /// Concolic: prob
