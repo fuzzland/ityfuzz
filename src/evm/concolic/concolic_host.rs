@@ -4,6 +4,7 @@ use revm::db::BenchmarkDB;
 use std::any::Any;
 use std::iter::Map;
 
+use crate::evm::abi::BoxedABI;
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::vm::IntermediateExecutionResult;
@@ -44,7 +45,8 @@ enum ConcolicOp {
     SLICEDINPUT(U256),
     BALANCE,
     CALLVALUE,
-    BV(u32),
+    // Represent a symbolic BV with width u32
+    BVVAR(u32),
     // constraint OP here
     EQ,
     LT,
@@ -120,6 +122,14 @@ impl BVBox {
             lhs: None,
             rhs: None,
             op: ConcolicOp::CALLVALUE,
+        }
+    }
+
+    pub fn new_bv_with_width(width: u32) -> Self {
+        BVBox {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::BVVAR(width),
         }
     }
 
@@ -350,10 +360,33 @@ impl<'a> Solving<'a> {
 //         else:
 //             bug
 
-pub struct ConcolicEVMInput {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EVMInputConstraint {
     // concrete data of EVM Input
     data: Bytes,
-    concolic_data: Map<u32, Box<BVBox>>,
+    input_constraints: Vec<Box<BVBox>>,
+}
+
+impl EVMInputConstraint {
+    // TODO: build input constraints from ABI
+    pub fn new(vmInput: BoxedABI) -> Self {
+        Self {
+            data: Bytes::from(vmInput.get_bytes()),
+            input_constraints: vec![],
+        }
+    }
+
+    pub fn add_constraint(&mut self, constraint: Box<BVBox>) {
+        self.input_constraints.push(constraint);
+    }
+
+    pub fn get_constraints(&self) -> &Vec<Box<BVBox>> {
+        &self.input_constraints
+    }
+
+    pub fn get_data(&self) -> &Bytes {
+        &self.data
+    }
 }
 
 // Q: Why do we need to make persistent memory symbolic?
@@ -361,16 +394,16 @@ pub struct ConcolicEVMInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicHost {
     symbolic_stack: Vec<Option<Box<BVBox>>>,
-    shadow_inputs: Option<BVBox>,
+    input_constraints: EVMInputConstraint,
     constraints: Vec<Box<BVBox>>,
     bits: u32,
 }
 
 impl ConcolicHost {
-    pub fn new(bytes: u32) -> Self {
+    pub fn new(bytes: u32, vmInput: BoxedABI) -> Self {
         Self {
             symbolic_stack: Vec::new(),
-            shadow_inputs: Some(BVBox::new_input()),
+            input_constraints: EVMInputConstraint::new(vmInput),
             constraints: vec![],
             bits: 8 * bytes,
         }

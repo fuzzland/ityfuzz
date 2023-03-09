@@ -791,6 +791,7 @@ where
         call_ctx: &CallContext,
         vm_state: &EVMState,
         data: Bytes,
+        input: &I,
         post_exec: Option<PostExecutionCtx>,
         mut state: Option<&mut S>,
     ) -> IntermediateExecutionResult {
@@ -847,8 +848,10 @@ where
         if self.host.middlewares_enabled {
             let rand = rand::random::<f32>();
             if self.host.concolic_prob > rand {
+                #[cfg(feature = "evm")]
                 self.host.add_middlewares(Box::new(ConcolicHost::new(
                     input_len_concolic.try_into().unwrap(),
+                    input.get_data_abi(),
                 )));
             }
         }
@@ -1023,6 +1026,7 @@ where
                 &post_exec.get_call_ctx(),
                 &_vm_state,
                 data,
+                input,
                 Some(post_exec),
                 state,
             )
@@ -1038,6 +1042,7 @@ where
                 },
                 &_vm_state,
                 data,
+                input,
                 None,
                 state,
             )

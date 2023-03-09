@@ -42,6 +42,9 @@ where
     fn pretty_txn(&self) -> Option<String>;
     fn as_any(&self) -> &dyn any::Any;
 
+    #[cfg(feature = "evm")]
+    fn get_data_abi(&self) -> crate::evm::abi::BoxedABI;
+
     #[cfg(test)]
     fn get_direct_data(&self) -> Vec<u8>;
 }

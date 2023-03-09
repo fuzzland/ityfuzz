@@ -1,3 +1,4 @@
+use crate::evm::abi::BoxedABI;
 use crate::input::VMInputT;
 use crate::r#move::types::MoveStagedVMState;
 use crate::r#move::vm_state::MoveVMState;
@@ -162,6 +163,11 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
     fn as_any(&self) -> &dyn any::Any {
         self
+    }
+
+    #[cfg(feature = "evm")]
+    fn get_data_abi(&self) -> BoxedABI {
+        todo!()
     }
 
     #[cfg(test)]
