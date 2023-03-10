@@ -21,6 +21,7 @@ use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
+use nix::libc::stat;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
@@ -189,6 +190,7 @@ where
     ) {
         match op {
             MiddlewareOp::AddCorpus(.., input, address) => {
+                state.add_caller(address);
                 ContractLoader::parse_abi_str(input)
                     .iter()
                     .filter(|v| !v.is_constructor)

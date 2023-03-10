@@ -72,6 +72,8 @@ impl<'a> EVMCorpusInitializer<'a> {
                 contract.deployed_address
             };
 
+            self.state.add_caller(&deployed_address);
+
             for abi in contract.abi {
                 self.add_abi(&abi, self.scheduler, deployed_address);
             }
@@ -113,14 +115,15 @@ impl<'a> EVMCorpusInitializer<'a> {
 
     pub fn setup_default_callers(&mut self, amount: usize) {
         for _ in 0..amount {
-            self.state.default_callers.push(generate_random_address());
+            let addr = generate_random_address();
+            self.state.add_caller(&addr);
         }
     }
 
     pub fn setup_contract_callers(&mut self, amount: usize) {
         for _ in 0..amount {
             let address = generate_random_address();
-            self.state.default_callers.push(address);
+            self.state.add_caller(&address);
             self.executor
                 .host
                 .set_code(address, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
