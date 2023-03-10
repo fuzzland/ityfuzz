@@ -4,12 +4,12 @@ use crate::{
     state_input::StagedVMState,
 };
 use std::fmt::Debug;
-use std::ops::Deref;
-use std::process::exit;
-use std::{marker::PhantomData, time::Duration};
 use std::fs::File;
 use std::io::Write;
+use std::ops::Deref;
 use std::path::Path;
+use std::process::exit;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -223,7 +223,8 @@ where
                     }
                     let txn_text = state
                         .get_execution_result()
-                        .new_state.trace
+                        .new_state
+                        .trace
                         .clone()
                         .to_string(state);
                     println!("============= New Corpus Item =============");
@@ -235,12 +236,10 @@ where
                     if !path.exists() {
                         std::fs::create_dir(path).unwrap();
                     }
-                    let mut file = File::create(
-                        format!("corpus/{}", unsafe { DUMP_FILE_COUNT })
-                    ).unwrap();
+                    let mut file =
+                        File::create(format!("corpus/{}", unsafe { DUMP_FILE_COUNT })).unwrap();
                     file.write_all(txn_text.as_bytes()).unwrap();
                 }
-
             }
         }
 

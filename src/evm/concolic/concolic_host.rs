@@ -2,7 +2,9 @@ use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
 use std::any::Any;
+use std::iter::Map;
 
+use crate::evm::abi::BoxedABI;
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::vm::IntermediateExecutionResult;
@@ -23,7 +25,7 @@ use z3::{ast::Ast, Config, Context, Solver};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
-    U256,
+    U256(U256),
     ADD,
     DIV,
     MUL,
@@ -40,9 +42,16 @@ enum ConcolicOp {
     SHR,
     SAR,
     INPUT,
-    SLICEDINPUT,
+    SLICEDINPUT(U256),
     BALANCE,
     CALLVALUE,
+    // Represent a symbolic BV with width u32
+    BVVAR(u32),
+    // helper OP for concrete btyes
+    CONCBYTES(Bytes),
+    // helper OP for input slicing (not in EVM)
+    // (start, end) in bytes, end is not included
+    FINEGRAINEDINPUT(u32, u32),
     // constraint OP here
     EQ,
     LT,
@@ -55,7 +64,8 @@ enum ConcolicOp {
 pub struct BVBox {
     lhs: Option<Box<BVBox>>,
     rhs: Option<Box<BVBox>>,
-    concrete: Option<U256>,
+    // concrete should be used in constant folding
+    // concrete: Option<U256>,
     op: ConcolicOp,
 }
 
@@ -71,7 +81,6 @@ macro_rules! box_bv {
         Box::new(BVBox {
             lhs: Some(Box::new($lhs)),
             rhs: Some($rhs),
-            concrete: None,
             op: $op,
         })
     };
@@ -89,21 +98,11 @@ macro_rules! bv_from_u256 {
 }
 
 impl BVBox {
-    pub fn new_input() -> Self {
-        BVBox {
-            lhs: None,
-            rhs: None,
-            concrete: None,
-            op: ConcolicOp::INPUT,
-        }
-    }
-
     pub fn new_sliced_input(idx: U256) -> Self {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: Some(idx),
-            op: ConcolicOp::SLICEDINPUT,
+            op: ConcolicOp::SLICEDINPUT(idx),
         }
     }
 
@@ -111,7 +110,6 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: None,
             op: ConcolicOp::BALANCE,
         }
     }
@@ -120,8 +118,23 @@ impl BVBox {
         BVBox {
             lhs: None,
             rhs: None,
-            concrete: None,
             op: ConcolicOp::CALLVALUE,
+        }
+    }
+
+    pub fn new_bv_with_width(width: u32) -> Self {
+        BVBox {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::BVVAR(width),
+        }
+    }
+
+    pub fn sliced_input(start: u32, end: u32) -> Self {
+        BVBox {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::FINEGRAINEDINPUT(start, end),
         }
     }
 
@@ -162,7 +175,6 @@ impl BVBox {
         Box::new(BVBox {
             lhs: Some(Box::new(self)),
             rhs: None,
-            concrete: None,
             op: ConcolicOp::NOT,
         })
     }
@@ -199,7 +211,7 @@ impl BVBox {
 
 pub struct Solving<'a> {
     context: &'a Context,
-    input: &'a BV<'a>,
+    input: &'a Vec<BV<'a>>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
     constraints: &'a Vec<Box<BVBox>>,
@@ -208,7 +220,7 @@ pub struct Solving<'a> {
 impl<'a> Solving<'a> {
     fn new(
         context: &'a Context,
-        input: &'a BV<'a>,
+        input: &'a Vec<BV<'a>>,
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
         constraints: &'a Vec<Box<BVBox>>,
@@ -224,6 +236,16 @@ impl<'a> Solving<'a> {
 }
 
 impl<'a> Solving<'a> {
+    pub fn slice_input(&self, start: u32, end: u32) -> BV<'a> {
+        let start = start as usize;
+        let end = end as usize;
+        let mut slice = self.input[start].clone();
+        for i in start + 1..end {
+            slice = slice.concat(&self.input[i]);
+        }
+        slice
+    }
+
     pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
@@ -232,8 +254,8 @@ impl<'a> Solving<'a> {
             };
         }
         match bv.op {
-            ConcolicOp::U256 => {
-                bv_from_u256!(bv.concrete.unwrap(), ctx)
+            ConcolicOp::U256(constant) => {
+                bv_from_u256!(constant, ctx)
             }
             ConcolicOp::ADD => {
                 binop!(bv.lhs, bv.rhs, bvadd)
@@ -278,13 +300,13 @@ impl<'a> Solving<'a> {
             ConcolicOp::SAR => {
                 binop!(bv.lhs, bv.rhs, bvashr)
             }
-            ConcolicOp::INPUT => self.input.clone(),
-            ConcolicOp::SLICEDINPUT => {
-                let idx = bv.concrete.unwrap().0[0] as u32;
-                self.input.extract(idx * 8 + 32, idx * 8)
+            ConcolicOp::SLICEDINPUT(idx) => {
+                let idx = idx.0[0] as u32;
+                self.slice_input(idx, idx + 4)
             }
             ConcolicOp::BALANCE => self.balance.clone(),
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
+            ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(start, end),
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -316,14 +338,16 @@ impl<'a> Solving<'a> {
 
         let result = solver.check();
         match result {
-            z3::SatResult::Sat => Some(
-                solver
-                    .get_model()
-                    .unwrap()
-                    .eval(self.input, true)
-                    .unwrap()
-                    .to_string(),
-            ),
+            z3::SatResult::Sat => {
+                let model = solver.get_model().unwrap();
+                Some(
+                    self.input
+                        .iter()
+                        .map(|x| model.eval(x, true).unwrap().to_string())
+                        .collect::<Vec<_>>()
+                        .join(""),
+                )
+            }
             z3::SatResult::Unsat => None,
             z3::SatResult::Unknown => todo!(),
         }
@@ -353,23 +377,55 @@ impl<'a> Solving<'a> {
 //         else:
 //             bug
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EVMInputConstraint {
+    // concrete data of EVM Input
+    data: Bytes,
+    input_constraints: Vec<Box<BVBox>>,
+}
+
+impl EVMInputConstraint {
+    pub fn new(vm_input: BoxedABI) -> Self {
+        // TODO: build input constraints from ABI
+        let mut input_constraints = vec![];
+        // input_constraints.push()
+
+        Self {
+            data: Bytes::from(vm_input.get_bytes()),
+            input_constraints: input_constraints,
+        }
+    }
+
+    pub fn add_constraint(&mut self, constraint: Box<BVBox>) {
+        self.input_constraints.push(constraint);
+    }
+
+    pub fn get_constraints(&self) -> &Vec<Box<BVBox>> {
+        &self.input_constraints
+    }
+
+    pub fn get_data(&self) -> &Bytes {
+        &self.data
+    }
+}
+
 // Q: Why do we need to make persistent memory symbolic?
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicHost {
     symbolic_stack: Vec<Option<Box<BVBox>>>,
-    shadow_inputs: Option<BVBox>,
+    input_constraints: EVMInputConstraint,
     constraints: Vec<Box<BVBox>>,
-    bits: u32,
+    bytes: u32,
 }
 
 impl ConcolicHost {
-    pub fn new(bytes: u32) -> Self {
+    pub fn new(bytes: u32, vm_input: BoxedABI) -> Self {
         Self {
             symbolic_stack: Vec::new(),
-            shadow_inputs: Some(BVBox::new_input()),
+            input_constraints: EVMInputConstraint::new(vm_input),
             constraints: vec![],
-            bits: 8 * bytes,
+            bytes: bytes,
         }
     }
 
@@ -380,7 +436,9 @@ impl ConcolicHost {
 
     pub fn solve(&self) -> Option<Vec<u8>> {
         let context = Context::new(&Config::default());
-        let input = BV::new_const(&context, "input", self.bits);
+        let input = (0..self.bytes)
+            .map(|idx| BV::new_const(&context, format!("input_{}", idx), 8))
+            .collect::<Vec<_>>();
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let balance = BV::new_const(&context, "balance", 256);
 
@@ -409,8 +467,7 @@ impl Middleware for ConcolicHost {
                         Box::new(BVBox {
                             lhs: None,
                             rhs: None,
-                            concrete: Some(u256),
-                            op: ConcolicOp::U256,
+                            op: ConcolicOp::U256(u256),
                         })
                     }
                 }
@@ -503,8 +560,7 @@ impl Middleware for ConcolicHost {
                 vec![Some(Box::new(BVBox {
                     lhs: None,
                     rhs: None,
-                    concrete: Some(res),
-                    op: ConcolicOp::U256,
+                    op: ConcolicOp::U256(res),
                 }))]
             }
             // SIGNEXTEND - FIXME: need to check
@@ -554,8 +610,7 @@ impl Middleware for ConcolicHost {
                 let res = Some(stack_bv!(0).eq(Box::new(BVBox {
                     lhs: None,
                     rhs: None,
-                    concrete: Some(U256::from(0)),
-                    op: ConcolicOp::U256,
+                    op: ConcolicOp::U256(U256::from(0)),
                 })));
                 self.symbolic_stack.pop();
                 vec![res]
