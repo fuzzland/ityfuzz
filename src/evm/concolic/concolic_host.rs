@@ -47,6 +47,11 @@ enum ConcolicOp {
     CALLVALUE,
     // Represent a symbolic BV with width u32
     BVVAR(u32),
+    // helper OP for concrete btyes
+    CONCBYTES(Bytes),
+    // helper OP for input slicing (not in EVM)
+    // (start, end) in bytes, end is not included
+    FINEGRAINEDINPUT(u32, u32),
     // constraint OP here
     EQ,
     LT,
@@ -93,14 +98,6 @@ macro_rules! bv_from_u256 {
 }
 
 impl BVBox {
-    pub fn new_input() -> Self {
-        BVBox {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::INPUT,
-        }
-    }
-
     pub fn new_sliced_input(idx: U256) -> Self {
         BVBox {
             lhs: None,
@@ -130,6 +127,14 @@ impl BVBox {
             lhs: None,
             rhs: None,
             op: ConcolicOp::BVVAR(width),
+        }
+    }
+
+    pub fn sliced_input(start: u32, end: u32) -> Self {
+        BVBox {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::FINEGRAINEDINPUT(start, end),
         }
     }
 
@@ -206,7 +211,7 @@ impl BVBox {
 
 pub struct Solving<'a> {
     context: &'a Context,
-    input: &'a BV<'a>,
+    input: &'a Vec<BV<'a>>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
     constraints: &'a Vec<Box<BVBox>>,
@@ -215,7 +220,7 @@ pub struct Solving<'a> {
 impl<'a> Solving<'a> {
     fn new(
         context: &'a Context,
-        input: &'a BV<'a>,
+        input: &'a Vec<BV<'a>>,
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
         constraints: &'a Vec<Box<BVBox>>,
@@ -231,6 +236,16 @@ impl<'a> Solving<'a> {
 }
 
 impl<'a> Solving<'a> {
+    pub fn slice_input(&self, start: u32, end: u32) -> BV<'a> {
+        let start = start as usize;
+        let end = end as usize;
+        let mut slice = self.input[start].clone();
+        for i in start + 1..end {
+            slice = slice.concat(&self.input[i]);
+        }
+        slice
+    }
+
     pub fn generate_z3_bv(&mut self, bv: &BVBox, ctx: &'a Context) -> BV<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
@@ -285,13 +300,13 @@ impl<'a> Solving<'a> {
             ConcolicOp::SAR => {
                 binop!(bv.lhs, bv.rhs, bvashr)
             }
-            ConcolicOp::INPUT => self.input.clone(),
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.0[0] as u32;
-                self.input.extract(idx * 8 + 32, idx * 8)
+                self.slice_input(idx, idx + 4)
             }
             ConcolicOp::BALANCE => self.balance.clone(),
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
+            ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(start, end),
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -323,14 +338,16 @@ impl<'a> Solving<'a> {
 
         let result = solver.check();
         match result {
-            z3::SatResult::Sat => Some(
-                solver
-                    .get_model()
-                    .unwrap()
-                    .eval(self.input, true)
-                    .unwrap()
-                    .to_string(),
-            ),
+            z3::SatResult::Sat => {
+                let model = solver.get_model().unwrap();
+                Some(
+                    self.input
+                        .iter()
+                        .map(|x| model.eval(x, true).unwrap().to_string())
+                        .collect::<Vec<_>>()
+                        .join(""),
+                )
+            }
             z3::SatResult::Unsat => None,
             z3::SatResult::Unknown => todo!(),
         }
@@ -368,11 +385,14 @@ pub struct EVMInputConstraint {
 }
 
 impl EVMInputConstraint {
-    // TODO: build input constraints from ABI
     pub fn new(vm_input: BoxedABI) -> Self {
+        // TODO: build input constraints from ABI
+        let mut input_constraints = vec![];
+        // input_constraints.push()
+
         Self {
             data: Bytes::from(vm_input.get_bytes()),
-            input_constraints: vec![],
+            input_constraints: input_constraints,
         }
     }
 
@@ -396,7 +416,7 @@ pub struct ConcolicHost {
     symbolic_stack: Vec<Option<Box<BVBox>>>,
     input_constraints: EVMInputConstraint,
     constraints: Vec<Box<BVBox>>,
-    bits: u32,
+    bytes: u32,
 }
 
 impl ConcolicHost {
@@ -405,7 +425,7 @@ impl ConcolicHost {
             symbolic_stack: Vec::new(),
             input_constraints: EVMInputConstraint::new(vm_input),
             constraints: vec![],
-            bits: 8 * bytes,
+            bytes: bytes,
         }
     }
 
@@ -416,7 +436,9 @@ impl ConcolicHost {
 
     pub fn solve(&self) -> Option<Vec<u8>> {
         let context = Context::new(&Config::default());
-        let input = BV::new_const(&context, "input", self.bits);
+        let input = (0..self.bytes)
+            .map(|idx| BV::new_const(&context, format!("input_{}", idx), 8))
+            .collect::<Vec<_>>();
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let balance = BV::new_const(&context, "balance", 256);
 
