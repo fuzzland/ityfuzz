@@ -283,10 +283,13 @@ where
             }
             ExecuteInputResult::Solution => {
                 println!(
-                    "trace: {}",
-                    TxnTrace::to_string(&input.get_staged_state().trace, state)
+                    "Found a solution! trace: {}",
+                        state.get_execution_result()
+                        .new_state
+                        .trace
+                        .clone()
+                        .to_string(state)
                 );
-                println!("Found a solution! {:?}", input.pretty_txn());
                 exit(0);
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
