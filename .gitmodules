@@ -1,3 +1,6 @@
 [submodule "move"]
 	path = externals/move
 	url = https://github.com/fuzzland/move.git
+[submodule "heimdall"]
+	path = externals/heimdall-rs
+	url = https://github.com/fuzzland/heimdall-rs.git
