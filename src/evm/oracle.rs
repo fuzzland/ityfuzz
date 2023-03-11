@@ -98,7 +98,17 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
 
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         // has balance increased?
-        ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed
+        if ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed {
+            println!(
+                "[Flashloan] Earned {} more than owed {}",
+                 ctx.post_state.flashloan_data.earned,
+                 ctx.post_state.flashloan_data.owed
+            );
+            true
+        } else {
+            false
+        }
+
     }
 }
 

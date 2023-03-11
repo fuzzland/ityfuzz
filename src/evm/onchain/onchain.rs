@@ -195,7 +195,7 @@ where
                     .filter(|v| !v.is_constructor)
                     .for_each(|abi| {
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance.set_func(abi.function);
+                        abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
                         let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: address.clone(),

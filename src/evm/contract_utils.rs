@@ -169,7 +169,7 @@ impl ContractLoader {
         if let Some(abi) = result.abi.iter().find(|abi| abi.is_constructor) {
             let mut abi_instance =
                 get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
-            abi_instance.set_func(abi.function);
+            abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
             // since this is constructor args, we ingore the function hash
             // Note (Shangyin): this may still non-deployable, need futher improvement
             // (The check may fail)
