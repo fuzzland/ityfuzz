@@ -45,9 +45,13 @@ itertools = "0.10.2"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 once_cell = "1.8.0"
 
+# external fuzzing-based abi decompiler
+heimdall = { path = "./externals/heimdall-rs/heimdall" }
+
 # from https://github.com/aptos-labs/aptos-core/blob/main/Cargo.toml#L452
 move-binary-format = { path = "./externals/move/language/move-binary-format" }
 move-core-types = { path = "./externals/move/language/move-core/types", features = ["address32"] }
 move-stdlib = { path = "./externals/move/language/move-stdlib" }
 move-vm-runtime = { path = "./externals/move/language/move-vm/runtime", features = ["lazy_natives"] }
 move-vm-types = { path = "./externals/move/language/move-vm/types" }
+
