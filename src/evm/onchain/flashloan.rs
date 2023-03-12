@@ -40,19 +40,19 @@ impl PriceOracle for DummyPriceOracle {
 }
 
 impl<S> Flashloan<S> {
-    pub fn new() -> Self {
+    pub fn new(use_contract_value: bool) -> Self {
         Self {
             phantom: PhantomData,
             oracle: Box::new(DummyPriceOracle {}),
-            use_contract_value: false,
+            use_contract_value,
         }
     }
 
-    pub fn new_with_oracle(oracle: Box<dyn PriceOracle>) -> Self {
+    pub fn new_with_oracle(oracle: Box<dyn PriceOracle>, use_contract_value: bool) -> Self {
         Self {
             phantom: PhantomData,
             oracle,
-            use_contract_value: false,
+            use_contract_value,
         }
     }
 

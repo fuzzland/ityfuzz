@@ -154,6 +154,8 @@ fn main() {
         oracles.push(Box::new(flashloan_oracle));
     }
 
+    let is_onchain = onchain.is_some();
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: match target_type {
@@ -187,7 +189,9 @@ fn main() {
         },
         oracle: oracles,
         flashloan: if args.flashloan {
-            Some(Flashloan::new())
+            // we should use real balance of tokens in the contract instead of providing flashloan
+            // to contract as well for on chain env
+            Some(Flashloan::new(is_onchain))
         } else {
             None
         },
