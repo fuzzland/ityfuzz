@@ -146,7 +146,7 @@ where
                 is_address: false,
             })),
             1 => BoxedABI::new(Box::new(A256 {
-                data: state.get_rand_caller().0.into(),
+                data: state.get_rand_address().0.into(),
                 is_address: true,
             })),
             _ => unreachable!(),
@@ -216,8 +216,7 @@ impl BoxedABI {
                 let a256 = v.downcast_mut::<A256>().unwrap();
                 if a256.is_address {
                     if state.rand_mut().below(100) < 90 {
-                        let new_caller = state.get_rand_caller();
-                        a256.data = new_caller.0.to_vec();
+                        a256.data = state.get_rand_address().0.to_vec();
                     } else {
                         a256.data = [0; 20].to_vec();
                     }

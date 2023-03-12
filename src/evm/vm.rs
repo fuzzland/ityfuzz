@@ -233,8 +233,8 @@ const ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 10;
 
-// if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
-const CONTROL_LEAK_THRESHOLD: usize = 2;
+// if a PC transfers control to >3 addresses, we consider call at this PC to be unbounded
+const CONTROL_LEAK_THRESHOLD: usize = 3;
 
 impl FuzzHost {
     pub fn new() -> Self {
@@ -620,6 +620,7 @@ impl Host for FuzzHost {
 
         if self.origin == input.contract {
             record_func_hash!();
+            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 

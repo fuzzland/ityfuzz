@@ -72,7 +72,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                 contract.deployed_address
             };
 
-            self.state.add_caller(&deployed_address);
+            self.state.add_address(&deployed_address);
 
             for abi in contract.abi {
                 self.add_abi(&abi, self.scheduler, deployed_address);
