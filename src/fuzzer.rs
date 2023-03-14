@@ -284,7 +284,8 @@ where
             ExecuteInputResult::Solution => {
                 println!(
                     "Found a solution! trace: {}",
-                        state.get_execution_result()
+                    state
+                        .get_execution_result()
                         .new_state
                         .trace
                         .clone()

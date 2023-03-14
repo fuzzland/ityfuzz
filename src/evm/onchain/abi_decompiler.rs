@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::Path;
+use crate::evm::contract_utils::ABIConfig;
 use heimdall::decompile::decompile_with_bytecode;
 use heimdall::decompile::output::ABIStructure;
-use crate::evm::contract_utils::ABIConfig;
+use std::fs;
+use std::path::Path;
 
 pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
     let output_dir = "/tmp/heimdall";
@@ -36,20 +36,18 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
                     is_payable: func.state_mutability == "payable",
                     is_constructor: false,
                 };
-                abi_config.function.copy_from_slice(
-                    hex::decode(name).unwrap().as_slice()
-                );
+                abi_config
+                    .function
+                    .copy_from_slice(hex::decode(name).unwrap().as_slice());
                 result.push(abi_config)
             }
             _ => {
                 continue;
             }
         }
-
     }
 
     result
-
 }
 
 mod tests {
