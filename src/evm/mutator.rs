@@ -98,7 +98,7 @@ where
                     }
                     None => MutationResult::Skipped,
                 },
-                16 => {
+                16..=20 => {
                     // make it a step forward to pop one post execution
                     // todo(@shou): fix the sizing of return
                     if input.get_staged_state().state.has_post_execution() && !input.is_step() {

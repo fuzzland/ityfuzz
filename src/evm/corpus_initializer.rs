@@ -154,7 +154,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     .insert(abi.function.clone(), HashSet::from([deployed_address]));
             }
         }
-        #[cfg(feature = "fuzz_static")]
+        #[cfg(not(feature = "fuzz_static"))]
         if abi.is_static {
             return;
         }
