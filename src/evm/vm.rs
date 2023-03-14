@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
 pub static mut jmp_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
+
 // dataflow
 pub static mut read_map: [bool; MAP_SIZE] = [false; MAP_SIZE];
 pub static mut write_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -854,6 +855,7 @@ where
                 self.host.add_middlewares(Box::new(ConcolicHost::new(
                     input_len_concolic.try_into().unwrap(),
                     input.get_data_abi(),
+                    input.get_caller(),
                 )));
             }
         }

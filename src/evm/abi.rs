@@ -9,6 +9,7 @@ use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
+use once_cell::sync::Lazy;
 use primitive_types::{H160, U256};
 use rand::random;
 use serde::de::DeserializeOwned;
@@ -17,12 +18,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
-use once_cell::sync::Lazy;
 
-
-static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(|| {
-    HashMap::new()
-});
+static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(|| HashMap::new());
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -121,12 +118,13 @@ impl BoxedABI {
             format!("Stepping with return: {}", hex::encode(self.b.to_string()))
         } else {
             let function_name = unsafe {
-                FUNCTION_SIG.get(&self.function).unwrap_or(
-                    &hex::encode(self.function)).clone()
+                FUNCTION_SIG
+                    .get(&self.function)
+                    .unwrap_or(&hex::encode(self.function))
+                    .clone()
             };
             format!("{}{}", function_name, self.b.to_string())
         }
-
     }
 }
 

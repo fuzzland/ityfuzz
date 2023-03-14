@@ -8,6 +8,7 @@ use crate::evm::abi::BoxedABI;
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::vm::IntermediateExecutionResult;
+use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::HasItyState;
 use revm::Return::Continue;
@@ -18,10 +19,12 @@ use revm::{
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Mul, Not, Sub};
 use std::str::FromStr;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
+
+pub static mut concolic_map: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
@@ -58,6 +61,7 @@ enum ConcolicOp {
     SLT,
     GT,
     SGT,
+    LNOT,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -207,6 +211,15 @@ impl BVBox {
     pub fn eq(self, rhs: Box<BVBox>) -> Box<BVBox> {
         box_bv!(self, rhs, ConcolicOp::EQ)
     }
+
+    // logical not
+    pub fn lnot(self) -> Box<BVBox> {
+        Box::new(BVBox {
+            lhs: Some(Box::new(self)),
+            rhs: None,
+            op: ConcolicOp::LNOT,
+        })
+    }
 }
 
 pub struct Solving<'a> {
@@ -307,6 +320,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::BALANCE => self.balance.clone(),
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
             ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(start, end),
+            ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -417,15 +431,17 @@ pub struct ConcolicHost {
     input_constraints: EVMInputConstraint,
     constraints: Vec<Box<BVBox>>,
     bytes: u32,
+    caller: H160,
 }
 
 impl ConcolicHost {
-    pub fn new(bytes: u32, vm_input: BoxedABI) -> Self {
+    pub fn new(bytes: u32, vm_input: BoxedABI, caller: H160) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             input_constraints: EVMInputConstraint::new(vm_input),
             constraints: vec![],
             bytes: bytes,
+            caller: caller,
         }
     }
 
@@ -434,7 +450,7 @@ impl ConcolicHost {
         hex::decode(&s[2..]).unwrap()
     }
 
-    pub fn solve(&self) -> Option<Vec<u8>> {
+    pub fn solve(&self) -> Option<String> {
         let context = Context::new(&Config::default());
         let input = (0..self.bytes)
             .map(|idx| BV::new_const(&context, format!("input_{}", idx), 8))
@@ -446,8 +462,8 @@ impl ConcolicHost {
         let input_str = solving.solve();
         match input_str {
             Some(s) => {
-                let bytes = Self::string_to_bytes(&s);
-                Some(bytes)
+                // let bytes = Self::string_to_bytes(&s);
+                Some(s)
             }
             None => None,
         }
@@ -456,14 +472,19 @@ impl ConcolicHost {
 
 impl Middleware for ConcolicHost {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
+        macro_rules! fast_peek {
+            ($idx:expr) => {
+                interp.stack.peek(interp.stack.len() - 1 - $idx)
+            };
+        }
+
         macro_rules! stack_bv {
             ($idx:expr) => {{
                 let real_loc_sym = self.symbolic_stack.len() - 1 - $idx;
                 match self.symbolic_stack[real_loc_sym].borrow() {
                     Some(bv) => bv.clone(),
                     None => {
-                        let real_loc_conc = interp.stack.len() - 1 - $idx;
-                        let u256 = interp.stack.peek(real_loc_conc).expect("stack underflow");
+                        let u256 = fast_peek!($idx).expect("stack underflow");
                         Box::new(BVBox {
                             lhs: None,
                             rhs: None,
@@ -481,6 +502,8 @@ impl Middleware for ConcolicHost {
                 u256
             }};
         }
+
+        let mut solutions = Vec::<String>::new();
 
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
@@ -802,7 +825,16 @@ impl Middleware for ConcolicHost {
             }
             // JUMPI
             0x57 => {
+                let path_constraint = stack_bv!(1);
+                self.constraints.push(path_constraint.lnot());
+                match self.solve() {
+                    Some(s) => solutions.push(s),
+                    None => {}
+                };
+                self.constraints.pop();
+
                 // jumping only happens if the second element is false
+
                 self.constraints.push(stack_bv!(1));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
@@ -857,7 +889,13 @@ impl Middleware for ConcolicHost {
         for v in bv {
             self.symbolic_stack.push(v);
         }
-        vec![]
+
+        solutions
+            .iter()
+            .map(|s| -> MiddlewareOp {
+                MiddlewareOp::AddCorpus(Concolic, s.to_string(), self.caller)
+            })
+            .collect()
     }
 
     fn get_type(&self) -> MiddlewareType {
