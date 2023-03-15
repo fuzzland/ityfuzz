@@ -285,7 +285,7 @@ impl<'a> Solving<'a> {
                     .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx))
             };
         }
-        match bv.op {
+        match &bv.op {
             ConcolicOp::U256(constant) => {
                 bv_from_u256!(constant, ctx)
             }
@@ -338,10 +338,10 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::BALANCE => self.balance.clone(),
             ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
-            ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(start, end),
+            ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(*start, *end),
             ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
-            ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, b as u64, 8),
-            ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s, 8),
+            ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, *b as u64, 8),
+            ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s.clone(), 8),
 
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
@@ -462,8 +462,8 @@ impl ConcolicHost {
             symbolic_stack: Vec::new(),
             input_bytes: Self::construct_input_from_abi(vm_input),
             constraints: vec![],
-            bytes: bytes,
-            caller: caller,
+            bytes,
+            caller,
         }
     }
 

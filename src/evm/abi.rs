@@ -19,7 +19,11 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
 
+use super::concolic::concolic_host::Expr;
+
 static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(|| HashMap::new());
+
+static mut CONCOLIC_COUNTER: u64 = 0;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ABILossyType {
@@ -37,6 +41,7 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn get_type(&self) -> ABILossyType;
     fn to_string(&self) -> String;
     fn as_any(&mut self) -> &mut dyn Any;
+    fn get_concolic(&self) -> Vec<Box<Expr>>;
 }
 
 impl Debug for dyn ABI {
@@ -327,6 +332,10 @@ impl ABI for AEmpty {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn get_concolic(&self) -> Vec<Box<Expr>> {
+        Vec::new()
+    }
 }
 
 // 0~256-bit data types
@@ -361,40 +370,6 @@ impl HasBytesVec for A256 {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct ADynamic {
-    data: Vec<u8>,
-    multiplier: usize,
-}
-
-impl Input for ADynamic {
-    fn generate_name(&self, idx: usize) -> String {
-        format!("ADynamic_{}", idx)
-    }
-}
-
-impl HasBytesVec for ADynamic {
-    fn bytes(&self) -> &[u8] {
-        self.data.as_slice()
-    }
-
-    fn bytes_mut(&mut self) -> &mut Vec<u8> {
-        self.data.as_mut()
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct AArray {
-    pub(crate) data: Vec<BoxedABI>,
-    pub(crate) dynamic_size: bool,
-}
-
-impl Input for AArray {
-    fn generate_name(&self, idx: usize) -> String {
-        format!("AArray_{}", idx)
-    }
-}
-
 impl ABI for A256 {
     fn is_static(&self) -> bool {
         true
@@ -424,19 +399,43 @@ impl ABI for A256 {
     fn to_string(&self) -> String {
         vec_to_hex(&self.data)
     }
-}
 
-fn roundup(x: usize, multiplier: usize) -> usize {
-    (x + multiplier - 1) / multiplier * multiplier
-}
-
-fn set_size(bytes: *mut u8, len: usize) {
-    let mut rem: usize = len;
-    unsafe {
-        for i in 0..32 {
-            *bytes.add(31 - i) = (rem & 0xff) as u8;
-            rem >>= 8;
+    fn get_concolic(&self) -> Vec<Box<Expr>> {
+        let mut bytes = vec![Expr::const_byte(0 as u8); 32];
+        let data_len = self.data.len();
+        unsafe {
+            let counter = CONCOLIC_COUNTER;
+            CONCOLIC_COUNTER += 1;
+            let mut ptr = bytes.as_mut_ptr();
+            ptr = ptr.add(32 - data_len);
+            for i in 0..data_len {
+                // FIXME: check if this is correct for 2's complement for integers
+                *ptr.add(i) = Expr::sym_byte(format!("A256_{}_{}", counter, i));
+            }
         }
+        bytes
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ADynamic {
+    data: Vec<u8>,
+    multiplier: usize,
+}
+
+impl Input for ADynamic {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("ADynamic_{}", idx)
+    }
+}
+
+impl HasBytesVec for ADynamic {
+    fn bytes(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+
+    fn bytes_mut(&mut self) -> &mut Vec<u8> {
+        self.data.as_mut()
     }
 }
 
@@ -469,6 +468,57 @@ impl ABI for ADynamic {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_concolic(&self) -> Vec<Box<Expr>> {
+        let new_len: usize = roundup(self.data.len(), self.multiplier);
+        let mut bytes = vec![Expr::const_byte(0 as u8); new_len + 32];
+        unsafe {
+            let counter = CONCOLIC_COUNTER;
+            CONCOLIC_COUNTER += 1;
+            let ptr = bytes.as_mut_ptr();
+            let mut rem: usize = self.data.len();
+            for i in 0..32 {
+                *ptr.add(31 - i) = Expr::const_byte((rem & 0xff) as u8);
+                rem >>= 8;
+            }
+            // set data
+            for i in 0..self.data.len() {
+                *ptr.add(i + 32) = Expr::sym_byte(format!("ADynamic_{}_{}", counter, i));
+            }
+        }
+        bytes
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AArray {
+    pub(crate) data: Vec<BoxedABI>,
+    pub(crate) dynamic_size: bool,
+}
+
+impl Input for AArray {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("AArray_{}", idx)
+    }
+}
+
+fn roundup(x: usize, multiplier: usize) -> usize {
+    (x + multiplier - 1) / multiplier * multiplier
+}
+
+// setting the 32 bytes starting at the memory location pointed to by bytes to
+// the binary representation of len, with the least significant byte stored
+// at the highest index.
+// E.g. if len = 0x1234,
+// then bytes is set to 0x00000000000000000000000000000000000000000000001234
+fn set_size(bytes: *mut u8, len: usize) {
+    let mut rem: usize = len;
+    unsafe {
+        for i in 0..32 {
+            *bytes.add(31 - i) = (rem & 0xff) as u8;
+            rem >>= 8;
+        }
     }
 }
 
@@ -553,6 +603,10 @@ impl ABI for AArray {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_concolic(&self) -> Vec<Box<Expr>> {
+        todo!()
     }
 }
 
@@ -725,6 +779,10 @@ impl ABI for AUnknown {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_concolic(&self) -> Vec<Box<Expr>> {
+        panic!("[Concolic] sAUnknown not supported")
     }
 }
 
