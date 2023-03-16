@@ -5,8 +5,10 @@ use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 
 use std::collections::hash_map::DefaultHasher;
+use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::i64::MAX;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::process::exit;
@@ -52,6 +54,7 @@ pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 pub static mut ret_size: usize = 0;
 pub static mut ret_offset: usize = 0;
 pub static mut global_call_context: Option<CallContext> = None;
+pub static mut global_call_data: Option<CallContext> = None;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostExecutionCtx {
@@ -199,6 +202,8 @@ pub struct FuzzHost {
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     #[cfg(feature = "record_instruction_coverage")]
     pub total_instr: HashMap<H160, usize>,
+    #[cfg(feature = "record_instruction_coverage")]
+    pub total_instr_set: HashMap<H160, HashSet<usize>>,
     pub origin: H160,
 }
 
@@ -223,6 +228,7 @@ impl Clone for FuzzHost {
             total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
             origin: self.origin.clone(),
+            total_instr_set: Default::default()
         }
     }
 }
@@ -237,9 +243,25 @@ const UNBOUND_CALL_THRESHOLD: usize = 10;
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
 
+pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
+    let mut i = 0;
+    let bytes = bytecode.bytes();
+    let mut complete_bytes = vec![];
+
+    while i < bytes.len() {
+        let op = *bytes.get(i).unwrap();
+        complete_bytes.push(i);
+        i += 1;
+        if op >= 0x60 && op <= 0x7f {
+            i += op as usize - 0x5f;
+        }
+    }
+    complete_bytes.into_iter().collect()
+}
+
 impl FuzzHost {
     pub fn new() -> Self {
-        Self {
+        let mut ret = Self {
             data: EVMState::new(),
             env: Env::default(),
             code: HashMap::new(),
@@ -257,7 +279,10 @@ impl FuzzHost {
             total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
             origin: Default::default(),
-        }
+            total_instr_set: Default::default()
+        };
+        ret.env.block.timestamp = U256::max_value();
+        ret
     }
 
     pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware>) {
@@ -287,29 +312,65 @@ impl FuzzHost {
     }
 
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
+        #[cfg(any(feature = "evaluation", feature = "record_instruction_coverage"))]
+        {
+            let pcs = instructions_pc(&code.clone());
+            self.total_instr.insert(
+                address,
+                pcs.len(),
+            );
+            self.total_instr_set.insert(address, pcs);
+        }
         self.code.insert(address, code.to_analysed::<LatestSpec>());
+
     }
 
     #[cfg(feature = "record_instruction_coverage")]
     fn record_instruction_coverage(&mut self) {
-        println!(
-            "coverage: {} out of {:?}",
-            self.pc_coverage.iter().fold(0, |acc, x| acc + {
-                if self.total_instr.contains_key(x.0) {
-                    println!("{:?}", x.1);
-                    x.1.len()
-                } else {
-                    0
-                }
-            }),
+        let mut data = format!(
+            "coverage: {:?}",
             self.total_instr
                 .keys()
                 .map(|k| (
+                    k,
                     self.pc_coverage.get(k).unwrap_or(&Default::default()).len(),
                     self.total_instr.get(k).unwrap()
                 ))
                 .collect::<Vec<_>>()
         );
+
+        let mut not_covered: HashMap<H160, HashSet<usize>> = HashMap::new();
+        for (addr, covs) in &self.total_instr_set {
+            for cov in covs {
+                match self.pc_coverage.get_mut(addr) {
+                    Some(covs) => {
+                        if !covs.contains(cov) {
+                            not_covered.entry(*addr).or_insert(HashSet::new()).insert(*cov);
+                        }
+                    }
+                    None => {
+                        not_covered.entry(*addr).or_insert(HashSet::new()).insert(*cov);
+                    }
+                }
+            }
+        }
+
+        data.push_str("\n\n\nnot covered: ");
+        not_covered
+            .iter()
+            .for_each(
+                |(addr, pcs)| {
+                    data.push_str(&format!("{:?}: {:?}\n\n", addr, pcs.into_iter().sorted().collect::<Vec<_>>()));
+                });
+
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .open("cov.txt")
+            .unwrap();
+        file.write_all(data.as_bytes()).unwrap();
     }
 }
 
@@ -368,7 +429,7 @@ impl Host for FuzzHost {
                     } else {
                         1
                     };
-                    let idx = (interp.program_counter() ^ (jump_dest as usize)) % MAP_SIZE;
+                    let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
                     if jmp_map[idx] < 255 {
                         jmp_map[idx] += 1;
                     }
@@ -758,34 +819,6 @@ where
     pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
         let bytecode = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
         self.host.set_code(address, bytecode.clone());
-        #[cfg(feature = "evaluation")]
-        {
-            self.host.total_instr.insert(
-                address,
-                EVMExecutor::<I, S, VS>::count_instructions(&bytecode),
-            );
-        }
-    }
-
-    pub fn count_instructions(bytecode: &Bytecode) -> usize {
-        // println!("bytecode = {:?}", bytecode.len());
-        let mut count: usize = 0;
-        let mut i = 0;
-        let bytes = bytecode.bytes();
-        let mut complete_bytes = vec![];
-
-        while i < bytes.len() {
-            let op = *bytes.get(i).unwrap();
-            complete_bytes.push(i);
-            i += 1;
-            count += 1;
-            if op >= 0x60 && op <= 0x7f {
-                i += op as usize - 0x5f;
-            }
-        }
-        // println!("count = {:?}", count);
-        // println!("complete bytes: {:?}", complete_bytes);
-        count
     }
 
     pub fn execute_from_pc(
@@ -981,19 +1014,10 @@ where
         }
         assert_eq!(r, Return::Return);
         println!("contract = {:?}", hex::encode(interp.return_value()));
-        self.host.set_code(
+        self.set_code(
             deployed_address,
-            Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
+            interp.return_value().to_vec(),
         );
-        #[cfg(feature = "evaluation")]
-        {
-            self.host.total_instr.insert(
-                deployed_address,
-                EVMExecutor::<I, S, VS>::count_instructions(
-                    &Bytecode::new_raw(interp.return_value()).to_analysed::<LatestSpec>(),
-                ),
-            );
-        }
         Some(deployed_address)
     }
 

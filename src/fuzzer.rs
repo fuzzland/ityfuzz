@@ -227,8 +227,10 @@ where
                         .trace
                         .clone()
                         .to_string(state);
+
+                    let data = format!("Reverted? {} \n Txn: {}", state.get_execution_result().reverted, txn_text);
                     println!("============= New Corpus Item =============");
-                    println!("{}", txn_text);
+                    println!("{}", data);
                     println!("==========================================");
 
                     // write to file
@@ -238,7 +240,7 @@ where
                     }
                     let mut file =
                         File::create(format!("corpus/{}", unsafe { DUMP_FILE_COUNT })).unwrap();
-                    file.write_all(txn_text.as_bytes()).unwrap();
+                    file.write_all(data.as_bytes()).unwrap();
                 }
             }
         }
