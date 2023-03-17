@@ -132,6 +132,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     }
 
     fn set_step(&mut self, gate: bool) {
+        self.txn_value = None;
         self.step = gate;
     }
 
