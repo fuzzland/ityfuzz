@@ -228,6 +228,7 @@ impl Clone for FuzzHost {
             total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
             origin: self.origin.clone(),
+            #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
         }
     }
@@ -279,6 +280,7 @@ impl FuzzHost {
             total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
             origin: Default::default(),
+            #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
         };
         ret.env.block.timestamp = U256::max_value();
