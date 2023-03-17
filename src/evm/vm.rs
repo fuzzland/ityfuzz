@@ -228,7 +228,7 @@ impl Clone for FuzzHost {
             total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
             origin: self.origin.clone(),
-            total_instr_set: Default::default()
+            total_instr_set: Default::default(),
         }
     }
 }
@@ -279,7 +279,7 @@ impl FuzzHost {
             total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
             origin: Default::default(),
-            total_instr_set: Default::default()
+            total_instr_set: Default::default(),
         };
         ret.env.block.timestamp = U256::max_value();
         ret
@@ -315,14 +315,10 @@ impl FuzzHost {
         #[cfg(any(feature = "evaluation", feature = "record_instruction_coverage"))]
         {
             let pcs = instructions_pc(&code.clone());
-            self.total_instr.insert(
-                address,
-                pcs.len(),
-            );
+            self.total_instr.insert(address, pcs.len());
             self.total_instr_set.insert(address, pcs);
         }
         self.code.insert(address, code.to_analysed::<LatestSpec>());
-
     }
 
     #[cfg(feature = "record_instruction_coverage")]
@@ -345,24 +341,30 @@ impl FuzzHost {
                 match self.pc_coverage.get_mut(addr) {
                     Some(covs) => {
                         if !covs.contains(cov) {
-                            not_covered.entry(*addr).or_insert(HashSet::new()).insert(*cov);
+                            not_covered
+                                .entry(*addr)
+                                .or_insert(HashSet::new())
+                                .insert(*cov);
                         }
                     }
                     None => {
-                        not_covered.entry(*addr).or_insert(HashSet::new()).insert(*cov);
+                        not_covered
+                            .entry(*addr)
+                            .or_insert(HashSet::new())
+                            .insert(*cov);
                     }
                 }
             }
         }
 
         data.push_str("\n\n\nnot covered: ");
-        not_covered
-            .iter()
-            .for_each(
-                |(addr, pcs)| {
-                    data.push_str(&format!("{:?}: {:?}\n\n", addr, pcs.into_iter().sorted().collect::<Vec<_>>()));
-                });
-
+        not_covered.iter().for_each(|(addr, pcs)| {
+            data.push_str(&format!(
+                "{:?}: {:?}\n\n",
+                addr,
+                pcs.into_iter().sorted().collect::<Vec<_>>()
+            ));
+        });
 
         let mut file = OpenOptions::new()
             .write(true)
@@ -1014,10 +1016,7 @@ where
         }
         assert_eq!(r, Return::Return);
         println!("contract = {:?}", hex::encode(interp.return_value()));
-        self.set_code(
-            deployed_address,
-            interp.return_value().to_vec(),
-        );
+        self.set_code(deployed_address, interp.return_value().to_vec());
         Some(deployed_address)
     }
 

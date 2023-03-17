@@ -518,7 +518,8 @@ where
                 .get_execution_result()
                 .new_state
                 .state
-                .get_post_execution_pc() != 0;
+                .get_post_execution_pc()
+                != 0;
 
             if self.vm.state_changed() || pc_interesting {
                 let hash = state.get_execution_result().new_state.state.get_hash();
