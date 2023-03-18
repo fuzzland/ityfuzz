@@ -60,7 +60,7 @@ where
             let concrete = state.get_infant_state(self.infant_scheduler).unwrap();
             input.set_staged_state(concrete.1, concrete.0);
         }
-        let should_havoc = state.rand_mut().below(100) < 40;
+        let should_havoc = state.rand_mut().below(100) < 60;
         let havoc_times = if should_havoc {
             state.rand_mut().below(10) + 1
         } else {
