@@ -90,6 +90,7 @@ where
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter) -> Vec<MiddlewareOp> {
         let pc = interp.program_counter();
+        #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {
                 match $ty.get_mut(&(interp.contract.address, pc)) {
@@ -108,6 +109,13 @@ where
                 }
             };
         }
+        #[cfg(not(feature = "force_cache"))]
+        macro_rules! force_cache {
+            ($ty: expr, $target: expr) => {
+                false
+            };
+        }
+
         match *interp.instruction_pointer {
             0x54 => {
                 let slot_idx = interp.stack.peek(0).unwrap();
@@ -129,13 +137,18 @@ where
                 let address_h160 = convert_u256_to_h160(address);
                 let force_cache = force_cache!(self.calls, address_h160);
 
+                let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
+                let has_code = !contract_code.is_empty();
+
                 let code_update = UpdateCode(
                     MiddlewareType::OnChain,
                     address_h160,
-                    self.endpoint.get_contract_code(address_h160, force_cache),
+                    contract_code,
                 );
 
-                let abi = if !self.loaded_code.contains(&address_h160) && !force_cache {
+                let abi = if !self.loaded_code.contains(&address_h160)
+                    && !force_cache
+                    && has_code {
                     self.endpoint.fetch_abi(address_h160)
                 } else {
                     None

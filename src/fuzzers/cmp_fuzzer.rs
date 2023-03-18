@@ -84,7 +84,6 @@ pub fn cmp_fuzzer(
                 onchain,
                 scheduler.clone(),
             ));
-            mid.add_blacklist(H160::from_str("6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap());
             fuzz_host.add_middlewares(mid);
         }
         None => {}
