@@ -304,26 +304,46 @@ impl OnChainConfig {
         }
 
         println!("fetching code from {}", hex::encode(address));
-        let mut params = String::from("[");
-        params.push_str(&format!("\"0x{:x}\",", address));
-        params.push_str(&format!("\"{}\"", self.block_number));
-        params.push_str("]");
-        let resp = self._request("eth_getCode".to_string(), params);
-        match resp {
-            Some(resp) => {
-                let code = resp.as_str().unwrap();
-                let code = code.trim_start_matches("0x");
-                let code = hex::decode(code).unwrap();
-                let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
-                self.code_cache.insert(address, bytes.clone());
-                return bytes;
+
+
+        let resp_string = if self.use_local_proxy {
+            let endpoint = format!(
+                "{}/bytecode/{}/{:?}/{}",
+                self.local_proxy_addr, self.chain_name, address, self.block_number
+            );
+            match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    let data = res.text().unwrap().trim().to_string();
+                    data
+                }
+                Err(_) => "".to_string(),
             }
-            None => {
-                // todo(@shou): exponential backoff here
-                self.code_cache.insert(address, Bytecode::new());
-                return Bytecode::new();
+        } else {
+            let mut params = String::from("[");
+            params.push_str(&format!("\"0x{:x}\",", address));
+            params.push_str(&format!("\"{}\"", self.block_number));
+            params.push_str("]");
+            let resp = self._request("eth_getCode".to_string(), params);
+            match resp {
+                Some(resp) => {
+                    let code = resp.as_str().unwrap();
+                    code.to_string()
+                }
+                None => {
+                    "".to_string()
+                }
             }
+        };
+        let code = resp_string.trim_start_matches("0x");
+        if code.len() == 0 {
+            self.code_cache.insert(address, Bytecode::new());
+            return Bytecode::new();
         }
+        let code = hex::decode(code).unwrap();
+        let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+        self.code_cache.insert(address, bytes.clone());
+        return bytes;
+
     }
 
     pub fn get_contract_slot(&mut self, address: H160, slot: U256, force_cache: bool) -> U256 {
@@ -333,25 +353,49 @@ impl OnChainConfig {
         if force_cache {
             return U256::zero();
         }
-        let mut params = String::from("[");
-        params.push_str(&format!("\"0x{:x}\",", address));
-        params.push_str(&format!("\"0x{:x}\",", slot));
-        params.push_str(&format!("\"{}\"", self.block_number));
-        params.push_str("]");
-        let resp = self._request("eth_getStorageAt".to_string(), params);
-        match resp {
-            Some(resp) => {
-                let slot_data = resp.as_str().unwrap();
-                let slot_suffix = slot_data.trim_start_matches("0x");
-                let slot_value = U256::from_big_endian(&hex::decode(slot_suffix).unwrap());
-                self.slot_cache.insert((address, slot), slot_value);
-                return slot_value;
+
+        let slot_hex = format!("0x{:x}", slot);
+
+        let resp_string = if self.use_local_proxy {
+            let endpoint = format!(
+                "{}/slot/{}/{:?}/{}/{}",
+                self.local_proxy_addr, self.chain_name, address, slot_hex, self.block_number
+            );
+            match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    let data = res.text().unwrap().trim().to_string();
+                    data
+                }
+                Err(_) => "".to_string(),
             }
-            None => {
-                self.slot_cache.insert((address, slot), U256::zero());
-                return U256::zero();
+        } else {
+            let mut params = String::from("[");
+            params.push_str(&format!("\"0x{:x}\",", address));
+            params.push_str(&format!("\"0x{:x}\",", slot));
+            params.push_str(&format!("\"{}\"", self.block_number));
+            params.push_str("]");
+            let resp = self._request("eth_getStorageAt".to_string(), params);
+            match resp {
+                Some(resp) => {
+                    let slot_data = resp.as_str().unwrap();
+                    slot_data.to_string()
+                }
+                None => {
+                    "".to_string()
+                }
             }
+        };
+
+        let slot_suffix = resp_string.trim_start_matches("0x");
+
+        if slot_suffix.len() == 0 {
+            self.slot_cache.insert((address, slot), U256::zero());
+            return U256::zero();
         }
+        let slot_value = U256::from_big_endian(&hex::decode(slot_suffix).unwrap());
+        self.slot_cache.insert((address, slot), slot_value);
+        return slot_value;
+
     }
 }
 

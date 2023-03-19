@@ -177,18 +177,14 @@ where
         let increment = data.votes_total / data.votes_and_visits.len();
         assert!(increment > 1);
         {
-            if data.votes_total < 5 {
-                data.votes_total += increment;
-            }
+            data.votes_total += increment;
         }
 
         {
             let v = data.votes_and_visits.get_mut(&idx);
             if v.is_some() {
                 let (votes, _visits) = v.expect("scheduler metadata malformed");
-                if data.votes_total < 5 {
-                    *votes += increment;
-                }
+                *votes += increment;
                 println!("Voted for {}", idx);
             } else {
                 println!("scheduler metadata malformed");

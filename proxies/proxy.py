@@ -36,6 +36,18 @@ def get_endpoint(network):
     else:
         raise Exception("Unknown network")
 
+def get_rpc(network):
+    if network == "eth":
+        return "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657"
+    elif network == "bsc":
+        return "https://bsc-dataseed.binance.org/"
+    elif network == "polygon":
+        return "https://polygon-rpc.com/"
+    elif network == "mumbai":
+        return "https://rpc-mumbai.maticvigil.com"
+    else:
+        raise Exception("Unknown network")
+
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
@@ -62,6 +74,37 @@ def fetch_etherscan_contract_abi(network, token_address):
     return []
 
 
+@functools.lru_cache(maxsize=10240)
+@retry(tries=3, delay=0.5, backoff=2)
+def fetch_rpc_slot(network, token_address, slot, block):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_getStorageAt",
+        "params": [token_address, slot, block],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    return response.json()["result"]
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=3, delay=0.5, backoff=2)
+def fetch_rpc_byte_code(network, address, block):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_getCode",
+        "params": [address, block],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    print(response.json())
+    return response.json()["result"]
+
+
 app = flask.Flask(__name__)
 
 
@@ -73,6 +116,16 @@ def holders(network, token_address):
 @app.route("/abi/<network>/<token_address>", methods=["GET"])
 def abi(network, token_address):
     return flask.jsonify(fetch_etherscan_contract_abi(network, token_address))
+
+
+@app.route("/slot/<network>/<token_address>/<slot>/<block>", methods=["GET"])
+def slot(network, token_address, slot, block):
+    return fetch_rpc_slot(network, token_address, slot, block)
+
+
+@app.route("/bytecode/<network>/<address>/<block>", methods=["GET"])
+def bytecode(network, address, block):
+    return fetch_rpc_byte_code(network, address, block)
 
 
 app.run(port=5003)
