@@ -140,15 +140,9 @@ where
                 let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
                 let has_code = !contract_code.is_empty();
 
-                let code_update = UpdateCode(
-                    MiddlewareType::OnChain,
-                    address_h160,
-                    contract_code,
-                );
+                let code_update = UpdateCode(MiddlewareType::OnChain, address_h160, contract_code);
 
-                let abi = if !self.loaded_code.contains(&address_h160)
-                    && !force_cache
-                    && has_code {
+                let abi = if !self.loaded_code.contains(&address_h160) && !force_cache && has_code {
                     self.endpoint.fetch_abi(address_h160)
                 } else {
                     None

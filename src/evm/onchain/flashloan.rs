@@ -61,7 +61,7 @@ impl<S> Flashloan<S> {
             oracle: Box::new(DummyPriceOracle {}),
             use_contract_value,
             known_tokens: Default::default(),
-            endpoint
+            endpoint,
         }
     }
 
@@ -282,17 +282,22 @@ where
                     vec![]
                 }
                 Some(v) => {
-                    let rich_caller = MiddlewareOp::AddCaller(MiddlewareType::Flashloan, v.clone().get(0).unwrap().clone());
+                    let rich_caller = MiddlewareOp::AddCaller(
+                        MiddlewareType::Flashloan,
+                        v.clone().get(0).unwrap().clone(),
+                    );
                     [
-                        v.into_iter().map(|holder| {
-                            MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder)
-                        }).collect(),
+                        v.into_iter()
+                            .map(|holder| {
+                                MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder)
+                            })
+                            .collect(),
                         vec![rich_caller],
-                    ].concat()
+                    ]
+                    .concat()
                 }
             };
             self.known_tokens.insert(call_target);
-
         }
 
         let erc20_ops = match data[0..4] {
@@ -321,9 +326,7 @@ where
                     Some(value) => {
                         // todo: replace caller with all trusted addresses
                         if src == interp.contract.caller {
-                            return vec![
-                                MiddlewareOp::Owed(MiddlewareType::Flashloan, value),
-                            ];
+                            return vec![MiddlewareOp::Owed(MiddlewareType::Flashloan, value)];
                         } else if dst == interp.contract.caller {
                             return vec![earned!(value)];
                         }

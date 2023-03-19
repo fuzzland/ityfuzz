@@ -77,17 +77,24 @@ pub fn cmp_fuzzer(
         None => {}
     }
 
-
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan
         // to contract as well for on chain env
         #[cfg(not(feature = "flashloan_v2"))]
-        fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(config.onchain.is_some())));
+        fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(
+            config.onchain.is_some(),
+        )));
 
         #[cfg(feature = "flashloan_v2")]
         {
-            assert!(config.onchain.is_some(), "Flashloan v2 requires onchain env");
-            fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(true, config.onchain.clone().unwrap())));
+            assert!(
+                config.onchain.is_some(),
+                "Flashloan v2 requires onchain env"
+            );
+            fuzz_host.add_middlewares(Box::new(Flashloan::<EVMFuzzState>::new(
+                true,
+                config.onchain.clone().unwrap(),
+            )));
         }
     }
 
