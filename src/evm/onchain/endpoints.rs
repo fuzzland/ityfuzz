@@ -167,7 +167,7 @@ impl OnChainConfig {
         );
         return match self.client.get(endpoint).send() {
             Ok(res) => {
-                let data = res.text().unwrap();
+                let data = res.text().unwrap().trim().to_string();
                 if data == "[]" {
                     None
                 } else {
@@ -193,7 +193,7 @@ impl OnChainConfig {
             );
             return match self.client.get(endpoint).send() {
                 Ok(res) => {
-                    let data = res.text().unwrap();
+                    let data = res.text().unwrap().trim().to_string();
                     if data == "[]" {
                         None
                     } else {
