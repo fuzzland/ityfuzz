@@ -37,6 +37,8 @@ pub enum MiddlewareOp {
     UpdateSlot(MiddlewareType, H160, U256, U256),
     UpdateCode(MiddlewareType, H160, Bytecode),
     AddCorpus(MiddlewareType, String, H160),
+    AddCaller(MiddlewareType, H160),
+    AddAddress(MiddlewareType, H160),
     Owed(MiddlewareType, U512),
     Earned(MiddlewareType, U512),
     MakeSubsequentCallSuccess(Bytes),
@@ -71,6 +73,18 @@ impl MiddlewareOp {
             MiddlewareOp::MakeSubsequentCallSuccess(data) => {
                 host.middlewares_latent_call_actions
                     .push(CallMiddlewareReturn::ReturnSuccess(data.clone()));
+            }
+            MiddlewareOp::AddCaller(middleware, ..) => {
+                host.middlewares_deferred_actions
+                    .get_mut(middleware)
+                    .expect("Middleware not found")
+                    .push(self.clone());
+            }
+            MiddlewareOp::AddAddress(middleware, ..) => {
+                host.middlewares_deferred_actions
+                    .get_mut(middleware)
+                    .expect("Middleware not found")
+                    .push(self.clone());
             }
         }
     }

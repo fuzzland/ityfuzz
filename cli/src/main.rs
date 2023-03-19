@@ -68,6 +68,10 @@ struct Args {
     #[arg(long)]
     onchain_etherscan_api_key: Option<String>,
 
+    /// Onchain Local Proxy Address (Default: None)
+    #[arg(long)]
+    onchain_local_proxy_addr: Option<String>,
+
     /// Enable Concolic
     #[arg(long, default_value = "false")]
     concolic: bool,
@@ -109,12 +113,23 @@ fn main() {
         }
     };
 
+    let is_local_proxy = args.onchain_local_proxy_addr.is_some();
+
     let mut onchain = if args.onchain {
         match args.chain_type {
             Some(chain_str) => {
                 let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
                 let block_number = args.onchain_block_number.unwrap();
-                Some(OnChainConfig::new(chain, block_number))
+                if is_local_proxy {
+                    Some(OnChainConfig::new_local_proxy(
+                        chain,
+                        block_number,
+                        args.onchain_local_proxy_addr.unwrap(),
+                    ))
+                } else {
+                    Some(OnChainConfig::new(chain, block_number))
+
+                }
             }
             None => Some(OnChainConfig::new_raw(
                 args.onchain_url
@@ -126,6 +141,12 @@ fn main() {
                     .expect("You need to either specify chain type or block explorer url"),
                 args.onchain_chain_name
                     .expect("You need to either specify chain type or chain name"),
+                is_local_proxy,
+                if is_local_proxy {
+                    args.onchain_local_proxy_addr.unwrap()
+                } else {
+                    "".to_string()
+                },
             )),
         }
     } else {
@@ -188,13 +209,7 @@ fn main() {
             None
         },
         oracle: oracles,
-        flashloan: if args.flashloan {
-            // we should use real balance of tokens in the contract instead of providing flashloan
-            // to contract as well for on chain env
-            Some(Flashloan::new(is_onchain))
-        } else {
-            None
-        },
+        flashloan: args.flashloan,
     };
 
     match config.fuzzer_type {

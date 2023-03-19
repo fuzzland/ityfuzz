@@ -49,6 +49,16 @@ impl Chain {
         }
         .to_string()
     }
+
+    pub fn get_chain_rpc(&self) -> String {
+        match self {
+            Chain::ETH => "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657",
+            Chain::BSC => "https://bsc-dataseed.binance.org/",
+            Chain::POLYGON => "https://polygon-rpc.com/",
+            Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -65,8 +75,11 @@ pub struct OnChainConfig {
     pub etherscan_api_key: Vec<String>,
     pub etherscan_base: String,
 
+    pub use_local_proxy: bool,
+    pub local_proxy_addr: String,
+
     pub moralis_api_key: Vec<String>,
-    pub moralis_handle: String,
+    pub chain_name: String,
 
     slot_cache: HashMap<(H160, U256), U256>,
     code_cache: HashMap<H160, Bytecode>,
@@ -77,13 +90,7 @@ pub struct OnChainConfig {
 impl OnChainConfig {
     pub fn new(chain: Chain, block_number: u64) -> Self {
         Self::new_raw(
-            match chain {
-                Chain::ETH => "https://mainnet.infura.io/v3/96580207f0604b4a8ba88674f6eac657",
-                Chain::BSC => "https://bsc-dataseed.binance.org/",
-                Chain::POLYGON => "https://polygon-rpc.com/",
-                Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
-            }
-            .to_string(),
+            chain.get_chain_rpc(),
             chain.get_chain_id(),
             block_number,
             match chain {
@@ -94,6 +101,20 @@ impl OnChainConfig {
             }
             .to_string(),
             chain.to_lowercase(),
+            false,
+            "".to_string()
+        )
+    }
+
+    pub fn new_local_proxy(chain: Chain, block_number: u64, local_proxy_addr: String) -> Self {
+        Self::new_raw(
+            chain.get_chain_rpc(),
+            chain.get_chain_id(),
+            block_number,
+            "".to_string(),
+            chain.to_lowercase(),
+            true,
+            local_proxy_addr
         )
     }
 
@@ -103,6 +124,8 @@ impl OnChainConfig {
         block_number: u64,
         etherscan_base: String,
         chain_name: String,
+        use_local_proxy: bool,
+        local_proxy_addr: String
     ) -> Self {
         Self {
             endpoint_url,
@@ -116,11 +139,13 @@ impl OnChainConfig {
             etherscan_api_key: vec![],
             moralis_api_key: vec![],
             etherscan_base,
-            moralis_handle: chain_name,
+            use_local_proxy,
+            chain_name: chain_name,
             slot_cache: Default::default(),
             code_cache: Default::default(),
             price_cache: Default::default(),
             abi_cache: Default::default(),
+            local_proxy_addr
         }
     }
 
@@ -132,7 +157,50 @@ impl OnChainConfig {
         self.moralis_api_key.push(key);
     }
 
+    pub fn fetch_holders(&self, token_address: H160) -> Option<Vec<H160>> {
+        if !self.use_local_proxy {
+            panic!("remote fetch for holders is not supported");
+        }
+        let endpoint = format!("{}/holders/{}/{:?}", self.local_proxy_addr, self.chain_name, token_address);
+        return match self.client.get(endpoint).send() {
+            Ok(res) => {
+                let data = res.text().unwrap();
+                if data == "[]" {
+                    None
+                } else {
+                    // hacky way to parse an array of addresses
+                    Some(data[1..data.len() - 1]
+                        .split(",")
+                        .map(|x| x.trim_start_matches('"').trim_end_matches('"'))
+                        .map(|x| H160::from_str(x).unwrap())
+                        .collect())
+                }
+            }
+            Err(_) => {
+                None
+            }
+        }
+
+    }
+
     pub fn fetch_abi_uncached(&self, address: H160) -> Option<String> {
+        if self.use_local_proxy {
+            let endpoint = format!("{}/abi/{}/{:?}", self.local_proxy_addr, self.chain_name, address);
+            return match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    let data = res.text().unwrap();
+                    if data == "[]" {
+                        None
+                    } else {
+                        Some(data)
+                    }
+                }
+                Err(_) => {
+                    None
+                }
+            }
+        }
+
         let endpoint = format!(
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
@@ -289,7 +357,7 @@ impl PriceOracle for OnChainConfig {
         let endpoint = format!(
             "https://deep-index.moralis.io/api/v2/erc20/0x{}/price?chain={}",
             hex::encode(token_address),
-            self.moralis_handle
+            self.chain_name
         );
         println!("fetching token price from {}", endpoint);
         match self
