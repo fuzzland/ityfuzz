@@ -189,7 +189,7 @@ where
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(
-        &self,
+        &mut self,
         op: &MiddlewareOp,
         state: &mut S,
         result: &mut IntermediateExecutionResult,
@@ -231,7 +231,10 @@ where
                             .on_add(state, idx)
                             .expect("failed to call scheduler on_add");
                     });
-            }
+            },
+            MiddlewareOp::AddBlacklist(.., address) => {
+                self.blacklist.insert(address.clone());
+            },
             _ => {
                 panic!("MiddlewareOp::execute_with_state called with invalid op");
             }

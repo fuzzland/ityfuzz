@@ -291,7 +291,7 @@ where
                                 v.clone().get(0).unwrap().clone(),
                             );
                             [
-                                v[0..min(3, v.len())].into_iter()
+                                v[0..min(2, v.len())].into_iter()
                                     .map(|holder| {
                                         MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder.clone())
                                     })
@@ -384,7 +384,7 @@ where
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(
-        &self,
+        &mut self,
         op: &MiddlewareOp,
         state: &mut S,
         result: &mut IntermediateExecutionResult,

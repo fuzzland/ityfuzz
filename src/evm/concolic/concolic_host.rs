@@ -940,7 +940,7 @@ where
     VS: VMStateT + Default,
 {
     fn handle_deferred_actions(
-        &self,
+        &mut self,
         op: &MiddlewareOp,
         state: &mut &mut S,
         result: &mut IntermediateExecutionResult,
