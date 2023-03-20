@@ -135,6 +135,9 @@ where
             0xf1 | 0xf2 | 0xf4 | 0xfa => {
                 let address = interp.stack.peek(1).unwrap();
                 let address_h160 = convert_u256_to_h160(address);
+                if self.blacklist.contains(&address_h160) {
+                    return vec![];
+                }
                 let force_cache = force_cache!(self.calls, address_h160);
 
                 let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
@@ -153,14 +156,10 @@ where
                 match abi {
                     Some(abi_ins) => {
                         // AddCorpus(MiddlewareType::OnChain, )
-                        if self.blacklist.contains(&address_h160) {
-                            vec![code_update]
-                        } else {
-                            vec![
-                                code_update,
-                                AddCorpus(MiddlewareType::OnChain, abi_ins, address_h160),
-                            ]
-                        }
+                        vec![
+                            code_update,
+                            AddCorpus(MiddlewareType::OnChain, abi_ins, address_h160),
+                        ]
                     }
                     None => {
                         vec![code_update]
