@@ -148,8 +148,8 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_data_abi(&self) -> crate::evm::abi::BoxedABI {
-        self.data.clone().unwrap()
+    fn get_data_abi(&self) -> Option<BoxedABI> {
+        self.data.clone()
     }
 
     #[cfg(test)]

@@ -5,7 +5,7 @@
 
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
-use crate::evm::vm::IntermediateExecutionResult;
+use crate::evm::vm::{EVMState, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::oracle::Oracle;
 use crate::state::{HasCaller, HasItyState};
@@ -24,6 +24,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
+use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
+use crate::input::VMInputT;
 
 #[derive(Debug)]
 pub struct Flashloan<S> {
@@ -81,6 +84,63 @@ impl<S> Flashloan<S> {
             Some(price) => Some(Self::calculate_usd_value(price, amount)),
             _ => None,
         }
+    }
+}
+
+#[cfg(feature = "flashloan_v2")]
+impl<S> Flashloan<S>
+{
+    pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
+    where I : VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT{
+        if input.get_txn_value().is_some() {
+            result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
+        }
+        let call_target = input.get_contract();
+        match input.get_data_abi() {
+            Some(ref data) => {
+                let serialized_data = input.to_bytes();
+                if serialized_data.len() < 4 {
+                    return;
+                }
+                match data.function {
+                    [0xa9, 0x05, 0x9c, 0xbb] => {
+                        let dst = H160::from_slice(&serialized_data[16..36]);
+                        let amount = U256::from_big_endian(&serialized_data[36..68]);
+                        match self.calculate_usd_value_from_addr(call_target, amount) {
+                            Some(value) => {
+                                if dst != input.get_caller() {
+                                    result.new_state.flashloan_data.owed += value;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    // transferFrom
+                    [0x23, 0xb8, 0x72, 0xdd] => {
+                        let src = H160::from_slice(&serialized_data[16..36]);
+                        let dst = H160::from_slice(&serialized_data[48..68]);
+                        let amount = U256::from_big_endian(&serialized_data[68..100]);
+                        match self.calculate_usd_value_from_addr(call_target, amount) {
+                            Some(value) => {
+                                // todo: replace caller with all trusted addresses
+                                if src == input.get_caller() {
+                                    result.new_state.flashloan_data.owed += value;
+                                } else if dst == input.get_caller() {
+                                    result.new_state.flashloan_data.earned += value;
+                                }
+                            }
+                            // if no value, we can't borrow it!
+                            // bypass by explicitly returning value for every token
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
     }
 }
 

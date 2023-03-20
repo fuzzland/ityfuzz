@@ -166,8 +166,8 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_data_abi(&self) -> BoxedABI {
-        todo!()
+    fn get_data_abi(&self) -> Option<BoxedABI> {
+        unreachable!("MoveVM does not have an ABI")
     }
 
     #[cfg(test)]
