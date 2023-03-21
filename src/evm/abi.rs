@@ -107,6 +107,16 @@ impl BoxedABI {
         self.b.get_type()
     }
 
+    pub fn get_type_str(&self) -> String {
+        match self.b.get_type() {
+            T256 => "A256".to_string(),
+            TArray => "AArray".to_string(),
+            TDynamic => "ADynamic".to_string(),
+            TEmpty => "AEmpty".to_string(),
+            TUnknown => "AUnknown".to_string(),
+        }
+    }
+
     pub fn set_func(&mut self, function: [u8; 4]) {
         self.function = function;
     }
@@ -130,6 +140,17 @@ impl BoxedABI {
             };
             format!("{}{}", function_name, self.b.to_string())
         }
+    }
+
+    pub fn get_concolic(self) -> Vec<Box<Expr>> {
+        [
+            self.function
+                .iter()
+                .map(|byte| Expr::const_byte(*byte))
+                .collect_vec(),
+            self.b.get_concolic(),
+        ]
+        .concat()
     }
 }
 
@@ -410,7 +431,7 @@ impl ABI for A256 {
             ptr = ptr.add(32 - data_len);
             for i in 0..data_len {
                 // FIXME: check if this is correct for 2's complement for integers
-                *ptr.add(i) = Expr::sym_byte(format!("A256_{}_{}", counter, i));
+                *ptr.add(i) = Expr::sym_byte(format!("{}_A256_{}", counter, i));
             }
         }
         bytes
@@ -522,6 +543,16 @@ fn set_size(bytes: *mut u8, len: usize) {
     }
 }
 
+fn set_size_concolic(bytes: *mut Box<Expr>, len: usize) {
+    let mut rem: usize = len;
+    unsafe {
+        for i in 0..32 {
+            *bytes.add(31 - i) = Expr::const_byte((rem & 0xff) as u8);
+            rem >>= 8;
+        }
+    }
+}
+
 impl ABI for AArray {
     fn is_static(&self) -> bool {
         if self.dynamic_size {
@@ -532,7 +563,7 @@ impl ABI for AArray {
     }
 
     fn get_bytes(&self) -> Vec<u8> {
-        let mut tails: Vec<Vec<u8>> = Vec::new();
+        let mut tail_data: Vec<Vec<u8>> = Vec::new();
         let mut tails_offset: Vec<usize> = Vec::new();
         let mut head: Vec<Vec<u8>> = Vec::new();
         let mut head_data: Vec<Vec<u8>> = Vec::new();
@@ -543,9 +574,9 @@ impl ABI for AArray {
                 let encoded = self.data[i].get_bytes_vec();
                 head_size += encoded.len();
                 head.push(encoded);
-                tails.push(dummy_bytes.clone());
+                tail_data.push(dummy_bytes.clone());
             } else {
-                tails.push(self.data[i].get_bytes_vec());
+                tail_data.push(self.data[i].get_bytes_vec());
                 head.push(dummy_bytes.clone());
                 head_size += 32;
             }
@@ -554,9 +585,9 @@ impl ABI for AArray {
         tails_offset.push(0);
         let mut head_data_size: usize = 0;
         let mut tail_data_size: usize = 0;
-        if tails.len() > 0 {
-            for i in 0..tails.len() - 1 {
-                content_size += tails[i].len();
+        if tail_data.len() > 0 {
+            for i in 0..tail_data.len() - 1 {
+                content_size += tail_data[i].len();
                 tails_offset.push(content_size);
             }
             for i in 0..tails_offset.len() {
@@ -569,7 +600,7 @@ impl ABI for AArray {
                     head_data_size += head[i].len();
                 }
             }
-            tail_data_size = content_size + tails[tails.len() - 1].len();
+            tail_data_size = content_size + tail_data[tail_data.len() - 1].len();
         }
         let mut bytes =
             vec![0; head_data_size + tail_data_size + if self.dynamic_size { 32 } else { 0 }];
@@ -583,9 +614,10 @@ impl ABI for AArray {
                 .copy_from_slice(head_data[i].to_vec().as_slice());
             offset += head_data[i].len();
         }
-        for i in 0..tails.len() {
-            bytes[offset..offset + tails[i].len()].copy_from_slice(tails[i].to_vec().as_slice());
-            offset += tails[i].len();
+        for i in 0..tail_data.len() {
+            bytes[offset..offset + tail_data[i].len()]
+                .copy_from_slice(tail_data[i].to_vec().as_slice());
+            offset += tail_data[i].len();
         }
         bytes
     }
@@ -606,7 +638,100 @@ impl ABI for AArray {
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
-        todo!()
+        let mut tail_data: Vec<Vec<u8>> = Vec::new();
+        let mut tails_offset: Vec<usize> = Vec::new();
+        let mut head: Vec<Vec<u8>> = Vec::new();
+        let mut head_data: Vec<Vec<u8>> = Vec::new();
+        let mut head_size: usize = 0;
+        let dummy_bytes: Vec<u8> = vec![0; 0];
+        for i in 0..self.data.len() {
+            if self.data[i].is_static() {
+                let encoded = self.data[i].get_bytes_vec();
+                head_size += encoded.len();
+                head.push(encoded);
+                tail_data.push(dummy_bytes.clone());
+            } else {
+                tail_data.push(self.data[i].get_bytes_vec());
+                head.push(dummy_bytes.clone());
+                head_size += 32;
+            }
+        }
+        let mut content_size: usize = 0;
+        tails_offset.push(0);
+        let mut head_data_size: usize = 0;
+        let mut tail_data_size: usize = 0;
+        if tail_data.len() > 0 {
+            for i in 0..tail_data.len() - 1 {
+                content_size += tail_data[i].len();
+                tails_offset.push(content_size);
+            }
+            for i in 0..tails_offset.len() {
+                if head[i].len() == 0 {
+                    head_data.push(vec![0; 32]);
+                    head_data_size += 32;
+                    set_size(head_data[i].as_mut_ptr(), tails_offset[i] + head_size);
+                } else {
+                    head_data.push(head[i].clone());
+                    head_data_size += head[i].len();
+                }
+            }
+            tail_data_size = content_size + tail_data[tail_data.len() - 1].len();
+        }
+        let mut bytes =
+            vec![
+                Expr::const_byte(0);
+                head_data_size + tail_data_size + if self.dynamic_size { 32 } else { 0 }
+            ];
+
+        if self.dynamic_size {
+            set_size_concolic(bytes.as_mut_ptr(), self.data.len());
+        }
+        let mut offset: usize = if self.dynamic_size { 32 } else { 0 };
+        for i in 0..head_data.len() {
+            if self.data[i].is_static() {
+                unsafe {
+                    let counter = CONCOLIC_COUNTER;
+
+                    CONCOLIC_COUNTER += 1;
+                    for j in 0..head_data[i].len() {
+                        bytes[offset + j] = Expr::sym_byte(format!(
+                            "{}_{}_{}",
+                            counter,
+                            self.data[i].get_type_str(),
+                            i
+                        ));
+                    }
+                }
+            } else {
+                bytes[offset..offset + head_data[i].len()].clone_from_slice(
+                    head_data[i]
+                        .iter()
+                        .map(|x| Expr::const_byte(*x))
+                        .collect_vec()
+                        .as_slice(),
+                );
+            }
+            offset += head_data[i].len();
+        }
+        for i in 0..tail_data.len() {
+            if tail_data[i].len() > 0 {
+                unsafe {
+                    let counter = CONCOLIC_COUNTER;
+
+                    CONCOLIC_COUNTER += 1;
+                    for j in 0..tail_data[i].len() {
+                        bytes[offset + j] = Expr::sym_byte(format!(
+                            "{}_{}_{}",
+                            counter,
+                            self.data[i].get_type_str(),
+                            i
+                        ));
+                    }
+                }
+                offset += tail_data[i].len();
+            }
+        }
+        bytes
     }
 }
 
