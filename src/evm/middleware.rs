@@ -81,7 +81,10 @@ impl MiddlewareOp {
                 host.middlewares_deferred_actions
                     .get_mut(&MiddlewareType::OnChain)
                     .expect("Middleware not found")
-                    .push(MiddlewareOp::AddBlacklist(MiddlewareType::OnChain, addr.clone()));
+                    .push(MiddlewareOp::AddBlacklist(
+                        MiddlewareType::OnChain,
+                        addr.clone(),
+                    ));
                 host.middlewares_deferred_actions
                     .get_mut(middleware)
                     .expect("Middleware not found")
@@ -91,7 +94,10 @@ impl MiddlewareOp {
                 host.middlewares_deferred_actions
                     .get_mut(&MiddlewareType::OnChain)
                     .expect("Middleware not found")
-                    .push(MiddlewareOp::AddBlacklist(MiddlewareType::OnChain, addr.clone()));
+                    .push(MiddlewareOp::AddBlacklist(
+                        MiddlewareType::OnChain,
+                        addr.clone(),
+                    ));
                 host.middlewares_deferred_actions
                     .get_mut(middleware)
                     .expect("Middleware not found")

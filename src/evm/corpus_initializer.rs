@@ -7,9 +7,7 @@ use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::rand_utils::{fixed_address, generate_random_address};
-use crate::state::{
-    FuzzState, HasCaller, HasItyState, InfantStateState,
-};
+use crate::state::{FuzzState, HasCaller, HasItyState, InfantStateState};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};

@@ -3,10 +3,13 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
 use crate::evm::vm::{EVMState, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
 use crate::oracle::Oracle;
 use crate::state::{HasCaller, HasItyState};
 use crate::types::{convert_u256_to_h160, float_scale_to_u512};
@@ -24,9 +27,6 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
-use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
-use crate::input::VMInputT;
 
 #[derive(Debug)]
 pub struct Flashloan<S> {
@@ -88,11 +88,12 @@ impl<S> Flashloan<S> {
 }
 
 #[cfg(feature = "flashloan_v2")]
-impl<S> Flashloan<S>
-{
+impl<S> Flashloan<S> {
     pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
-    where I : VMInputT<VS, H160, H160> + EVMInputT,
-    VS: VMStateT{
+    where
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
+    {
         if input.get_txn_value().is_some() {
             result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
         }
@@ -134,13 +135,12 @@ impl<S> Flashloan<S>
                             // bypass by explicitly returning value for every token
                             _ => {}
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
             _ => {}
         }
-
     }
 }
 
@@ -351,9 +351,13 @@ where
                                 v.clone().get(5).unwrap().clone(),
                             );
                             [
-                                v[0..2].into_iter()
+                                v[0..2]
+                                    .into_iter()
                                     .map(|holder| {
-                                        MiddlewareOp::AddAddress(MiddlewareType::Flashloan, holder.clone())
+                                        MiddlewareOp::AddAddress(
+                                            MiddlewareType::Flashloan,
+                                            holder.clone(),
+                                        )
                                     })
                                     .collect(),
                                 vec![rich_caller],
@@ -394,7 +398,10 @@ where
                     Some(value) => {
                         // todo: replace caller with all trusted addresses
                         if src == interp.contract.caller {
-                            return add_rich_when_ret!(vec![MiddlewareOp::Owed(MiddlewareType::Flashloan, value)]);
+                            return add_rich_when_ret!(vec![MiddlewareOp::Owed(
+                                MiddlewareType::Flashloan,
+                                value
+                            )]);
                         } else if dst == interp.contract.caller {
                             return add_rich_when_ret!(vec![earned!(value)]);
                         }
