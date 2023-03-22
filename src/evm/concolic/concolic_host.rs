@@ -7,7 +7,7 @@ use std::iter::Map;
 use crate::evm::abi::{AEmpty, BoxedABI};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{CanHandleDeferredActions, Middleware, MiddlewareOp, MiddlewareType};
-use crate::evm::vm::IntermediateExecutionResult;
+use crate::evm::vm::{jmp_map, IntermediateExecutionResult};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::HasItyState;
@@ -818,16 +818,28 @@ impl Middleware for ConcolicHost {
             }
             // JUMPI
             0x57 => {
-                let path_constraint = stack_bv!(1);
-                self.constraints.push(path_constraint.lnot());
-                match self.solve() {
-                    Some(s) => solutions.push(s),
-                    None => {}
+                // jump dest in concolic solving mode is the opposite of the concrete
+                let jump_dest_concolic = if fast_peek!(1)
+                    .expect("[Concolic] JUMPI stack error at 1")
+                    .is_zero()
+                {
+                    1
+                } else {
+                    fast_peek!(0)
+                        .expect("[Concolic] JUMPI stack error at 0")
+                        .as_u64()
                 };
-                self.constraints.pop();
-
+                let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
+                if jmp_map[idx] == 0 {
+                    let path_constraint = stack_bv!(1);
+                    self.constraints.push(path_constraint.lnot());
+                    match self.solve() {
+                        Some(s) => solutions.push(s),
+                        None => {}
+                    };
+                    self.constraints.pop();
+                }
                 // jumping only happens if the second element is false
-
                 self.constraints.push(stack_bv!(1));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
