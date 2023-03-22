@@ -9,45 +9,49 @@ use std::fmt::Debug;
 pub const MAP_SIZE: usize = 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ExecutionResult<Loc, Addr, VS>
+pub struct ExecutionResult<Loc, Addr, VS, Out>
 where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
+    Out: Default
 {
-    pub output: Vec<u8>,
+    pub output: Out,
     pub reverted: bool,
     #[serde(deserialize_with = "StagedVMState::deserialize")]
     pub new_state: StagedVMState<Loc, Addr, VS>,
 }
 
-impl<Loc, Addr, VS> ExecutionResult<Loc, Addr, VS>
+impl<Loc, Addr, VS, Out> ExecutionResult<Loc, Addr, VS, Out>
 where
     VS: Default + VMStateT + 'static,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
+    Out: Default
 {
     pub fn empty_result() -> Self {
         Self {
-            output: vec![],
+            output: Out::default(),
             reverted: false,
             new_state: StagedVMState::new_uninitialized(),
         }
     }
 }
 
-pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S> {
+pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
     fn deploy(
         &mut self,
         code: Code,
         constructor_args: Option<By>,
         deployed_address: Addr,
     ) -> Option<Addr>;
-    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<Loc, Addr, VS>
+    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<Loc, Addr, VS, Out>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
-        Loc: Serialize + DeserializeOwned + Debug;
+        Loc: Serialize + DeserializeOwned + Debug,
+        Out: Default
+    ;
 
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.

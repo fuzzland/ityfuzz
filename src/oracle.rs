@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, I, S: 'static>
+pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
@@ -22,12 +22,12 @@ where
     pub pre_state: &'a VS,
     pub post_state: &'a VS,
     pub metadata: SerdeAnyMap,
-    pub executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
+    pub executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
     pub input: &'a I,
     pub phantom: PhantomData<(Addr)>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, I, S> OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
 where
     I: VMInputT<VS, Loc, Addr> + 'static,
     S: State + HasCorpus<I> + HasMetadata,
@@ -39,7 +39,7 @@ where
         fuzz_state: &'a S,
         pre_state: &'a VS,
         post_state: &'a VS,
-        executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
+        executor: &'a Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
         input: &'a I,
     ) -> Self {
         Self {
@@ -94,7 +94,7 @@ where
     // }
 }
 
-pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, I, S>
+pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: Default + VMStateT,
@@ -103,12 +103,12 @@ where
 {
     fn transition(
         &self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>,
+        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>,
         stage: u64,
     ) -> u64;
     fn oracle(
         &self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, I, S>,
+        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>,
         stage: u64,
     ) -> bool;
 }

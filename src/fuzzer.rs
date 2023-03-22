@@ -36,7 +36,7 @@ use serde::Serialize;
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
-pub struct ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -54,11 +54,11 @@ where
     infant_feedback: IF,
     infant_scheduler: &'a IS,
     objective: OF,
-    phantom: PhantomData<(I, S, OT, VS, Loc, Addr)>,
+    phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
 }
 
-impl<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
-    ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
+    ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -91,8 +91,8 @@ where
 
 // implement fuzzer trait for ItyFuzzer
 // Seems that we can get rid of this impl and just use StdFuzzer?
-impl<'a, VS, Loc, Addr, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
-    for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
+    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -143,8 +143,8 @@ where
 pub static mut DUMP_FILE_COUNT: u8 = 0;
 
 // implement evaluator trait for ItyFuzzer
-impl<'a, VS, Loc, Addr, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
-    for ItyFuzzer<'a, VS, Loc, Addr, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
+    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
     CS: Scheduler<I, S>,
     IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -160,11 +160,13 @@ where
         + HasSolutions<I>
         + HasInfantStateState<Loc, Addr, VS>
         + HasItyState<Loc, Addr, VS>
-        + HasExecutionResult<Loc, Addr, VS>
+        + HasExecutionResult<Loc, Addr, VS, Out>
         + HasExecutions,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn evaluate_input_events(
         &mut self,

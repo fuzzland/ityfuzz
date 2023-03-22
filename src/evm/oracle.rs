@@ -12,7 +12,7 @@ use revm::Bytecode;
 
 pub struct NoOracle {}
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState> for NoOracle {
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState> for NoOracle {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
     }
@@ -54,7 +54,7 @@ impl IERC20Oracle {
     }
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState> for IERC20Oracle {
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState> for IERC20Oracle {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
     }
@@ -89,7 +89,7 @@ impl IERC20OracleFlashloan {
     }
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
     for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
@@ -114,7 +114,7 @@ pub struct FunctionHarnessOracle {
     pub address: H160,
     harness_func: Vec<u8>,
     precondition: fn(
-        ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
+        ctx: &mut EVMOracleCtx<'_>,
         stage: u64,
     ) -> u64,
 }
@@ -141,7 +141,7 @@ impl FunctionHarnessOracle {
     }
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
     for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
@@ -150,7 +150,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>
 
     fn oracle(
         &self,
-        ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, EVMInput, EVMFuzzState>,
+        ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
         stage: u64,
     ) -> bool {
         if stage == 99 {

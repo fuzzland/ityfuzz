@@ -66,6 +66,7 @@ where
     VS: Default + VMStateT,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
+
 {
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS>;
 }
@@ -74,25 +75,28 @@ pub trait HasHashToAddress {
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
 }
 
-pub trait HasExecutionResult<Loc, Addr, VS>
+pub trait HasExecutionResult<Loc, Addr, VS, Out>
 where
     VS: Default + VMStateT,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
+    Out: Default
+
 {
-    fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS>;
-    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS>;
-    fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS>);
+    fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out>;
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out>;
+    fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>);
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "Addr: Serialize + DeserializeOwned")]
-pub struct FuzzState<VI, VS, Loc, Addr>
+#[serde(bound = "Addr: Serialize + DeserializeOwned, Out: Serialize + DeserializeOwned")]
+pub struct FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Debug + Serialize + DeserializeOwned + Clone,
+    Out: Default
 {
     #[serde(deserialize_with = "InfantStateState::deserialize")]
     pub infant_states_state: InfantStateState<Loc, Addr, VS>,
@@ -108,7 +112,7 @@ where
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
     #[serde(deserialize_with = "ExecutionResult::deserialize")]
-    execution_result: ExecutionResult<Loc, Addr, VS>,
+    execution_result: ExecutionResult<Loc, Addr, VS, Out>,
     pub callers_pool: Vec<Addr>,
     pub addresses_pool: Vec<Addr>,
     pub rand_generator: RomuDuoJrRand,
@@ -117,12 +121,14 @@ where
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
 
-impl<VI, VS, Loc, Addr> FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT + 'static,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     pub fn new() -> Self {
         let seed = current_nanos();
@@ -156,12 +162,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasCaller<Addr> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasCaller<Addr> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT + 'static,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Clone + Debug + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn get_rand_address(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.addresses_pool.len() as u64);
@@ -216,12 +224,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasHashToAddress for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasHashToAddress for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
         &self.hash_to_address
@@ -233,6 +243,7 @@ where
     VS: Default + VMStateT + DeserializeOwned,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+
 {
 }
 
@@ -285,12 +296,13 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasItyState<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasItyState<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input + 'static,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
 {
     fn get_infant_state<SC>(
         &mut self,
@@ -339,24 +351,28 @@ where
     //
 }
 
-impl<VI, VS, Loc, Addr> HasInfantStateState<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasInfantStateState<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS> {
         &mut self.infant_states_state
     }
 }
 
-impl<VI, VS, Loc, Addr> HasMaxSize for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasMaxSize for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn max_size(&self) -> usize {
         self.max_size
@@ -367,12 +383,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasRand for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasRand for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     type Rand = StdRand;
 
@@ -385,12 +403,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasExecutions for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasExecutions for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn executions(&self) -> &usize {
         &self.executions
@@ -401,12 +421,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasMetadata for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasMetadata for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
@@ -417,12 +439,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasCorpus<VI> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasCorpus<VI> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     #[cfg(not(feature = "evaluation"))]
     type Corpus = InMemoryCorpus<VI>;
@@ -438,12 +462,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasSolutions<VI> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasSolutions<VI> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     type Solutions = OnDiskCorpus<VI>;
 
@@ -456,12 +482,14 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasClientPerfMonitor for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasClientPerfMonitor for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn introspection_monitor(&self) -> &ClientPerfMonitor {
         todo!()
@@ -472,32 +500,36 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> HasExecutionResult<Loc, Addr, VS> for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasExecutionResult<Loc, Addr, VS, Out> for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
-    fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS> {
+    fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out> {
         &self.execution_result
     }
 
-    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS> {
+    fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out> {
         &mut self.execution_result
     }
 
-    fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS>) {
+    fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>) {
         self.execution_result = res
     }
 }
 
-impl<VI, VS, Loc, Addr> HasNamedMetadata for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> HasNamedMetadata for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn named_metadata(&self) -> &NamedSerdeAnyMap {
         &self.named_metadata
@@ -508,11 +540,13 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr> State for FuzzState<VI, VS, Loc, Addr>
+impl<VI, VS, Loc, Addr, Out> State for FuzzState<VI, VS, Loc, Addr, Out>
 where
     VS: Default + VMStateT + DeserializeOwned,
     VI: VMInputT<VS, Loc, Addr> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Serialize + DeserializeOwned + Default
+
 {
 }

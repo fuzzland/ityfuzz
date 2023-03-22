@@ -1000,7 +1000,7 @@ where
     }
 }
 
-impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, I, S> for EVMExecutor<I, S, VS>
+impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, Vec<u8>, I, S> for EVMExecutor<I, S, VS>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + 'static,
@@ -1039,7 +1039,7 @@ where
         Some(deployed_address)
     }
 
-    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<H160, H160, VS> {
+    fn execute(&mut self, input: &I, state: Option<&mut S>) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         let mut _vm_state = unsafe {
             input
                 .get_state()

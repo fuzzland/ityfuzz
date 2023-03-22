@@ -21,6 +21,7 @@ use move_vm_types::values;
 use move_vm_types::values::Locals;
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::r#move::types::MoveOutput;
 
 struct MoveVM<I, S> {
     modules: HashMap<ModuleId, Arc<loader::Module>>,
@@ -58,6 +59,7 @@ impl<I, S>
         ModuleId,
         AccountAddress,
         values::Value,
+        MoveOutput,
         I,
         S,
     > for MoveVM<I, S>
@@ -93,6 +95,9 @@ where
                 .or_insert_with(HashMap::new)
                 .insert(name.to_owned(), function);
         }
+
+        println!("deployed structs: {:?}", self._module_cache.structs);
+
         Some(module.self_id().address().clone())
     }
 
@@ -100,7 +105,7 @@ where
         &mut self,
         input: &I,
         state: Option<&mut S>,
-    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState>
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput>
     where
         MoveVMState: VMStateT,
     {
@@ -130,7 +135,9 @@ where
             paranoid_type_checks: false,
         };
 
-        let loader = Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default());
+        let mut loader = Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default());
+
+        loader.set_structs(self._module_cache.structs.clone());
 
         let resolver = Resolver {
             loader: &loader,
@@ -141,6 +148,17 @@ where
 
         let ret =
             current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
+
+        for v in interp.operand_stack.value {
+            println!("val: {:?}", v);
+        }
+
+        function.return_types().iter().for_each(|ty| {
+            let abilities = resolver.loader.abilities(ty);
+            println!("ty: {:?} - ability {:?}", ty, abilities);
+        });
+
+        println!("ret: {:?}", ret);
 
         //
         // match ret {
@@ -197,14 +215,12 @@ mod tests {
     use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
     use move_vm_types::values::Value;
 
-    #[test]
-    fn test_move_vm_simple() {
-        let module_hex = "a11ceb0b0500000006010002030205050703070a0e0818200c38130000000100000001030007546573744d6f6405746573743100000000000000000000000000000000000000000000000000000000000000030001000001040b00060200000000000000180200";
-        let module_bytecode = hex::decode(module_hex).unwrap();
+    fn _run(bytecode: &str) -> MoveVM<MoveFunctionInput, FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>> {
+        let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
         let mut mv = MoveVM::<
             MoveFunctionInput,
-            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress>,
+            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
         >::new();
         let loc = mv
             .deploy(module, None, AccountAddress::new([0; 32]))
@@ -235,5 +251,33 @@ mod tests {
 
         let res = mv.execute(&input, None);
         println!("{:?}", res);
+        return mv
+    }
+
+    #[test]
+    fn test_move_vm_simple() {
+        // module 0x3::TestMod {
+        //         public fun test1(data: u64) : u64 {
+        //         data * 2
+        //     }
+        // }
+
+        let module_hex = "a11ceb0b0500000006010002030205050703070a0e0818200c38130000000100000001030007546573744d6f6405746573743100000000000000000000000000000000000000000000000000000000000000030001000001040b00060200000000000000180200";
+        _run(module_hex);
+    }
+
+    #[test]
+    fn test_dropping() {
+        // module 0x3::TestMod {
+        //     resource struct TestStruct {
+        //         data: u64
+        //     }
+        //     public fun test1(data: u64) : TestStruct {
+        //         TestStruct { data };
+        //     }
+        // }
+
+        let module_hex = "a11ceb0b0500000008010002020204030605050b0607111e082f200a4f050c540b000000010200000200010001030108000007546573744d6f640a546573745374727563740574657374310464617461000000000000000000000000000000000000000000000000000000000000000300020103030001000002030b0012000200";
+        _run(module_hex);
     }
 }

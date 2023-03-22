@@ -18,7 +18,7 @@ use crate::tracer::build_basic_txn;
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
-pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
@@ -26,13 +26,13 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
-    pub vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
+    pub vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
     observers: OT,
-    phantom: PhantomData<(I, S, Addr)>,
+    phantom: PhantomData<(I, S, Addr, Out)>,
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT> Debug
-    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT> Debug
+    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
@@ -48,8 +48,8 @@ where
     }
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
-    FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
+    FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
@@ -58,7 +58,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
-        vm_executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, I, S>>,
+        vm_executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
         observers: OT,
     ) -> Self {
         Self {
@@ -69,15 +69,17 @@ where
     }
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT, EM, Z> Executor<EM, I, S, Z>
-    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT, EM, Z> Executor<EM, I, S, Z>
+    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr> + Input + 'static,
     OT: ObserversTuple<I, S>,
-    S: State + HasExecutionResult<Loc, Addr, VS> + HasCorpus<I> + HasMetadata + 'static,
+    S: State + HasExecutionResult<Loc, Addr, VS, Out> + HasCorpus<I> + HasMetadata + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default
+
 {
     fn run_target(
         &mut self,
@@ -103,8 +105,8 @@ where
 }
 
 // implement HasObservers trait for ItyFuzzer
-impl<VS, Addr, Code, By, Loc, SlotTy, I, S, OT> HasObservers<I, OT, S>
-    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, I, S, OT>
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT> HasObservers<I, OT, S>
+    for FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr>,
     OT: ObserversTuple<I, S>,
