@@ -427,9 +427,9 @@ impl Host for FuzzHost {
                 //     // println!("fd {}", interp.program_counter());
                 // }
                 0x57 => {
-                    // JUMPI
-                    let jump_dest = if fast_peek!(0).is_zero() {
-                        fast_peek!(1).as_u64()
+                    // JUMPI counter cond
+                    let jump_dest = if fast_peek!(1).is_zero() {
+                        fast_peek!(0).as_u64()
                     } else {
                         1
                     };
