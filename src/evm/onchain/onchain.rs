@@ -22,6 +22,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
+use crypto::digest::Digest;
+use crypto::sha3::Sha3;
+use crate::evm::config::StorageFetchingMode;
 
 const UNBOUND_THRESHOLD: usize = 5;
 
@@ -38,8 +41,9 @@ where
     pub endpoint: OnChainConfig,
     pub scheduler: Option<Box<dyn Scheduler<I, S>>>,
     pub blacklist: HashSet<H160>,
-    pub use_full_storage: bool,
-    pub full_storage: HashMap<H160, Arc<HashMap<U256, U256>>>,
+    pub storage_fetching: StorageFetchingMode,
+    pub storage_all: HashMap<H160, Arc<HashMap<String, U256>>>,
+    pub storage_dump: HashMap<H160, Arc<HashMap<U256, U256>>>,
     pub phantom: std::marker::PhantomData<VS>,
 }
 
@@ -64,7 +68,7 @@ where
     S: State,
     VS: VMStateT + Default,
 {
-    pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC, use_full_storage: bool) -> Self
+    pub fn new<SC>(endpoint: OnChainConfig, scheduler: SC, storage_fetching: StorageFetchingMode) -> Self
     where
         SC: Scheduler<I, S> + 'static,
     {
@@ -76,15 +80,27 @@ where
             endpoint,
             scheduler: Some(Box::new(scheduler)),
             blacklist: Default::default(),
-            use_full_storage,
-            full_storage: Default::default(),
+            storage_all: Default::default(),
+            storage_dump: Default::default(),
             phantom: Default::default(),
+            storage_fetching
         }
     }
 
     pub fn add_blacklist(&mut self, address: H160) {
         self.blacklist.insert(address);
     }
+}
+
+
+pub fn keccak_hex(data: U256) -> String {
+    let mut hasher = Sha3::keccak256();
+    let mut output = [0u8; 32];
+    let mut input = [0u8; 32];
+    data.to_big_endian(&mut input);
+    hasher.input(input.as_ref());
+    hasher.result(&mut output);
+    hex::encode(&output).to_string()
 }
 
 impl<VS, I, S> Middleware for OnChain<VS, I, S>
@@ -126,27 +142,37 @@ where
                 let slot_idx = interp.stack.peek(0).unwrap();
                 let address = interp.contract.address;
 
-                let slot_val = {
-                    if self.use_full_storage {
-                        if !self.full_storage.contains_key(&address) {
-                            let storage = self
-                                .endpoint
-                                .fetch_full_storage(address)
-                                .unwrap_or(Arc::new(HashMap::new()));
-                            self.full_storage.insert(address, storage);
+                macro_rules! load_data {
+                    ($func: ident, $stor: ident, $key: ident) => {
+                        {
+                            if !self.$stor.contains_key(&address) {
+                                let storage = self.endpoint.$func(address)
+                                    .unwrap_or(Arc::new(HashMap::new()));
+                                self.$stor.insert(address, storage);
+                            }
+                            self.$stor.get(&address).unwrap().get(&$key).unwrap_or(&U256::zero()).clone()
                         }
+                    };
+                    () => {};
+                }
 
-                        if let Some(storage) = self.full_storage.get(&address) {
-                            storage.get(&slot_idx).unwrap_or(&U256::zero()).clone()
-                        } else {
-                            unreachable!("full storage should be loaded");
+                let slot_val = {
+                    match self.storage_fetching {
+                        StorageFetchingMode::Dump => {
+                            load_data!(fetch_storage_dump, storage_dump, slot_idx)
                         }
-                    } else {
-                        self.endpoint.get_contract_slot(
-                            address,
-                            slot_idx,
-                            force_cache!(self.locs, slot_idx),
-                        )
+                        StorageFetchingMode::All => {
+                            // the key is in keccak256 format
+                            let key = keccak_hex(slot_idx);
+                            load_data!(fetch_storage_all, storage_all, key)
+                        }
+                        StorageFetchingMode::OneByOne => {
+                            self.endpoint.get_contract_slot(
+                                address,
+                                slot_idx,
+                                force_cache!(self.locs, slot_idx),
+                            )
+                        }
                     }
                 };
                 vec![

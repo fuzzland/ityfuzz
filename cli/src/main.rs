@@ -1,6 +1,6 @@
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
-use ityfuzz::evm::config::{Config, FuzzerTypes};
+use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middleware::Middleware;
@@ -72,9 +72,9 @@ struct Args {
     #[arg(long)]
     onchain_local_proxy_addr: Option<String>,
 
-    /// Onchain whether to use eth_getStorageAll (Default: false)
-    #[arg(long, default_value = "false")]
-    onchain_full_storage: bool,
+    /// Onchain which fetching method to use (All, Dump, OneByOne) (Default: OneByOne)
+    #[arg(long, default_value = "onebyone")]
+    onchain_storage_fetching: String,
 
     /// Enable Concolic
     #[arg(long, default_value = "false")]
@@ -214,7 +214,11 @@ fn main() {
         },
         oracle: oracles,
         flashloan: args.flashloan,
-        use_full_storage: args.onchain_full_storage,
+        onchain_storage_fetching: if is_onchain {
+            Some(StorageFetchingMode::from_str(args.onchain_storage_fetching.as_str()).unwrap())
+        } else {
+            None
+        },
     };
 
     match config.fuzzer_type {

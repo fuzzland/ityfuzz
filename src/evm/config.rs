@@ -9,6 +9,23 @@ pub enum FuzzerTypes {
     BASIC,
 }
 
+pub enum StorageFetchingMode {
+    Dump,
+    All,
+    OneByOne,
+}
+
+impl From<&str> for StorageFetchingMode {
+    fn from(s: &str) -> Self {
+        match s {
+            "dump" => StorageFetchingMode::Dump,
+            "all" => StorageFetchingMode::All,
+            "onebyone" => StorageFetchingMode::OneByOne,
+            _ => panic!("Storage fetching mode not supported"),
+        }
+    }
+}
+
 impl FuzzerTypes {
     pub fn from_str(s: &str) -> Result<Self, String> {
         match s {
@@ -22,10 +39,10 @@ impl FuzzerTypes {
 
 pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub onchain: Option<OnChainConfig>,
+    pub onchain_storage_fetching: Option<StorageFetchingMode>,
     pub flashloan: bool,
     pub concolic_prob: Option<f32>,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-    pub use_full_storage: bool,
 }
