@@ -104,6 +104,7 @@ pub fn cmp_fuzzer(
                 // scheduler can be cloned because it never uses &mut self
                 onchain,
                 scheduler.clone(),
+                config.use_full_storage
             ));
             fuzz_host.add_middlewares(mid);
         }
