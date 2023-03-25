@@ -106,3 +106,10 @@ git clone https://github.com/Z3Prover/z3 && cd z3
 python scripts/mk_make.py --prefix=/usr/local
 cd build && make -j64 && sudo make install
 ```
+
+### Onchain Fetching
+ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
+There are three ways of fetching: 
+* OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
+* All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large. 
+* Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
