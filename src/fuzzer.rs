@@ -165,8 +165,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn evaluate_input_events(
         &mut self,

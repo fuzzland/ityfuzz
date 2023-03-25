@@ -94,8 +94,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         todo!()
@@ -213,7 +212,11 @@ where
         oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
         executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
     ) -> Self {
-        Self { oracle, executor, phantom: Default::default() }
+        Self {
+            oracle,
+            executor,
+            phantom: Default::default(),
+        }
     }
 }
 
@@ -230,8 +233,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     // since OracleFeedback is just a wrapper around one stateless oracle
     // we don't need to do initialization
@@ -342,8 +344,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -475,8 +476,7 @@ where
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
-
+    Out: Default,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())

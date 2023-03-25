@@ -2,6 +2,7 @@ use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
+use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
 use move_binary_format::access::ModuleAccess;
@@ -21,7 +22,6 @@ use move_vm_types::values;
 use move_vm_types::values::Locals;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::r#move::types::MoveOutput;
 
 struct MoveVM<I, S> {
     modules: HashMap<ModuleId, Arc<loader::Module>>,
@@ -215,7 +215,12 @@ mod tests {
     use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
     use move_vm_types::values::Value;
 
-    fn _run(bytecode: &str) -> MoveVM<MoveFunctionInput, FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>> {
+    fn _run(
+        bytecode: &str,
+    ) -> MoveVM<
+        MoveFunctionInput,
+        FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
+    > {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
         let mut mv = MoveVM::<
@@ -251,7 +256,7 @@ mod tests {
 
         let res = mv.execute(&input, None);
         println!("{:?}", res);
-        return mv
+        return mv;
     }
 
     #[test]

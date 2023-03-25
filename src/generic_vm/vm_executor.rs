@@ -14,7 +14,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default
+    Out: Default,
 {
     pub output: Out,
     pub reverted: bool,
@@ -27,7 +27,7 @@ where
     VS: Default + VMStateT + 'static,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default
+    Out: Default,
 {
     pub fn empty_result() -> Self {
         Self {
@@ -50,8 +50,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default
-    ;
+        Out: Default;
 
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.

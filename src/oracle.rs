@@ -27,7 +27,8 @@ where
     pub phantom: PhantomData<(Addr)>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+    OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
 where
     I: VMInputT<VS, Loc, Addr> + 'static,
     S: State + HasCorpus<I> + HasMetadata,

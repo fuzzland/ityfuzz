@@ -176,20 +176,20 @@ impl OnChainConfig {
     }
 
     pub fn fetch_storage_all_uncached(&self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
-        assert_eq!(self.block_number, "latest", "fetch_full_storage only works with latest block");
+        assert_eq!(
+            self.block_number, "latest",
+            "fetch_full_storage only works with latest block"
+        );
         let resp = if self.use_local_proxy {
             let endpoint = format!(
                 "{}/full_storage/{}/{:?}",
                 self.local_proxy_addr, self.chain_name, address
             );
             match self.client.get(endpoint).send() {
-                Ok(res) => {
-                    Some(
-                        serde_json::from_str::<Value>(
-                            &res.text().unwrap().trim().to_string()
-                        ).expect("Failed to parse proxy response")
-                    )
-                }
+                Ok(res) => Some(
+                    serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
+                        .expect("Failed to parse proxy response"),
+                ),
                 Err(_) => None,
             }
         } else {
@@ -227,7 +227,10 @@ impl OnChainConfig {
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
-                        let blk_hash = res["hash"].as_str().expect("fail to find block hash").to_string();
+                        let blk_hash = res["hash"]
+                            .as_str()
+                            .expect("fail to find block hash")
+                            .to_string();
                         Some(blk_hash)
                     }
                     None => panic!("fail to get block hash"),
@@ -247,19 +250,20 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_storage_dump_uncached(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+    pub fn fetch_storage_dump_uncached(
+        &mut self,
+        address: H160,
+    ) -> Option<Arc<HashMap<U256, U256>>> {
         let resp = if self.use_local_proxy {
             let endpoint = format!(
                 "{}/storage_dump/{}/{:?}",
                 self.local_proxy_addr, self.chain_name, address
             );
             match self.client.get(endpoint).send() {
-                Ok(res) => {
-                    Some(
-                        serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
-                            .expect("Failed to parse proxy response")
-                    )
-                }
+                Ok(res) => Some(
+                    serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
+                        .expect("Failed to parse proxy response"),
+                ),
                 Err(_) => None,
             }
         } else {
@@ -277,7 +281,8 @@ impl OnChainConfig {
         match resp {
             Some(resp) => {
                 let mut map = HashMap::new();
-                for (_, v) in resp["storage"].as_object()
+                for (_, v) in resp["storage"]
+                    .as_object()
                     .expect("failed to convert resp to array")
                     .iter()
                 {
@@ -671,20 +676,19 @@ mod tests {
     #[test]
     fn test_fetch_storage_dump() {
         let mut config = OnChainConfig::new(ETH, 0);
-        let v = config.fetch_storage_dump(
-            H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-        ).unwrap();
-
+        let v = config
+            .fetch_storage_dump(
+                H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+            )
+            .unwrap();
 
         let v0 = v.get(&U256::from(0)).unwrap().clone();
-
 
         let slot_v = config.get_contract_slot(
             H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
             U256::from(0),
             false,
         );
-
 
         assert_eq!(slot_v, v0);
     }
