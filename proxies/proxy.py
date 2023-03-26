@@ -148,7 +148,7 @@ def fetch_rpc_storage_dump(network, address, block):
         print(j)
         raise Exception("invalid response")
     # this rpc is likely going to fail for a few times
-    return j["result"]["storage"]
+    return j["result"]
 
 
 @functools.lru_cache(maxsize=10240)
