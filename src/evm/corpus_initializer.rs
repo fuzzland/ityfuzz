@@ -118,7 +118,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         ]);
 
         for caller in default_callers {
-            self.state.add_address(&caller);
+            self.state.add_caller(&caller);
         }
     }
 
