@@ -29,7 +29,7 @@ flashloan_v2 = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { version = "2.1.0", features = ["no_gas_measuring"] }
+revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring"] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.8.2"
