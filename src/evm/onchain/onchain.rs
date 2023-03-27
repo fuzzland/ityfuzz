@@ -26,7 +26,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 
-const UNBOUND_THRESHOLD: usize = 5;
+const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
 where

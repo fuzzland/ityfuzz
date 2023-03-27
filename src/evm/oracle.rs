@@ -93,6 +93,8 @@ impl IERC20OracleFlashloan {
     }
 }
 
+pub static mut FL_DATA: String = String::new();
+
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
     for IERC20OracleFlashloan
 {
@@ -103,10 +105,12 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         // has balance increased?
         if ctx.post_state.flashloan_data.earned > ctx.post_state.flashloan_data.owed {
-            println!(
-                "[Flashloan] Earned {} more than owed {}",
-                ctx.post_state.flashloan_data.earned, ctx.post_state.flashloan_data.owed
-            );
+            unsafe {
+                FL_DATA = format!(
+                    "[Flashloan] Earned {} more than owed {}",
+                    ctx.post_state.flashloan_data.earned, ctx.post_state.flashloan_data.owed
+                );
+            }
             true
         } else {
             false
