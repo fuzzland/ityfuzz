@@ -362,7 +362,7 @@ impl ABI for AEmpty {
 // 0~256-bit data types
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct A256 {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     pub is_address: bool,
 }
 

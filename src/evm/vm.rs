@@ -206,7 +206,8 @@ where
     concolic_prob: f32,
     middlewares_enabled: bool,
     middlewares: Rc<RefCell<HashMap<MiddlewareType, Box<dyn Middleware<S>>>>>,
-    flashloan_middleware: Option<Rc<RefCell<Flashloan<S>>>>,
+
+    pub flashloan_middleware: Option<Rc<RefCell<Flashloan<S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
     #[cfg(feature = "record_instruction_coverage")]
