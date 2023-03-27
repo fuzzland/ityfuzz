@@ -285,6 +285,7 @@ impl<'a> Solving<'a> {
                     .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx))
             };
         }
+        // println!("generate_z3_bv: {:?}", bv);
         match &bv.op {
             ConcolicOp::U256(constant) => bv_from_u256!(constant, ctx),
             ConcolicOp::ADD => binop!(bv.lhs, bv.rhs, bvadd),
@@ -312,6 +313,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
             ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, *b as u64, 8),
             ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s.clone(), 8),
+            ConcolicOp::EQ => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx),  // recursively solve lhs
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -320,6 +322,7 @@ impl<'a> Solving<'a> {
         let context = self.context;
         let solver = Solver::new(&context);
         for cons in self.constraints {
+            // println!("Constraints: {:?}", cons);
             let bv: BV = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
                 ConcolicOp::GT => {
@@ -797,7 +800,10 @@ impl Middleware for ConcolicHost {
             }
             // MSTORE
             0x52 => {
-                vec![None]
+                // todo: write to symbolic memory
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![]
             }
             // MSTORE8
             0x53 => {
@@ -818,6 +824,8 @@ impl Middleware for ConcolicHost {
             }
             // JUMPI
             0x57 => {
+                // println!("{:?}", interp.stack);
+                // println!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
                 let jump_dest_concolic = if fast_peek!(1)
                     .expect("[Concolic] JUMPI stack error at 1")
@@ -832,7 +840,13 @@ impl Middleware for ConcolicHost {
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
                 if jmp_map[idx] == 0 {
                     let path_constraint = stack_bv!(1);
-                    self.constraints.push(path_constraint.lnot());
+                    self.constraints.push(path_constraint.lnot().eq(Box::new(
+                        Expr {
+                            lhs: None,
+                            rhs: None,
+                            op: ConcolicOp::U256(U256::from(1))
+                        }
+                    )));
                     match self.solve() {
                         Some(s) => solutions.push(s),
                         None => {}
@@ -873,7 +887,7 @@ impl Middleware for ConcolicHost {
             0x80..=0x8f => {
                 let _n = (*interp.instruction_pointer) - 0x80 + 1;
                 vec![
-                    //todo!
+                    Some(stack_bv!(usize::from(_n - 1)).clone())
                 ]
             }
             // SWAP
