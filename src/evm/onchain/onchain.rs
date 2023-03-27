@@ -181,19 +181,21 @@ where
                         }
                     }};
                 }
+                //
+                // match host.data.get_mut(&address) {
+                //     Some(data) => {
+                //         if data.get(&slot_idx).is_none() {
+                //             data.insert(slot_idx, slot_val!());
+                //         }
+                //     }
+                //     None => {
+                //         let mut data = HashMap::new();
+                //         data.insert(slot_idx, slot_val!());
+                //         host.data.insert(address, data);
+                //     }
+                // }
 
-                match host.data.get_mut(&address) {
-                    Some(data) => {
-                        if data.get(&slot_idx).is_none() {
-                            data.insert(slot_idx, slot_val!());
-                        }
-                    }
-                    None => {
-                        let mut data = HashMap::new();
-                        data.insert(slot_idx, slot_val!());
-                        host.data.insert(address, data);
-                    }
-                }
+                host.next_slot = slot_val!();
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa => {

@@ -104,8 +104,11 @@ where
         I: VMInputT<VS, H160, H160> + EVMInputT,
         VS: VMStateT,
     {
+        macro_rules! scale {
+            ($data: expr) => {$data * float_scale_to_u512(1.0, 23)};
+        }
         if input.get_txn_value().is_some() {
-            result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
+            result.new_state.flashloan_data.owed += scale!(U512::from(input.get_txn_value().unwrap()));
         }
         let call_target = input.get_contract();
         match input.get_data_abi() {
