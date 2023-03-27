@@ -91,12 +91,10 @@ pub fn cmp_fuzzer(
                 config.onchain.is_some(),
                 "Flashloan v2 requires onchain env"
             );
-            fuzz_host.add_flashloan_middleware(
-                Flashloan::<EVMFuzzState>::new(
-                    true,
-                    config.onchain.clone().unwrap(),
-                )
-            );
+            fuzz_host.add_flashloan_middleware(Flashloan::<EVMFuzzState>::new(
+                true,
+                config.onchain.clone().unwrap(),
+            ));
         }
     }
 

@@ -170,11 +170,11 @@ impl EVMState {
 
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::{
-    CallMiddlewareReturn, ExecutionStage, Middleware, MiddlewareOp,
-    MiddlewareType,
+    CallMiddlewareReturn, ExecutionStage, Middleware, MiddlewareOp, MiddlewareType,
 };
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use crate::evm::onchain::onchain::OnChain;
+use crate::evm::types::EVMFuzzState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -185,10 +185,10 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::evm::types::EVMFuzzState;
 
 pub struct FuzzHost<S>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     pub data: EVMState,
     // these are internal to the host
@@ -212,11 +212,12 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
     pub total_instr_set: HashMap<H160, HashSet<usize>>,
     pub origin: H160,
 
-    pub scheduler: Arc<dyn Scheduler<EVMInput, S>>
+    pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
 }
 
 impl<S> Debug for FuzzHost<S>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
@@ -230,7 +231,10 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
             .field("concolic_prob", &self.concolic_prob)
             .field("middlewares_enabled", &self.middlewares_enabled)
             .field("middlewares", &self.middlewares)
-            .field("middlewares_latent_call_actions", &self.middlewares_latent_call_actions)
+            .field(
+                "middlewares_latent_call_actions",
+                &self.middlewares_latent_call_actions,
+            )
             .field("origin", &self.origin)
             .finish()
     }
@@ -238,7 +242,8 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
 
 // all clones would not include middlewares and states
 impl<S> Clone for FuzzHost<S>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -261,7 +266,7 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
             origin: self.origin.clone(),
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
-            scheduler: self.scheduler.clone()
+            scheduler: self.scheduler.clone(),
         }
     }
 }
@@ -293,7 +298,9 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
 }
 
 impl<S> FuzzHost<S>
-where S: State + HasCaller<H160> + Clone + Debug + 'static {
+where
+    S: State + HasCaller<H160> + Clone + Debug + 'static,
+{
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
         let mut ret = Self {
             data: EVMState::new(),
@@ -315,7 +322,7 @@ where S: State + HasCaller<H160> + Clone + Debug + 'static {
             origin: Default::default(),
             #[cfg(feature = "record_instruction_coverage")]
             total_instr_set: Default::default(),
-            scheduler
+            scheduler,
         };
         ret.env.block.timestamp = U256::max_value();
         ret
@@ -434,8 +441,8 @@ macro_rules! u256_to_u8 {
     };
 }
 impl<S> Host<S> for FuzzHost<S>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static,
-
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
@@ -504,7 +511,11 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
                         let v = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = v;
                     }
-                    let res = <FuzzHost<S> as Host<S>>::sload(self, interp.contract.address, fast_peek!(0));
+                    let res = <FuzzHost<S> as Host<S>>::sload(
+                        self,
+                        interp.contract.address,
+                        fast_peek!(0),
+                    );
                     state_change = res.expect("sload failed").0 != value;
                 }
 
@@ -762,9 +773,7 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
         if !self.pc_to_addresses.contains_key(&self._pc) {
             self.pc_to_addresses.insert(self._pc, HashSet::new());
         }
-        let addresses_at_pc = self.pc_to_addresses
-            .get_mut(&self._pc)
-            .unwrap();
+        let addresses_at_pc = self.pc_to_addresses.get_mut(&self._pc).unwrap();
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call
@@ -808,11 +817,7 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
             let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(
-                    input_bytes,
-                    code.clone(),
-                    &input.context,
-                ),
+                Contract::new_with_context::<LatestSpec>(input_bytes, code.clone(), &input.context),
                 1e10 as u64,
             );
             let ret = interp.run::<FuzzHost<S>, LatestSpec, S>(self, state);
@@ -830,7 +835,9 @@ where     S: State + HasCaller<H160> + Debug + Clone + 'static,
 
 #[derive(Debug, Clone)]
 pub struct EVMExecutor<I, S, VS>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static {
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+{
     pub host: FuzzHost<S>,
     deployer: H160,
     phandom: PhantomData<(I, S, VS)>,
@@ -849,7 +856,15 @@ pub struct IntermediateExecutionResult {
 impl<VS, I, S> EVMExecutor<I, S, VS>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + Default + Clone + Debug + 'static,
+    S: State
+        + HasCorpus<I>
+        + HasItyState<H160, H160, VS>
+        + HasMetadata
+        + HasCaller<H160>
+        + Default
+        + Clone
+        + Debug
+        + 'static,
     VS: Default + VMStateT + 'static,
 {
     pub fn new(fuzz_host: FuzzHost<S>, deployer: H160) -> Self {
@@ -952,8 +967,7 @@ where
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
         match self.host.flashloan_middleware {
-            Some(ref m) => m.deref().borrow_mut()
-                .analyze_call(input, &mut result),
+            Some(ref m) => m.deref().borrow_mut().analyze_call(input, &mut result),
             None => (),
         }
 
@@ -978,7 +992,15 @@ impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, Vec<u8>, I, S>
     for EVMExecutor<I, S, VS>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
-    S: State + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + HasCaller<H160> + Default + Clone + Debug + 'static,
+    S: State
+        + HasCorpus<I>
+        + HasItyState<H160, H160, VS>
+        + HasMetadata
+        + HasCaller<H160>
+        + Default
+        + Clone
+        + Debug
+        + 'static,
     VS: VMStateT + Default + 'static,
 {
     fn deploy(
@@ -1154,8 +1176,10 @@ mod tests {
 
     #[test]
     fn test_fuzz_executor() {
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
-            EVMExecutor::new(FuzzHost::new(Arc::new(StdScheduler::new())), generate_random_address());
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
+            FuzzHost::new(Arc::new(StdScheduler::new())),
+            generate_random_address(),
+        );
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 

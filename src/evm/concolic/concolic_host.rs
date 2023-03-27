@@ -7,10 +7,15 @@ use std::iter::Map;
 use crate::evm::abi::{AEmpty, BoxedABI};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
-use crate::evm::vm::{jmp_map, IntermediateExecutionResult, FuzzHost};
+use crate::evm::types::EVMFuzzState;
+use crate::evm::vm::{jmp_map, FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
+use libafl::prelude::{HasMetadata, Input};
+use libafl::schedulers::Scheduler;
+use libafl::state::{HasCorpus, State};
 use revm::Return::Continue;
 use revm::{
     Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
@@ -24,13 +29,8 @@ use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
-use libafl::prelude::{HasMetadata, Input};
-use libafl::schedulers::Scheduler;
-use libafl::state::{HasCorpus, State};
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::evm::types::EVMFuzzState;
-use crate::input::VMInputT;
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -321,7 +321,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
             ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, *b as u64, 8),
             ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s.clone(), 8),
-            ConcolicOp::EQ => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx),  // recursively solve lhs
+            ConcolicOp::EQ => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx), // recursively solve lhs
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -445,7 +445,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             constraints: vec![],
             bytes,
             caller,
-            phantom: Default::default()
+            phantom: Default::default(),
         }
     }
 
@@ -479,10 +479,16 @@ impl<I, VS> ConcolicHost<I, VS> {
 }
 
 impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
-    where
-        I: Input + VMInputT<VS, H160, H160> + 'static,
-        VS: VMStateT,
-        S: State + HasCaller<H160> + HasCorpus<I> + HasItyState<H160, H160, VS> + HasMetadata + Debug + Clone,
+where
+    I: Input + VMInputT<VS, H160, H160> + 'static,
+    VS: VMStateT,
+    S: State
+        + HasCaller<H160>
+        + HasCorpus<I>
+        + HasItyState<H160, H160, VS>
+        + HasMetadata
+        + Debug
+        + Clone,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
         macro_rules! fast_peek {
@@ -855,13 +861,12 @@ impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
                 if jmp_map[idx] == 0 {
                     let path_constraint = stack_bv!(1);
-                    self.constraints.push(path_constraint.lnot().eq(Box::new(
-                        Expr {
+                    self.constraints
+                        .push(path_constraint.lnot().eq(Box::new(Expr {
                             lhs: None,
                             rhs: None,
-                            op: ConcolicOp::U256(U256::from(1))
-                        }
-                    )));
+                            op: ConcolicOp::U256(U256::from(1)),
+                        })));
                     match self.solve() {
                         Some(s) => solutions.push(s),
                         None => {}
@@ -901,9 +906,7 @@ impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
             // DUP
             0x80..=0x8f => {
                 let _n = (*interp.instruction_pointer) - 0x80 + 1;
-                vec![
-                    Some(stack_bv!(usize::from(_n - 1)).clone())
-                ]
+                vec![Some(stack_bv!(usize::from(_n - 1)).clone())]
             }
             // SWAP
             0x90..=0x9f => {
@@ -924,7 +927,6 @@ impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
             self.symbolic_stack.push(v);
         }
 
-
         for s in solutions {
             add_corpus(host, self.caller, &s.to_string(), state);
         }
@@ -933,5 +935,4 @@ impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
     fn get_type(&self) -> MiddlewareType {
         Concolic
     }
-
 }

@@ -4,6 +4,7 @@
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
 use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
@@ -27,12 +28,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
-use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 
 #[derive(Debug)]
 pub struct Flashloan<S>
-where     S: State + HasCaller<H160> + Debug + Clone + 'static,
-
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     phantom: PhantomData<S>,
     oracle: Box<dyn PriceOracle>,
@@ -53,8 +53,8 @@ impl PriceOracle for DummyPriceOracle {
 }
 
 impl<S> Flashloan<S>
-    where     S: State + HasCaller<H160> + Debug + Clone + 'static,
-
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     #[cfg(not(feature = "flashloan_v2"))]
     pub fn new(use_contract_value: bool) -> Self {
@@ -96,8 +96,8 @@ impl<S> Flashloan<S>
 
 #[cfg(feature = "flashloan_v2")]
 impl<S> Flashloan<S>
-    where     S: State + HasCaller<H160> + Debug + Clone + 'static,
-
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
     pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
     where
@@ -174,7 +174,6 @@ where
             () => {};
         }
 
-
         let offset_of_arg_offset: usize = match *interp.instruction_pointer {
             0xf1 | 0xf2 => 3,
             0xf4 | 0xfa => 2,
@@ -192,7 +191,7 @@ where
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         if value_transfer > U256::zero() && call_target == interp.contract.caller {
-                earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
+            earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
         }
 
         let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
@@ -203,20 +202,19 @@ where
         let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
         // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
-
         macro_rules! make_transfer_call_success {
             () => {
-                host.middlewares_latent_call_actions.push(ReturnSuccess(Bytes::from(
-                    [vec![0x0; 31], vec![0x1]].concat(),
-                )));
+                host.middlewares_latent_call_actions
+                    .push(ReturnSuccess(Bytes::from(
+                        [vec![0x0; 31], vec![0x1]].concat(),
+                    )));
             };
         }
 
         macro_rules! make_balance_call_success {
             () => {
-                host.middlewares_latent_call_actions.push(ReturnSuccess(Bytes::from(
-                    vec![0xff; 32]
-                )));
+                host.middlewares_latent_call_actions
+                    .push(ReturnSuccess(Bytes::from(vec![0xff; 32])));
             };
         }
         macro_rules! handle_contract_contract_transfer {
@@ -298,7 +296,9 @@ where
 
     #[cfg(feature = "flashloan_v2")]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, s: &mut S)
-    where S: HasCaller<H160> {
+    where
+        S: HasCaller<H160>,
+    {
         macro_rules! earned {
             ($amount:expr) => {
                 host.data.flashloan_data.earned += $amount;
@@ -342,7 +342,6 @@ where
         }
         let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
 
-
         macro_rules! add_rich_when_ret {
             () => {
                 if !self.known_tokens.contains(&call_target) {
@@ -353,11 +352,9 @@ where
                         }
                         Some(v) => {
                             // add some user funds address
-                            v[0..2]
-                                .into_iter()
-                                .for_each(|holder| {
-                                    s.add_address(&holder);
-                                });
+                            v[0..2].into_iter().for_each(|holder| {
+                                s.add_address(&holder);
+                            });
                             // add rich caller
                             s.add_caller(&v.clone().get(5).unwrap().clone());
                         }
