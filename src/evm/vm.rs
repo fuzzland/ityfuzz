@@ -1153,13 +1153,14 @@ mod tests {
     use bytes::Bytes;
     use libafl::observers::StdMapObserver;
     use libafl::prelude::{tuple_list, HitcountsMapObserver};
+    use libafl::schedulers::StdScheduler;
     use libafl::state::State;
     use revm::Bytecode;
 
     #[test]
     fn test_fuzz_executor() {
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
-            EVMExecutor::new(FuzzHost::new(), generate_random_address());
+            EVMExecutor::new(FuzzHost::new(Arc::new(StdScheduler::new())), generate_random_address());
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 
