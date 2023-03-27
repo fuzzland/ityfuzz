@@ -104,7 +104,7 @@ where
     fn execute(
         &mut self,
         input: &I,
-        state: Option<&mut S>,
+        state: &mut S,
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput>
     where
         MoveVMState: VMStateT,
@@ -254,7 +254,7 @@ mod tests {
             vm_state_idx: 0,
         };
 
-        let res = mv.execute(&input, None);
+        let res = mv.execute(&input, &mut FuzzState::new());
         println!("{:?}", res);
         return mv;
     }
