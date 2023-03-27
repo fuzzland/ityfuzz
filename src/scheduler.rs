@@ -44,9 +44,14 @@ struct VoteData {
     pub sorted_votes: Vec<usize>,
     pub visits_total: usize,
     pub votes_total: usize,
+    #[cfg(feature = "full_trace")]
+    removed: usize
 }
 
 impl_serdeany!(VoteData);
+
+#[cfg(feature = "full_trace")]
+pub static mut REMOVED_CORPUS: usize = 0;
 
 impl<I, S> Scheduler<I, S> for SortedDroppingScheduler<I, S>
 where
@@ -60,6 +65,8 @@ where
                 sorted_votes: vec![],
                 visits_total: 1,
                 votes_total: 1,
+                #[cfg(feature = "full_trace")]
+                removed: 0
             });
         }
 
@@ -74,9 +81,14 @@ where
         // this is costly, but we have to do it to keep the corpus not increasing indefinitely
         let mut to_remove: Vec<usize> = vec![];
         {
-            let corpus_size = state.corpus().count();
+            let mut corpus_size = state.corpus().count();
             let _corpus_mut = state.corpus_mut();
             let data = state.metadata().get::<VoteData>().unwrap();
+            #[cfg(feature = "full_trace")]
+            {
+                corpus_size -= unsafe {REMOVED_CORPUS};
+            }
+
             if corpus_size > DROP_THRESHOLD {
                 // get top 100 entries sorted by votes (descending)
                 let mut sorted: Vec<_> = data.votes_and_visits.iter().collect();
@@ -92,7 +104,17 @@ where
 
                 to_remove.iter().for_each(|x| {
                     self.on_remove(state, *x, &None);
-                    state.corpus_mut().remove(*x).expect("failed to remove");
+                    #[cfg(feature = "full_trace")]
+                    {
+                        unsafe {
+                            REMOVED_CORPUS += 1;
+                        }
+                    }
+                    #[cfg(not(feature = "full_trace"))]
+                    {
+                        state.corpus_mut().remove(*x).expect("failed to remove");
+                    }
+
                 });
             }
         }

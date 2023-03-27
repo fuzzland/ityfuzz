@@ -140,6 +140,11 @@ impl VMStateT for EVMState {
         }
     }
 
+    #[cfg(feature = "full_trace")]
+    fn get_flashloan(&self) -> String {
+        format!("earned: {:?}, owed: {:?}", self.flashloan_data.earned, self.flashloan_data.owed)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

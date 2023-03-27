@@ -93,7 +93,7 @@ where
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
         {
             res.new_state.trace.from_idx = Some(input.get_state_idx());
-            res.new_state.trace.add_txn(build_basic_txn(input));
+            res.new_state.trace.add_txn(build_basic_txn(input, &res));
         }
 
         // the execution result is added to the fuzzer state

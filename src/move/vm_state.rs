@@ -159,6 +159,11 @@ impl VMStateT for MoveVMState {
         todo!()
     }
 
+    #[cfg(feature = "full_trace")]
+    fn get_flashloan(&self) -> String {
+        todo!()
+    }
+
     fn as_any(&self) -> &dyn Any {
         todo!()
     }
