@@ -317,8 +317,9 @@ where
         }
 
         let offset_of_arg_offset: usize = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => 3,
-            0xf4 | 0xfa => 2,
+            0xf1  => 3,
+            0xfa => 2,
+            // ignore delegatecall and callcode
             _ => {
                 return;
             }
@@ -329,7 +330,6 @@ where
             _ => U256::zero(),
         };
 
-        // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         if value_transfer > U256::zero() {
