@@ -156,16 +156,17 @@ def fetch_blk_hash(network, num):
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=10, delay=0.5, backoff=0.3)
-def fetch_rpc_storage_dump(network, address, block):
+def fetch_rpc_storage_dump(network, address, block, offset=""):
+    print(f"fetching {address} {block} {offset}")
     url = f"{get_rpc(network)}"
     payload = {
         "jsonrpc": "2.0",
         "method": "debug_storageRangeAt",
-        "params": [fetch_blk_hash(network, block), 0, address, "", 1000000000000000],
+        "params": [fetch_blk_hash(network, block), 0, address, offset, 100000],
         "id": 1
     }
 
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=15)
     try:
         response.raise_for_status()
     except Exception as e:
@@ -176,8 +177,12 @@ def fetch_rpc_storage_dump(network, address, block):
     if "result" not in j:
         print(j)
         raise Exception("invalid response")
+
+    res = {}
+    if "nextKey" in j["result"] and j["result"]["nextKey"]:
+        res = fetch_rpc_storage_dump(network, address, block, offset=j["result"]["nextKey"])
     # this rpc is likely going to fail for a few times
-    return j["result"]
+    return {**res, **j["result"]["storage"]}
 
 
 @functools.lru_cache(maxsize=10240)
@@ -191,7 +196,7 @@ def fetch_rpc_storage_all(network, address, block):
         "id": 1
     }
 
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=7)
     response.raise_for_status()
 
     return response.json()["result"]
@@ -224,7 +229,7 @@ def bytecode(network, address, block):
 def storage_dump(network, address, block):
     # use debug_storageRangeAt to dump the storage
     # this requires RPC endpoint enabling debug & archive node
-    return fetch_rpc_storage_dump(network, address, block)
+    return {"storage": fetch_rpc_storage_dump(network, address, block)}
 
 
 @app.route("/storage_all/<network>/<address>/<block>", methods=["GET"])

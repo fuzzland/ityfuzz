@@ -397,8 +397,9 @@ where
                 if unbound_transfer_check!() {
                     return;
                 }
-
-
+                if data.len() < 68 {
+                    return;
+                }
 
                 let dst = H160::from_slice(&data[16..36]);
                 let amount = U256::from_big_endian(&data[36..68]);
@@ -417,6 +418,9 @@ where
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
                 if unbound_transfer_check!() {
+                    return;
+                }
+                if data.len() < 100 {
                     return;
                 }
                 let src = H160::from_slice(&data[16..36]);
