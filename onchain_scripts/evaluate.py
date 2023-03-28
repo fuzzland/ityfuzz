@@ -53,6 +53,6 @@ def run(target):
 
 
 # run('0x007FE7c498A2Cf30971ad8f2cbC36bd14Ac51157')
-
-with Pool(10) as p:
-    p.map(run, open('target.txt', 'r').read().split('\n'))
+if __name__ == "__main__":
+    with Pool(10) as p:
+        p.map(run, open('target.txt', 'r').read().split('\n'))
