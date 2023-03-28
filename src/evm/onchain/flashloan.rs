@@ -23,11 +23,13 @@ use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::cmp::min;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::process::exit;
 use std::str::FromStr;
+
+const UNBOUND_TRANSFER_LIMIT: usize = 3;
 
 #[derive(Debug)]
 pub struct Flashloan<S>
@@ -41,6 +43,8 @@ where
     known_tokens: HashSet<H160>,
     #[cfg(feature = "flashloan_v2")]
     endpoint: OnChainConfig,
+    #[cfg(feature = "flashloan_v2")]
+    transfer_to_address: HashMap<(H160, usize), HashSet<H160>>
 }
 
 #[derive(Clone, Debug)]
@@ -73,18 +77,19 @@ where
             use_contract_value,
             known_tokens: Default::default(),
             endpoint,
+            transfer_to_address: Default::default()
         }
     }
 
     fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: U256) -> U512 {
         // scale all token to orig_price * 10^18
         let amount = if decimals > 18 {
-            amount / U256::from(10u64.pow(decimals - 18))
+            U512::from(amount) / U512::from(10u64.pow(decimals - 18))
         } else {
-            amount * U256::from(10u64.pow(18 - decimals))
+            U512::from(amount) * U512::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return U512::from(amount) * U512::from(eth_price);
+        return amount * U512::from(eth_price);
     }
 
     fn calculate_usd_value_from_addr(&mut self, addr: H160, amount: U256) -> Option<U512> {
@@ -367,9 +372,34 @@ where
             };
         }
 
+        macro_rules! unbound_transfer_check {
+            () => {
+                {
+                    let addr_set = self.transfer_to_address.get_mut(&(interp.contract.address, interp.program_counter()));
+                    if addr_set.is_none() {
+                        self.transfer_to_address.insert((interp.contract.address, interp.program_counter()), HashSet::new());
+                    }
+                    let addr_set = self.transfer_to_address.get_mut(&(interp.contract.address, interp.program_counter())).unwrap();
+                    addr_set.insert(call_target);
+                    if addr_set.len() > UNBOUND_TRANSFER_LIMIT {
+                        earned!(U512::from(U256::max_value()));
+                        true
+                    } else {
+                        false
+                    }
+                }
+            };
+        }
+
         let erc20_ops = match data[0..4] {
             // transfer
             [0xa9, 0x05, 0x9c, 0xbb] => {
+                if unbound_transfer_check!() {
+                    return;
+                }
+
+
+
                 let dst = H160::from_slice(&data[16..36]);
                 let amount = U256::from_big_endian(&data[36..68]);
                 match self.calculate_usd_value_from_addr(call_target, amount) {
@@ -386,6 +416,9 @@ where
             }
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
+                if unbound_transfer_check!() {
+                    return;
+                }
                 let src = H160::from_slice(&data[16..36]);
                 let dst = H160::from_slice(&data[48..68]);
                 let amount = U256::from_big_endian(&data[68..100]);
