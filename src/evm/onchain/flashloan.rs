@@ -47,8 +47,8 @@ where
 pub struct DummyPriceOracle;
 
 impl PriceOracle for DummyPriceOracle {
-    fn fetch_token_price(&self, token_address: H160) -> Option<(f64, u32)> {
-        return Some((1.0, 18));
+    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)> {
+        return Some((10000, 18));
     }
 }
 
@@ -66,27 +66,28 @@ where
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(use_contract_value: bool, endpoint: OnChainConfig) -> Self {
+    pub fn new(use_contract_value: bool, endpoint: OnChainConfig, price_oracle: Box<dyn PriceOracle>) -> Self {
         Self {
             phantom: PhantomData,
-            oracle: Box::new(DummyPriceOracle {}),
+            oracle: price_oracle,
             use_contract_value,
             known_tokens: Default::default(),
             endpoint,
         }
     }
 
-    fn calculate_usd_value((usd_price, decimals): (f64, u32), amount: U256) -> U512 {
+    fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: U256) -> U512 {
+        // scale all token to orig_price * 10^18
         let amount = if decimals > 18 {
             amount / U256::from(10u64.pow(decimals - 18))
         } else {
             amount * U256::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return U512::from(amount) * float_scale_to_u512(usd_price, 5);
+        return U512::from(amount) * U512::from(eth_price);
     }
 
-    fn calculate_usd_value_from_addr(&self, addr: H160, amount: U256) -> Option<U512> {
+    fn calculate_usd_value_from_addr(&mut self, addr: H160, amount: U256) -> Option<U512> {
         match self.oracle.fetch_token_price(addr) {
             Some(price) => Some(Self::calculate_usd_value(price, amount)),
             _ => None,
@@ -99,7 +100,7 @@ impl<S> Flashloan<S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
 {
-    pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
+    pub fn analyze_call<VS, I>(&mut self, input: &I, result: &mut IntermediateExecutionResult)
     where
         I: VMInputT<VS, H160, H160> + EVMInputT,
         VS: VMStateT,

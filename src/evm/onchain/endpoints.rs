@@ -18,7 +18,9 @@ pub enum Chain {
 }
 
 pub trait PriceOracle: Debug {
-    fn fetch_token_price(&self, token_address: H160) -> Option<(f64, u32)>;
+    // ret0: price = int(original_price x 10^5)
+    // ret1: decimals of the token
+    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)>;
 }
 
 impl Chain {
@@ -80,15 +82,15 @@ pub struct OnChainConfig {
     pub use_local_proxy: bool,
     pub local_proxy_addr: String,
 
-    pub moralis_api_key: Vec<String>,
     pub chain_name: String,
 
     slot_cache: HashMap<(H160, U256), U256>,
     code_cache: HashMap<H160, Bytecode>,
-    price_cache: HashMap<H160, (f64, u32)>,
+    price_cache: HashMap<H160, Option<(u32, u32)>>,
     abi_cache: HashMap<H160, Option<String>>,
     storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
     storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
+
 }
 
 impl OnChainConfig {
@@ -142,7 +144,6 @@ impl OnChainConfig {
             },
             block_hash: None,
             etherscan_api_key: vec![],
-            moralis_api_key: vec![],
             etherscan_base,
             use_local_proxy,
             chain_name: chain_name,
@@ -159,10 +160,6 @@ impl OnChainConfig {
 
     pub fn add_etherscan_api_key(&mut self, key: String) {
         self.etherscan_api_key.push(key);
-    }
-
-    pub fn add_moralis_api_key(&mut self, key: String) {
-        self.moralis_api_key.push(key);
     }
 
     pub fn fetch_storage_all(&mut self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
@@ -536,76 +533,43 @@ impl OnChainConfig {
     }
 }
 
-impl PriceOracle for OnChainConfig {
-    fn fetch_token_price(&self, token_address: H160) -> Option<(f64, u32)> {
-        let endpoint = format!(
-            "https://deep-index.moralis.io/api/v2/erc20/0x{}/price?chain={}",
-            hex::encode(token_address),
-            self.chain_name
-        );
-        println!("fetching token price from {}", endpoint);
-        match self
-            .client
-            .get(endpoint.clone())
-            .header(
-                "X-API-Key",
-                if self.moralis_api_key.len() > 0 {
-                    self.moralis_api_key[rand::random::<usize>() % self.moralis_api_key.len()]
-                        .clone()
-                } else {
-                    "".to_string()
-                },
-            )
-            .send()
-        {
-            Ok(resp) => {
-                let resp = resp.text();
-                match resp {
-                    Ok(resp) => {
-                        let json = serde_json::from_str::<Value>(&resp);
-                        if json.is_err() {
-                            return None;
-                        }
-                        let json_v = json.unwrap();
-                        let price = json_v["usdPrice"].as_f64();
-                        if price.is_none() {
-                            return None;
-                        }
-                        unsafe {
-                            let decimals_res = panic::catch_unwind(|| {
-                                json_v
-                                    .get("nativePrice")
-                                    .unwrap()
-                                    .get("decimals")
-                                    .unwrap()
-                                    .as_u64()
-                                    .unwrap();
-                            });
-                            if decimals_res.is_err() {
-                                return None;
-                            }
-                        }
-
-                        let decimals = json_v
-                            .get("nativePrice")
-                            .unwrap()
-                            .get("decimals")
-                            .unwrap()
-                            .as_u64()
-                            .unwrap();
-                        Some((price.unwrap(), decimals as u32))
-                    }
-                    Err(e) => {
-                        println!("{:?}", e);
+impl OnChainConfig {
+    fn fetch_token_price_uncached(&self, token_address: H160) -> Option<(u32, u32)> {
+        if self.use_local_proxy {
+            let endpoint = format!(
+                "{}/price/{}/{:?}",
+                self.local_proxy_addr, self.chain_name, token_address
+            );
+            return match self.client.get(endpoint).send() {
+                Ok(res) => {
+                    let data = res.text().unwrap().trim().to_string();
+                    if data == "0,0" {
                         None
+                    } else {
+                        let parts: Vec<u32> = data.split(",").map(
+                            |x| x.parse::<u32>().unwrap()
+                        ).collect();
+                        assert_eq!(parts.len(), 2);
+                        Some((parts[0], parts[1]))
                     }
                 }
-            }
-            Err(e) => {
-                println!("Error: {}", e);
-                None
-            }
+                Err(_) => None,
+            };
+        } else {
+            panic!("not implemented");
         }
+
+    }
+}
+
+impl PriceOracle for OnChainConfig {
+    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)> {
+        if self.price_cache.contains_key(&token_address) {
+            return self.price_cache.get(&token_address).unwrap().clone();
+        }
+        let price = self.fetch_token_price_uncached(token_address);
+        self.price_cache.insert(token_address, price);
+        price
     }
 }
 
@@ -652,17 +616,17 @@ mod tests {
         println!("{:?}", v)
     }
 
-    #[test]
-    fn test_fetch_token_price() {
-        let mut config = OnChainConfig::new(BSC, 0);
-        config.add_moralis_api_key(
-            "ocJtTEZWOJZjYOMAQjRmWcHpvUdieMLJDAtUjycFNTdSxgFGofNJhdiRX0Kk1h1O".to_string(),
-        );
-        let v = config.fetch_token_price(
-            H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
-        );
-        println!("{:?}", v)
-    }
+    // #[test]
+    // fn test_fetch_token_price() {
+    //     let mut config = OnChainConfig::new(BSC, 0);
+    //     config.add_moralis_api_key(
+    //         "ocJtTEZWOJZjYOMAQjRmWcHpvUdieMLJDAtUjycFNTdSxgFGofNJhdiRX0Kk1h1O".to_string(),
+    //     );
+    //     let v = config.fetch_token_price(
+    //         H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
+    //     );
+    //     println!("{:?}", v)
+    // }
 
     #[test]
     fn test_fetch_storage_all() {
