@@ -10,6 +10,8 @@ use std::ops::Deref;
 use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 
 use crate::evm::oracle::FL_DATA;
 use crate::generic_vm::vm_state::VMStateT;
@@ -33,6 +35,9 @@ use libafl::{
 use rand::random;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use crate::generic_vm::vm_executor::MAP_SIZE;
+use std::hash::{Hash, Hasher};
+use crate::evm::vm::JMP_MAP;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -55,6 +60,8 @@ where
     infant_feedback: IF,
     infant_scheduler: &'a IS,
     objective: OF,
+    // map from hash of a testcase can do (e.g., coverage map) to the (testcase idx, fav factor)
+    minimizer_map: HashMap<u64, (usize, f64)>,
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
 }
 
@@ -85,8 +92,38 @@ where
             infant_feedback,
             infant_scheduler,
             objective,
+            minimizer_map: Default::default(),
             phantom: PhantomData,
         }
+    }
+
+    pub fn on_add_corpus(&mut self, input: &I, coverage: &[u8; MAP_SIZE], testcase_idx: usize) -> (){
+        let mut hasher = DefaultHasher::new();
+        coverage.hash(&mut hasher);
+        let hash = hasher.finish();
+        self.minimizer_map.insert(hash, (testcase_idx, input.fav_factor()));
+    }
+
+    pub fn on_replace_corpus(&mut self,
+                             (hash, new_fav_factor, _): (u64, f64, usize),
+                             new_testcase_idx: usize) -> ()
+    {
+        let res = self.minimizer_map.get_mut(&hash).unwrap();
+        res.0 = new_testcase_idx;
+        res.1 = new_fav_factor;
+    }
+
+    pub fn should_replace(&self, input: &I, coverage: &[u8; MAP_SIZE]) -> Option<(u64, f64, usize)> {
+        let mut hasher = DefaultHasher::new();
+        coverage.hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some((testcase_idx, fav_factor)) = self.minimizer_map.get(&hash) {
+            let new_fav_factor = input.fav_factor();
+            if new_fav_factor > *fav_factor {
+                return Some((hash, new_fav_factor, testcase_idx.clone()));
+            }
+        }
+        None
     }
 }
 
@@ -264,9 +301,25 @@ where
 
         match res {
             ExecuteInputResult::None => {
-                self.feedback.discard_metadata(state, &input)?;
                 self.objective.discard_metadata(state, &input)?;
-                Ok((res, None))
+                match self.should_replace(&input, unsafe {&JMP_MAP}) {
+                    Some((hash, new_fav_factor, old_testcase_idx)) => {
+                        state.corpus_mut().remove(old_testcase_idx)?;
+
+                        let mut testcase = Testcase::new(input.clone());
+                        self.feedback.append_metadata(state, &mut testcase)?;
+                        let new_testcase_idx = state.corpus_mut().add(testcase)?;
+                        self.scheduler.on_add(state, new_testcase_idx)?;
+                        self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), new_testcase_idx);
+
+                        Ok((res, Some(new_testcase_idx)))
+                    }
+                    None => {
+                        self.feedback.discard_metadata(state, &input)?;
+                        Ok((res, None))
+                    }
+                }
+
             }
             ExecuteInputResult::Corpus => {
                 // Not a solution
@@ -277,6 +330,7 @@ where
                 self.feedback.append_metadata(state, &mut testcase)?;
                 let idx = state.corpus_mut().add(testcase)?;
                 self.scheduler.on_add(state, idx)?;
+                self.on_add_corpus(&input, unsafe {&JMP_MAP}, idx);
 
                 if send_events {
                     // TODO set None for fast targets

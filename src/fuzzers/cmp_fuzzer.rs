@@ -12,9 +12,9 @@ use crate::{
     rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{powersched::PowerSchedule, SimpleEventManager};
+use libafl::prelude::{powersched::PowerSchedule, QueueScheduler, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
-use libafl::stages::{CalibrationStage, Stage};
+use libafl::stages::{CalibrationStage, Stage, StdMutationalStage};
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     stages::StdPowerMutationalStage,
@@ -65,11 +65,11 @@ pub fn cmp_fuzzer(
     let calibration = CalibrationStage::new(&feedback);
     let mut state: EVMFuzzState = FuzzState::new();
 
-    let mut scheduler = PowerQueueScheduler::new(PowerSchedule::FAST);
+    let mut scheduler = QueueScheduler::new();
 
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
-    let std_stage = StdPowerMutationalStage::new(mutator, &jmp_observer);
+    let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));

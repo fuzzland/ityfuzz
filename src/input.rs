@@ -44,6 +44,9 @@ where
     fn pretty_txn(&self) -> Option<String>;
     fn as_any(&self) -> &dyn any::Any;
 
+    // determine whether a input is better than another
+    fn fav_factor(&self) -> f64;
+
     #[cfg(feature = "evm")]
     fn get_data_abi(&self) -> Option<BoxedABI>;
 

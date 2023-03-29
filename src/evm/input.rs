@@ -9,7 +9,7 @@ use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, State};
-use primitive_types::H160;
+use primitive_types::{H160, U512};
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
@@ -149,6 +149,27 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn fav_factor(&self) -> f64 {
+        if self.sstate.state.flashloan_data.earned > self.sstate.state.flashloan_data.owed {
+            return f64::MAX;
+        }
+        let owed_amount = (
+            // should never < 0, otherwise it's a bug
+            self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned
+        );
+
+        if owed_amount == U512::zero() {
+            return f64::MAX;
+        }
+
+        // hacky convert from U512 -> f64
+        let mut res = 0.0;
+        for idx in 0..8 {
+            res += owed_amount.0[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
+        }
+        res
     }
 
     #[cfg(feature = "evm")]
