@@ -31,6 +31,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::evm::input::EVMInputT;
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -478,9 +479,9 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 }
 
-impl<I, VS, S> Middleware<S> for ConcolicHost<I, VS>
+impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
 where
-    I: Input + VMInputT<VS, H160, H160> + 'static,
+    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
         + HasCaller<H160>
@@ -490,7 +491,7 @@ where
         + Debug
         + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.peek(interp.stack.len() - 1 - $idx)
@@ -928,7 +929,8 @@ where
         }
 
         for s in solutions {
-            add_corpus(host, self.caller, &s.to_string(), state);
+            // todo: get it to corpus
+            // add_corpus(host, self.caller, &s.to_string(), state);
         }
     }
 

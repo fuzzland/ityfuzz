@@ -22,20 +22,27 @@ use primitive_types::{H160, U256, U512};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::borrow::BorrowMut;
+use std::cell::{Ref, RefCell};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
 use crate::evm::contract_utils::ABIConfig;
+use crate::evm::onchain::onchain::OnChain;
+use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct Flashloan<S>
+pub struct Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
 {
-    phantom: PhantomData<S>,
+    phantom: PhantomData<(VS, I, S)>,
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
     #[cfg(feature = "flashloan_v2")]
@@ -43,7 +50,9 @@ pub struct Flashloan<S>
     #[cfg(feature = "flashloan_v2")]
     endpoint: OnChainConfig,
     #[cfg(feature = "flashloan_v2")]
-    erc20_address: HashSet<H160>
+    erc20_address: HashSet<H160>,
+    #[cfg(feature = "flashloan_v2")]
+    pub onchain_middlware: Rc<RefCell<OnChain<VS, I, S>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -55,9 +64,11 @@ impl PriceOracle for DummyPriceOracle {
     }
 }
 
-impl<S> Flashloan<S>
+impl<VS, I, S> Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
     pub fn new(use_contract_value: bool) -> Self {
@@ -69,14 +80,15 @@ impl<S> Flashloan<S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(use_contract_value: bool, endpoint: OnChainConfig, price_oracle: Box<dyn PriceOracle>) -> Self {
+    pub fn new(use_contract_value: bool, endpoint: OnChainConfig, price_oracle: Box<dyn PriceOracle>, onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>) -> Self {
         Self {
             phantom: PhantomData,
             oracle: price_oracle,
             use_contract_value,
             known_addresses: Default::default(),
             endpoint,
-            erc20_address: Default::default()
+            erc20_address: Default::default(),
+            onchain_middlware: onchain_middleware,
         }
     }
 
@@ -98,10 +110,10 @@ impl<S> Flashloan<S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_contract_insertion(&mut self, addr: &H160, abi: &Vec<ABIConfig>, state: &mut S) {
+    pub fn on_contract_insertion(&mut self, addr: &H160, abi: &Vec<ABIConfig>, state: &mut S) -> Vec<H160> {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
-            return;
+            return vec![];
         }
         self.known_addresses.insert(addr.clone());
 
@@ -116,9 +128,10 @@ impl<S> Flashloan<S>
         println!("abi_names: {:?}", abi_names);
         // check abi_signatures is subset of abi.name
         if !abi_signatures.iter().all(|x| abi_names.contains(x)) {
-            return;
+            return vec![];
         }
         // if the #holder > 10, then add it to the erc20_address
+        let mut blacklist = vec![];
         match self.endpoint.fetch_holders(*addr) {
             None => {
                 println!("failed to fetch token holders for token {:?}", addr);
@@ -128,23 +141,26 @@ impl<S> Flashloan<S>
                 // add some user funds address
                 v[0..2].into_iter().for_each(|holder| {
                     state.add_address(&holder);
+                    blacklist.push(*holder);
                 });
                 // add rich caller
-                state.add_caller(&v.clone().get(5).unwrap().clone());
+                let rich_account = v.clone().get(5).unwrap().clone();
+                blacklist.push(rich_account);
             }
         }
+
+        blacklist
     }
 }
 
 #[cfg(feature = "flashloan_v2")]
-impl<S> Flashloan<S>
+impl<VS, I, S> Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
 {
-    pub fn analyze_call<VS, I>(&self, input: &I, result: &mut IntermediateExecutionResult)
-        where
-            I: VMInputT<VS, H160, H160> + EVMInputT,
-            VS: VMStateT,
+    pub fn analyze_call(&self, input: &I, result: &mut IntermediateExecutionResult)
     {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
@@ -160,12 +176,14 @@ impl<S> Flashloan<S>
     }
 }
 
-impl<S> Middleware<S> for Flashloan<S>
+impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
     where
         S: State + HasCaller<H160> + Debug + Clone + 'static,
+        I: VMInputT<VS, H160, H160> + EVMInputT,
+        VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
         macro_rules! earned {
             ($amount:expr) => {
                 host.data.flashloan_data.earned += $amount;
@@ -301,7 +319,7 @@ impl<S> Middleware<S> for Flashloan<S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<S>, s: &mut S)
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, s: &mut S)
         where
             S: HasCaller<H160>,
     {
@@ -322,7 +340,7 @@ impl<S> Middleware<S> for Flashloan<S>
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
         if value_transfer > U256::zero() && call_target == interp.contract.caller {
-            host.data.flashloan_data.owed += U512::from(value_transfer);
+            host.data.flashloan_data.earned += U512::from(value_transfer);
         }
 
 

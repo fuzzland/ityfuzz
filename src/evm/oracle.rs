@@ -1,4 +1,4 @@
-use crate::evm::input::EVMInput;
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::vm::EVMState;
@@ -132,6 +132,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         let need_recheck = ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.oracle_recheck_balance.clone();
         let zero = U256::zero();
         let caller = ctx.input.get_caller();
+
+
         for token in need_recheck {
             let mut extended_address = vec![0; 12];
             extended_address.extend_from_slice(caller.0.as_slice());
@@ -169,18 +171,14 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             });
 
 
-
-
             let exec_res = ctx.fuzz_state.get_execution_result_mut();
-            let new_balance = U256::from(res_post.output.as_slice());
-            let prev_balance = U256::from(res_pre.output.as_slice());
-
+            let new_balance = U512::from(res_post.output.as_slice());
+            let prev_balance = U512::from(res_pre.output.as_slice());
 
             if new_balance > prev_balance {
-                exec_res.new_state.state.flashloan_data.earned += U512::from(new_balance - prev_balance);
+                exec_res.new_state.state.flashloan_data.earned += U512::from(new_balance) - U512::from(prev_balance);
             } else {
-                exec_res.new_state.state.flashloan_data.owed += U512::from(prev_balance - new_balance);
-                // println!("{} owed {} more", token, *prev_balance - new_balance);
+                exec_res.new_state.state.flashloan_data.owed += U512::from(prev_balance) - U512::from(new_balance);
             }
 
             // exec_res.new_state.state.flashloan_data.account_balances.insert(token, new_balance);

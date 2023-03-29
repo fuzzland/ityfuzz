@@ -191,9 +191,11 @@ pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
 
-pub struct FuzzHost<S>
+pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     pub data: EVMState,
     // these are internal to the host
@@ -205,9 +207,9 @@ where
     pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     concolic_prob: f32,
     middlewares_enabled: bool,
-    middlewares: Rc<RefCell<HashMap<MiddlewareType, Box<dyn Middleware<S>>>>>,
+    middlewares: Rc<RefCell<HashMap<MiddlewareType, Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
 
-    pub flashloan_middleware: Option<Rc<RefCell<Flashloan<S>>>>,
+    pub flashloan_middleware: Option<Rc<RefCell<Flashloan<VS, I, S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -224,9 +226,11 @@ where
     pub next_slot: U256
 }
 
-impl<S> Debug for FuzzHost<S>
+impl<VS, I, S> Debug for FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
@@ -250,9 +254,11 @@ where
 }
 
 // all clones would not include middlewares and states
-impl<S> Clone for FuzzHost<S>
+impl<VS, I, S> Clone for FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     fn clone(&self) -> Self {
         Self {
@@ -307,9 +313,11 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
     complete_bytes.into_iter().collect()
 }
 
-impl<S> FuzzHost<S>
+impl<VS, I, S> FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Clone + Debug + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
         let mut ret = Self {
@@ -339,16 +347,16 @@ where
         ret
     }
 
-    pub fn add_middlewares(&mut self, middlewares: Box<dyn Middleware<S>>) {
+    pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
         self.middlewares_enabled = true;
-        let ty = middlewares.get_type();
+        let ty = middlewares.deref().borrow().get_type();
         self.middlewares
             .deref()
             .borrow_mut()
             .insert(ty, middlewares);
     }
 
-    pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<S>) {
+    pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<VS, I, S>) {
         self.flashloan_middleware = Some(Rc::new(RefCell::new(middlware)));
     }
 
@@ -451,9 +459,11 @@ macro_rules! u256_to_u8 {
         (($key >> 4) % 254).as_u64() as u8
     };
 }
-impl<S> Host<S> for FuzzHost<S>
+impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
@@ -476,7 +486,10 @@ where
                 }
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
-                    middleware.on_step(interp, self, state);
+                    middleware
+                        .deref().deref()
+                        .borrow_mut()
+                        .on_step(interp, self, state);
                 }
             }
 
@@ -522,7 +535,7 @@ where
                         let v = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = v;
                     }
-                    let res = <FuzzHost<S> as Host<S>>::sload(
+                    let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
                         self,
                         interp.contract.address,
                         fast_peek!(0),
@@ -680,20 +693,12 @@ where
     ) -> Option<(U256, U256, U256, bool)> {
         match self.data.get_mut(&address) {
             Some(account) => {
-                if let Some(slot) = account.get_mut(&index) {
-                    *slot = value;
-                } else {
-                    if !value.is_zero() {
-                        account.insert(index, value);
-                    }
-                }
+                account.insert(index, value);
             }
             None => {
-                if !value.is_zero() {
-                    let mut account = HashMap::new();
-                    account.insert(index, value);
-                    self.data.insert(address, account);
-                }
+                let mut account = HashMap::new();
+                account.insert(index, value);
+                self.data.insert(address, account);
             }
         };
 
@@ -837,7 +842,7 @@ where
                     1e10 as u64,
                 );
 
-                let ret = interp.run::<FuzzHost<S>, LatestSpec, S>(self, state);
+                let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
                 return (ret, Gas::new(0), interp.return_value());
             }
         }
@@ -848,7 +853,7 @@ where
                 Contract::new_with_context::<LatestSpec>(input_bytes, code.clone(), &input.context),
                 1e10 as u64,
             );
-            let ret = interp.run::<FuzzHost<S>, LatestSpec, S>(self, state);
+            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
             return (ret, Gas::new(0), interp.return_value());
         }
 
@@ -865,8 +870,10 @@ where
 pub struct EVMExecutor<I, S, VS>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
-    pub host: FuzzHost<S>,
+    pub host: FuzzHost<VS, I, S>,
     deployer: H160,
     phandom: PhantomData<(I, S, VS)>,
 }
@@ -895,7 +902,7 @@ where
         + 'static,
     VS: Default + VMStateT + 'static,
 {
-    pub fn new(fuzz_host: FuzzHost<S>, deployer: H160) -> Self {
+    pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: H160) -> Self {
         Self {
             host: fuzz_host,
             deployer,
@@ -972,15 +979,15 @@ where
             let rand = rand::random::<f32>();
             if self.host.concolic_prob > rand {
                 #[cfg(feature = "evm")]
-                self.host.add_middlewares(Box::new(ConcolicHost::new(
+                self.host.add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
                     input_len_concolic.try_into().unwrap(),
                     input.get_data_abi().unwrap(),
                     input.get_caller(),
-                )));
+                ))));
             }
         }
 
-        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, state);
+        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
 
         // For each middleware, execute the deferred actions
         let mut result = IntermediateExecutionResult {
@@ -1050,7 +1057,7 @@ where
         let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = interp.run::<FuzzHost<S>, LatestSpec, S>(&mut self.host, &mut dummy_state);
+        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
