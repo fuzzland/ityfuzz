@@ -16,7 +16,7 @@ use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
-use crate::tracer::TxnTrace;
+use crate::tracer::{build_basic_txn, TxnTrace};
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -200,14 +200,25 @@ where
         let is_infant_interesting = self
             .infant_feedback
             .is_interesting(state, manager, &input, observers, &exitkind)?;
-        if is_infant_interesting && !reverted {
-            let new_state = state.get_execution_result();
-            state.add_infant_state(&new_state.new_state.clone(), self.infant_scheduler);
-        }
 
         let is_solution = self
             .objective
             .is_interesting(state, manager, &input, observers, &exitkind)?;
+
+
+        // add the trace of the new state
+        #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
+        {
+            let txn = build_basic_txn(&input, &state.get_execution_result());
+            state.get_execution_result_mut().new_state.trace.from_idx = Some(input.get_state_idx());
+            state.get_execution_result_mut().new_state.trace.add_txn(txn);
+        }
+
+
+        if is_infant_interesting && !reverted {
+            state.add_infant_state(&state.get_execution_result().new_state.clone(), self.infant_scheduler);
+        }
+
 
         let mut res = ExecuteInputResult::None;
         if is_solution && !reverted {

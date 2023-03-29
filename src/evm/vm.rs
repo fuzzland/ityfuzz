@@ -206,7 +206,8 @@ where
     concolic_prob: f32,
     middlewares_enabled: bool,
     middlewares: Rc<RefCell<HashMap<MiddlewareType, Box<dyn Middleware<S>>>>>,
-    flashloan_middleware: Option<Rc<RefCell<Flashloan<S>>>>,
+
+    pub flashloan_middleware: Option<Rc<RefCell<Flashloan<S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
     #[cfg(feature = "record_instruction_coverage")]
@@ -677,18 +678,24 @@ where
         index: U256,
         value: U256,
     ) -> Option<(U256, U256, U256, bool)> {
-        if !value.is_zero() {
-            match self.data.get_mut(&address) {
-                Some(account) => {
-                    account.insert(index, value);
+        match self.data.get_mut(&address) {
+            Some(account) => {
+                if let Some(slot) = account.get_mut(&index) {
+                    *slot = value;
+                } else {
+                    if !value.is_zero() {
+                        account.insert(index, value);
+                    }
                 }
-                None => {
+            }
+            None => {
+                if !value.is_zero() {
                     let mut account = HashMap::new();
                     account.insert(index, value);
                     self.data.insert(address, account);
                 }
-            };
-        }
+            }
+        };
 
         Some((U256::from(0), U256::from(0), U256::from(0), true))
     }

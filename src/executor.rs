@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 
@@ -9,6 +10,8 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
+use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
@@ -26,7 +29,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
-    pub vm: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+    pub vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     observers: OT,
     phantom: PhantomData<(I, S, Addr, Out)>,
 }
@@ -58,7 +61,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(
-        vm_executor: Box<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>,
+        vm_executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
         observers: OT,
     ) -> Self {
         Self {
@@ -87,15 +90,7 @@ where
         _mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
-        let mut res = self.vm.execute(input, state);
-
-        // add the trace of the new state
-        #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
-        {
-            res.new_state.trace.from_idx = Some(input.get_state_idx());
-            res.new_state.trace.add_txn(build_basic_txn(input, &res));
-        }
-
+        let mut res = self.vm.deref().borrow_mut().execute(input, state);
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
         state.set_execution_result(res);

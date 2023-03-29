@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::clone::Clone;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::time::Duration;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -67,7 +68,19 @@ where
     VS: VMStateT + Default,
 {
     state.add_address(&address);
-    ContractLoader::parse_abi_str(input)
+    let abis = ContractLoader::parse_abi_str(input);
+    #[cfg(feature = "flashloan_v2")]
+    match host.flashloan_middleware {
+        Some(ref middleware) => {
+            middleware.deref().borrow_mut().on_contract_insertion(
+                &address,
+                &abis,
+                state,
+            );
+        }
+        None => {}
+    }
+    abis
         .iter()
         .filter(|v| !v.is_constructor)
         .for_each(|abi| {

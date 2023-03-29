@@ -31,6 +31,7 @@ where
     fn set_caller(&mut self, caller: Addr);
     fn get_contract(&self) -> Addr;
     fn get_state(&self) -> &VS;
+    fn get_state_mut(&mut self) -> &mut VS;
     fn set_staged_state(&mut self, state: StagedVMState<Loc, Addr, VS>, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState<Loc, Addr, VS>;
