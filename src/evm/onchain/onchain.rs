@@ -204,8 +204,12 @@ where
                 host.next_slot = slot_val!();
             }
 
-            0xf1 | 0xf2 | 0xf4 | 0xfa => {
-                let address = interp.stack.peek(1).unwrap();
+            0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
+                let address = match *interp.instruction_pointer {
+                    0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
+                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                    _ => { unreachable!() }
+                };
                 let address_h160 = convert_u256_to_h160(address);
                 if self.blacklist.contains(&address_h160) {
                     return;
@@ -245,6 +249,10 @@ where
                                     #[cfg(not(feature = "fuzz_static"))]
                                     if abi.is_static {
                                         return;
+                                    }
+
+                                    if abi.function_name != "deposit" {
+                                        return;;
                                     }
 
                                     let mut abi_instance = get_abi_type_boxed(&abi.abi);
