@@ -200,7 +200,7 @@ where
     pub data: EVMState,
     // these are internal to the host
     env: Env,
-    code: HashMap<H160, Bytecode>,
+    pub code: HashMap<H160, Bytecode>,
     hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     _pc: usize,
     pc_to_addresses: HashMap<usize, HashSet<H160>>,
@@ -817,8 +817,18 @@ where
             }
         }
 
+        let mut old_call_context = None;
         unsafe {
+            old_call_context = global_call_context.clone();
             global_call_context = Some(input.context.clone());
+        }
+
+        macro_rules! ret_back_ctx {
+            () => {
+                unsafe {
+                    global_call_context = old_call_context;
+                }
+            };
         }
 
         let input_bytes = Bytes::from(input_seq);
@@ -843,6 +853,7 @@ where
                 );
 
                 let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+                ret_back_ctx!();
                 return (ret, Gas::new(0), interp.return_value());
             }
         }
@@ -850,18 +861,21 @@ where
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
             let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(input_bytes, code.clone(), &input.context),
+                Contract::new_with_context::<LatestSpec>(input_bytes.clone(), code.clone(), &input.context),
                 1e10 as u64,
             );
             let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+            ret_back_ctx!();
             return (ret, Gas::new(0), interp.return_value());
         }
 
         // transfer txn and fallback provided
         if hash == [0x00, 0x00, 0x00, 0x00] {
+            ret_back_ctx!();
             return (Continue, Gas::new(0), Bytes::new());
         }
 
+        ret_back_ctx!();
         return (Revert, Gas::new(0), Bytes::new());
     }
 }
@@ -964,7 +978,7 @@ where
                     post_exec_ctx.output_offset,
                     &data[4..min(post_exec_ctx.output_len + 4, data.len())],
                 );
-                interp.return_data_buffer = data;
+                interp.return_data_buffer = data.slice(4..);
                 interp
             }
         } else {
