@@ -95,6 +95,10 @@ struct Args {
     /// Enable ierc20 oracle
     #[arg(short, long, default_value = "false")]
     ierc20_oracle: bool,
+
+    /// Debug?
+    #[arg(long)]
+    debug_file: Option<String>,
 }
 
 enum TargetType {
@@ -231,6 +235,7 @@ fn main() {
         } else {
             None
         },
+        debug_file: args.debug_file,
     };
 
     match config.fuzzer_type {

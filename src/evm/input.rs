@@ -27,7 +27,7 @@ pub struct EVMInput {
     pub txn_value: Option<usize>,
     pub step: bool,
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "debug"))]
     pub direct_data: Bytes,
 }
 
@@ -177,7 +177,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         self.data.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "debug"))]
     fn get_direct_data(&self) -> Vec<u8> {
         self.direct_data.to_vec()
     }

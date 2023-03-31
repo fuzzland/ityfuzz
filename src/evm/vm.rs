@@ -1101,11 +1101,8 @@ where
         // todo(@shou): is this correct?
         let is_step = input.is_step();
         let caller = input.get_caller();
-        #[cfg(test)]
         let mut data = Bytes::from(input.to_bytes());
-        #[cfg(not(test))]
-        let data = Bytes::from(input.to_bytes());
-        #[cfg(test)]
+        #[cfg(any(test, feature = "debug"))]
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }

@@ -262,7 +262,7 @@ where
                                         txn_value: if abi.is_payable { Some(0) } else { None },
                                         step: false,
 
-                                        #[cfg(test)]
+                                        #[cfg(any(test, feature = "debug"))]
                                         direct_data: Default::default(),
                                     };
                                     add_corpus(host, state, &input);

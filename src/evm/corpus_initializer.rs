@@ -105,7 +105,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     sstate_idx: 0,
                     txn_value: Some(1),
                     step: false,
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "debug"))]
                     direct_data: Default::default(),
                 };
                 let mut tc = Testcase::new(input);
@@ -195,7 +195,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             sstate_idx: 0,
             txn_value: if abi.is_payable { Some(0) } else { None },
             step: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "debug"))]
             direct_data: Default::default(),
         };
         let mut tc = Testcase::new(input.clone());
