@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::ContractLoader;
-use crate::evm::input::{AccessPattern, EVMInput, EVMInputT};
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::OnChainConfig;
@@ -30,6 +30,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 use std::str::FromStr;
+use crate::evm::mutator::AccessPattern;
+
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
@@ -261,7 +263,7 @@ where
                                         data: Some(abi_instance),
                                         sstate: StagedVMState::new_uninitialized(),
                                         sstate_idx: 0,
-                                        txn_value: if abi.is_payable { Some(0) } else { None },
+                                        txn_value: if abi.is_payable { Some(U256::zero()) } else { None },
                                         step: false,
 
                                         env: Default::default(),

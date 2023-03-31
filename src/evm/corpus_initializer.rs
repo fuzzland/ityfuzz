@@ -2,7 +2,7 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::{AccessPattern, EVMInput};
+use crate::evm::input::{EVMInput};
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
@@ -16,12 +16,13 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
-use primitive_types::H160;
+use primitive_types::{H160, U256};
 use revm::Bytecode;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
+use crate::evm::mutator::AccessPattern;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -105,7 +106,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: Some(1),
+                    txn_value: Some(U256::one()),
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -197,7 +198,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             data: Some(abi_instance),
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: if abi.is_payable { Some(0) } else { None },
+            txn_value: if abi.is_payable { Some(U256::zero()) } else { None },
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),

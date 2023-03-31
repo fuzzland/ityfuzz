@@ -29,6 +29,22 @@ impl<'a> VMStateHintedMutator<'a> {
     }
 }
 
+pub fn mutate_with_vm_slot<S: State + HasRand>(
+    vm_slots: &HashMap<U256, U256>,
+    state: &mut S
+) -> U256 {
+    let mut data = vec![0u8; 32];
+    // sample a key from the vm_state.state
+    let idx = state.rand_mut().below(vm_slots.len() as u64) as usize;
+    let key = vm_slots.keys().nth(idx).unwrap();
+    if state.rand_mut().below(100) < 90 {
+        let value = vm_slots.get(key).unwrap();
+        value.clone()
+    } else {
+        key.clone()
+    }
+}
+
 impl<'a, I, S> Mutator<I, S> for VMStateHintedMutator<'a>
 where
     S: State + HasRand,
@@ -40,22 +56,19 @@ where
         input: &mut I,
         stage_idx: i32,
     ) -> Result<MutationResult, Error> {
-        let bm = input.bytes_mut();
-        let bm_len = bm.len();
-        if bm_len < 8 {
+        let input_len = input.bytes().len();
+        if input_len < 8 {
             return Ok(MutationResult::Skipped);
         }
+        let new_val = mutate_with_vm_slot(
+            self.vm_slots,
+            state
+        );
+
         let mut data = vec![0u8; 32];
-        // sample a key from the vm_state.state
-        let idx = state.rand_mut().below(self.vm_slots.len() as u64) as usize;
-        let key = self.vm_slots.keys().nth(idx).unwrap();
-        if state.rand_mut().below(100) < 90 {
-            let value = self.vm_slots.get(key).unwrap();
-            value.to_big_endian(&mut data);
-        } else {
-            key.to_big_endian(&mut data);
-        }
-        bm.copy_from_slice(&data[(32 - bm_len)..]);
+        new_val.to_big_endian(&mut data);
+
+        input.bytes_mut().copy_from_slice(&data[(32 - input_len)..]);
         Ok(MutationResult::Mutated)
     }
 }

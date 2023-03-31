@@ -35,8 +35,7 @@ where
     fn set_staged_state(&mut self, state: StagedVMState<Loc, Addr, VS>, idx: usize);
     fn get_state_idx(&self) -> usize;
     fn get_staged_state(&self) -> &StagedVMState<Loc, Addr, VS>;
-    fn get_txn_value(&self) -> Option<usize>;
-    fn set_txn_value(&mut self, v: usize);
+
     // fn get_abi_cloned(&self) -> Option<BoxedABI>;
     fn set_as_post_exec(&mut self, out_size: usize);
     fn is_step(&self) -> bool;
