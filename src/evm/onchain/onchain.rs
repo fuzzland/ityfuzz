@@ -22,9 +22,11 @@ use primitive_types::{H160, H256, U256};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize, Serializer};
 use std::any::Any;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 use std::str::FromStr;
@@ -263,7 +265,7 @@ where
                                         step: false,
 
                                         env: Default::default(),
-                                        access_pattern: AccessPattern::new(),
+                                        access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                                         #[cfg(any(test, feature = "debug"))]
                                         direct_data: Default::default(),
                                     };

@@ -187,7 +187,7 @@ pub fn cmp_fuzzer(
                         txn_value: if value == 0 { None } else { Some(value) },
                         step: is_step,
                         env: Default::default(),
-                        access_pattern: AccessPattern::new(),
+                        access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
 
                         #[cfg(any(test, feature = "debug"))]
                         direct_data: Bytes::from(input.clone()),

@@ -1,4 +1,5 @@
 use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::{AccessPattern, EVMInput};
@@ -19,6 +20,7 @@ use primitive_types::H160;
 use revm::Bytecode;
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::rc::Rc;
 use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
@@ -106,7 +108,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     txn_value: Some(1),
                     step: false,
                     env: Default::default(),
-                    access_pattern: AccessPattern::new(),
+                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                     #[cfg(any(test, feature = "debug"))]
                     direct_data: Default::default(),
                 };
@@ -198,7 +200,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             txn_value: if abi.is_payable { Some(0) } else { None },
             step: false,
             env: Default::default(),
-            access_pattern: AccessPattern::new(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             #[cfg(any(test, feature = "debug"))]
             direct_data: Default::default(),
         };
