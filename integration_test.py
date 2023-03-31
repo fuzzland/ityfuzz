@@ -24,7 +24,7 @@ def test_one(path):
     # run fuzzer and check whether the stdout has string success
     start_time = time.time()
     p = subprocess.run(" ".join([
-        TIMEOUT_BIN, "1m", "./cli/target/release/cli", "-t", f"'{path}/*'",  "-f"]),
+        TIMEOUT_BIN, "3m", "./cli/target/release/cli", "-t", f"'{path}/*'",  "-f"]),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=True
@@ -49,11 +49,9 @@ def build_fuzzer():
     os.chdir("..")
 
 
-build_fuzzer()
-for i in glob.glob("tests/*"):
-    # if "verilog-2" in i:
-    #     continue
-    print("Starting test: " + i)
-    test_one(i)
+import multiprocessing
 
-print("All tests passed")
+if __name__ == "__main__":
+    build_fuzzer()
+    with multiprocessing.Pool(20) as p:
+        p.map(test_one, glob.glob("./tests/*/", recursive=True))
