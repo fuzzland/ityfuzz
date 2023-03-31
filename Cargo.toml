@@ -27,10 +27,12 @@ fuzz_static = []
 downcast_unchecked = []
 flashloan_v2 = []
 full_trace = []
+force_cache = []
+debug = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring"] }
+revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "with-serde"] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.8.2"

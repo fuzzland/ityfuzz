@@ -1205,7 +1205,7 @@ where
 mod tests {
     use super::*;
     use crate::evm::abi::get_abi_type;
-    use crate::evm::input::EVMInput;
+    use crate::evm::input::{AccessPattern, EVMInput};
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
     use crate::evm::vm::{FuzzHost, JMP_MAP};
@@ -1258,6 +1258,8 @@ mod tests {
             sstate_idx: 0,
             txn_value: Some(0),
             step: false,
+            env: Default::default(),
+            access_pattern: AccessPattern::new(),
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),
@@ -1290,6 +1292,8 @@ mod tests {
             sstate_idx: 0,
             txn_value: Some(0),
             step: false,
+            env: Default::default(),
+            access_pattern: AccessPattern::new(),
             direct_data: Bytes::from(
                 [
                     function_hash.clone(),
