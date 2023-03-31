@@ -44,6 +44,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         code: Code,
         constructor_args: Option<By>,
         deployed_address: Addr,
+        state: &mut S,
     ) -> Option<Addr>;
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<Loc, Addr, VS, Out>
     where

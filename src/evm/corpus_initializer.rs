@@ -22,6 +22,7 @@ use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
+use crate::evm::bytecode_analyzer;
 use crate::evm::mutator::AccessPattern;
 
 pub struct EVMCorpusInitializer<'a> {
@@ -60,6 +61,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     Bytecode::new_raw(Bytes::from(contract.code)),
                     Some(Bytes::from(contract.constructor_args)),
                     contract.deployed_address,
+                    self.state
                 ) {
                     Some(addr) => addr,
                     None => {
@@ -70,8 +72,10 @@ impl<'a> EVMCorpusInitializer<'a> {
                 }
             } else {
                 // directly set bytecode
-                self.executor
-                    .set_code(contract.deployed_address, contract.code);
+                let contract_code = Bytecode::new_raw(Bytes::from(contract.code));
+                // bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
+                self.executor.host
+                    .set_code(contract.deployed_address, contract_code);
                 contract.deployed_address
             };
 

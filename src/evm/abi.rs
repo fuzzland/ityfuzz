@@ -7,7 +7,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{Mutator, Rand};
+use libafl::prelude::{HasMetadata, Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
 use primitive_types::{H160, U256};
@@ -214,7 +214,7 @@ where
 impl BoxedABI {
     pub fn mutate<Loc, Addr, VS, S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160>,
+        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160> + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
@@ -228,7 +228,7 @@ impl BoxedABI {
         vm_slots: Option<HashMap<U256, U256>>,
     ) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160>,
+        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160> + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,

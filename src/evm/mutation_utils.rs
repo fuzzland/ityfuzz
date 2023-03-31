@@ -1,17 +1,76 @@
+use std::borrow::Borrow;
 use crate::input::VMInputT;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{
-    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
-    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
-    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator, Named, QwordAddMutator,
-    Rand, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
-};
+use libafl::prelude::{tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator, ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator, BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, Mutator, Named, QwordAddMutator, Rand, StdScheduledMutator, WordAddMutator, WordInterestingMutator, HasMetadata};
 use libafl::state::{HasMaxSize, HasRand, State};
-use libafl::Error;
+use libafl::{Error, impl_serdeany};
 use primitive_types::U256;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConstantPoolMetadata {
+    pub constants: Vec<Vec<u8>>,
+}
+
+impl_serdeany!(ConstantPoolMetadata);
+
+pub struct ConstantHintedMutator;
+
+impl Named for ConstantHintedMutator {
+    fn name(&self) -> &str {
+        "ConstantHintedMutator"
+    }
+}
+
+impl ConstantHintedMutator {
+    pub fn new() -> Self {
+        Self { }
+    }
+}
+
+impl<I, S> Mutator<I, S> for ConstantHintedMutator
+    where
+        S: State + HasRand + HasMetadata,
+        I: Input + HasBytesVec,
+{
+    fn mutate(
+        &mut self,
+        state: &mut S,
+        input: &mut I,
+        stage_idx: i32,
+    ) -> Result<MutationResult, Error> {
+        let idx = state.rand_mut().next() as usize;
+
+        let constant = match state.metadata().get::<ConstantPoolMetadata>() {
+            Some(meta) => {
+                unsafe {
+                    meta.constants.get_unchecked(idx % meta.constants.len())
+                }
+            },
+            None => return Ok(MutationResult::Skipped),
+        };
+
+        let input_bytes = input.bytes_mut();
+        let input_len = input_bytes.len();
+        let constant_len = constant.len();
+
+        if input_len < constant_len {
+            input_bytes.copy_from_slice(&constant[0..input_len]);
+        } else {
+            input_bytes.copy_from_slice(
+                &[
+                    vec![0; input_len - constant_len],
+                    constant.clone(),
+                ].concat()
+            );
+        }
+        Ok(MutationResult::Mutated)
+    }
+}
+
+
 
 pub struct VMStateHintedMutator<'a> {
     pub vm_slots: &'a HashMap<U256, U256>,
@@ -33,7 +92,6 @@ pub fn mutate_with_vm_slot<S: State + HasRand>(
     vm_slots: &HashMap<U256, U256>,
     state: &mut S
 ) -> U256 {
-    let mut data = vec![0u8; 32];
     // sample a key from the vm_state.state
     let idx = state.rand_mut().below(vm_slots.len() as u64) as usize;
     let key = vm_slots.keys().nth(idx).unwrap();
@@ -79,7 +137,7 @@ pub fn byte_mutator<I, S>(
     vm_slots: Option<HashMap<U256, U256>>,
 ) -> MutationResult
 where
-    S: State + HasRand,
+    S: State + HasRand + HasMetadata,
     I: HasBytesVec + Input,
 {
     let mutations = tuple_list!(
@@ -99,6 +157,7 @@ where
         BytesSetMutator::new(),
         BytesRandSetMutator::new(),
         BytesSwapMutator::new(),
+        ConstantHintedMutator::new(),
     );
 
     if let Some(vm_slots) = vm_slots {

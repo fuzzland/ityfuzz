@@ -30,6 +30,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 use std::str::FromStr;
+use crate::evm::bytecode_analyzer;
 use crate::evm::mutator::AccessPattern;
 
 const UNBOUND_THRESHOLD: usize = 30;
@@ -278,6 +279,7 @@ where
                     }
                 }
 
+                bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                 host.set_code(address_h160, contract_code);
             }
             _ => {}

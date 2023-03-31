@@ -13,7 +13,7 @@ use bytes::Bytes;
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasBytesVec, HasMaxSize, HasRand, Rand, State};
+use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
 use primitive_types::{H160, H256, U256, U512};
 use revm::{Env, Interpreter};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -105,7 +105,7 @@ impl EVMInputT for EVMInput {
 macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-            where S: State + HasCaller<H160> + HasRand {
+            where S: State + HasCaller<H160> + HasRand + HasMetadata  {
             let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
                 Some(s.clone())
             } else {
@@ -208,25 +208,26 @@ impl EVMInput {
     impl_env_mutator_u256!(chain_id, cfg);
 
     pub fn prevrandao<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand {
+        where S: State + HasCaller<H160> + HasRand + HasMetadata {
         // not supported yet
         unreachable!();
     }
 
     pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand {
+        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
         // not supported yet
         unreachable!();
     }
 
     pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand {
+        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
         // not supported yet
-        unreachable!();
+        // unreachable!();
+        return MutationResult::Skipped;
     }
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand {
+        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
             return MutationResult::Skipped;
@@ -237,7 +238,7 @@ impl EVMInput {
     }
 
     pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand {
+        where S: State + HasCaller<H160> + HasRand + HasMetadata  {
         let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
             Some(s.clone())
         } else {
@@ -261,7 +262,7 @@ impl EVMInput {
     }
 
     pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
-        where S: State + HasCaller<H160> + HasRand
+        where S: State + HasCaller<H160> + HasRand + HasMetadata
     {
         let ap = self.get_access_pattern().deref().borrow().clone();
         let mut mutators = vec![];
@@ -306,7 +307,7 @@ impl EVMInput {
 impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<H160, H160, EVMState> + HasCaller<H160>,
+        S: State + HasRand + HasMaxSize + HasItyState<H160, H160, EVMState> + HasCaller<H160> + HasMetadata,
     {
         if state.rand_mut().next() % 100 > 95 {
             return self.mutate_env_with_access_pattern(state);

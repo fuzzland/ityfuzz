@@ -190,6 +190,7 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
+use crate::evm::bytecode_analyzer;
 use crate::evm::mutator::AccessPattern;
 
 pub struct FuzzHost<VS, I, S>
@@ -388,7 +389,7 @@ where
             self.total_instr.insert(address, pcs.len());
             self.total_instr_set.insert(address, pcs);
         }
-        self.code.insert(address, code.to_analysed::<LatestSpec>());
+        assert!(self.code.insert(address, code.to_analysed::<LatestSpec>()).is_none());
     }
 
     #[cfg(feature = "record_instruction_coverage")]
@@ -649,8 +650,6 @@ where
     }
 
     fn block_hash(&mut self, number: U256) -> Option<H256> {
-        println!("blockhash {}", number);
-
         Some(
             H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
@@ -946,6 +945,7 @@ where
         mut state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.data = vm_state.clone();
+        self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
 
         // although some of the concolic inputs are concrete
@@ -1067,6 +1067,7 @@ where
         code: Bytecode,
         constructor_args: Option<Bytes>,
         deployed_address: H160,
+        state: &mut S,
     ) -> Option<H160> {
         let deployer = Contract::new::<LatestSpec>(
             constructor_args.unwrap_or(Bytes::new()),
@@ -1092,7 +1093,9 @@ where
         }
         assert_eq!(r, Return::Return);
         println!("contract = {:?}", hex::encode(interp.return_value()));
-        self.set_code(deployed_address, interp.return_value().to_vec());
+        let contract_code = Bytecode::new_raw(interp.return_value());
+        bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
+        self.host.set_code(deployed_address, contract_code);
         Some(deployed_address)
     }
 
@@ -1254,6 +1257,7 @@ mod tests {
                 Bytecode::new_raw(Bytes::from(deployment_bytecode)),
                 None,
                 generate_random_address(),
+                &mut FuzzState::new(),
             )
             .unwrap();
 
