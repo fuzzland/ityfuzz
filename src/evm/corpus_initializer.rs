@@ -73,7 +73,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             } else {
                 // directly set bytecode
                 let contract_code = Bytecode::new_raw(Bytes::from(contract.code));
-                // bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
+                bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
                 self.executor.host
                     .set_code(contract.deployed_address, contract_code);
                 contract.deployed_address

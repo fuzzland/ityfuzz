@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
@@ -10,6 +11,7 @@ use libafl::state::HasMetadata;
 use primitive_types::{H160, U256, U512};
 use revm::Bytecode;
 use crate::evm::abi::{A256, BoxedABI};
+use crate::evm::mutator::AccessPattern;
 use crate::input::VMInputT;
 use crate::state_input::StagedVMState;
 
@@ -153,6 +155,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 sstate_idx: 0,
                 txn_value: None,
                 step: false,
+                env: Default::default(),
+                access_pattern: ctx.input.get_access_pattern().clone(),
                 #[cfg(any(test, feature = "debug"))]
                 direct_data: Default::default()
             });
@@ -166,6 +170,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 sstate_idx: 0,
                 txn_value: None,
                 step: false,
+                env: Default::default(),
+                access_pattern: ctx.input.get_access_pattern().clone(),
                 #[cfg(any(test, feature = "debug"))]
                 direct_data: Default::default()
             });
