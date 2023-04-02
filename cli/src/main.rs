@@ -117,7 +117,7 @@ fn main() {
             }
         },
         None => {
-            if H160::from_str(&args.target).is_ok() {
+            if args.target.starts_with("0x") {
                 Address
             } else {
                 Glob
@@ -210,7 +210,7 @@ fn main() {
                 }
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
-                    vec![H160::from_str(args.target.as_str()).unwrap()],
+                    args.target.split(",").map(|s| H160::from_str(s).unwrap()).collect(),
                 )
                 .contracts
             }
