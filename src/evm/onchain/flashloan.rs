@@ -3,10 +3,12 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
+use crate::evm::contract_utils::ABIConfig;
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
+use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
 use crate::evm::vm::{EVMState, FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
@@ -30,19 +32,17 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::process::exit;
-use std::str::FromStr;
-use crate::evm::contract_utils::ABIConfig;
-use crate::evm::onchain::onchain::OnChain;
 use std::rc::Rc;
+use std::str::FromStr;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 
 #[derive(Debug)]
 pub struct Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     phantom: PhantomData<(VS, I, S)>,
     oracle: Box<dyn PriceOracle>,
@@ -69,10 +69,10 @@ impl PriceOracle for DummyPriceOracle {
 }
 
 impl<VS, I, S> Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
     pub fn new(use_contract_value: bool) -> Self {
@@ -84,7 +84,12 @@ impl<VS, I, S> Flashloan<VS, I, S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(use_contract_value: bool, endpoint: OnChainConfig, price_oracle: Box<dyn PriceOracle>, onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>) -> Self {
+    pub fn new(
+        use_contract_value: bool,
+        endpoint: OnChainConfig,
+        price_oracle: Box<dyn PriceOracle>,
+        onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>,
+    ) -> Self {
         Self {
             phantom: PhantomData,
             oracle: price_oracle,
@@ -93,7 +98,7 @@ impl<VS, I, S> Flashloan<VS, I, S>
             endpoint,
             erc20_address: Default::default(),
             onchain_middlware: onchain_middleware,
-            unbound_tracker: Default::default()
+            unbound_tracker: Default::default(),
         }
     }
 
@@ -115,7 +120,12 @@ impl<VS, I, S> Flashloan<VS, I, S>
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_contract_insertion(&mut self, addr: &H160, abi: &Vec<ABIConfig>, state: &mut S) -> Vec<H160> {
+    pub fn on_contract_insertion(
+        &mut self,
+        addr: &H160,
+        abi: &Vec<ABIConfig>,
+        state: &mut S,
+    ) -> Vec<H160> {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
             return vec![];
@@ -129,7 +139,10 @@ impl<VS, I, S> Flashloan<VS, I, S>
             "transferFrom".to_string(),
             "approve".to_string(),
         ];
-        let abi_names = abi.iter().map(|x| x.function_name.clone()).collect::<HashSet<String>>();
+        let abi_names = abi
+            .iter()
+            .map(|x| x.function_name.clone())
+            .collect::<HashSet<String>>();
         println!("abi_names: {:?}", abi_names);
         // check abi_signatures is subset of abi.name
         if !abi_signatures.iter().all(|x| abi_names.contains(x)) {
@@ -160,13 +173,12 @@ impl<VS, I, S> Flashloan<VS, I, S>
 
 #[cfg(feature = "flashloan_v2")]
 impl<VS, I, S> Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
-    pub fn analyze_call(&self, input: &I, result: &mut IntermediateExecutionResult)
-    {
+    pub fn analyze_call(&self, input: &I, result: &mut IntermediateExecutionResult) {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
             result.new_state.flashloan_data.owed += U512::from(input.get_txn_value().unwrap());
@@ -177,18 +189,27 @@ impl<VS, I, S> Flashloan<VS, I, S>
             return;
         }
         // if the target is erc20 contract, then check the balance of the caller in the oracle
-        result.new_state.flashloan_data.oracle_recheck_balance.insert(addr);
+        result
+            .new_state
+            .flashloan_data
+            .oracle_recheck_balance
+            .insert(addr);
     }
 }
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
         macro_rules! earned {
             ($amount:expr) => {
                 host.data.flashloan_data.earned += $amount;
@@ -325,8 +346,8 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 
     #[cfg(feature = "flashloan_v2")]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, s: &mut S)
-        where
-            S: HasCaller<H160>,
+    where
+        S: HasCaller<H160>,
     {
         let offset_of_arg_offset = match *interp.instruction_pointer {
             0xf1 => 3,
@@ -335,7 +356,6 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
                 return;
             }
         };
-
 
         let value_transfer = match *interp.instruction_pointer {
             0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
@@ -359,9 +379,8 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 
                         match self.unbound_tracker.get_mut(&pc) {
                             None => {
-                                self.unbound_tracker.insert(
-                                    pc, HashSet::from([call_target])
-                                );
+                                self.unbound_tracker
+                                    .insert(pc, HashSet::from([call_target]));
                             }
                             Some(set) => {
                                 if set.len() > UNBOUND_TRANSFER_AMT {
@@ -390,7 +409,6 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
             };
         }
 
-
         // todo: fix for delegatecall
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
@@ -398,10 +416,12 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
             host.data.flashloan_data.earned += U512::from(value_transfer);
         }
 
-
         let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
         if self.erc20_address.contains(&call_target) {
-            host.data.flashloan_data.oracle_recheck_balance.insert(call_target);
+            host.data
+                .flashloan_data
+                .oracle_recheck_balance
+                .insert(call_target);
         }
     }
 
@@ -429,8 +449,6 @@ impl FlashloanData {
 #[cfg(not(feature = "flashloan_v2"))]
 impl_serdeany!(FlashloanData);
 
-
-
 #[cfg(feature = "flashloan_v2")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
@@ -447,7 +465,7 @@ impl FlashloanData {
             account_balances: HashMap::new(),
             oracle_recheck_balance: HashSet::new(),
             owed: Default::default(),
-            earned: Default::default()
+            earned: Default::default(),
         }
     }
 }

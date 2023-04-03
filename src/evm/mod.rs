@@ -1,4 +1,5 @@
 pub mod abi;
+pub mod bytecode_analyzer;
 pub mod concolic;
 pub mod config;
 pub mod contract_utils;
@@ -12,4 +13,3 @@ pub mod oracle;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod bytecode_analyzer;

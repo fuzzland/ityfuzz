@@ -1,8 +1,8 @@
+use bytes::Bytes;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
-use bytes::Bytes;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -17,7 +17,11 @@ use libafl::feedbacks::Feedback;
 use libafl::prelude::{powersched::PowerSchedule, QueueScheduler, SimpleEventManager};
 use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
 use libafl::stages::{CalibrationStage, Stage, StdMutationalStage};
-use libafl::{prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver}, stages::StdPowerMutationalStage, Fuzzer, Evaluator};
+use libafl::{
+    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
+    stages::StdPowerMutationalStage,
+    Evaluator, Fuzzer,
+};
 
 use crate::evm::contract_utils::{set_hash, ContractLoader};
 use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
@@ -30,7 +34,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{EVMInput};
+use crate::evm::input::EVMInput;
 use crate::evm::middleware::Middleware;
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
@@ -80,24 +84,30 @@ pub fn cmp_fuzzer(
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
-                let mut mid = Rc::new(RefCell::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
-                    // scheduler can be cloned because it never uses &mut self
-                    onchain,
-                    config.onchain_storage_fetching.unwrap(),
-                )));
+                let mut mid = Rc::new(RefCell::new(
+                    OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                        // scheduler can be cloned because it never uses &mut self
+                        onchain,
+                        config.onchain_storage_fetching.unwrap(),
+                    ),
+                ));
                 fuzz_host.add_middlewares(mid.clone());
                 mid
             })
         }
-        None => { None }
+        None => None,
     };
 
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan
         // to contract as well for on chain env
         #[cfg(not(feature = "flashloan_v2"))]
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
-            config.onchain.is_some(),
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Flashloan::<
+            EVMState,
+            EVMInput,
+            EVMFuzzState,
+        >::new(
+            config.onchain.is_some()
         ))));
 
         #[cfg(feature = "flashloan_v2")]
@@ -110,11 +120,10 @@ pub fn cmp_fuzzer(
                 true,
                 config.onchain.clone().unwrap(),
                 config.price_oracle,
-                onchain_middleware.unwrap()
+                onchain_middleware.unwrap(),
             ));
         }
     }
-
 
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);
@@ -155,13 +164,15 @@ pub fn cmp_fuzzer(
     );
     match config.debug_file {
         None => {
-            fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+            fuzzer
+                .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
                 .expect("Fuzzing failed");
         }
         Some(file) => {
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
-            f.read_to_string(&mut transactions).expect("Failed to read file");
+            f.read_to_string(&mut transactions)
+                .expect("Failed to read file");
 
             let mut vm_state = StagedVMState::new_with_state(EVMState::new());
 
@@ -179,25 +190,32 @@ pub fn cmp_fuzzer(
                 let input = hex::decode(splitter[3]).unwrap();
                 let value = splitter[4].parse::<usize>().unwrap();
 
+                fuzzer
+                    .evaluate_input_events(
+                        &mut state,
+                        &mut executor,
+                        &mut mgr,
+                        EVMInput {
+                            caller,
+                            contract,
+                            data: None,
+                            sstate: vm_state.clone(),
+                            sstate_idx: 0,
+                            txn_value: if value == 0 {
+                                None
+                            } else {
+                                Some(U256::from(value))
+                            },
+                            step: is_step,
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
 
-                fuzzer.evaluate_input_events(
-                    &mut state, &mut executor, &mut mgr, EVMInput {
-                        caller,
-                        contract,
-                        data: None,
-                        sstate: vm_state.clone(),
-                        sstate_idx: 0,
-                        txn_value: if value == 0 { None } else { Some(U256::from(value)) },
-                        step: is_step,
-                        env: Default::default(),
-                        access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-
-                        #[cfg(any(test, feature = "debug"))]
-                        direct_data: Bytes::from(input.clone()),
-
-                    },
-                    false
-                ).unwrap();
+                            #[cfg(any(test, feature = "debug"))]
+                            direct_data: Bytes::from(input.clone()),
+                        },
+                        false,
+                    )
+                    .unwrap();
 
                 println!("result: {:?}", state.get_execution_result().clone());
 
