@@ -7,12 +7,12 @@ use primitive_types::H160;
 use std::fmt::Debug;
 
 use crate::evm::abi::BoxedABI;
+use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::generic_vm::vm_executor::ExecutionResult;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn<Addr> {
@@ -44,7 +44,10 @@ where
     }
 }
 
-pub fn build_basic_txn<Loc, Addr, VS, I, Out>(v: &I, res: &ExecutionResult<Loc, Addr, VS, Out>) -> BasicTxn<Addr>
+pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
+    v: &I,
+    res: &ExecutionResult<Loc, Addr, VS, Out>,
+) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
     VS: VMStateT,

@@ -61,6 +61,11 @@ pub trait HasCaller<Addr> {
     fn add_address(&mut self, caller: &Addr);
 }
 
+pub trait HasCurrentInputIdx {
+    fn get_current_input_idx(&self) -> usize;
+    fn set_current_input_idx(&mut self, idx: usize);
+}
+
 pub trait HasInfantStateState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
@@ -109,6 +114,8 @@ where
     executions: usize,
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
+    // used for concolic execution
+    current_input_idx: usize,
     #[serde(deserialize_with = "ExecutionResult::deserialize")]
     execution_result: ExecutionResult<Loc, Addr, VS, Out>,
     pub callers_pool: Vec<Addr>,
@@ -140,6 +147,7 @@ where
             executions: 0,
             metadata: Default::default(),
             named_metadata: Default::default(),
+            current_input_idx: 0,
             execution_result: ExecutionResult::empty_result(),
             callers_pool: Vec::new(),
             addresses_pool: Vec::new(),
@@ -356,6 +364,23 @@ where
     //     idx
     // }
     //
+}
+
+impl<VI, VS, Loc, Addr, Out> HasCurrentInputIdx for FuzzState<VI, VS, Loc, Addr, Out>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+{
+    fn get_current_input_idx(&self) -> usize {
+        self.current_input_idx
+    }
+
+    fn set_current_input_idx(&mut self, idx: usize) {
+        self.current_input_idx = idx;
+    }
 }
 
 impl<VI, VS, Loc, Addr, Out> HasInfantStateState<Loc, Addr, VS>

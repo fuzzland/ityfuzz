@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -17,6 +16,7 @@ use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
@@ -255,12 +255,8 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> = OracleCtx::new(
-            state,
-            input.get_state(),
-            &mut self.executor,
-            input,
-        );
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
+            OracleCtx::new(state, input.get_state(), &mut self.executor, input);
         // todo(@shou): should it be new stage?
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {

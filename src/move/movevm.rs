@@ -230,7 +230,9 @@ mod tests {
         >::new();
         let loc = mv
             .deploy(
-                module, None, AccountAddress::new([0; 32]),
+                module,
+                None,
+                AccountAddress::new([0; 32]),
                 &mut FuzzState::new(),
             )
             .unwrap();

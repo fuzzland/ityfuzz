@@ -39,6 +39,7 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn is_static(&self) -> bool;
     fn get_bytes(&self) -> Vec<u8>;
     fn get_type(&self) -> ABILossyType;
+    fn set_bytes(&mut self, bytes: Vec<u8>);
     fn to_string(&self) -> String;
     fn as_any(&mut self) -> &mut dyn Any;
     fn get_concolic(&self) -> Vec<Box<Expr>>;
@@ -152,6 +153,10 @@ impl BoxedABI {
         ]
         .concat()
     }
+
+    pub fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.b.set_bytes(bytes);
+    }
 }
 
 fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
@@ -214,7 +219,12 @@ where
 impl BoxedABI {
     pub fn mutate<Loc, Addr, VS, S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160> + HasMetadata,
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<Loc, Addr, VS>
+            + HasCaller<H160>
+            + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
@@ -228,7 +238,12 @@ impl BoxedABI {
         vm_slots: Option<HashMap<U256, U256>>,
     ) -> MutationResult
     where
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<H160> + HasMetadata,
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<Loc, Addr, VS>
+            + HasCaller<H160>
+            + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
@@ -346,6 +361,10 @@ impl ABI for AEmpty {
         TEmpty
     }
 
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        assert!(bytes.len() == 0);
+    }
+
     fn to_string(&self) -> String {
         "".to_string()
     }
@@ -415,6 +434,10 @@ impl ABI for A256 {
 
     fn get_type(&self) -> ABILossyType {
         T256
+    }
+
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.data = bytes;
     }
 
     fn to_string(&self) -> String {
@@ -488,6 +511,10 @@ impl ABI for ADynamic {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.data = bytes;
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -636,6 +663,12 @@ impl ABI for AArray {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        // TODO: here we need to able to perform
+        // the inverse of get_bytes
+        todo!()
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -897,6 +930,10 @@ impl ABI for AUnknown {
 
     fn get_type(&self) -> ABILossyType {
         TUnknown
+    }
+
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.concrete_type.b.set_bytes(bytes);
     }
 
     fn to_string(&self) -> String {

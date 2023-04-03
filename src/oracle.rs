@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -9,6 +8,7 @@ use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -38,7 +38,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default
+    Out: Default,
 {
     pub fn new(
         fuzz_state: &'a mut S,
@@ -58,18 +58,27 @@ where
 
     pub(crate) fn call_pre(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
         input.set_staged_state(StagedVMState::new_with_state(self.pre_state.clone()), 0);
-        self.executor.deref().borrow_mut().execute(
-            input,
-            &mut self.fuzz_state
-        )
+        self.executor
+            .deref()
+            .borrow_mut()
+            .execute(input, &mut self.fuzz_state)
     }
 
     pub(crate) fn call_post(&mut self, input: &mut I) -> ExecutionResult<Loc, Addr, VS, Out> {
-        input.set_staged_state(StagedVMState::new_with_state(self.fuzz_state.get_execution_result().new_state.state.clone()), 0);
-        self.executor.deref().borrow_mut().execute(
-            input,
-            &mut self.fuzz_state
-        )
+        input.set_staged_state(
+            StagedVMState::new_with_state(
+                self.fuzz_state
+                    .get_execution_result()
+                    .new_state
+                    .state
+                    .clone(),
+            ),
+            0,
+        );
+        self.executor
+            .deref()
+            .borrow_mut()
+            .execute(input, &mut self.fuzz_state)
     }
 }
 

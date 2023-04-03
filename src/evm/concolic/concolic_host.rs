@@ -5,6 +5,7 @@ use std::any::Any;
 use std::iter::Map;
 
 use crate::evm::abi::{AEmpty, BoxedABI};
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::types::EVMFuzzState;
@@ -12,8 +13,8 @@ use crate::evm::vm::{jmp_map, FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState};
-use libafl::prelude::{HasMetadata, Input};
+use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 use revm::Return::Continue;
@@ -31,7 +32,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use z3::ast::BV;
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::evm::input::EVMInputT;
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -479,6 +479,15 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 }
 
+// TODO: test this
+fn str_to_bytes(s: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for c in s.chars() {
+        bytes.push(c as u8);
+    }
+    bytes
+}
+
 impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
 where
     I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
@@ -488,10 +497,16 @@ where
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata
+        + HasCurrentInputIdx
         + Debug
         + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.peek(interp.stack.len() - 1 - $idx)
@@ -928,9 +943,23 @@ where
             self.symbolic_stack.push(v);
         }
 
+        let input = state
+            .corpus()
+            .get(state.get_current_input_idx())
+            .unwrap()
+            .borrow_mut()
+            .load_input()
+            .expect("Failed loading input")
+            .clone();
         for s in solutions {
-            // todo: get it to corpus
-            // add_corpus(host, self.caller, &s.to_string(), state);
+            let mut new_input = input.clone();
+            new_input
+                .get_data_abi_mut()
+                .as_mut()
+                .unwrap()
+                .set_bytes(str_to_bytes(&s));
+            let mut new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
+            add_corpus(host, state, &new_evm_input);
         }
     }
 

@@ -1,3 +1,4 @@
+use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::mutation_utils::{mutate_with_vm_slot, VMStateHintedMutator};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -6,27 +7,25 @@ use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
+use libafl::state::HasMetadata;
 use libafl::Error;
+use primitive_types::H160;
+use revm::Interpreter;
 use serde::de::DeserializeOwned;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
-use libafl::state::HasMetadata;
-use primitive_types::H160;
-use revm::Interpreter;
-use crate::evm::input::{EVMInput, EVMInputT};
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;
 
-
 // each mutant should report to its source's access pattern
 // if a new corpus item is added, it should inherit the access pattern of its source
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccessPattern {
-    pub caller: bool, // or origin
+    pub caller: bool,       // or origin
     pub balance: Vec<H160>, // balance queried for accounts
     pub call_value: bool,
     pub gas_price: bool,
@@ -57,10 +56,10 @@ impl AccessPattern {
     }
 
     pub fn decode_instruction(&mut self, interp: &Interpreter) {
-        match unsafe {*interp.instruction_pointer} {
-            0x31 => self.balance.push(
-                convert_u256_to_h160(interp.stack.peek(0).unwrap())
-            ),
+        match unsafe { *interp.instruction_pointer } {
+            0x31 => self
+                .balance
+                .push(convert_u256_to_h160(interp.stack.peek(0).unwrap())),
             0x33 => self.caller = true,
             0x34 => {
                 // prevent initial check of dispatch to fallback

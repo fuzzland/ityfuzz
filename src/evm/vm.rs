@@ -142,7 +142,10 @@ impl VMStateT for EVMState {
 
     #[cfg(feature = "full_trace")]
     fn get_flashloan(&self) -> String {
-        format!("earned: {:?}, owed: {:?}", self.flashloan_data.earned, self.flashloan_data.owed)
+        format!(
+            "earned: {:?}, owed: {:?}",
+            self.flashloan_data.earned, self.flashloan_data.owed
+        )
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -173,10 +176,12 @@ impl EVMState {
     }
 }
 
+use crate::evm::bytecode_analyzer;
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::{
     CallMiddlewareReturn, ExecutionStage, Middleware, MiddlewareOp, MiddlewareType,
 };
+use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::EVMFuzzState;
@@ -184,14 +189,12 @@ use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
-use crate::state::{FuzzState, HasCaller, HasHashToAddress, HasItyState};
+use crate::state::{FuzzState, HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::evm::bytecode_analyzer;
-use crate::evm::mutator::AccessPattern;
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -389,7 +392,10 @@ where
             self.total_instr.insert(address, pcs.len());
             self.total_instr_set.insert(address, pcs);
         }
-        assert!(self.code.insert(address, code.to_analysed::<LatestSpec>()).is_none());
+        assert!(self
+            .code
+            .insert(address, code.to_analysed::<LatestSpec>())
+            .is_none());
     }
 
     #[cfg(feature = "record_instruction_coverage")]
@@ -493,7 +499,8 @@ where
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
-                        .deref().deref()
+                        .deref()
+                        .deref()
                         .borrow_mut()
                         .on_step(interp, self, state);
                 }
@@ -629,7 +636,10 @@ where
                 _ => {}
             }
 
-            self.access_pattern.deref().borrow_mut().decode_instruction(interp);
+            self.access_pattern
+                .deref()
+                .borrow_mut()
+                .decode_instruction(interp);
         }
         return Continue;
     }
@@ -681,7 +691,7 @@ where
     fn sload(&mut self, address: H160, index: U256) -> Option<(U256, bool)> {
         if let Some(account) = self.data.get(&address) {
             if let Some(slot) = account.get(&index) {
-                return Some((slot.clone(), true))
+                return Some((slot.clone(), true));
             }
         }
         Some((self.next_slot, true))
@@ -867,7 +877,11 @@ where
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
             let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(input_bytes.clone(), code.clone(), &input.context),
+                Contract::new_with_context::<LatestSpec>(
+                    input_bytes.clone(),
+                    code.clone(),
+                    &input.context,
+                ),
                 1e10 as u64,
             );
             let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
@@ -916,6 +930,7 @@ where
         + HasItyState<H160, H160, VS>
         + HasMetadata
         + HasCaller<H160>
+        + HasCurrentInputIdx
         + Default
         + Clone
         + Debug
@@ -955,7 +970,6 @@ where
         unsafe {
             global_call_context = Some(call_ctx.clone());
         }
-
 
         let mut bytecode = self
             .host
@@ -1003,11 +1017,12 @@ where
             let rand = rand::random::<f32>();
             if self.host.concolic_prob > rand {
                 #[cfg(feature = "evm")]
-                self.host.add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
-                    input_len_concolic.try_into().unwrap(),
-                    input.get_data_abi().unwrap(),
-                    input.get_caller(),
-                ))));
+                self.host
+                    .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
+                        input_len_concolic.try_into().unwrap(),
+                        input.get_data_abi().unwrap(),
+                        input.get_caller(),
+                    ))));
             }
         }
 
@@ -1056,6 +1071,7 @@ where
         + HasItyState<H160, H160, VS>
         + HasMetadata
         + HasCaller<H160>
+        + HasCurrentInputIdx
         + Default
         + Clone
         + Debug
@@ -1099,11 +1115,7 @@ where
         Some(deployed_address)
     }
 
-    fn execute(
-        &mut self,
-        input: &I,
-        state: &mut S,
-    ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
+    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         let mut _vm_state = unsafe {
             input
                 .get_state()
@@ -1218,7 +1230,8 @@ where
 mod tests {
     use super::*;
     use crate::evm::abi::get_abi_type;
-    use crate::evm::input::{EVMInput};
+    use crate::evm::input::EVMInput;
+    use crate::evm::mutator::AccessPattern;
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
     use crate::evm::vm::{FuzzHost, JMP_MAP};
@@ -1232,7 +1245,6 @@ mod tests {
     use libafl::schedulers::StdScheduler;
     use libafl::state::State;
     use revm::Bytecode;
-    use crate::evm::mutator::AccessPattern;
 
     #[test]
     fn test_fuzz_executor() {

@@ -1,8 +1,10 @@
 use crate::{
     input::VMInputT,
-    state::{HasInfantStateState, HasItyState, InfantStateState},
+    state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -10,10 +12,10 @@ use std::ops::Deref;
 use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 
 use crate::evm::oracle::FL_DATA;
+use crate::evm::vm::JMP_MAP;
+use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
@@ -35,9 +37,7 @@ use libafl::{
 use rand::random;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use crate::generic_vm::vm_executor::MAP_SIZE;
 use std::hash::{Hash, Hasher};
-use crate::evm::vm::JMP_MAP;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -97,23 +97,34 @@ where
         }
     }
 
-    pub fn on_add_corpus(&mut self, input: &I, coverage: &[u8; MAP_SIZE], testcase_idx: usize) -> (){
+    pub fn on_add_corpus(
+        &mut self,
+        input: &I,
+        coverage: &[u8; MAP_SIZE],
+        testcase_idx: usize,
+    ) -> () {
         let mut hasher = DefaultHasher::new();
         coverage.hash(&mut hasher);
         let hash = hasher.finish();
-        self.minimizer_map.insert(hash, (testcase_idx, input.fav_factor()));
+        self.minimizer_map
+            .insert(hash, (testcase_idx, input.fav_factor()));
     }
 
-    pub fn on_replace_corpus(&mut self,
-                             (hash, new_fav_factor, _): (u64, f64, usize),
-                             new_testcase_idx: usize) -> ()
-    {
+    pub fn on_replace_corpus(
+        &mut self,
+        (hash, new_fav_factor, _): (u64, f64, usize),
+        new_testcase_idx: usize,
+    ) -> () {
         let res = self.minimizer_map.get_mut(&hash).unwrap();
         res.0 = new_testcase_idx;
         res.1 = new_fav_factor;
     }
 
-    pub fn should_replace(&self, input: &I, coverage: &[u8; MAP_SIZE]) -> Option<(u64, f64, usize)> {
+    pub fn should_replace(
+        &self,
+        input: &I,
+        coverage: &[u8; MAP_SIZE],
+    ) -> Option<(u64, f64, usize)> {
         let mut hasher = DefaultHasher::new();
         coverage.hash(&mut hasher);
         let hash = hasher.finish();
@@ -139,7 +150,7 @@ where
     IF: Feedback<I, S>,
     I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasExecutions + HasMetadata,
+    S: HasClientPerfMonitor + HasExecutions + HasMetadata + HasCurrentInputIdx,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -153,6 +164,11 @@ where
         manager: &mut EM,
     ) -> Result<usize, libafl::Error> {
         let idx = self.scheduler.next(state)?;
+        state.set_current_input_idx(idx);
+
+        // TODO: if the idx input is a concolic input returned by the solver
+        // we should not perform all stages.
+
         stages
             .perform_all(self, executor, state, manager, idx)
             .expect("perform_all failed");
@@ -242,20 +258,24 @@ where
             .objective
             .is_interesting(state, manager, &input, observers, &exitkind)?;
 
-
         // add the trace of the new state
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
         {
             let txn = build_basic_txn(&input, &state.get_execution_result());
             state.get_execution_result_mut().new_state.trace.from_idx = Some(input.get_state_idx());
-            state.get_execution_result_mut().new_state.trace.add_txn(txn);
+            state
+                .get_execution_result_mut()
+                .new_state
+                .trace
+                .add_txn(txn);
         }
-
 
         if is_infant_interesting && !reverted {
-            state.add_infant_state(&state.get_execution_result().new_state.clone(), self.infant_scheduler);
+            state.add_infant_state(
+                &state.get_execution_result().new_state.clone(),
+                self.infant_scheduler,
+            );
         }
-
 
         let mut res = ExecuteInputResult::None;
         if is_solution && !reverted {
@@ -302,7 +322,7 @@ where
         match res {
             ExecuteInputResult::None => {
                 self.objective.discard_metadata(state, &input)?;
-                match self.should_replace(&input, unsafe {&JMP_MAP}) {
+                match self.should_replace(&input, unsafe { &JMP_MAP }) {
                     Some((hash, new_fav_factor, old_testcase_idx)) => {
                         state.corpus_mut().remove(old_testcase_idx)?;
 
@@ -310,7 +330,10 @@ where
                         self.feedback.append_metadata(state, &mut testcase)?;
                         let new_testcase_idx = state.corpus_mut().add(testcase)?;
                         self.scheduler.on_add(state, new_testcase_idx)?;
-                        self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), new_testcase_idx);
+                        self.on_replace_corpus(
+                            (hash, new_fav_factor, old_testcase_idx),
+                            new_testcase_idx,
+                        );
 
                         Ok((res, Some(new_testcase_idx)))
                     }
@@ -319,7 +342,6 @@ where
                         Ok((res, None))
                     }
                 }
-
             }
             ExecuteInputResult::Corpus => {
                 // Not a solution
@@ -330,7 +352,7 @@ where
                 self.feedback.append_metadata(state, &mut testcase)?;
                 let idx = state.corpus_mut().add(testcase)?;
                 self.scheduler.on_add(state, idx)?;
-                self.on_add_corpus(&input, unsafe {&JMP_MAP}, idx);
+                self.on_add_corpus(&input, unsafe { &JMP_MAP }, idx);
 
                 if send_events {
                     // TODO set None for fast targets
