@@ -4,7 +4,7 @@ use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState};
+use crate::state::{HasCaller, HasItyState, HasCurrentInputIdx};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};

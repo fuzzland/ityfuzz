@@ -1,6 +1,6 @@
 use crate::{
     input::VMInputT,
-    state::{HasInfantStateState, HasItyState, InfantStateState},
+    state::{HasInfantStateState, HasItyState, InfantStateState, HasCurrentInputIdx},
     state_input::StagedVMState,
 };
 use std::fmt::Debug;
@@ -139,7 +139,7 @@ where
     IF: Feedback<I, S>,
     I: VMInputT<VS, Loc, Addr>,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasExecutions + HasMetadata,
+    S: HasClientPerfMonitor + HasExecutions + HasMetadata + HasCurrentInputIdx,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -153,6 +153,11 @@ where
         manager: &mut EM,
     ) -> Result<usize, libafl::Error> {
         let idx = self.scheduler.next(state)?;
+        state.set_current_input_idx(idx);
+
+        // TODO: if the idx input is a concolic input returned by the solver
+        // we should not perform all stages.
+
         stages
             .perform_all(self, executor, state, manager, idx)
             .expect("perform_all failed");

@@ -12,7 +12,7 @@ use crate::evm::vm::{jmp_map, FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState};
+use crate::state::{HasCaller, HasItyState, HasCurrentInputIdx};
 use libafl::prelude::{HasMetadata, Input};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
@@ -488,6 +488,7 @@ where
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata
+        + HasCurrentInputIdx
         + Debug
         + Clone,
 {
@@ -929,8 +930,7 @@ where
         }
 
         for s in solutions {
-            // todo: get it to corpus
-            // add_corpus(host, self.caller, &s.to_string(), state);
+
         }
     }
 

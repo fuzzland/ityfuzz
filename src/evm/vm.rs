@@ -184,7 +184,7 @@ use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
-use crate::state::{FuzzState, HasCaller, HasHashToAddress, HasItyState};
+use crate::state::{FuzzState, HasCaller, HasHashToAddress, HasItyState, HasCurrentInputIdx};
 use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
@@ -916,6 +916,7 @@ where
         + HasItyState<H160, H160, VS>
         + HasMetadata
         + HasCaller<H160>
+        + HasCurrentInputIdx
         + Default
         + Clone
         + Debug
@@ -1056,6 +1057,7 @@ where
         + HasItyState<H160, H160, VS>
         + HasMetadata
         + HasCaller<H160>
+        + HasCurrentInputIdx
         + Default
         + Clone
         + Debug
