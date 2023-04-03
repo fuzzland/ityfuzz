@@ -1,6 +1,9 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::evm::contract_utils::ContractInfo;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::onchain::flashloan::Flashloan;
+use crate::evm::oracle::IERC20OracleFlashloan;
 use crate::oracle::Oracle;
 
 pub enum FuzzerTypes {
@@ -44,7 +47,8 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub concolic_prob: Option<f32>,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
-    pub oracle: Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+    pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     pub price_oracle: Box<dyn PriceOracle>,
     pub debug_file: Option<String>,
+    pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
 }

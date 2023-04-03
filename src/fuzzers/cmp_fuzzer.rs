@@ -110,7 +110,8 @@ pub fn cmp_fuzzer(
                 true,
                 config.onchain.clone().unwrap(),
                 config.price_oracle,
-                onchain_middleware.unwrap()
+                onchain_middleware.unwrap(),
+                config.flashloan_oracle
             ));
         }
     }
@@ -165,7 +166,10 @@ pub fn cmp_fuzzer(
 
             let mut vm_state = StagedVMState::new_with_state(EVMState::new());
 
+            let mut idx = 0;
+
             for txn in transactions.split("\n") {
+                idx += 1;
                 let splitter = txn.split(" ").collect::<Vec<&str>>();
                 if splitter.len() < 4 {
                     continue;
@@ -175,7 +179,7 @@ pub fn cmp_fuzzer(
 
                 let is_step = splitter[0] == "step";
                 let caller = H160::from_str(splitter[1]).unwrap();
-                let contract = H160::from_str(splitter[1]).unwrap();
+                let contract = H160::from_str(splitter[2]).unwrap();
                 let input = hex::decode(splitter[3]).unwrap();
                 let value = splitter[4].parse::<usize>().unwrap();
 
@@ -199,7 +203,11 @@ pub fn cmp_fuzzer(
                     false
                 ).unwrap();
 
-                println!("result: {:?}", state.get_execution_result().clone());
+                println!("============ Execution result {} =============", idx);
+                println!("reverted: {:?}", state.get_execution_result().clone().reverted);
+                println!("trace: {:?}", state.get_execution_result().clone().new_state.trace);
+                println!("output: {:?}", hex::encode(state.get_execution_result().clone().output));
+                println!("================================================");
 
                 vm_state = state.get_execution_result().new_state.clone();
             }

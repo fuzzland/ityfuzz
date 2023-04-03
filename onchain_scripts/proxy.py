@@ -50,6 +50,184 @@ def get_rpc(network):
     else:
         raise Exception("Unknown network")
 
+def get_uniswap_api(network) -> dict:
+    if network == "eth":
+        return {
+            "v2": {
+                "uniswapv2": 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v2'
+            },
+            "v3": {
+                "uniswapv3": 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
+            }
+        }
+    elif network == "bsc":
+        return {
+            "v2": {
+                "pancakeswap":'https://api.thegraph.com/subgraphs/name/pancakeswap/pairs',
+                "biswap": 'https://api.thegraph.com/subgraphs/name/unchase/biswap'
+            },
+        }
+    elif network == "polygon":
+        return {
+            "v3": {
+                "uniswapv3": 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
+            }
+        }
+    elif network == "mumbai":
+        return {}
+    else:
+        raise Exception("Unknown network")
+
+def get_pegged_token(network):
+    if network == "eth":
+        return {
+            "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "DAI": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "WBTC": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+            "WMATIC": "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0",
+        }
+    elif network == "bsc":
+        return {
+            "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+            "USDT": "0x55d398326f99059ff775485246999027b3197955",
+            "DAI": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+            "WBTC": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+            "WETH": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+            "BUSD": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+            "CAKE": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"
+        }
+    elif network == "polygon":
+        return {
+            "WMATIC": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+            "USDC": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+            "USDT": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+            "DAI": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+            "WBTC": "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6",
+            "WETH": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+        }
+    elif network == "mumbai":
+        raise Exception("Not supported")
+    else:
+        raise Exception("Unknown network")
+
+
+data = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  \n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n}'
+
+
+reserve_cache = {}
+
+def fetch_reserve(pair, network, block):
+    if pair in reserve_cache:
+        return reserve_cache[pair]
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_call",
+        "params": [{
+            "to": pair,
+            "data": "0x0902f1ac"
+        }, block],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    result = response.json()["result"]
+
+    reserve_cache[pair] = (result[2:66], result[66:130])
+    return result[2:66], result[66:130]
+
+
+def get_latest_block(network):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_blockNumber",
+        "params": [],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    return response.json()["result"]
+
+
+def get_pair(token, network, block):
+    # -50 account for delay in api indexing
+    block_int = int(block, 16) if block != "latest" else int(get_latest_block(network), 16) - 50
+    next_tokens = []
+    api = get_uniswap_api(network)
+    if "v2" in api:
+        for name, i in api["v2"].items():
+            res = requests.post(i, json={
+                    "query": data % (block_int, token.lower(), block_int, token.lower())}
+                ).json()["data"]
+                
+            for pair in res["p0"] + res["p1"]:
+                reserves = fetch_reserve(pair["id"], network, block)
+                next_tokens.append({
+                    "src": "v2",
+                    "in": 0 if pair["token0"]["id"] == token else 1,
+                    "pair": pair["id"],
+                    "next": pair["token0"]["id"] if pair["token0"]["id"] != token else pair["token1"]["id"],
+                    "decimals0": pair["token0"]["decimals"],
+                    "decimals1": pair["token1"]["decimals"],
+                    "src_exact": name,
+                    "initial_reserves_0": reserves[0],
+                    "initial_reserves_1": reserves[1],
+                })
+    return next_tokens
+
+
+# max 2 hops
+MAX_HOPS = 1
+def get_all_hops(token, network, block, hop=0, known=set()):
+    known.add(token)
+    if hop > MAX_HOPS:
+        return {}
+    hops = {}
+    hops[token] = get_pair(token, network, block)
+
+    for i in hops[token]:
+        if i["next"] in get_pegged_token(network).values():
+            continue
+        if i["next"] in known:
+            continue
+        hops = {**hops, **get_all_hops(i["next"], network, block, hop + 1, known)}
+    return hops
+
+
+def get_pegged_next_hop(token, network):
+
+    return {"src": "pegged", "rate": fetch_token_price(network, token)[2]}
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
+def find_path(network, token, block):
+    if token in get_pegged_token(network).values():
+        return [[get_pegged_next_hop(token, network)]]
+    hops = get_all_hops(token, network, block)
+    routes = []
+    # do a DFS to find all routes
+    def dfs(token, path, visited):
+        if token in get_pegged_token(network).values():
+            routes.append(path + [get_pegged_next_hop(token, network)])
+            return
+        visited.add(token)
+        if token not in hops:
+            return
+        for i in hops[token]:
+            if i["next"] in visited:
+                continue
+            dfs(i["next"], path + [i], visited.copy())
+    dfs(token, [], set())
+    return routes
+
+
+# for path in (find_path("0x056fd409e1d7a124bd7017459dfea2f387b6d5cd", "eth", "16399064")):
+#     print(path)
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
@@ -91,6 +269,17 @@ def fetch_etherscan_contract_abi(network, token_address):
     return contract_abi
 
 
+def get_major_symbol(network):
+    if network == "eth":
+        return "Eth"
+    elif network == "bsc":
+        return "BNB"
+    elif network == "polygon" or network == "mumbai":
+        return "MATIC"
+    else:
+        raise Exception("Unknown network")
+
+
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
 def fetch_token_price(network, token_address):
@@ -98,15 +287,19 @@ def fetch_token_price(network, token_address):
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     resp = response.text.replace("\r", "").replace("\t", "").replace("\n", "")
-    price_finder = re.compile("text-nowrap\'> @ (.+?) Eth</span>")
+    price_finder = re.compile(f"text-nowrap\'> @ (.+?) {get_major_symbol(network)}</span>")
     price = price_finder.findall(resp)
 
     decimals_finder = re.compile("Decimals:</div><div class=\"col-md-8\">(.+?)</div>")
     decimals = decimals_finder.findall(resp)
 
     if len(price) == 0 or len(decimals) == 0:
-        return 0, 0
-    return int(float(price[0]) * 10e5), int(decimals[0])
+        return 0, 0, 0
+    if int(decimals[0]) > 18:
+        price_scaled = float(price[0]) / (10 ** (int(decimals[0]) - 18))
+    else:
+        price_scaled = float(price[0]) * (10 ** (18 - int(decimals[0])))
+    return int(float(price[0]) * 10e5), int(decimals[0]), int(price_scaled * 10e5)
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)
@@ -242,6 +435,10 @@ def storage_all(network, address, block):
 @app.route("/price/<network>/<token_address>", methods=["GET"])
 def price(network, token_address):
     return ",".join(map(str, fetch_token_price(network, token_address)))
+
+@app.route("/swap_path/<network>/<token_address>/<block>", methods=["GET"])
+def swap_path(network, token_address, block):
+    return flask.jsonify(find_path(network, token_address, block))
 
 app.run(port=5003)
 
