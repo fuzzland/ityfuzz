@@ -181,7 +181,8 @@ impl<VS, I, S> Flashloan<VS, I, S>
                         blacklist.push(*holder);
                     });
                     // add rich caller
-                    let rich_account = v.clone().get(5).unwrap().clone();
+                    let rich_account = v.clone().get(10).unwrap().clone();
+                    state.add_caller(&rich_account);
                     blacklist.push(rich_account);
                 }
             }

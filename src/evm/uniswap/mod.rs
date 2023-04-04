@@ -353,7 +353,7 @@ mod tests {
                 })
             ],
             final_pegged_ratio: U256::from(1),
-        }.get_amount_out(U256::from(1000), &mut HashMap::new());
+        }.get_amount_out(U256::from(1000), &mut reserve_data);
         assert_eq!(res, U256::from(39 as u64));
     }
 
