@@ -54,6 +54,8 @@ pub static mut state_change: bool = false;
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 
+// How mant iterations the coverage is the same
+pub static mut coverage_not_changed: u32 = 0;
 pub static mut ret_size: usize = 0;
 pub static mut ret_offset: usize = 0;
 pub static mut global_call_context: Option<CallContext> = None;
@@ -214,6 +216,8 @@ where
     middlewares_enabled: bool,
     middlewares: Rc<RefCell<HashMap<MiddlewareType, Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
 
+    pub coverage_changed: bool,
+
     pub flashloan_middleware: Option<Rc<RefCell<Flashloan<VS, I, S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
@@ -279,6 +283,7 @@ where
             concolic_prob: self.concolic_prob,
             middlewares_enabled: false,
             middlewares: Rc::new(RefCell::new(HashMap::new())),
+            coverage_changed: false,
             flashloan_middleware: None,
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: self.pc_coverage.clone(),
@@ -339,6 +344,7 @@ where
             concolic_prob: 0.0,
             middlewares_enabled: false,
             middlewares: Rc::new(RefCell::new(HashMap::new())),
+            coverage_changed: false,
             flashloan_middleware: None,
             #[cfg(feature = "record_instruction_coverage")]
             pc_coverage: Default::default(),
@@ -523,6 +529,9 @@ where
                         1
                     };
                     let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
+                    if jmp_map[idx] == 0 {
+                        self.coverage_changed = true;
+                    }
                     if jmp_map[idx] < 255 {
                         jmp_map[idx] += 1;
                     }
@@ -556,11 +565,7 @@ where
                     let value_changed = res.expect("sload failed").0 != value;
 
                     let idx = interp.program_counter() % MAP_SIZE;
-                    jmp_map[idx] = if value_changed {
-                        1
-                    } else {
-                        0
-                    };
+                    jmp_map[idx] = if value_changed { 1 } else { 0 };
 
                     state_change |= value_changed;
                 }
@@ -968,6 +973,7 @@ where
         post_exec: Option<PostExecutionCtx>,
         mut state: &mut S,
     ) -> IntermediateExecutionResult {
+        self.host.coverage_changed = false;
         self.host.data = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
@@ -1022,22 +1028,23 @@ where
             state_change = false;
         }
 
-        if self.host.middlewares_enabled {
-            let rand = rand::random::<f32>();
-            if self.host.concolic_prob > rand {
-                #[cfg(feature = "evm")]
-                self.host
-                    .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
-                        input_len_concolic.try_into().unwrap(),
-                        input.get_data_abi().unwrap(),
-                        input.get_caller(),
-                    ))));
+        if self.host.middlewares_enabled && self.host.concolic_prob > 0.0 {
+            // let rand = rand::random::<f32>();
+            // if self.host.concolic_prob > rand {
+            unsafe {
+                if coverage_not_changed > 10000 {
+                    self.host
+                        .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
+                            input_len_concolic.try_into().unwrap(),
+                            input.get_data_abi().unwrap(),
+                            input.get_caller(),
+                        ))));
+                }
             }
         }
 
         let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
 
-        // For each middleware, execute the deferred actions
         let mut result = IntermediateExecutionResult {
             output: interp.return_value(),
             new_state: self.host.data.clone(),
@@ -1046,6 +1053,14 @@ where
             stack: interp.stack.data().clone(),
             memory: interp.memory.data().clone(),
         };
+
+        unsafe {
+            if self.host.coverage_changed {
+                coverage_not_changed = 0;
+            } else {
+                coverage_not_changed += 1;
+            }
+        }
 
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
