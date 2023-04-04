@@ -121,6 +121,8 @@ impl<'a> EVMCorpusInitializer<'a> {
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                     #[cfg(any(test, feature = "debug"))]
                     direct_data: Default::default(),
+                    #[cfg(feature = "flashloan_v2")]
+                    liquidation_percent: 0,
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -215,6 +217,8 @@ impl<'a> EVMCorpusInitializer<'a> {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: 0,
             #[cfg(any(test, feature = "debug"))]
             direct_data: Default::default(),
         };

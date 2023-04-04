@@ -108,7 +108,7 @@ where
 
 impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC>
 where
-    I: VMInputT<VS, Loc, Addr> + Input,
+    I: VMInputT<VS, Loc, Addr> + Input + EVMInputT,
     S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
     SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT,
@@ -159,6 +159,21 @@ where
                     }
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
+                }
+                6..=10 => {
+                    let prev_percent = input.get_liquidation_percent();
+                    input.set_liquidation_percent(
+                        if state.rand_mut().below(100) < 50 {
+                            1
+                        } else {
+                            0
+                        } as u8
+                    );
+                    if prev_percent != input.get_liquidation_percent() {
+                        MutationResult::Mutated
+                    } else {
+                        MutationResult::Skipped
+                    }
                 }
                 _ => input.mutate(state),
             }
