@@ -30,8 +30,9 @@ use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
-use z3::ast::BV;
+use z3::ast::{BV, Bool};
 use z3::{ast::Ast, Config, Context, Solver};
+use either::{Either};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -287,42 +288,62 @@ impl<'a> Solving<'a> {
         slice
     }
 
-    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> BV<'a> {
+    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> Either<BV<'a>, Bool<'a>> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
-                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
-                    .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx))
+                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx).expect_left("value was right")
+                    .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx).expect_left("value was right"))
             };
         }
         // println!("generate_z3_bv: {:?}", bv);
         match &bv.op {
-            ConcolicOp::U256(constant) => bv_from_u256!(constant, ctx),
-            ConcolicOp::ADD => binop!(bv.lhs, bv.rhs, bvadd),
-            ConcolicOp::DIV => binop!(bv.lhs, bv.rhs, bvudiv),
-            ConcolicOp::MUL => binop!(bv.lhs, bv.rhs, bvmul),
-            ConcolicOp::SUB => binop!(bv.lhs, bv.rhs, bvsub),
-            ConcolicOp::SDIV => binop!(bv.lhs, bv.rhs, bvsdiv),
-            ConcolicOp::SMOD => binop!(bv.lhs, bv.rhs, bvsmod),
-            ConcolicOp::UREM => binop!(bv.lhs, bv.rhs, bvurem),
-            ConcolicOp::SREM => binop!(bv.lhs, bv.rhs, bvsrem),
-            ConcolicOp::AND => binop!(bv.lhs, bv.rhs, bvand),
-            ConcolicOp::OR => binop!(bv.lhs, bv.rhs, bvor),
-            ConcolicOp::XOR => binop!(bv.lhs, bv.rhs, bvxor),
-            ConcolicOp::NOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).bvnot(),
-            ConcolicOp::SHL => binop!(bv.lhs, bv.rhs, bvshl),
-            ConcolicOp::SHR => binop!(bv.lhs, bv.rhs, bvlshr),
-            ConcolicOp::SAR => binop!(bv.lhs, bv.rhs, bvashr),
+            ConcolicOp::U256(constant) => Either::Left(bv_from_u256!(constant, ctx)),
+            ConcolicOp::ADD => Either::Left(binop!(bv.lhs, bv.rhs, bvadd)),
+            ConcolicOp::DIV => Either::Left(binop!(bv.lhs, bv.rhs, bvudiv)),
+            ConcolicOp::MUL => Either::Left(binop!(bv.lhs, bv.rhs, bvmul)),
+            ConcolicOp::SUB => Either::Left(binop!(bv.lhs, bv.rhs, bvsub)),
+            ConcolicOp::SDIV => Either::Left(binop!(bv.lhs, bv.rhs, bvsdiv)),
+            ConcolicOp::SMOD => Either::Left(binop!(bv.lhs, bv.rhs, bvsmod)),
+            ConcolicOp::UREM => Either::Left(binop!(bv.lhs, bv.rhs, bvurem)),
+            ConcolicOp::SREM => Either::Left(binop!(bv.lhs, bv.rhs, bvsrem)),
+            ConcolicOp::AND => Either::Left(binop!(bv.lhs, bv.rhs, bvand)),
+            ConcolicOp::OR => Either::Left(binop!(bv.lhs, bv.rhs, bvor)),
+            ConcolicOp::XOR => Either::Left(binop!(bv.lhs, bv.rhs, bvxor)),
+            ConcolicOp::NOT => {
+                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                match lhs {
+                    Either::Left(lhs) => Either::Left(lhs.bvnot()),
+                    Either::Right(lhs) => Either::Right(lhs.not()),
+                }
+            },
+            ConcolicOp::SHL => Either::Left(binop!(bv.lhs, bv.rhs, bvshl)),
+            ConcolicOp::SHR => Either::Left(binop!(bv.lhs, bv.rhs, bvlshr)),
+            ConcolicOp::SAR => Either::Left(binop!(bv.lhs, bv.rhs, bvashr)),
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.0[0] as u32;
-                self.slice_input(idx, idx + 4)
+                Either::Left(self.slice_input(idx, idx + 4))
             }
-            ConcolicOp::BALANCE => self.balance.clone(),
-            ConcolicOp::CALLVALUE => self.calldatavalue.clone(),
-            ConcolicOp::FINEGRAINEDINPUT(start, end) => self.slice_input(*start, *end),
-            ConcolicOp::LNOT => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx).not(),
-            ConcolicOp::CONSTBYTE(b) => BV::from_u64(ctx, *b as u64, 8),
-            ConcolicOp::SYMBYTE(s) => BV::new_const(ctx, s.clone(), 8),
-            ConcolicOp::EQ => self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx), // recursively solve lhs
+            ConcolicOp::BALANCE => Either::Left(self.balance.clone()),
+            ConcolicOp::CALLVALUE => Either::Left(self.calldatavalue.clone()),
+            ConcolicOp::FINEGRAINEDINPUT(start, end) => Either::Left(self.slice_input(*start, *end)),
+            ConcolicOp::LNOT => {
+                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                match lhs {
+                    Either::Left(lhs) => Either::Left(lhs.not()),
+                    Either::Right(lhs) => Either::Right(lhs.not()),
+                }
+            },
+            ConcolicOp::CONSTBYTE(b) => Either::Left(BV::from_u64(ctx, *b as u64, 8)),
+            ConcolicOp::SYMBYTE(s) => Either::Left(BV::new_const(ctx, s.clone(), 8)),
+            ConcolicOp::EQ => {
+                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                let rhs = self.generate_z3_bv(bv.rhs.as_ref().unwrap(), ctx);
+                match (lhs, rhs) {
+                    (Either::Left(lhs), Either::Left(rhs)) => Either::Right(lhs._eq(&rhs)),
+                    (Either::Right(lhs), Either::Right(rhs)) => Either::Right(lhs._eq(&rhs)),
+                    _ => panic!("op {:?} not supported as operands", bv.op),
+                }
+                }
             _ => panic!("op {:?} not supported as operands", bv.op),
         }
     }
@@ -332,27 +353,34 @@ impl<'a> Solving<'a> {
         let solver = Solver::new(&context);
         for cons in self.constraints {
             // println!("Constraints: {:?}", cons);
-            let bv: BV = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
+            let bv = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
                 ConcolicOp::GT => {
-                    bv.bvugt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                    bv.expect_left("lhs was Bool").bvugt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
                 }
                 ConcolicOp::SGT => {
-                    bv.bvsgt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                    bv.expect_left("lhs was Bool").bvsgt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
                 }
                 ConcolicOp::EQ => {
-                    bv._eq(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                    bv.expect_left("lhs was Bool")._eq(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
                 }
                 ConcolicOp::LT => {
-                    bv.bvult(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                    bv.expect_left("lhs was Bool").bvult(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
                 }
                 ConcolicOp::SLT => {
-                    bv.bvslt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context))
+                    bv.expect_left("lhs was Bool").bvslt(&self.generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context).expect_left("rhs was Bool"))
+                }
+                ConcolicOp::LNOT =>{
+                    match bv {
+                        Either::Left(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
+                        Either::Right(bv) => bv.not(),
+                    }
                 }
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
             });
         }
 
+        // println!("Solver: {:?}", solver);
         let result = solver.check();
         match result {
             z3::SatResult::Sat => {
@@ -519,7 +547,7 @@ where
                 match self.symbolic_stack[real_loc_sym].borrow() {
                     Some(bv) => bv.clone(),
                     None => {
-                        let u256 = fast_peek!($idx).expect("stack underflow");
+                        let u256 = fast_peek!(real_loc_sym).expect("stack underflow");
                         Box::new(Expr {
                             lhs: None,
                             rhs: None,
@@ -543,6 +571,8 @@ where
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
+        println!("{:?}", interp.stack);
+        println!("{:?}", self.symbolic_stack);
         let bv: Vec<Option<Box<Expr>>> = match *interp.instruction_pointer {
             // ADD
             0x01 => {
@@ -878,15 +908,12 @@ where
                 if jmp_map[idx] == 0 {
                     let path_constraint = stack_bv!(1);
                     self.constraints
-                        .push(path_constraint.lnot().eq(Box::new(Expr {
-                            lhs: None,
-                            rhs: None,
-                            op: ConcolicOp::U256(U256::from(1)),
-                        })));
+                        .push(path_constraint.lnot());
                     match self.solve() {
                         Some(s) => solutions.push(s),
                         None => {}
                     };
+                    // println!("Solutions: {:?}", solutions);
                     self.constraints.pop();
                 }
                 // jumping only happens if the second element is false
