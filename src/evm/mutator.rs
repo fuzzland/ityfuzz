@@ -160,6 +160,7 @@ where
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
                 }
+                #[cfg(feature = "flashloan_v2")]
                 6..=10 => {
                     let prev_percent = input.get_liquidation_percent();
                     input.set_liquidation_percent(
