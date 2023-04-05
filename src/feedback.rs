@@ -264,7 +264,11 @@ where
             } else {
                 input.get_staged_state().stage[idx]
             };
-            if self.oracle[idx].deref().borrow().oracle(&mut oracle_ctx, original_stage) {
+            if self.oracle[idx]
+                .deref()
+                .borrow()
+                .oracle(&mut oracle_ctx, original_stage)
+            {
                 // ensure the execution is finished
                 if state
                     .get_execution_result()

@@ -665,6 +665,8 @@ impl ABI for AArray {
         self
     }
 
+    // Input: packed concrete bytes produced by get_concolic
+    // Set the bytes in self.data accordingly
     fn set_bytes(&mut self, bytes: Vec<u8>) {
         // TODO: here we need to able to perform
         // the inverse of get_bytes
