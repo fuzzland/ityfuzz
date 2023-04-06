@@ -12,6 +12,7 @@ use crate::evm::abi::BoxedABI;
 use crate::evm::mutation_utils::VMStateHintedMutator;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
+use primitive_types::U256;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
@@ -57,6 +58,9 @@ where
 
     #[cfg(feature = "evm")]
     fn get_data_abi_mut(&mut self) -> &mut Option<BoxedABI>;
+
+    #[cfg(feature = "evm")]
+    fn get_txn_value_temp(&self) -> Option<U256>;
 
     #[cfg(any(test, feature = "debug"))]
     fn get_direct_data(&self) -> Vec<u8>;

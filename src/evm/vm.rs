@@ -21,6 +21,7 @@ use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::input::VMInputT;
 use crate::rand_utils;
 use crate::state_input::StagedVMState;
+use crate::tracer::{build_basic_txn, build_basic_txn_from_input};
 use bytes::Bytes;
 use libafl::impl_serdeany;
 use libafl::prelude::powersched::PowerSchedule;
@@ -198,6 +199,8 @@ pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
 
+use super::concolic::concolic_exe_host::{ConcolicEVMExecutor, ConcolicExeHost};
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -280,7 +283,7 @@ where
             _pc: self._pc,
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
-            concolic_enabled: self.concolic_enabled,
+            concolic_enabled: false,
             middlewares_enabled: false,
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             coverage_changed: false,
@@ -360,6 +363,11 @@ where
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
+    }
+
+    pub fn remove_all_middlewares(&mut self) {
+        self.middlewares_enabled = false;
+        self.middlewares.deref().borrow_mut().clear();
     }
 
     pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
@@ -973,10 +981,6 @@ where
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
 
-        // although some of the concolic inputs are concrete
-        // see EVMInputConstraint
-        let input_len_concolic = data.len() * 8;
-
         unsafe {
             global_call_context = Some(call_ctx.clone());
         }
@@ -1021,26 +1025,6 @@ where
         };
         unsafe {
             state_change = false;
-        }
-
-        // TODO: implement baseline here
-
-        if self.host.middlewares_enabled && self.host.concolic_enabled {
-            // let rand = rand::random::<f32>();
-            // if self.host.concolic_prob > rand {
-            unsafe {
-                // here probably we should reset the number to 0?
-                // or let concolic run for ten times
-                if coverage_not_changed > 10000 {
-                    coverage_not_changed = 0;
-                    self.host
-                        .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
-                            input_len_concolic.try_into().unwrap(),
-                            input.get_data_abi().unwrap(),
-                            input.get_caller(),
-                        ))));
-                }
-            }
         }
 
         let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
@@ -1174,6 +1158,27 @@ where
                 state,
             )
         } else {
+            let input_len_concolic = data.len() * 8;
+
+            // TODO: implement baseline here
+            if self.host.middlewares_enabled && self.host.concolic_enabled {
+                unsafe {
+                    // here probably we should reset the number to 0?
+                    // or let concolic run for ten times?
+                    if coverage_not_changed > 10000 {
+                        coverage_not_changed = 0;
+                        let mut txntrace = input.get_staged_state().trace.clone();
+                        txntrace.add_txn(build_basic_txn_from_input(input));
+                        let mut concolic_exe_host = ConcolicEVMExecutor::new(
+                            self.host.clone(),
+                            self.deployer,
+                            contract_address,
+                            txntrace,
+                        );
+                        concolic_exe_host.execute_all(state);
+                    }
+                }
+            }
             self.host.origin = caller;
             self.execute_from_pc(
                 &CallContext {
