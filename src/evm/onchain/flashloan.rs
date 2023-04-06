@@ -231,14 +231,14 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
         macro_rules! earned {
             ($amount:expr) => {
-                host.data.flashloan_data.earned += $amount;
+                host.evmstate.flashloan_data.earned += $amount;
             };
             () => {};
         }
 
         macro_rules! owed {
             ($amount:expr) => {
-                host.data.flashloan_data.owed += $amount;
+                host.evmstate.flashloan_data.owed += $amount;
             };
             () => {};
         }
