@@ -163,13 +163,11 @@ where
                 #[cfg(feature = "flashloan_v2")]
                 6..=10 => {
                     let prev_percent = input.get_liquidation_percent();
-                    input.set_liquidation_percent(
-                        if state.rand_mut().below(100) < 50 {
-                            1
-                        } else {
-                            0
-                        } as u8
-                    );
+                    input.set_liquidation_percent(if state.rand_mut().below(100) < 50 {
+                        1
+                    } else {
+                        0
+                    } as u8);
                     if prev_percent != input.get_liquidation_percent() {
                         MutationResult::Mutated
                     } else {
