@@ -3,7 +3,7 @@ use bytes::Bytes;
 use libafl::corpus::Corpus;
 use libafl::inputs::Input;
 use libafl::prelude::HasCorpus;
-use primitive_types::H160;
+use primitive_types::{H160, U256};
 use std::fmt::Debug;
 
 use crate::evm::abi::BoxedABI;
@@ -19,6 +19,10 @@ pub struct BasicTxn<Addr> {
     pub caller: Addr,
     pub contract: Addr,
     pub data: Option<String>,
+    #[cfg(feature = "evm")]
+    pub data_abi: Option<BoxedABI>,
+    #[cfg(feature = "evm")]
+    pub value: Option<U256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
 }
@@ -59,8 +63,30 @@ where
         caller: v.get_caller(),
         contract: v.get_contract(),
         data: v.pretty_txn(),
+        #[cfg(feature = "evm")]
+        value: v.get_txn_value_temp(),
+        #[cfg(feature = "evm")]
+        data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
+    }
+}
+
+pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: VMStateT,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Debug + Serialize + DeserializeOwned + Clone,
+{
+    BasicTxn {
+        caller: v.get_caller(),
+        contract: v.get_contract(),
+        data: v.pretty_txn(),
+        #[cfg(feature = "evm")]
+        value: v.get_txn_value_temp(),
+        #[cfg(feature = "evm")]
+        data_abi: v.get_data_abi(),
     }
 }
 

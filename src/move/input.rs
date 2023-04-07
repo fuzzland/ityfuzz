@@ -14,6 +14,7 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::values::{Value, ValueImpl};
+use primitive_types::U256;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
@@ -176,6 +177,11 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
 
     #[cfg(feature = "evm")]
     fn get_data_abi_mut(&mut self) -> &mut Option<BoxedABI> {
+        unreachable!("MoveVM does not have an ABI")
+    }
+
+    #[cfg(feature = "evm")]
+    fn get_txn_value_temp(&self) -> Option<U256> {
         unreachable!("MoveVM does not have an ABI")
     }
 

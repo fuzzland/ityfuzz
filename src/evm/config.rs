@@ -44,7 +44,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub onchain: Option<OnChainConfig>,
     pub onchain_storage_fetching: Option<StorageFetchingMode>,
     pub flashloan: bool,
-    pub concolic_prob: Option<f32>,
+    pub concolic: bool,
     pub fuzzer_type: FuzzerTypes,
     pub contract_info: Vec<ContractInfo>,
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
