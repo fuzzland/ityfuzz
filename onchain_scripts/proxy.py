@@ -199,8 +199,11 @@ def get_all_hops(token, network, block, hop=0, known=set()):
 
 
 def get_pegged_next_hop(token, network):
-
-    return {"src": "pegged", "rate": fetch_token_price(network, token)[2]}
+    return {"src": "pegged", "rate": fetch_token_price(network, token)[2] if token not in [
+        "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+        "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    ] else int(1e6)}
 
 
 @functools.lru_cache(maxsize=10240)
@@ -299,7 +302,7 @@ def fetch_token_price(network, token_address):
         price_scaled = float(price[0]) / (10 ** (int(decimals[0]) - 18))
     else:
         price_scaled = float(price[0]) * (10 ** (18 - int(decimals[0])))
-    return int(float(price[0]) * 10e5), int(decimals[0]), int(price_scaled * 10e5)
+    return int(float(price[0]) * 1e6), int(decimals[0]), int(price_scaled * 1e6)
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=3, delay=0.5, backoff=2)

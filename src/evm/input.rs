@@ -277,6 +277,10 @@ impl EVMInput {
         if res == MutationResult::Skipped {
             return res;
         }
+        // make set first 16 bytes to 0
+        for i in 0..16 {
+            input_vec[i] = 0;
+        }
         input.set_txn_value(U256::from_big_endian(&input_vec.as_slice()));
         res
     }
@@ -336,7 +340,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
             + HasCaller<H160>
             + HasMetadata,
     {
-        if state.rand_mut().next() % 100 > 95 {
+        if state.rand_mut().next() % 100 > 87 {
             return self.mutate_env_with_access_pattern(state);
         }
         let vm_slots = if let Some(s) = self.get_state().get(&self.get_contract()) {

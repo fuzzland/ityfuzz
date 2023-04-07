@@ -164,8 +164,8 @@ where
                 6..=10 => {
                     let prev_percent = input.get_liquidation_percent();
                     input.set_liquidation_percent(
-                        if state.rand_mut().below(100) < 50 {
-                            1
+                        if state.rand_mut().below(100) < 80 {
+                            10
                         } else {
                             0
                         } as u8
