@@ -1254,7 +1254,7 @@ where
             },
         );
         unsafe {
-            self.host.data = vm_state
+            self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
