@@ -5,6 +5,7 @@ use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
 use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
+use bytes::Bytes;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
 use move_binary_format::CompiledModule;
@@ -20,12 +21,11 @@ use move_vm_runtime::{loader, move_vm};
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use move_vm_types::values::Locals;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use bytes::Bytes;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 struct MoveVM<I, S> {
     modules: HashMap<ModuleId, Arc<loader::Module>>,
@@ -106,7 +106,19 @@ where
         Some(module.self_id().address().clone())
     }
 
-    fn fast_static_call(&mut self, address: AccountAddress, data: MoveFunctionInput, vm_state: &MoveVMState, state: &mut S) -> MoveOutput where MoveVMState: VMStateT, AccountAddress: Serialize + DeserializeOwned + Debug, ModuleId: Serialize + DeserializeOwned + Debug, MoveOutput: Default {
+    fn fast_static_call(
+        &mut self,
+        address: AccountAddress,
+        data: MoveFunctionInput,
+        vm_state: &MoveVMState,
+        state: &mut S,
+    ) -> MoveOutput
+    where
+        MoveVMState: VMStateT,
+        AccountAddress: Serialize + DeserializeOwned + Debug,
+        ModuleId: Serialize + DeserializeOwned + Debug,
+        MoveOutput: Default,
+    {
         todo!()
     }
 

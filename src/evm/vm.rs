@@ -1235,7 +1235,13 @@ where
         };
     }
 
-    fn fast_static_call(&mut self, address: H160, data: Bytes, vm_state: &VS, state: &mut S) -> Vec<u8> {
+    fn fast_static_call(
+        &mut self,
+        address: H160,
+        data: Bytes,
+        vm_state: &VS,
+        state: &mut S,
+    ) -> Vec<u8> {
         let call = Contract::new_with_context::<LatestSpec>(
             data,
             self.host.code.get(&address).expect("no code").clone(),
@@ -1244,11 +1250,14 @@ where
                 caller: Default::default(),
                 code_address: address,
                 apparent_value: Default::default(),
-                scheme: CallScheme::StaticCall
-            }
+                scheme: CallScheme::StaticCall,
+            },
         );
         unsafe {
-            self.host.data = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
+            self.host.data = vm_state
+                .as_any()
+                .downcast_ref_unchecked::<EVMState>()
+                .clone();
         }
         let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
         interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
