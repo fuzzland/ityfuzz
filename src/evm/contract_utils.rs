@@ -1,6 +1,6 @@
 use glob::glob;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use std::fs::File;
 
@@ -248,7 +248,7 @@ impl ContractLoader {
         Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
     }
 
-    pub fn from_address(onchain: &mut OnChainConfig, address: Vec<H160>) -> Self {
+    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<H160>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         for addr in address {
             let abi = onchain.fetch_abi(addr);

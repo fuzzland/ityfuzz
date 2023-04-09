@@ -224,7 +224,8 @@ impl EVMInput {
         S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         // not supported yet
-        unreachable!();
+        // unreachable!();
+        return MutationResult::Skipped;
     }
 
     pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
@@ -232,7 +233,8 @@ impl EVMInput {
         S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         // not supported yet
-        unreachable!();
+        // unreachable!();
+        return MutationResult::Skipped;
     }
 
     pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
