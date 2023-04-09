@@ -261,6 +261,13 @@ impl UniswapInfo {
         let amount_in_with_fee = amount_in * U256::from(10000 - self.pool_fee);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = reserve_in * U256::from(10000) + amount_in_with_fee;
+        if denominator == U256::zero() {
+            return SwapResult {
+                amount_out: U256::zero(),
+                new_reserve_in: reserve_in,
+                new_reserve_out: reserve_out,
+            };
+        }
         let amount_out = numerator / denominator;
         SwapResult {
             amount_out,
