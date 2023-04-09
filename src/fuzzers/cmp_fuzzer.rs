@@ -41,7 +41,7 @@ use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
-use revm::Bytecode;
+use revm::{BlockEnv, Bytecode};
 
 struct ABIConfig {
     abi: String,
@@ -189,8 +189,9 @@ pub fn cmp_fuzzer(
                 let caller = H160::from_str(splitter[1]).unwrap();
                 let contract = H160::from_str(splitter[2]).unwrap();
                 let input = hex::decode(splitter[3]).unwrap();
-                let value = splitter[4].parse::<usize>().unwrap();
+                let value = U256::from_str(splitter[4]).unwrap();
                 let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
+                let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
 
                 fuzzer
                     .evaluate_input_events(
@@ -203,13 +204,25 @@ pub fn cmp_fuzzer(
                             data: None,
                             sstate: vm_state.clone(),
                             sstate_idx: 0,
-                            txn_value: if value == 0 {
+                            txn_value: if value == U256::zero() {
                                 None
                             } else {
-                                Some(U256::from(value))
+                                Some(value)
                             },
                             step: is_step,
-                            env: Default::default(),
+                            env: revm::Env {
+                                cfg: Default::default(),
+                                block: BlockEnv {
+                                    number: U256::from(warp_to),
+                                    coinbase: Default::default(),
+                                    timestamp: U256::from(warp_to * 1000),
+                                    difficulty: Default::default(),
+                                    prevrandao: None,
+                                    basefee: Default::default(),
+                                    gas_limit: Default::default(),
+                                },
+                                tx: Default::default(),
+                            },
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                             #[cfg(feature = "flashloan_v2")]
                             liquidation_percent,
