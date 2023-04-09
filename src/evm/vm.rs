@@ -559,7 +559,8 @@ where
                 // }
                 0x57 => {
                     // JUMPI counter cond
-                    let jump_dest = if fast_peek!(1).is_zero() {
+                    let br = fast_peek!(1);
+                    let jump_dest = if br.is_zero() {
                         1
                     } else {
                         fast_peek!(0).as_u64()
@@ -575,9 +576,7 @@ where
                     #[cfg(feature = "cmp")]
                     {
                         let idx = (interp.program_counter()) % MAP_SIZE;
-                        if jump_dest != 1 {
-                            CMP_MAP[idx] = U256::zero();
-                        }
+                        CMP_MAP[idx] = br;
                     }
                 }
 
