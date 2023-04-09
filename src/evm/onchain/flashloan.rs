@@ -420,11 +420,9 @@ where
             let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
             let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
             let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-            if size < U256::from(4) {
-                return;
-            }
-            let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
-            macro_rules! handle_transfer {
+            if size >= U256::from(4) {
+                let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
+                macro_rules! handle_transfer {
                 ($dst: ident, $amount: ident) => {
                     if $amount > U256::zero() && $dst == interp.contract.caller {
                         let pc = interp.program_counter();
@@ -444,21 +442,22 @@ where
                     }
                 };
             }
-            match data[0..4] {
-                // transfer
-                [0xa9, 0x05, 0x9c, 0xbb] => {
-                    let dst = H160::from_slice(&data[16..36]);
-                    let amount = U256::from_big_endian(&data[36..68]);
-                    handle_transfer!(dst, amount);
-                }
-                // transferFrom
-                [0x23, 0xb8, 0x72, 0xdd] => {
-                    let dst = H160::from_slice(&data[48..68]);
-                    let amount = U256::from_big_endian(&data[68..100]);
-                    handle_transfer!(dst, amount);
-                }
-                _ => {}
-            };
+                match data[0..4] {
+                    // transfer
+                    [0xa9, 0x05, 0x9c, 0xbb] => {
+                        let dst = H160::from_slice(&data[16..36]);
+                        let amount = U256::from_big_endian(&data[36..68]);
+                        handle_transfer!(dst, amount);
+                    }
+                    // transferFrom
+                    [0x23, 0xb8, 0x72, 0xdd] => {
+                        let dst = H160::from_slice(&data[48..68]);
+                        let amount = U256::from_big_endian(&data[68..100]);
+                        handle_transfer!(dst, amount);
+                    }
+                    _ => {}
+                };
+            }
         }
 
         // todo: fix for delegatecall
