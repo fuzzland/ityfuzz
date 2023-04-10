@@ -3,6 +3,11 @@ Fast hybrid fuzzer for EVM, MoveVM, etc.
 
 
 ### Building
+**Prerequisite** 
+
+You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (Z3) installed.  
+
+**Build the project**
 ```bash
 # download move dependencies
 git submodule update --recursive --init
@@ -111,11 +116,18 @@ python3 proxy.py
 
 To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
 
-### Z3 Installation (macOS)
+### Z3 Installation
+macOS:
 ```bash
 git clone https://github.com/Z3Prover/z3 && cd z3
 python scripts/mk_make.py --prefix=/usr/local
 cd build && make -j64 && sudo make install
+```
+
+Ubuntu:
+
+```bash
+apt install libz3-dev
 ```
 
 ### Onchain Fetching
