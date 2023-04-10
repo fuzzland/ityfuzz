@@ -1,13 +1,24 @@
 # ItyFuzz
-Fast hybrid fuzzer for EVM, MoveVM, etc.
+Fast hybrid fuzzer for EVM, MoveVM (WIP), etc.
 
+### Run ItyFuzz with UI
+Install Docker from https://www.docker.com/ and run our docker image (x86 only, running on non-x86 platform significantly degrades performance):
+
+
+```bash
+docker run -p 8000:8000 fuzzland/dev-ityfuzz-2
+```
+
+
+Then, you can visit the interface at http://localhost:8000
+
+
+# Development
 
 ### Building
-**Prerequisite** 
 
-You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (Z3) installed.  
+You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.  
 
-**Build the project**
 ```bash
 # download move dependencies
 git submodule update --recursive --init
@@ -15,14 +26,9 @@ cd cli/
 cargo build --release
 ```
 
-If you encounter any Z3 related errors, please refer to [this](#z3-installation-macos) section.
-
-
 You can enable certain debug gates in `Cargo.toml`
 
-
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
-
 
 ### Run
 Compile Smart Contracts:
@@ -116,6 +122,13 @@ python3 proxy.py
 
 To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
 
+### Onchain Fetching
+ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
+There are three ways of fetching: 
+* OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
+* All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large. 
+* Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
+
 ### Z3 Installation
 macOS:
 ```bash
@@ -129,10 +142,3 @@ Ubuntu:
 ```bash
 apt install libz3-dev
 ```
-
-### Onchain Fetching
-ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
-There are three ways of fetching: 
-* OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
-* All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large. 
-* Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
