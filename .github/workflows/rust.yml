@@ -22,6 +22,13 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y libssl-dev libz3-dev
 
+    - name: Install solc-select
+      run: |
+        sudo apt-get install -y python3-pip
+        pip3 install solc-select
+        solc-select install 0.8.15
+        solc-select use 0.8.15
+
     - name: Build
       run: cargo build --verbose
 
