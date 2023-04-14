@@ -99,7 +99,7 @@ impl<'a> EVMCorpusInitializer<'a> {
 
             self.state.add_address(&deployed_address);
 
-            if unsafe {BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address) } {
+            if unsafe {BLACKLIST_ADDR.is_some() && BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address) } {
                 continue;
             }
 
