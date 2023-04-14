@@ -19,8 +19,6 @@ pub fn init_license() {
         extra: ({
             let mut map = std::collections::BTreeMap::new();
             map.insert("args".to_string(), env::args().collect::<Vec<String>>().join(" ").into());
-            map.insert("vars".to_string(), env::vars().map(|(x,y)| format!("{}:{}", x,y))
-                .collect::<Vec<String>>().join("\n").into());
             map.insert("cwd".to_string(), env::current_dir().unwrap().to_str().unwrap().into());
             map
         }),
