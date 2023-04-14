@@ -5,6 +5,8 @@ import flask
 import requests
 from retry import retry
 from ratelimit import limits
+import time
+
 
 headers = {
     'authority': 'etherscan.io',
@@ -44,8 +46,7 @@ def get_rpc(network):
     elif network == "bsc":
         # BSC mod to geth make it no longer possible to use debug_storageRangeAt
         # so, we use our own node that supports eth_getStorageAll
-        # return "https://blue-damp-glitter.bsc.discover.quiknode.pro/8364ed151b17ed4619e9effc6237600241c2e65c/"
-        return "http://bsc.node1.infra.fuzz.land"
+        return "https://bsc-dataseed2.ninicoin.io/" # "http://bsc.node1.infra.fuzz.land:4949"
     elif network == "polygon":
         return "https://polygon-rpc.com/"
     elif network == "mumbai":
@@ -119,10 +120,85 @@ def get_pegged_token(network):
         raise Exception("Unknown network")
 
 
+def get_weth(network):
+    t = get_pegged_token(network)
+    if network == "eth":
+        return t["WETH"]
+    elif network == "bsc":
+        return t["WBNB"]
+    elif network == "polygon":
+        return t["WMATIC"]
+    elif network == "mumbai":
+        raise Exception("Not supported")
+    else:
+        raise Exception("Unknown network")
+
+
+def get_router(network, source):
+    if network == "eth":
+        if source == "uniswapv2":
+            return "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"
+        elif source == "uniswapv3":
+            return "0xe592427a0aece92de3edee1f18e0157c05861564"
+        else:
+            raise Exception("Unknown source")
+    elif network == "bsc":
+        if source == "pancakeswap":
+            return "0x05ff2b0db69458a0750badebc4f9e13add608c7f"
+        elif source == "biswap":
+            return "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+        else:
+            raise Exception("Unknown source")
+    elif network == "polygon":
+        if source == "uniswapv3":
+            return "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+        else:
+            raise Exception("Unknown source")
+    elif network == "mumbai":
+        raise Exception("Not supported")
+
+
+def get_token_name_from_address(network, address):
+    data = get_pegged_token(network)
+
+    for k, v in data.items():
+        if v == address:
+            return k
+    raise Exception("Unknown token address")
+
+
+def get_funded_src(network, name):
+    if network == "eth":
+        return "0xBA12222222228d8Ba445958a75a0704d566BF2C8"  # balancer
+    elif network == "bsc":
+        return {
+            "WBNB": "0x0ed7e52944161450477ee417de9cd3a859b14fd0", # cake LP
+            "USDC": "0x2354ef4df11afacb85a5c7f98b624072eccddbb1", # usdc busd LP
+            "USDT": "0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE", # usdt wbnb LP
+            "DAI": "0x66FDB2eCCfB58cF098eaa419e5EfDe841368e489", # busd dai LP
+            "WBTC": "0x0000000000000000000000000000000000001004",
+            "WETH": "0x0000000000000000000000000000000000001004",
+            "BUSD": "0x2354ef4df11afacb85a5c7f98b624072eccddbb1", # usdc busd LP
+            "CAKE": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"  # cake LP
+        }[name]
+    elif network == "polygon":
+        return "0xba12222222228d8ba445958a75a0704d566bf2c8" # balancer
+    elif network == "mumbai":
+        raise Exception("Not supported")
+    else:
+        raise Exception("Unknown network")
+
+
+def get_funded_src_with_balance(network, name, block):
+    src = get_funded_src(network, name)
+    token_address = get_pegged_token(network)[name]
+    return src, fetch_balance(token_address, src, network, block)
+
 data = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  \n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n}'
+data_peg = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\", token1: \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n\n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\", token0: \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  }'
 
 
-@retry(tries=100, delay=1, backoff=0.3)
+@retry(tries=100, delay=1, backoff=1)
 @limits(calls=4, period=2)
 def etherscan_get(url, ):
     print(url)
@@ -151,6 +227,25 @@ def fetch_reserve(pair, network, block):
 
 @functools.lru_cache(maxsize=10240)
 @retry(tries=10, delay=0.5, backoff=0.3)
+def fetch_balance(token, address, network, block):
+    url = f"{get_rpc(network)}"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_call",
+        "params": [{
+            "to": token,
+            "data": "0x70a08231000000000000000000000000" + address[2:]
+        }, block],
+        "id": 1
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    result = response.json()["result"]
+    return result
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
 def get_latest_block(network):
     url = f"{get_rpc(network)}"
     payload = {
@@ -175,12 +270,41 @@ def get_pair(token, network, block):
         for name, i in api["v2"].items():
             res = requests.post(i, json={
                 "query": data % (block_int, token.lower(), block_int, token.lower())}
-                                ).json()["data"]
+                                ).json()
+            res = res["data"]
 
             for pair in res["p0"] + res["p1"]:
                 reserves = fetch_reserve(pair["id"], network, block)
                 next_tokens.append({
                     "src": "v2",
+                    "in": 0 if pair["token0"]["id"] == token else 1,
+                    "pair": pair["id"],
+                    "next": pair["token0"]["id"] if pair["token0"]["id"] != token else pair["token1"]["id"],
+                    "decimals0": pair["token0"]["decimals"],
+                    "decimals1": pair["token1"]["decimals"],
+                    "src_exact": name,
+                    "initial_reserves_0": reserves[0],
+                    "initial_reserves_1": reserves[1],
+                })
+    return next_tokens
+
+
+@functools.lru_cache(maxsize=10240)
+@retry(tries=10, delay=0.5, backoff=0.3)
+def get_pair_pegged(token, network, block):
+    # -50 account for delay in api indexing
+    block_int = int(block, 16) if block != "latest" else int(get_latest_block(network), 16) - 50
+    next_tokens = []
+    api = get_uniswap_api(network)
+    if "v2" in api:
+        for name, i in api["v2"].items():
+            res = requests.post(i, json={
+                "query": data_peg % (block_int, token.lower(), get_weth(network), block_int, token.lower(), get_weth(network))}
+                                ).json()["data"]
+
+            for pair in res["p0"] + res["p1"]:
+                reserves = fetch_reserve(pair["id"], network, block)
+                next_tokens.append({
                     "in": 0 if pair["token0"]["id"] == token else 1,
                     "pair": pair["id"],
                     "next": pair["token0"]["id"] if pair["token0"]["id"] != token else pair["token1"]["id"],
@@ -213,24 +337,50 @@ def get_all_hops(token, network, block, hop=0, known=set()):
     return hops
 
 
-def get_pegged_next_hop(token, network):
-    return {"src": "pegged", "rate": fetch_token_price(network, token)[2] if token not in [
-        "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-        "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
-        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    ] else int(1e6)}
+def scale(price, decimals):
+    # scale price to 18 decimals
+    price = int(price, 16)
+    if int(decimals) > 18:
+        return float(price) / (10 ** (int(decimals) - 18))
+    else:
+        return float(price) * (10 ** (18 - int(decimals)))
+
+
+def get_pegged_next_hop(token, network, block):
+    if token == get_weth(network):
+        return {"src": "pegged_weth", "rate": int(1e6), "token": token}
+    peg_info = get_pair_pegged(token, network, block)[0]
+    # calculate price using reserves
+    src = peg_info["in"]
+    p0 = int(peg_info["initial_reserves_0"], 16)
+    p1 = int(peg_info["initial_reserves_1"], 16)
+    if src == 0:
+        peg_info["rate"] = int(p1 / p0 * 1e6)
+    else:
+        peg_info["rate"] = int(p0 / p1 * 1e6)
+    return {"src": "pegged", **peg_info}
+
+
+def with_info(routes, network, token):
+    return {
+        "routes": routes,
+        "basic_info": {
+            "weth": get_weth(network),
+            "is_weth": token == get_weth(network),
+        },
+    }
 
 
 def find_path(network, token, block):
     if token in get_pegged_token(network).values():
-        return [[get_pegged_next_hop(token, network)]]
+        return with_info([[get_pegged_next_hop(token, network, block)]], network, token)
     hops = get_all_hops(token, network, block)
     routes = []
 
     # do a DFS to find all routes
     def dfs(token, path, visited):
         if token in get_pegged_token(network).values():
-            routes.append(path + [get_pegged_next_hop(token, network)])
+            routes.append(path + [get_pegged_next_hop(token, network, block)])
             return
         visited.add(token)
         if token not in hops:
@@ -241,25 +391,29 @@ def find_path(network, token, block):
             dfs(i["next"], path + [i], visited.copy())
 
     dfs(token, [], set())
-    return routes
+    return with_info(routes, network, token)
 
 
 # for path in (find_path("0x056fd409e1d7a124bd7017459dfea2f387b6d5cd", "eth", "16399064")):
 #     print(path)
 
 @functools.lru_cache(maxsize=10240)
-@retry(tries=3, delay=0.5, backoff=2)
 def fetch_etherscan_token_holder(network, token_address):
+    slot = re.compile("<tbody(.*?)>(.+?)</tbody>")
+    td_finder = re.compile("<tr>(.+?)</tr>")
     finder = re.compile("/token/" + token_address + "\?a=0x[0-9a-f]{40}'")
     url = f"{get_endpoint(network)}/token/generic-tokenholders2?a={token_address}"
     response = etherscan_get(url)
     response.raise_for_status()
     ret = []
-    for i in finder.findall(response.text):
-        ret.append(i.split("?a=")[1][:-1])
-    # todo: fix logic
-    if len(ret) < 10:
+    tds = td_finder.findall(slot.findall(response.text.replace("\n", ""))[0][1])
+    if len(tds) < 10:
         return []
+    for i in tds:
+        holder = finder.findall(i)[0].split("?a=")[1][:-1]
+        is_contract = "Contract" in i
+        if not is_contract:
+            ret.append(holder)
     return ret
 
 
@@ -289,7 +443,7 @@ def fetch_etherscan_contract_abi(network, token_address):
 
 def get_major_symbol(network):
     if network == "eth":
-        return "Eth"
+        return "ETH"
     elif network == "bsc":
         return "BNB"
     elif network == "polygon" or network == "mumbai":
@@ -305,12 +459,17 @@ def fetch_token_price(network, token_address):
     response = etherscan_get(url)
     response.raise_for_status()
     resp = response.text.replace("\r", "").replace("\t", "").replace("\n", "")
-    price_finder = re.compile(f"text-nowrap\'> @ (.+?) {get_major_symbol(network)}</span>")
+    print(f"@ (.+?) {get_major_symbol(network)}</span>")
+    price_finder = re.compile(f"@ (.+?) {get_major_symbol(network)}</span>")
     price = price_finder.findall(resp)
 
     decimals_finder = re.compile("Decimals:</div><div class=\"col-md-8\">(.+?)</div>")
+    decimals_finder_new = re.compile("WITH <b>(.+?)</b> Decimals")
     decimals = decimals_finder.findall(resp)
+    if len(decimals) == 0:
+        decimals = decimals_finder_new.findall(resp)
 
+    print(price, decimals)
     if len(price) == 0 or len(decimals) == 0:
         return 0, 0, 0
     if int(decimals[0]) > 18:
@@ -462,7 +621,7 @@ def price(network, token_address):
 
 @app.route("/swap_path/<network>/<token_address>/<block>", methods=["GET"])
 def swap_path(network, token_address, block):
-    return flask.jsonify(find_path(network, token_address, block))
+    return flask.jsonify(find_path(network, token_address.lower(), block))
 
 
 if __name__ == "__main__":
