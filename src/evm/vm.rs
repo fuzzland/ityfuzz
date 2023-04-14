@@ -309,7 +309,7 @@ where
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
 const ControlLeak: Return = Return::FatalExternalError;
-const ACTIVE_MATCH_EXT_CALL: bool = false;
+pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = true;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
 
@@ -902,7 +902,7 @@ where
 
         // find contracts that have this function hash
         let contract_loc_option = self.hash_to_address.get(hash.as_slice());
-        if ACTIVE_MATCH_EXT_CALL == true && contract_loc_option.is_some() {
+        if unsafe { ACTIVE_MATCH_EXT_CALL } && contract_loc_option.is_some() {
             let loc = contract_loc_option.unwrap();
             // if there is such a location known, then we can use exact call
             if !loc.contains(&input.contract) {
