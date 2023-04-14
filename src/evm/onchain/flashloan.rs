@@ -423,25 +423,25 @@ where
             if size >= U256::from(4) {
                 let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
                 macro_rules! handle_transfer {
-                ($dst: ident, $amount: ident) => {
-                    if $amount > U256::zero() && $dst == interp.contract.caller {
-                        let pc = interp.program_counter();
+                    ($dst: ident, $amount: ident) => {
+                        if $amount > U256::zero() && $dst == interp.contract.caller {
+                            let pc = interp.program_counter();
 
-                        match self.unbound_tracker.get_mut(&pc) {
-                            None => {
-                                self.unbound_tracker
-                                    .insert(pc, HashSet::from([call_target]));
-                            }
-                            Some(set) => {
-                                if set.len() > UNBOUND_TRANSFER_AMT {
-                                    host.evmstate.flashloan_data.earned = U512::max_value();
+                            match self.unbound_tracker.get_mut(&pc) {
+                                None => {
+                                    self.unbound_tracker
+                                        .insert(pc, HashSet::from([call_target]));
                                 }
-                                set.insert(call_target);
+                                Some(set) => {
+                                    if set.len() > UNBOUND_TRANSFER_AMT {
+                                        host.evmstate.flashloan_data.earned = U512::max_value();
+                                    }
+                                    set.insert(call_target);
+                                }
                             }
                         }
-                    }
-                };
-            }
+                    };
+                }
                 match data[0..4] {
                     // transfer
                     [0xa9, 0x05, 0x9c, 0xbb] => {

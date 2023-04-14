@@ -312,9 +312,10 @@ impl BoxedABI {
                             let index: usize = state.rand_mut().next() as usize % data_len;
                             aarray.data.remove(index);
                         }
-                        _ => {unreachable!()}
+                        _ => {
+                            unreachable!()
+                        }
                     }
-
                 } else {
                     let index: usize = state.rand_mut().next() as usize % data_len;
                     return aarray.data[index].mutate_with_vm_slots(state, vm_slots);
@@ -699,7 +700,9 @@ impl ABI for AArray {
 
         if self.dynamic_size {
             // to usize
-            let size: usize = bytes[0..32].iter().fold(0, |acc, x| (acc << 8) + *x as usize);
+            let size: usize = bytes[0..32]
+                .iter()
+                .fold(0, |acc, x| (acc << 8) + *x as usize);
             if size != self.data.len() {
                 unreachable!("Array size mismatch");
             }
@@ -721,7 +724,6 @@ impl ABI for AArray {
         //
         //     }
         // }
-
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {

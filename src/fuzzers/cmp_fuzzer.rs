@@ -25,7 +25,7 @@ use libafl::{
 
 use crate::evm::contract_utils::{set_hash, ContractLoader};
 use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
-use crate::evm::vm::{EVMState, CMP_MAP, ACTIVE_MATCH_EXT_CALL};
+use crate::evm::vm::{EVMState, ACTIVE_MATCH_EXT_CALL, CMP_MAP};
 use crate::feedback::{CmpFeedback, OracleFeedback};
 use crate::rand_utils::generate_random_address;
 use crate::scheduler::SortedDroppingScheduler;
@@ -94,9 +94,11 @@ pub fn cmp_fuzzer(
         }
         None => {
             // enable active match for offchain fuzzing (todo: handle this more elegantly)
-            unsafe { ACTIVE_MATCH_EXT_CALL = true; }
+            unsafe {
+                ACTIVE_MATCH_EXT_CALL = true;
+            }
             None
-        },
+        }
     };
 
     if config.flashloan {

@@ -162,7 +162,7 @@ git clone https://github.com/Z3Prover/z3 && cd z3
 python scripts/mk_make.py --prefix=/usr/local
 cd build && make -j64 && sudo make install
 ```
-If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HEADER=/usr/local/z3.h` 
+If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h` 
 
 **Ubuntu**
 

@@ -263,12 +263,10 @@ impl OnChainConfig {
                 self.local_proxy_addr, self.chain_name, address, self.block_number
             );
             match self.client.get(endpoint).send() {
-                Ok(res) => {
-                    Some(
-                        serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
-                            .expect("Failed to parse proxy response"),
-                    )
-                },
+                Ok(res) => Some(
+                    serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
+                        .expect("Failed to parse proxy response"),
+                ),
                 Err(_) => None,
             }
         } else {
@@ -292,8 +290,7 @@ impl OnChainConfig {
                 if kvs.len() == 0 {
                     return None;
                 }
-                for (_, v) in kvs.iter()
-                {
+                for (_, v) in kvs.iter() {
                     let key = v["key"].as_str().expect("fail to find key");
                     let value = v["value"].as_str().expect("fail to find value");
 

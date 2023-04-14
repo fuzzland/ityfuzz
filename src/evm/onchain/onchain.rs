@@ -6,6 +6,7 @@ use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
@@ -32,7 +33,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
@@ -169,23 +169,18 @@ where
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
                         if !self.$stor.contains_key(&address) {
-                            let storage = self
-                                .endpoint
-                                .$func(address);
+                            let storage = self.endpoint.$func(address);
                             if storage.is_some() {
                                 self.$stor.insert(address, storage.unwrap());
                             }
                         }
-                        match self.$stor
-                                .get(&address) {
+                        match self.$stor.get(&address) {
                             Some(v) => v.get(&$key).unwrap_or(&U256::zero()).clone(),
-                            None => {
-                                self.endpoint.get_contract_slot(
-                                    address,
-                                    slot_idx,
-                                    force_cache!(self.locs, slot_idx),
-                                )
-                            },
+                            None => self.endpoint.get_contract_slot(
+                                address,
+                                slot_idx,
+                                force_cache!(self.locs, slot_idx),
+                            ),
                         }
                     }};
                     () => {};
@@ -250,26 +245,26 @@ where
                     self.loaded_code.insert(address_h160);
 
                     let parsed_abi = match abi {
-                        Some(ref abi_ins) => {
-                            ContractLoader::parse_abi_str(abi_ins)
-                        }
-                        None => {
-                            fetch_abi_heimdall(hex::encode(contract_code.bytes()))
-                        }
+                        Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
+                        None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
                     };
 
                     // set up host
-                    host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
+                    host.add_hashes(
+                        address_h160,
+                        parsed_abi.iter().map(|abi| abi.function).collect(),
+                    );
                     state.add_address(&address_h160);
 
                     // notify flashloan and blacklisting flashloan addresses
                     #[cfg(feature = "flashloan_v2")]
                     match host.flashloan_middleware {
                         Some(ref middleware) => {
-                            let blacklists = middleware
-                                .deref()
-                                .borrow_mut()
-                                .on_contract_insertion(&address_h160, &parsed_abi, state);
+                            let blacklists = middleware.deref().borrow_mut().on_contract_insertion(
+                                &address_h160,
+                                &parsed_abi,
+                                state,
+                            );
                             for addr in blacklists {
                                 self.add_blacklist(addr);
                             }
@@ -278,37 +273,40 @@ where
                     }
 
                     // add abi to corpus
-                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
-                        #[cfg(not(feature = "fuzz_static"))]
-                        if abi.is_static {
-                            return;
-                        }
+                    parsed_abi
+                        .iter()
+                        .filter(|v| !v.is_constructor)
+                        .for_each(|abi| {
+                            #[cfg(not(feature = "fuzz_static"))]
+                            if abi.is_static {
+                                return;
+                            }
 
-                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance
-                            .set_func_with_name(abi.function, abi.function_name.clone());
-                        let input = EVMInput {
-                            caller: state.get_rand_caller(),
-                            contract: address_h160.clone(),
-                            data: Some(abi_instance),
-                            sstate: StagedVMState::new_uninitialized(),
-                            sstate_idx: 0,
-                            txn_value: if abi.is_payable {
-                                Some(U256::zero())
-                            } else {
-                                None
-                            },
-                            step: false,
+                            let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                            abi_instance
+                                .set_func_with_name(abi.function, abi.function_name.clone());
+                            let input = EVMInput {
+                                caller: state.get_rand_caller(),
+                                contract: address_h160.clone(),
+                                data: Some(abi_instance),
+                                sstate: StagedVMState::new_uninitialized(),
+                                sstate_idx: 0,
+                                txn_value: if abi.is_payable {
+                                    Some(U256::zero())
+                                } else {
+                                    None
+                                },
+                                step: false,
 
-                            env: Default::default(),
-                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                            #[cfg(feature = "flashloan_v2")]
-                            liquidation_percent: 0,
-                            #[cfg(any(test, feature = "debug"))]
-                            direct_data: Default::default(),
-                        };
-                        add_corpus(host, state, &input);
-                    });
+                                env: Default::default(),
+                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                                #[cfg(feature = "flashloan_v2")]
+                                liquidation_percent: 0,
+                                #[cfg(any(test, feature = "debug"))]
+                                direct_data: Default::default(),
+                            };
+                            add_corpus(host, state, &input);
+                        });
                 }
 
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
