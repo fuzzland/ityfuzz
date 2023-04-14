@@ -20,7 +20,7 @@ jobs:
         submodules: 'recursive'
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y libssl-dev libz3-dev pkg-config clang
+      run: sudo apt-get update && sudo apt-get install -y libssl-dev libz3-dev pkg-config clang cmake
 
     - name: Install solc-select
       run: |
