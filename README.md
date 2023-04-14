@@ -1,4 +1,4 @@
-# ItyFuzz
+# ItyFuzz 🍦
 Fast hybrid fuzzer for EVM, MoveVM (WIP), etc.
 
 ### Run ItyFuzz with UI
@@ -9,9 +9,33 @@ Install Docker from https://www.docker.com/ and run our docker image (x86 only, 
 docker run -p 8000:8000 fuzzland/dev-ityfuzz-2
 ```
 
-
 Then, you can visit the interface at http://localhost:8000
 
+
+### Statistics & Comparison
+
+Time taken for finding vulnerabilities / generating exploits: 
+
+| Project Name             | Vulnerability           | **Mythril** | **SMARTIAN**    | **Slither** | **ItyFuzz** |
+|---------------|-------------------------|---------|-------------|---------|---------|
+| AES           | Business Logic          | Inf     | Unsupported | No      | 4hrs    |
+| Carrot        | Arbitrary External Call | 17s     | 11s         | Yes     | 1s      |
+| Olympus       | Access Control          | 36s     | Inf         | Yes     | 1s      |
+| MUMUG         | Price Manipulation      | Inf     | Unsupported         | No      | 18hrs   |
+| Omni          | Reentrancy              | Inf     | Unsupported         | Yes*    | 22hrs   |
+| Verilog CTF-2 | Reentrancy              | Inf     | Unsupported         | Yes*    | 3s      |
+
+<sub>\* Slither only finds the reentrancy location, but not how to leverage reentrancy to trigger final buggy code. The output also contains significant amount of false positives. </sub>
+
+Test Coverage:
+
+| **Dataset** | **SMARTIAN** | **Echidna** | **ItyFuzz** |
+|-------------|--------------|-------------|-------------|
+| B1          | 97.1%        | 47.1%       | 99.2%       |
+| B2          | 86.2%        | 82.9%       | 95.4%       |
+| Tests       | Unsupported  | 52.9%       | 100%        |
+
+<sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
 # Development
 
