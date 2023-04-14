@@ -3,6 +3,8 @@ use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
+use crate::evm::onchain::flashloan::register_borrow_txn;
+use crate::evm::onchain::onchain::BLACKLIST_ADDR;
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
@@ -24,8 +26,6 @@ use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
-use crate::evm::onchain::flashloan::register_borrow_txn;
-use crate::evm::onchain::onchain::BLACKLIST_ADDR;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -86,20 +86,19 @@ impl<'a> EVMCorpusInitializer<'a> {
             if match self.executor.host.flashloan_middleware {
                 Some(ref middleware) => {
                     let mut mid = middleware.deref().borrow_mut();
-                    mid.on_contract_insertion(
-                        &deployed_address,
-                        &contract.abi,
-                        &mut self.state,
-                    )
+                    mid.on_contract_insertion(&deployed_address, &contract.abi, &mut self.state)
                 }
-                None => {false}
+                None => false,
             } {
                 register_borrow_txn(&self.executor.host, self.state, deployed_address);
             }
 
             self.state.add_address(&deployed_address);
 
-            if unsafe {BLACKLIST_ADDR.is_some() && BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address) } {
+            if unsafe {
+                BLACKLIST_ADDR.is_some()
+                    && BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address)
+            } {
                 continue;
             }
 

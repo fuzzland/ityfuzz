@@ -1,3 +1,4 @@
+use crate::evm::input::EVMInputTy::{Borrow, ABI};
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::mutation_utils::{mutate_with_vm_slot, VMStateHintedMutator};
 use crate::generic_vm::vm_state::VMStateT;
@@ -16,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
-use crate::evm::input::EVMInputTy::{ABI, Borrow};
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -82,22 +82,22 @@ impl AccessPattern {
 }
 
 pub struct FuzzMutator<'a, VS, Loc, Addr, SC>
-    where
-        VS: Default + VMStateT,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub infant_scheduler: &'a SC,
     pub phantom: std::marker::PhantomData<(VS, Loc, Addr)>,
 }
 
 impl<'a, VS, Loc, Addr, SC> FuzzMutator<'a, VS, Loc, Addr, SC>
-    where
-        VS: Default + VMStateT,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     pub fn new(infant_scheduler: &'a SC) -> Self {
         Self {
@@ -108,13 +108,13 @@ impl<'a, VS, Loc, Addr, SC> FuzzMutator<'a, VS, Loc, Addr, SC>
 }
 
 impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC>
-    where
-        I: VMInputT<VS, Loc, Addr> + Input + EVMInputT,
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
-        VS: Default + VMStateT,
-        Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
+where
+    I: VMInputT<VS, Loc, Addr> + Input + EVMInputT,
+    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    VS: Default + VMStateT,
+    Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn mutate(
         &mut self,
@@ -142,21 +142,20 @@ impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Add
                 let rand_u8 = state.rand_mut().below(255) as u8;
                 return match state.rand_mut().below(3) {
                     0 => {
-                        input.set_randomness(vec![rand_u8;1]);
+                        input.set_randomness(vec![rand_u8; 1]);
                         MutationResult::Mutated
                     }
                     1 => {
                         let old_idx = input.get_state_idx();
-                        let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
+                        let (idx, new_state) =
+                            state.get_infant_state(self.infant_scheduler).unwrap();
                         if idx == old_idx {
                             return MutationResult::Skipped;
                         }
                         input.set_staged_state(new_state, idx);
                         MutationResult::Mutated
                     }
-                    _ => {
-                        input.mutate(state)
-                    }
+                    _ => input.mutate(state),
                 };
             }
             if input.get_staged_state().state.has_post_execution() && !input.is_step() {

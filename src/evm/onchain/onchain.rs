@@ -6,7 +6,9 @@ use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
+use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::vm::{FuzzHost, IntermediateExecutionResult, IS_FAST_CALL};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -32,18 +34,16 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
-use crate::evm::onchain::flashloan::register_borrow_txn;
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<H160>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
-    where
-        I: Input + VMInputT<VS, H160, H160>,
-        S: State,
-        VS: VMStateT + Default,
+where
+    I: Input + VMInputT<VS, H160, H160>,
+    S: State,
+    VS: VMStateT + Default,
 {
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
@@ -58,10 +58,10 @@ pub struct OnChain<VS, I, S>
 }
 
 impl<VS, I, S> Debug for OnChain<VS, I, S>
-    where
-        I: Input + VMInputT<VS, H160, H160>,
-        S: State,
-        VS: VMStateT + Default,
+where
+    I: Input + VMInputT<VS, H160, H160>,
+    S: State,
+    VS: VMStateT + Default,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OnChain")
@@ -73,10 +73,10 @@ impl<VS, I, S> Debug for OnChain<VS, I, S>
 }
 
 impl<VS, I, S> OnChain<VS, I, S>
-    where
-        I: Input + VMInputT<VS, H160, H160>,
-        S: State,
-        VS: VMStateT + Default,
+where
+    I: Input + VMInputT<VS, H160, H160>,
+    S: State,
+    VS: VMStateT + Default,
 {
     pub fn new(endpoint: OnChainConfig, storage_fetching: StorageFetchingMode) -> Self {
         unsafe {
@@ -136,9 +136,9 @@ pub fn keccak_hex(data: U256) -> String {
 }
 
 impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
-    where
-        I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
-        S: State
+where
+    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    S: State
         + Debug
         + HasCaller<H160>
         + HasCorpus<I>
@@ -146,7 +146,7 @@ impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
         + HasMetadata
         + Clone
         + 'static,
-        VS: VMStateT + Default + 'static,
+    VS: VMStateT + Default + 'static,
 {
     unsafe fn on_step(
         &mut self,
@@ -189,23 +189,18 @@ impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
                         if !self.$stor.contains_key(&address) {
-                            let storage = self
-                                .endpoint
-                                .$func(address);
+                            let storage = self.endpoint.$func(address);
                             if storage.is_some() {
                                 self.$stor.insert(address, storage.unwrap());
                             }
                         }
-                        match self.$stor
-                                .get(&address) {
+                        match self.$stor.get(&address) {
                             Some(v) => v.get(&$key).unwrap_or(&U256::zero()).clone(),
-                            None => {
-                                self.endpoint.get_contract_slot(
-                                    address,
-                                    slot_idx,
-                                    force_cache!(self.locs, slot_idx),
-                                )
-                            },
+                            None => self.endpoint.get_contract_slot(
+                                address,
+                                slot_idx,
+                                force_cache!(self.locs, slot_idx),
+                            ),
                         }
                     }};
                     () => {};
@@ -262,13 +257,12 @@ impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
                 let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
                 println!("fetching code3 {:?}", hex::encode(contract_code.bytes()));
 
-
                 if !self.loaded_code.contains(&address_h160)
                     && !force_cache
                     && !contract_code.is_empty()
                 {
                     self.loaded_code.insert(address_h160);
-                    if unsafe {IS_FAST_CALL} || self.blacklist.contains(&address_h160) {
+                    if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) {
                         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                         host.set_code(address_h160, contract_code);
                         return;
@@ -277,70 +271,69 @@ impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
                     println!("fetching abi {:?}", address_h160);
                     let abi = self.endpoint.fetch_abi(address_h160);
 
-
                     let parsed_abi = match abi {
-                        Some(ref abi_ins) => {
-                            ContractLoader::parse_abi_str(abi_ins)
-                        }
-                        None => {
-                            fetch_abi_heimdall(hex::encode(contract_code.bytes()))
-                        }
+                        Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
+                        None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
                     };
 
                     // set up host
-                    host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
+                    host.add_hashes(
+                        address_h160,
+                        parsed_abi.iter().map(|abi| abi.function).collect(),
+                    );
                     state.add_address(&address_h160);
 
                     // notify flashloan and blacklisting flashloan addresses
                     #[cfg(feature = "flashloan_v2")]
                     if match host.flashloan_middleware {
-                        Some(ref middleware) => {
-                            middleware
-                                .deref()
-                                .borrow_mut()
-                                .on_contract_insertion(&address_h160, &parsed_abi, state)
-                        }
-                        None => {false}
+                        Some(ref middleware) => middleware
+                            .deref()
+                            .borrow_mut()
+                            .on_contract_insertion(&address_h160, &parsed_abi, state),
+                        None => false,
                     } {
                         println!("borrowing from {:?}", address_h160);
                         register_borrow_txn(host, state, address_h160);
                     }
 
                     // add abi to corpus
-                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
-                        #[cfg(not(feature = "fuzz_static"))]
-                        if abi.is_static {
-                            return;
-                        }
+                    parsed_abi
+                        .iter()
+                        .filter(|v| !v.is_constructor)
+                        .for_each(|abi| {
+                            #[cfg(not(feature = "fuzz_static"))]
+                            if abi.is_static {
+                                return;
+                            }
 
-                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance
-                            .set_func_with_name(abi.function, abi.function_name.clone());
-                        let input = EVMInput {
-                            caller: state.get_rand_caller(),
-                            contract: address_h160.clone(),
-                            data: Some(abi_instance),
-                            sstate: StagedVMState::new_uninitialized(),
-                            sstate_idx: 0,
-                            txn_value: if abi.is_payable {
-                                Some(U256::zero())
-                            } else {
-                                None
-                            },
-                            step: false,
+                            let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                            abi_instance
+                                .set_func_with_name(abi.function, abi.function_name.clone());
+                            let input = EVMInput {
+                                caller: state.get_rand_caller(),
+                                contract: address_h160.clone(),
+                                data: Some(abi_instance),
+                                sstate: StagedVMState::new_uninitialized(),
+                                sstate_idx: 0,
+                                txn_value: if abi.is_payable {
+                                    Some(U256::zero())
+                                } else {
+                                    None
+                                },
+                                step: false,
 
-                            env: Default::default(),
-                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                            #[cfg(feature = "flashloan_v2")]
-                            liquidation_percent: 0,
-                            #[cfg(feature = "flashloan_v2")]
-                            input_type: EVMInputTy::ABI,
-                            #[cfg(any(test, feature = "debug"))]
-                            direct_data: Default::default(),
-                            randomness: vec![],
-                        };
-                        add_corpus(host, state, &input);
-                    });
+                                env: Default::default(),
+                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                                #[cfg(feature = "flashloan_v2")]
+                                liquidation_percent: 0,
+                                #[cfg(feature = "flashloan_v2")]
+                                input_type: EVMInputTy::ABI,
+                                #[cfg(any(test, feature = "debug"))]
+                                direct_data: Default::default(),
+                                randomness: vec![],
+                            };
+                            add_corpus(host, state, &input);
+                        });
                 }
 
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);

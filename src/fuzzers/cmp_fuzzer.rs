@@ -167,7 +167,7 @@ pub fn cmp_fuzzer(
         objective,
     );
     match config.debug_file {
-        None => { }
+        None => {}
         Some(file) => {
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
@@ -275,24 +275,19 @@ pub fn cmp_fuzzer(
                             #[cfg(feature = "flashloan_v2")]
                             liquidation_percent,
                             #[cfg(feature = "flashloan_v2")]
-
                             input_type: EVMInputTy::Borrow,
                             #[cfg(any(test, feature = "debug"))]
                             direct_data: Bytes::new(),
                             randomness,
                         }
                     }
-                    _ => {unreachable!()}
+                    _ => {
+                        unreachable!()
+                    }
                 };
 
                 fuzzer
-                    .evaluate_input_events(
-                        &mut state,
-                        &mut executor,
-                        &mut mgr,
-                        inp,
-                        false,
-                    )
+                    .evaluate_input_events(&mut state, &mut executor, &mut mgr, inp, false)
                     .unwrap();
 
                 println!("============ Execution result {} =============", idx);

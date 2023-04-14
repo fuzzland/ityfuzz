@@ -27,12 +27,12 @@ pub struct BasicTxn<Addr> {
     pub flashloan: String,
     #[cfg(feature = "debug")]
     pub direct_data: Vec<u8>,
-    pub layer: usize
+    pub layer: usize,
 }
 
 impl<Addr> Debug for BasicTxn<Addr>
-    where
-        Addr: Debug,
+where
+    Addr: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut binding = f.debug_struct("BasicTxn");
@@ -60,12 +60,12 @@ pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
     res: &ExecutionResult<Loc, Addr, VS, Out>,
 ) -> BasicTxn<Addr>
-    where
-        I: VMInputT<VS, Loc, Addr>,
-        VS: VMStateT,
-        Addr: Debug + Serialize + DeserializeOwned + Clone,
-        Loc: Debug + Serialize + DeserializeOwned + Clone,
-        Out: Default,
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: VMStateT,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Debug + Serialize + DeserializeOwned + Clone,
+    Out: Default,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -79,16 +79,16 @@ pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
         flashloan: res.new_state.state.get_flashloan(),
         #[cfg(feature = "debug")]
         direct_data: v.get_direct_data(),
-        layer: v.get_state().get_post_execution_len()
+        layer: v.get_state().get_post_execution_len(),
     }
 }
 
 pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
-    where
-        I: VMInputT<VS, Loc, Addr>,
-        VS: VMStateT,
-        Addr: Debug + Serialize + DeserializeOwned + Clone,
-        Loc: Debug + Serialize + DeserializeOwned + Clone,
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: VMStateT,
+    Addr: Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Debug + Serialize + DeserializeOwned + Clone,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -102,7 +102,7 @@ pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
         flashloan: "".to_string(),
         #[cfg(feature = "debug")]
         direct_data: v.get_direct_data(),
-        layer: v.get_state().get_post_execution_len()
+        layer: v.get_state().get_post_execution_len(),
     }
 }
 
@@ -129,11 +129,11 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
     }
 
     pub fn to_string<VS, S>(&self, state: &mut S) -> String
-        where
-            S: HasInfantStateState<Loc, Addr, VS>,
-            VS: VMStateT,
-            Addr: Debug + Serialize + DeserializeOwned + Clone,
-            Loc: Debug + Serialize + DeserializeOwned + Clone,
+    where
+        S: HasInfantStateState<Loc, Addr, VS>,
+        VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
         if self.from_idx.is_none() {
             return String::from("Begin\n");

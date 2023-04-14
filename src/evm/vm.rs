@@ -192,6 +192,7 @@ use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::EVMFuzzState;
+use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -202,7 +203,6 @@ pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
-use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 
 use super::concolic::concolic_exe_host::{ConcolicEVMExecutor, ConcolicExeHost};
 
@@ -245,8 +245,7 @@ where
 
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
-    pub token_ctx: HashMap<H160, TokenContext>
-
+    pub token_ctx: HashMap<H160, TokenContext>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -524,9 +523,7 @@ macro_rules! u256_to_u8 {
     };
 }
 
-
-pub static mut ARBITRARY_CALL : bool = false;
-
+pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
@@ -870,7 +867,9 @@ where
         if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD
             && input_seq.len() >= 4
         {
-            unsafe {ARBITRARY_CALL = true;}
+            unsafe {
+                ARBITRARY_CALL = true;
+            }
             // random sample a key from hash_to_address
             // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             match self.address_to_hash.get_mut(&input.context.code_address) {
@@ -1102,7 +1101,10 @@ where
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
         match self.host.flashloan_middleware {
-            Some(ref m) => m.deref().borrow_mut().analyze_call(input, &mut result.new_state.flashloan_data),
+            Some(ref m) => m
+                .deref()
+                .borrow_mut()
+                .analyze_call(input, &mut result.new_state.flashloan_data),
             None => (),
         }
 
@@ -1137,7 +1139,11 @@ where
         // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
         let call = Contract::new_with_context::<LatestSpec>(
             data,
-            self.host.code.get(&address).expect(&*format!("no code {:?}", address)).clone(),
+            self.host
+                .code
+                .get(&address)
+                .expect(&*format!("no code {:?}", address))
+                .clone(),
             &CallContext {
                 address,
                 caller: from,
@@ -1167,8 +1173,11 @@ where
         }
     }
 
-    fn execute_abi(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
-
+    fn execute_abi(
+        &mut self,
+        input: &I,
+        state: &mut S,
+    ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         let mut _vm_state = unsafe {
             input
                 .get_state()
@@ -1339,23 +1348,33 @@ where
         self.execute_abi(input, state)
     }
 
-
     #[cfg(feature = "flashloan_v2")]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
-
         match input.get_input_type() {
             EVMInputTy::Borrow => {
                 let token = input.get_contract();
-                let token_ctx = self.host.flashloan_middleware.as_ref().unwrap()
+                let token_ctx = self
+                    .host
+                    .flashloan_middleware
+                    .as_ref()
+                    .unwrap()
                     .deref()
                     .borrow()
-                    .flashloan_oracle.deref().borrow().known_tokens.get(&token).unwrap().clone();
+                    .flashloan_oracle
+                    .deref()
+                    .borrow()
+                    .known_tokens
+                    .get(&token)
+                    .unwrap()
+                    .clone();
 
                 let path_idx = input.get_randomness()[0] as usize;
                 match generate_uniswap_router_call(
-                    &token_ctx, path_idx,
+                    &token_ctx,
+                    path_idx,
                     input.get_txn_value().unwrap(),
-                    input.get_caller()) {
+                    input.get_caller(),
+                ) {
                     Some((abi, value, target)) => {
                         // println!("borrow: {:?} {:?} {:?}", hex::encode(abi.get_bytes()), value, target);
                         let mut res = self.fast_call(
@@ -1369,14 +1388,19 @@ where
                         // println!("borrow: {:?}", ret);
                         #[cfg(feature = "flashloan_v2")]
                         match self.host.flashloan_middleware {
-                            Some(ref m) => m.deref().borrow_mut().analyze_call(input, &mut res.new_state.flashloan_data),
+                            Some(ref m) => m
+                                .deref()
+                                .borrow_mut()
+                                .analyze_call(input, &mut res.new_state.flashloan_data),
                             None => (),
                         }
 
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: res.ret != Return::Return && res.ret != Return::Stop && res.ret != ControlLeak,
+                                reverted: res.ret != Return::Return
+                                    && res.ret != Return::Stop
+                                    && res.ret != ControlLeak,
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
@@ -1385,22 +1409,17 @@ where
                             }
                         }
                     }
-                    None => {
-                        ExecutionResult {
-                            output: vec![],
-                            reverted: false,
-                            new_state: StagedVMState::new_with_state(input.get_state().clone()),
-                        }
-                    }
+                    None => ExecutionResult {
+                        output: vec![],
+                        reverted: false,
+                        new_state: StagedVMState::new_with_state(input.get_state().clone()),
+                    },
                 }
-
             }
             EVMInputTy::Liquidate => {
                 unreachable!("liquidate should be handled by middleware");
             }
-            EVMInputTy::ABI => {
-                self.execute_abi(input, state)
-            }
+            EVMInputTy::ABI => self.execute_abi(input, state),
         }
     }
 

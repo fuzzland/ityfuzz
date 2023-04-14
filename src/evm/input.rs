@@ -27,7 +27,7 @@ use std::sync::Arc;
 pub enum EVMInputTy {
     ABI,
     Borrow,
-    Liquidate
+    Liquidate,
 }
 
 pub trait EVMInputT {
@@ -195,8 +195,8 @@ struct MutatorInput<'a> {
 
 impl<'a, 'de> Deserialize<'de> for MutatorInput<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         unreachable!()
     }
@@ -247,8 +247,8 @@ impl EVMInput {
     impl_env_mutator_u256!(chain_id, cfg);
 
     pub fn prevrandao<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -256,8 +256,8 @@ impl EVMInput {
     }
 
     pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -265,8 +265,8 @@ impl EVMInput {
     }
 
     pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -274,8 +274,8 @@ impl EVMInput {
     }
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
@@ -287,8 +287,8 @@ impl EVMInput {
     }
 
     pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
             Some(s.clone())
@@ -315,8 +315,8 @@ impl EVMInput {
     }
 
     pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+    where
+        S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
         let ap = self.get_access_pattern().deref().borrow().clone();
         let mut mutators = vec![];
@@ -361,8 +361,8 @@ impl EVMInput {
 
 impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State
+    where
+        S: State
             + HasRand
             + HasMaxSize
             + HasItyState<H160, H160, EVMState>
@@ -440,20 +440,23 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     fn pretty_txn(&self) -> Option<String> {
         let liq = self.liquidation_percent;
         match self.data {
-            Some(ref d) => Some(format!("{} with {:?} ETH ({}), liq percent: {}",
-                                        d.to_string(), self.txn_value, hex::encode(d.get_bytes()), liq)),
-            None => {
-                match self.input_type {
-                    EVMInputTy::ABI => {
-                        Some(format!("ABI with {:?} ETH, liq percent: {}", self.txn_value, liq))
-                    }
-                    EVMInputTy::Borrow => {
-                        Some(format!("Borrow with {:?} ETH, liq percent: {}", self.txn_value, liq))
-                    }
-                    EVMInputTy::Liquidate => {
-                        None
-                    }
-                }
+            Some(ref d) => Some(format!(
+                "{} with {:?} ETH ({}), liq percent: {}",
+                d.to_string(),
+                self.txn_value,
+                hex::encode(d.get_bytes()),
+                liq
+            )),
+            None => match self.input_type {
+                EVMInputTy::ABI => Some(format!(
+                    "ABI with {:?} ETH, liq percent: {}",
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Borrow => Some(format!(
+                    "Borrow with {:?} ETH, liq percent: {}",
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Liquidate => None,
             },
         }
     }
@@ -461,11 +464,13 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     #[cfg(not(feature = "flashloan_v2"))]
     fn pretty_txn(&self) -> Option<String> {
         match self.data {
-            Some(ref d) => Some(format!("{} with {:?} ETH ({})",
-                                        d.to_string(), self.txn_value, hex::encode(d.get_bytes()))),
-            None => {
-                Some(format!("ABI with {:?} ETH", self.txn_value))
-            },
+            Some(ref d) => Some(format!(
+                "{} with {:?} ETH ({})",
+                d.to_string(),
+                self.txn_value,
+                hex::encode(d.get_bytes())
+            )),
+            None => Some(format!("ABI with {:?} ETH", self.txn_value)),
         }
     }
 

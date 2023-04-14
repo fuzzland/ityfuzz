@@ -1,5 +1,4 @@
-use std::borrow::Borrow;
-use crate::evm::abi::{A256, AArray, AEmpty, BoxedABI};
+use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256};
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::types::EVMOracleCtx;
@@ -10,8 +9,10 @@ use crate::state_input::StagedVMState;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 use itertools::iproduct;
+use libafl::prelude::Prepend;
 use permutator::{cartesian_product, CartesianProduct, CartesianProductIterator};
 use primitive_types::{H160, U256};
+use std::borrow::Borrow;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::iter;
@@ -19,7 +20,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use libafl::prelude::Prepend;
 
 pub enum UniswapVer {
     V1,
@@ -214,23 +214,26 @@ impl PathContext {
         };
 
         let mut amount_out = {
-            if initial_pair.side == 0 { initial_reserve.0 } else { initial_reserve.1 }
-        } * percentage / 1000;
+            if initial_pair.side == 0 {
+                initial_reserve.0
+            } else {
+                initial_reserve.1
+            }
+        } * percentage
+            / 1000;
         println!("amount_out: {}", amount_out);
 
         // address => (new reserve0, new reserve1)
 
         macro_rules! process_pair {
-            ($pair: expr) => {
-                {
-                    let reserves = match reserve_data.get(&$pair.pair_address) {
-                        None => $pair.initial_reserves,
-                        Some(reserves) => reserves.clone(),
-                    };
-                    let swap_result = $pair.get_amount_in(amount_out, reserves.0, reserves.1);
-                    amount_out = swap_result.amount;
-                }
-            };
+            ($pair: expr) => {{
+                let reserves = match reserve_data.get(&$pair.pair_address) {
+                    None => $pair.initial_reserves,
+                    Some(reserves) => reserves.clone(),
+                };
+                let swap_result = $pair.get_amount_in(amount_out, reserves.0, reserves.1);
+                amount_out = swap_result.amount;
+            }};
         }
 
         for pair in self.route.iter() {
@@ -266,7 +269,7 @@ pub fn generate_uniswap_router_call(
     if token.is_weth {
         let mut abi = BoxedABI::new(Box::new(AEmpty {}));
         abi.function = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit
-        // U256::from(perct) * unsafe {WETH_MAX}
+                                                 // U256::from(perct) * unsafe {WETH_MAX}
         Some((abi, amount_in, token.weth_address))
     } else {
         if token.swaps.len() == 0 {
@@ -275,35 +278,61 @@ pub fn generate_uniswap_router_call(
         let path_ctx = &token.swaps[path_idx % token.swaps.len()];
         // let amount_in = path_ctx.get_amount_in(perct, reserve);
         let mut path: Vec<H160> = path_ctx
-            .route.iter()
+            .route
+            .iter()
             .rev()
-            .map(|pair| pair.deref().borrow().next_hop).collect();
+            .map(|pair| pair.deref().borrow().next_hop)
+            .collect();
         path.insert(0, token.weth_address);
         path.insert(path.len(), token.address);
-        let mut abi = BoxedABI::new(Box::new(AArray { data: vec![
-            BoxedABI::new(Box::new(A256 { data: vec![0; 32], is_address: false })),
-            BoxedABI::new(Box::new(AArray { data:
-            path.iter().map(
-                |addr| BoxedABI::new(Box::new(A256 { data: addr.as_bytes().to_vec(), is_address: true }))
-            ).collect(),
-                dynamic_size: true
-            })),
-            BoxedABI::new(Box::new(A256 { data: to.0.to_vec(), is_address: true })),
-            BoxedABI::new(Box::new(A256 { data: vec![0xff; 32], is_address: false })),
-        ], dynamic_size: false }));
-        abi.function = [0xb6,0xf9,0xde,0x95]; // swapExactETHForTokensSupportingFeeOnTransferTokens
+        let mut abi = BoxedABI::new(Box::new(AArray {
+            data: vec![
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0; 32],
+                    is_address: false,
+                })),
+                BoxedABI::new(Box::new(AArray {
+                    data: path
+                        .iter()
+                        .map(|addr| {
+                            BoxedABI::new(Box::new(A256 {
+                                data: addr.as_bytes().to_vec(),
+                                is_address: true,
+                            }))
+                        })
+                        .collect(),
+                    dynamic_size: true,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: to.0.to_vec(),
+                    is_address: true,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0xff; 32],
+                    is_address: false,
+                })),
+            ],
+            dynamic_size: false,
+        }));
+        abi.function = [0xb6, 0xf9, 0xde, 0x95]; // swapExactETHForTokensSupportingFeeOnTransferTokens
 
         match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
-            None => {
-                Some((abi, amount_in, path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router))
-            },
-            Some(info) => {
-                Some((abi, amount_in, info.uniswap_info.router))
-            }
+            None => Some((
+                abi,
+                amount_in,
+                path_ctx
+                    .route
+                    .last()
+                    .unwrap()
+                    .deref()
+                    .borrow()
+                    .uniswap_info
+                    .router,
+            )),
+            Some(info) => Some((abi, amount_in, info.uniswap_info.router)),
         }
     }
 }
-
 
 pub fn liquidate_all_token(
     tokens: Vec<(&TokenContext, U256)>,
@@ -331,15 +360,15 @@ pub fn liquidate_all_token(
             .collect::<Vec<&[(PathContext, U256)]>>()
             .as_slice(),
     )
-        .into_iter()
-        .for_each(|swaps| {
-            let mut reserve_data = initial_reserve_data.clone();
-            let mut total_amount_out = U256::zero();
-            for (path, amt) in &swaps {
-                total_amount_out += path.get_amount_out(amt.clone(), &mut reserve_data);
-            }
-            possible_amount_out.push((total_amount_out, reserve_data));
-        });
+    .into_iter()
+    .for_each(|swaps| {
+        let mut reserve_data = initial_reserve_data.clone();
+        let mut total_amount_out = U256::zero();
+        for (path, amt) in &swaps {
+            total_amount_out += path.get_amount_out(amt.clone(), &mut reserve_data);
+        }
+        possible_amount_out.push((total_amount_out, reserve_data));
+    });
 
     let mut best_quote = U256::zero();
     let mut best_reserve_data = None;
@@ -350,7 +379,10 @@ pub fn liquidate_all_token(
         }
     }
 
-    (best_quote, best_reserve_data.unwrap_or(initial_reserve_data))
+    (
+        best_quote,
+        best_reserve_data.unwrap_or(initial_reserve_data),
+    )
 }
 
 pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
@@ -362,7 +394,7 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             init_code_hash: hex::decode(
                 "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
             )
-                .unwrap(),
+            .unwrap(),
         },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
             pool_fee: 3,
@@ -371,7 +403,7 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             init_code_hash: hex::decode(
                 "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
             )
-                .unwrap(),
+            .unwrap(),
         },
         _ => panic!(
             "Uniswap provider {:?} @ chain {:?} not supported",
@@ -415,7 +447,6 @@ impl UniswapInfo {
         println!("calculate_amounts_in amount_out: {}", amount_out);
         println!("calculate_amounts_in reserve_in: {}", reserve_in);
         println!("calculate_amounts_in reserve_out: {}", reserve_out);
-
 
         let adjusted_amount_out = if amount_out > reserve_out {
             reserve_out - U256::one()
@@ -519,7 +550,6 @@ mod tests {
                 )),
                 initial_reserves: (Default::default(), Default::default()),
                 next_hop: Default::default(),
-                
             })],
             // 0.1 * 10^5 eth / token
             final_pegged_ratio: U256::from(1),
@@ -557,8 +587,7 @@ mod tests {
                         &Chain::BSC
                     )),
                     initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-                    
+                    next_hop: Default::default(),
                 }),
                 wrap!(PairContext {
                     pair_address: H160::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
@@ -569,8 +598,7 @@ mod tests {
                         &Chain::BSC
                     )),
                     initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-                    
+                    next_hop: Default::default(),
                 }),
             ],
             final_pegged_ratio: U256::from(1),
@@ -639,7 +667,6 @@ mod tests {
                         )),
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
-
                     })],
                     final_pegged_ratio: U256::from(20),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -658,20 +685,15 @@ mod tests {
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
-
                 },
             ],
             is_weth: false,
             weth_address: Default::default(),
             address: Default::default(),
         };
-        let (amt, reserve) = liquidate_all_token(
-            vec![(&t0, U256::from(1000))], reserve_data);
+        let (amt, reserve) = liquidate_all_token(vec![(&t0, U256::from(1000))], reserve_data);
 
-        assert_eq!(
-            amt,
-            U256::from(48 * 20 as u64)
-        );
+        assert_eq!(amt, U256::from(48 * 20 as u64));
     }
 
     #[test]
@@ -705,8 +727,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -721,8 +742,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -745,8 +765,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -761,8 +780,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -774,13 +792,11 @@ mod tests {
         };
 
         let (amt, reserve) = liquidate_all_token(
-            vec![(&t0, U256::from(1000)), (&t1, U256::from(10000))], reserve_data);
-
-
-        assert_eq!(
-            amt,
-            U256::from(58 as u64)
+            vec![(&t0, U256::from(1000)), (&t1, U256::from(10000))],
+            reserve_data,
         );
+
+        assert_eq!(amt, U256::from(58 as u64));
     }
 
     #[test]
@@ -797,7 +813,12 @@ mod tests {
             (U256::from(10), U256::from(10 as u64)),
         );
 
-        let t0 = TokenContext { swaps: vec![], is_weth: false, weth_address: Default::default(), address: Default::default() };
+        let t0 = TokenContext {
+            swaps: vec![],
+            is_weth: false,
+            weth_address: Default::default(),
+            address: Default::default(),
+        };
 
         let t1 = TokenContext {
             swaps: vec![
@@ -811,8 +832,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -827,8 +847,7 @@ mod tests {
                             &Chain::BSC
                         )),
                         initial_reserves: (Default::default(), Default::default()),
-                next_hop: Default::default(),
-                        
+                        next_hop: Default::default(),
                     })],
                     final_pegged_ratio: U256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
@@ -840,12 +859,9 @@ mod tests {
         };
         let (amt, _) = liquidate_all_token(
             vec![(&t0, U256::from(1000)), (&t1, U256::from(10000))],
-            reserve_data
+            reserve_data,
         );
-        assert_eq!(
-            amt,
-            U256::from(49 as u64)
-        );
+        assert_eq!(amt, U256::from(49 as u64));
     }
 
     #[test]

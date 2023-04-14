@@ -55,7 +55,7 @@ impl Chain {
             Chain::POLYGON => "polygon",
             Chain::MUMBAI => "mumbai",
         }
-            .to_string()
+        .to_string()
     }
 
     pub fn get_chain_rpc(&self) -> String {
@@ -65,7 +65,7 @@ impl Chain {
             Chain::POLYGON => "https://polygon-rpc.com/",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
         }
-            .to_string()
+        .to_string()
     }
 }
 
@@ -110,7 +110,7 @@ impl OnChainConfig {
                 Chain::POLYGON => "https://api.polygonscan.com/api",
                 Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
             }
-                .to_string(),
+            .to_string(),
             chain.to_lowercase(),
             false,
             "".to_string(),
@@ -263,12 +263,10 @@ impl OnChainConfig {
                 self.local_proxy_addr, self.chain_name, address, self.block_number
             );
             match self.client.get(endpoint).send() {
-                Ok(res) => {
-                    Some(
-                        serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
-                            .expect("Failed to parse proxy response"),
-                    )
-                },
+                Ok(res) => Some(
+                    serde_json::from_str::<Value>(&res.text().unwrap().trim().to_string())
+                        .expect("Failed to parse proxy response"),
+                ),
                 Err(_) => None,
             }
         } else {
@@ -292,8 +290,7 @@ impl OnChainConfig {
                 if kvs.len() == 0 {
                     return None;
                 }
-                for (_, v) in kvs.iter()
-                {
+                for (_, v) in kvs.iter() {
                     let key = v["key"].as_str().expect("fail to find key");
                     let value = v["value"].as_str().expect("fail to find value");
 
@@ -556,58 +553,56 @@ impl OnChainConfig {
                 .send()
                 .expect("failed to fetch swap path");
             let data = res.text().unwrap().trim().to_string();
-            let data_parsed: Value = serde_json::from_str(&data).expect("failed to parse API result");
+            let data_parsed: Value =
+                serde_json::from_str(&data).expect("failed to parse API result");
 
-            let basic_info = data_parsed["basic_info"].as_object().expect("failed to parse basic_info");
-            let weth = H160::from_str(basic_info["weth"].as_str().expect("failed to parse weth")).expect("failed to parse weth");
-            let is_weth = basic_info["is_weth"].as_bool().expect("failed to parse is_weth");
+            let basic_info = data_parsed["basic_info"]
+                .as_object()
+                .expect("failed to parse basic_info");
+            let weth = H160::from_str(basic_info["weth"].as_str().expect("failed to parse weth"))
+                .expect("failed to parse weth");
+            let is_weth = basic_info["is_weth"]
+                .as_bool()
+                .expect("failed to parse is_weth");
 
             macro_rules! parse_pair_json {
-                ($pair: ident) => {
-                    {
-                        let reserve0_str = $pair["initial_reserves_0"]
-                            .as_str()
-                            .expect("failed to parse initial_reserves_0")
-                            .to_string();
-                        let reserve0 =
-                            U256::from_big_endian(&hex::decode(reserve0_str).unwrap());
-                        let reserve1_str = $pair["initial_reserves_1"]
-                            .as_str()
-                            .expect("failed to parse initial_reserves_1")
-                            .to_string();
-                        let reserve1 =
-                            U256::from_big_endian(&hex::decode(reserve1_str).unwrap());
+                ($pair: ident) => {{
+                    let reserve0_str = $pair["initial_reserves_0"]
+                        .as_str()
+                        .expect("failed to parse initial_reserves_0")
+                        .to_string();
+                    let reserve0 = U256::from_big_endian(&hex::decode(reserve0_str).unwrap());
+                    let reserve1_str = $pair["initial_reserves_1"]
+                        .as_str()
+                        .expect("failed to parse initial_reserves_1")
+                        .to_string();
+                    let reserve1 = U256::from_big_endian(&hex::decode(reserve1_str).unwrap());
 
-                        let pair_address = H160::from_str(
-                            $pair["pair"].as_str().expect("failed to parse pair"),
-                        )
-                        .expect("failed to parse pair");
+                    let pair_address =
+                        H160::from_str($pair["pair"].as_str().expect("failed to parse pair"))
+                            .expect("failed to parse pair");
 
-                        let next_hop = H160::from_str(
-                            $pair["next"].as_str().expect("failed to parse pair"),
-                        )
-                        .expect("failed to parse pair");
+                    let next_hop =
+                        H160::from_str($pair["next"].as_str().expect("failed to parse pair"))
+                            .expect("failed to parse pair");
 
-                        let side =
-                            $pair["in"].as_u64().expect("failed to parse direction")
-                                as u8;
-                        let src_exact = $pair["src_exact"]
-                            .as_str()
-                            .expect("failed to parse src_exact");
-                        println!("src_exact: {}", src_exact);
+                    let side = $pair["in"].as_u64().expect("failed to parse direction") as u8;
+                    let src_exact = $pair["src_exact"]
+                        .as_str()
+                        .expect("failed to parse src_exact");
+                    println!("src_exact: {}", src_exact);
 
-                        (PairContext {
-                            pair_address,
-                            next_hop,
-                            side,
-                            uniswap_info: Arc::new(get_uniswap_info(
-                                &UniswapProvider::from_str(src_exact).unwrap(),
-                                &Chain::from_str(&self.chain_name).unwrap(),
-                            )),
-                            initial_reserves: (reserve0, reserve1),
-                        })
-                    }
-                };
+                    (PairContext {
+                        pair_address,
+                        next_hop,
+                        side,
+                        uniswap_info: Arc::new(get_uniswap_info(
+                            &UniswapProvider::from_str(src_exact).unwrap(),
+                            &Chain::from_str(&self.chain_name).unwrap(),
+                        )),
+                        initial_reserves: (reserve0, reserve1),
+                    })
+                }};
             }
 
             let paths_parsed = data_parsed["routes"]
@@ -629,15 +624,18 @@ impl OnChainConfig {
                                     // let decimals1 = pair["decimals1"].as_u64().expect("failed to parse decimals1");
                                     // let next = H160::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
 
-                                    path_parsed.route.push(Rc::new(RefCell::new(parse_pair_json!(pair))));
+                                    path_parsed
+                                        .route
+                                        .push(Rc::new(RefCell::new(parse_pair_json!(pair))));
                                 }
                                 "pegged" => {
                                     // always live at final
                                     path_parsed.final_pegged_ratio = U256::from(
                                         pair["rate"].as_u64().expect("failed to parse ratio"),
                                     );
-                                    path_parsed.final_pegged_pair = Rc::new(RefCell::new(Some(parse_pair_json!(pair))));
-                                },
+                                    path_parsed.final_pegged_pair =
+                                        Rc::new(RefCell::new(Some(parse_pair_json!(pair))));
+                                }
                                 "pegged_weth" => {
                                     path_parsed.final_pegged_ratio = U256::from(
                                         pair["rate"].as_u64().expect("failed to parse ratio"),

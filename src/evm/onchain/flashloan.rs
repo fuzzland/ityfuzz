@@ -7,6 +7,7 @@ use crate::evm::contract_utils::ABIConfig;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::oracle::IERC20OracleFlashloan;
@@ -18,7 +19,9 @@ use crate::oracle::Oracle;
 use crate::state::{HasCaller, HasItyState};
 use crate::types::{convert_u256_to_h160, float_scale_to_u512};
 use bytes::Bytes;
+use libafl::corpus::{Corpus, Testcase};
 use libafl::impl_serdeany;
+use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
 use libafl::state::HasMetadata;
 use primitive_types::{H160, U256, U512};
@@ -36,9 +39,6 @@ use std::process::exit;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Duration;
-use libafl::corpus::{Corpus, Testcase};
-use libafl::inputs::Input;
-use crate::evm::mutator::AccessPattern;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -47,10 +47,10 @@ macro_rules! scale {
     };
 }
 pub struct Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     phantom: PhantomData<(VS, I, S)>,
     oracle: Box<dyn PriceOracle>,
@@ -67,15 +67,15 @@ pub struct Flashloan<VS, I, S>
     pub onchain_middlware: Rc<RefCell<OnChain<VS, I, S>>>,
     #[cfg(feature = "flashloan_v2")]
     pub unbound_tracker: HashMap<usize, HashSet<H160>>, // pc -> [address called]
-#[cfg(feature = "flashloan_v2")]
-pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+    #[cfg(feature = "flashloan_v2")]
+    pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
 }
 
 impl<VS, I, S> Debug for Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Flashloan")
@@ -95,9 +95,9 @@ impl PriceOracle for DummyPriceOracle {
 }
 
 pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, token: H160)
-    where
-        I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
-        S: State
+where
+    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    S: State
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata
@@ -105,28 +105,34 @@ pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, t
         + Clone
         + Debug
         + 'static,
-        VS: VMStateT + Default,
+    VS: VMStateT + Default,
 {
-    let mut tc = Testcase::new({
-        EVMInput {
-            #[cfg(feature = "flashloan_v2")]
-            input_type: EVMInputTy::Borrow,
-            caller: state.get_rand_caller(),
-            contract: token,
-            data: None,
-            sstate: Default::default(),
-            sstate_idx: 0,
-            txn_value: Some(U256::from_str("10000000000000000000").unwrap()),
-            step: false,
-            env: Default::default(),
-            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
-            liquidation_percent: 0,
-            #[cfg(any(test, feature = "debug"))]
-            direct_data: Default::default(),
-            randomness: vec![0],
+    let mut tc = Testcase::new(
+        {
+            EVMInput {
+                #[cfg(feature = "flashloan_v2")]
+                input_type: EVMInputTy::Borrow,
+                caller: state.get_rand_caller(),
+                contract: token,
+                data: None,
+                sstate: Default::default(),
+                sstate_idx: 0,
+                txn_value: Some(U256::from_str("10000000000000000000").unwrap()),
+                step: false,
+                env: Default::default(),
+                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                #[cfg(feature = "flashloan_v2")]
+                liquidation_percent: 0,
+                #[cfg(any(test, feature = "debug"))]
+                direct_data: Default::default(),
+                randomness: vec![0],
+            }
         }
-    }.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
+        .as_any()
+        .downcast_ref::<I>()
+        .unwrap()
+        .clone(),
+    ) as Testcase<I>;
     tc.set_exec_time(Duration::from_secs(0));
     let idx = state.corpus_mut().add(tc).expect("failed to add");
     host.scheduler
@@ -134,12 +140,11 @@ pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, t
         .expect("failed to call scheduler on_add");
 }
 
-
 impl<VS, I, S> Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
     pub fn new(use_contract_value: bool) -> Self {
@@ -244,7 +249,6 @@ impl<VS, I, S> Flashloan<VS, I, S>
             //         blacklist.push(rich_account);
             //     }
             // }
-
         }
 
         // if the contract is pair
@@ -259,40 +263,35 @@ impl<VS, I, S> Flashloan<VS, I, S>
 
 #[cfg(feature = "flashloan_v2")]
 impl<VS, I, S> Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     pub fn analyze_call(&self, input: &I, flashloan_data: &mut FlashloanData) {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
-            flashloan_data.owed +=
-                U512::from(input.get_txn_value().unwrap()) * scale!();
+            flashloan_data.owed += U512::from(input.get_txn_value().unwrap()) * scale!();
         }
         let addr = input.get_contract();
         // dont care if the call target is not erc20
         if self.erc20_address.contains(&addr) {
             // if the target is erc20 contract, then check the balance of the caller in the oracle
-            flashloan_data
-                .oracle_recheck_balance
-                .insert(addr);
+            flashloan_data.oracle_recheck_balance.insert(addr);
         }
 
         if self.pair_address.contains(&addr) {
             // if the target is pair contract, then check the balance of the caller in the oracle
-            flashloan_data
-                .oracle_recheck_reserve
-                .insert(addr);
+            flashloan_data.oracle_recheck_reserve.insert(addr);
         }
     }
 }
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
-    where
-        S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
     unsafe fn on_step(
@@ -437,8 +436,8 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 
     #[cfg(feature = "flashloan_v2")]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, s: &mut S)
-        where
-            S: HasCaller<H160>,
+    where
+        S: HasCaller<H160>,
     {
         let offset_of_arg_offset = match *interp.instruction_pointer {
             // detect whether it mutates token balance
@@ -474,25 +473,25 @@ impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
             if size >= U256::from(4) {
                 let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
                 macro_rules! handle_transfer {
-                ($dst: ident, $amount: ident) => {
-                    // if $amount > U256::zero() && $dst == interp.contract.caller {
-                    //     let pc = interp.program_counter();
-                    //
-                    //     match self.unbound_tracker.get_mut(&pc) {
-                    //         None => {
-                    //             self.unbound_tracker
-                    //                 .insert(pc, HashSet::from([call_target]));
-                    //         }
-                    //         Some(set) => {
-                    //             if set.len() > UNBOUND_TRANSFER_AMT {
-                    //                 host.evmstate.flashloan_data.earned = U512::max_value();
-                    //             }
-                    //             set.insert(call_target);
-                    //         }
-                    //     }
-                    // }
-                };
-            }
+                    ($dst: ident, $amount: ident) => {
+                        // if $amount > U256::zero() && $dst == interp.contract.caller {
+                        //     let pc = interp.program_counter();
+                        //
+                        //     match self.unbound_tracker.get_mut(&pc) {
+                        //         None => {
+                        //             self.unbound_tracker
+                        //                 .insert(pc, HashSet::from([call_target]));
+                        //         }
+                        //         Some(set) => {
+                        //             if set.len() > UNBOUND_TRANSFER_AMT {
+                        //                 host.evmstate.flashloan_data.earned = U512::max_value();
+                        //             }
+                        //             set.insert(call_target);
+                        //         }
+                        //     }
+                        // }
+                    };
+                }
                 match data[0..4] {
                     // transfer
                     [0xa9, 0x05, 0x9c, 0xbb] => {

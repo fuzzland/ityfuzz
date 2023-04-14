@@ -25,7 +25,7 @@ use std::sync::Arc;
 pub struct NoOracle {}
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for NoOracle
+    for NoOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -69,7 +69,7 @@ impl IERC20Oracle {
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for IERC20Oracle
+    for IERC20Oracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
@@ -121,7 +121,7 @@ impl IERC20OracleFlashloan {
 pub static mut FL_DATA: String = String::new();
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for IERC20OracleFlashloan
+    for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -279,7 +279,8 @@ for IERC20OracleFlashloan
                 .insert(*token, *amount - liq);
         });
 
-        let (liquidation_earned, adjusted_reserves) = liquidate_all_token(liquidations_earned, new_reserves);
+        let (liquidation_earned, adjusted_reserves) =
+            liquidate_all_token(liquidations_earned, new_reserves);
 
         // println!("Liquidation earned: {}", liquidation_earned);
         exec_res.new_state.state.flashloan_data.prev_reserves = adjusted_reserves;
@@ -364,7 +365,7 @@ impl FunctionHarnessOracle {
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for FunctionHarnessOracle
+    for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
         (self.precondition)(ctx, stage)
