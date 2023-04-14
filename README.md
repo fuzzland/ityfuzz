@@ -1,6 +1,8 @@
 # ItyFuzz 🍦
 Fast hybrid fuzzer for EVM, MoveVM (WIP), etc.
 
+[中文版README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md)
+
 ### Run ItyFuzz with UI
 Install Docker from https://www.docker.com/ and run our docker image (x86 only, running on non-x86 platform significantly degrades performance):
 
