@@ -1,6 +1,6 @@
-use crate::evm::input::EVMInputTy::{Borrow, ABI};
-use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::mutation_utils::{mutate_with_vm_slot, VMStateHintedMutator};
+
+use crate::evm::input::{EVMInputT};
+
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, InfantStateState};
@@ -14,9 +14,9 @@ use primitive_types::H160;
 use revm::Interpreter;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+
 use std::fmt::Debug;
-use std::ops::{Add, Deref};
+
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;

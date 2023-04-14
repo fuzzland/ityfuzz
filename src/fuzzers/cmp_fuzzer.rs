@@ -14,28 +14,27 @@ use crate::{
     rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{powersched::PowerSchedule, QueueScheduler, SimpleEventManager};
-use libafl::prelude::{PowerQueueScheduler, ShMemProvider};
-use libafl::stages::{CalibrationStage, Stage, StdMutationalStage};
+use libafl::prelude::{QueueScheduler, SimpleEventManager};
+use libafl::prelude::{ShMemProvider};
+use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
-    stages::StdPowerMutationalStage,
     Evaluator, Fuzzer,
 };
 
-use crate::evm::contract_utils::{set_hash, ContractLoader};
-use crate::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
+
+
 use crate::evm::vm::{EVMState, ACTIVE_MATCH_EXT_CALL, CMP_MAP};
 use crate::feedback::{CmpFeedback, OracleFeedback};
-use crate::rand_utils::generate_random_address;
+
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasExecutionResult, InfantStateState};
+use crate::state::{FuzzState, HasExecutionResult};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::{EVMInput, EVMInputTy};
-use crate::evm::middleware::Middleware;
+
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
@@ -78,10 +77,10 @@ pub fn cmp_fuzzer(
 
     fuzz_host.set_concolic_enabled(config.concolic);
 
-    let onchain_middleware = match config.onchain.clone() {
+    let _onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
-                let mut mid = Rc::new(RefCell::new(
+                let mid = Rc::new(RefCell::new(
                     OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
                         // scheduler can be cloned because it never uses &mut self
                         onchain,
@@ -187,14 +186,6 @@ pub fn cmp_fuzzer(
 
                 // [is_step] [caller] [target] [input] [value]
 
-                let is_step = splitter[0] == "step";
-                let caller = H160::from_str(splitter[1]).unwrap();
-                let contract = H160::from_str(splitter[2]).unwrap();
-                let input = hex::decode(splitter[3]).unwrap();
-                let value = U256::from_str(splitter[4]).unwrap();
-                let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
-                let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
-
                 let inp = match splitter[0] {
                     "abi" => {
                         let caller = H160::from_str(splitter[1]).unwrap();
@@ -244,7 +235,7 @@ pub fn cmp_fuzzer(
                         let contract = H160::from_str(splitter[2]).unwrap();
                         let randomness = hex::decode(splitter[3]).unwrap();
                         let value = U256::from_str(splitter[4]).unwrap();
-                        let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
+                        let _liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                         let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
                         EVMInput {
                             caller,

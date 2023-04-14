@@ -3,29 +3,31 @@ use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
-use crate::evm::onchain::flashloan::register_borrow_txn;
+
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::rand_utils::{fixed_address, generate_random_address};
-use crate::state::{FuzzState, HasCaller, HasItyState, InfantStateState};
+
+
+use crate::rand_utils::{fixed_address};
+use crate::state::{HasCaller};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
-use libafl::inputs::Input;
+
 use libafl::schedulers::Scheduler;
-use libafl::state::{HasCorpus, HasMetadata, State};
+use libafl::state::{HasCorpus};
 use primitive_types::{H160, U256};
 use revm::Bytecode;
-use std::borrow::BorrowMut;
+
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
+
 use std::rc::Rc;
 use std::time::Duration;
+use crate::evm::onchain::flashloan::register_borrow_txn;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -149,7 +151,7 @@ impl<'a> EVMCorpusInitializer<'a> {
     }
 
     pub fn setup_default_callers(&mut self) {
-        let mut default_callers = HashSet::from([
+        let default_callers = HashSet::from([
             fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
             fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
             // fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb"),
@@ -161,7 +163,7 @@ impl<'a> EVMCorpusInitializer<'a> {
     }
 
     pub fn setup_contract_callers(&mut self) {
-        let mut contract_callers = HashSet::from([
+        let contract_callers = HashSet::from([
             fixed_address("e1A425f1AC34A8a441566f93c82dD730639c8510"),
             fixed_address("68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024"),
             // fixed_address("aF97EE5eef1B02E12B650B8127D8E8a6cD722bD2"),

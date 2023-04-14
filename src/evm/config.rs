@@ -1,6 +1,6 @@
 use crate::evm::contract_utils::ContractInfo;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
-use crate::evm::onchain::flashloan::Flashloan;
+
 use crate::evm::oracle::IERC20OracleFlashloan;
 use crate::oracle::Oracle;
 use std::cell::RefCell;

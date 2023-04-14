@@ -7,37 +7,40 @@ use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::fs::OpenOptions;
+
 use std::hash::{Hash, Hasher};
-use std::i64::MAX;
 use std::io::Write;
+
+
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::process::exit;
+use std::ops::{Deref};
+
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::evm::concolic::concolic_host::ConcolicHost;
+
 use crate::input::VMInputT;
-use crate::rand_utils;
+
 use crate::state_input::StagedVMState;
-use crate::tracer::{build_basic_txn, build_basic_txn_from_input};
+use crate::tracer::{build_basic_txn_from_input};
 use bytes::Bytes;
-use libafl::impl_serdeany;
-use libafl::prelude::powersched::PowerSchedule;
-use libafl::prelude::{HasMetadata, ObserversTuple, SerdeAnyMap};
+
+
+use libafl::prelude::{HasMetadata};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
-use nix::libc::stat;
+
 use primitive_types::{H160, H256, U256, U512};
 use rand::random;
+
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
 use revm::{
     Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host,
     Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
 };
-use serde::__private::de::Borrowed;
+
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
@@ -186,25 +189,25 @@ impl EVMState {
 use crate::evm::bytecode_analyzer;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::{
-    CallMiddlewareReturn, ExecutionStage, Middleware, MiddlewareOp, MiddlewareType,
+    CallMiddlewareReturn, Middleware, MiddlewareType,
 };
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
-use crate::evm::onchain::onchain::OnChain;
-use crate::evm::types::EVMFuzzState;
+
+
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
-use crate::state::{FuzzState, HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
+use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 pub use cmp_map as CMP_MAP;
 pub use jmp_map as JMP_MAP;
 pub use read_map as READ_MAP;
 pub use write_map as WRITE_MAP;
 
-use super::concolic::concolic_exe_host::{ConcolicEVMExecutor, ConcolicExeHost};
+use super::concolic::concolic_exe_host::{ConcolicEVMExecutor};
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -347,7 +350,7 @@ where
     VS: VMStateT,
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
-        let mut ret = Self {
+        let ret = Self {
             evmstate: EVMState::new(),
             env: Env::default(),
             code: HashMap::new(),
@@ -630,7 +633,7 @@ where
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 >= v2 {
                         if v1 - v2 != U256::zero() {
-                            (v1 - v2)
+                            v1 - v2
                         } else {
                             U256::from(1)
                         }
@@ -650,7 +653,7 @@ where
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 <= v2 {
                         if v2 - v1 != U256::zero() {
-                            (v2 - v1)
+                            v2 - v1
                         } else {
                             U256::from(1)
                         }
@@ -718,7 +721,7 @@ where
         ))
     }
 
-    fn block_hash(&mut self, number: U256) -> Option<H256> {
+    fn block_hash(&mut self, _number: U256) -> Option<H256> {
         Some(
             H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
@@ -1026,7 +1029,7 @@ where
         data: Bytes,
         input: &I,
         post_exec: Option<PostExecutionCtx>,
-        mut state: &mut S,
+        state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.coverage_changed = false;
         self.host.evmstate = vm_state.clone();
@@ -1037,7 +1040,7 @@ where
             global_call_context = Some(call_ctx.clone());
         }
 
-        let mut bytecode = self
+        let bytecode = self
             .host
             .code
             .get(&call_ctx.code_address)
@@ -1212,7 +1215,7 @@ where
                 state,
             )
         } else {
-            let input_len_concolic = data.len() * 8;
+            let _input_len_concolic = data.len() * 8;
 
             // TODO: implement baseline here
             if self.host.middlewares_enabled && self.host.concolic_enabled {
@@ -1474,23 +1477,21 @@ where
 }
 
 mod tests {
-    use super::*;
-    use crate::evm::abi::get_abi_type;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::Arc;
+    use bytes::Bytes;
+    use libafl::prelude::{StdScheduler, tuple_list};
+    use primitive_types::U256;
+    use revm::Bytecode;
     use crate::evm::input::{EVMInput, EVMInputTy};
     use crate::evm::mutator::AccessPattern;
     use crate::evm::types::EVMFuzzState;
-    use crate::evm::vm::EVMState;
-    use crate::evm::vm::{FuzzHost, JMP_MAP};
-    use crate::generic_vm::vm_executor::MAP_SIZE;
+    use crate::evm::vm::{EVMExecutor, EVMState, FuzzHost, JMP_MAP};
+    use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
     use crate::rand_utils::generate_random_address;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
-    use bytes::Bytes;
-    use libafl::observers::StdMapObserver;
-    use libafl::prelude::{tuple_list, HitcountsMapObserver};
-    use libafl::schedulers::StdScheduler;
-    use libafl::state::State;
-    use revm::Bytecode;
 
     #[test]
     fn test_fuzz_executor() {

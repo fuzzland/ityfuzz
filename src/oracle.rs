@@ -1,10 +1,10 @@
-use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
+use crate::generic_vm::vm_executor::{GenericVM};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{FuzzState, HasExecutionResult, HasItyState};
-use crate::state_input::StagedVMState;
-use hex;
-use libafl::prelude::{tuple_list, HasCorpus, HasMetadata, SerdeAnyMap};
+use crate::state::{HasExecutionResult};
+
+
+use libafl::prelude::{HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -27,7 +27,7 @@ where
     pub metadata: SerdeAnyMap,
     pub executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     pub input: &'a I,
-    pub phantom: PhantomData<(Addr)>,
+    pub phantom: PhantomData<Addr>,
     pub post_state: VS,
 }
 

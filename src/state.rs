@@ -1,6 +1,6 @@
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::VMInputT;
-use crate::rand_utils::generate_random_address;
+
 use crate::state_input::StagedVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
@@ -10,7 +10,7 @@ use libafl::prelude::{
     current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
     StdRand,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::fmt::Debug;
 
 use libafl::state::{
@@ -21,12 +21,12 @@ use libafl::state::{
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 
-use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
+use crate::generic_vm::vm_executor::{ExecutionResult};
 use crate::generic_vm::vm_state::VMStateT;
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
-use std::time::Duration;
+
 
 pub const ACCOUNT_AMT: u8 = 2;
 pub const CONTRACT_AMT: u8 = 2;

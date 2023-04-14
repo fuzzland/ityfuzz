@@ -17,7 +17,7 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -171,7 +171,7 @@ where
 {
     oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
-    phantom: PhantomData<(Out)>,
+    phantom: PhantomData<Out>,
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Debug
@@ -496,7 +496,7 @@ where
         OT: ObserversTuple<I0, S0>,
     {
         let mut cmp_interesting = false;
-        let mut cov_interesting = false;
+        let cov_interesting = false;
 
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {

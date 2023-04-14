@@ -1,36 +1,35 @@
 use bytes::Bytes;
-use primitive_types::{H160, H256, U256};
-use revm::db::BenchmarkDB;
-use std::any::Any;
-use std::iter::Map;
+use primitive_types::{H160, U256};
 
-use crate::evm::abi::{AEmpty, BoxedABI};
+
+
+
+use crate::evm::abi::{BoxedABI};
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareType::Concolic;
-use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
-use crate::evm::types::EVMFuzzState;
-use crate::evm::vm::{jmp_map, FuzzHost, IntermediateExecutionResult};
+use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
+
+use crate::evm::vm::{jmp_map, FuzzHost};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use either::Either;
 use libafl::prelude::{Corpus, HasMetadata, Input};
-use libafl::schedulers::Scheduler;
+
 use libafl::state::{HasCorpus, State};
-use revm::Return::Continue;
+
 use revm::{
-    Bytecode, CallInputs, CreateInputs, Env, Gas, Host, Interpreter, Return, SelfDestructResult,
-    Spec,
+    Host, Interpreter,
 };
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::HashMap;
+
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
-use std::str::FromStr;
-use std::sync::Arc;
+
+
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
 
@@ -999,7 +998,7 @@ where
                 .as_mut()
                 .unwrap()
                 .set_bytes(str_to_bytes(&s));
-            let mut new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
+            let new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
             add_corpus(host, state, &new_evm_input);
         }
     }

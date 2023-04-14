@@ -1,16 +1,16 @@
 use crate::generic_vm::vm_state::VMStateT;
-use crate::r#move::types::MoveAddress;
+
 use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::effects::Op;
 use move_core_types::gas_algebra::NumBytes;
-use move_core_types::identifier::{IdentStr, Identifier};
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+
+use move_core_types::language_storage::{ModuleId};
+
 use move_core_types::value::MoveTypeLayout;
-use move_vm_runtime::interpreter::Frame;
-use move_vm_runtime::loader::Loader;
-use move_vm_runtime::move_vm::MoveVM;
+
+
+
 use move_vm_types::data_store::DataStore;
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::values::{GlobalValue, Value};
@@ -44,7 +44,7 @@ impl Clone for MoveVMState {
 }
 
 impl Serialize for MoveVMState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -53,7 +53,7 @@ impl Serialize for MoveVMState {
 }
 
 impl<'de> Deserialize<'de> for MoveVMState {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -110,29 +110,29 @@ impl DataStore for MoveVMState {
         return Ok((self._gv_slot.get_mut(&(addr, ty.clone())).unwrap(), None));
     }
 
-    fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
+    fn load_module(&self, _module_id: &ModuleId) -> VMResult<Vec<u8>> {
         unreachable!()
     }
 
     fn publish_module(
         &mut self,
-        module_id: &ModuleId,
-        blob: Vec<u8>,
-        is_republishing: bool,
+        _module_id: &ModuleId,
+        _blob: Vec<u8>,
+        _is_republishing: bool,
     ) -> VMResult<()> {
         unreachable!()
     }
 
-    fn exists_module(&self, module_id: &ModuleId) -> VMResult<bool> {
+    fn exists_module(&self, _module_id: &ModuleId) -> VMResult<bool> {
         unreachable!()
     }
 
     fn emit_event(
         &mut self,
-        guid: Vec<u8>,
-        seq_num: u64,
-        ty: Type,
-        val: Value,
+        _guid: Vec<u8>,
+        _seq_num: u64,
+        _ty: Type,
+        _val: Value,
     ) -> PartialVMResult<()> {
         unreachable!()
     }

@@ -1,5 +1,5 @@
-use crate::evm::vm::PostExecutionCtx;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
 pub trait VMStateT: Clone + Debug + Default + Serialize + DeserializeOwned {

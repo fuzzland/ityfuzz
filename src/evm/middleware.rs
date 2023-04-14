@@ -1,11 +1,11 @@
-use crate::evm::abi::get_abi_type_boxed;
-use crate::evm::contract_utils::ContractLoader;
+
+
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::vm::{FuzzHost, IntermediateExecutionResult};
+use crate::evm::vm::{FuzzHost};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use crate::state_input::StagedVMState;
+use crate::state::{HasCaller, HasItyState};
+
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
@@ -14,10 +14,10 @@ use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::{H160, U256, U512};
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
-use std::any::Any;
+
 use std::clone::Clone;
 use std::fmt::Debug;
-use std::ops::Deref;
+
 use std::time::Duration;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

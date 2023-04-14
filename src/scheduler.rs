@@ -6,12 +6,13 @@ use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use libafl::{impl_serdeany, Error};
-use rand::random;
+
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ops::Deref;
+use rand::random;
+
 
 pub trait HasVote<I, S>
 where

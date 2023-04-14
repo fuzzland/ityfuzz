@@ -1,27 +1,28 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::mutation_utils::{byte_mutator, mutate_with_vm_slot};
+use crate::evm::mutation_utils::{byte_mutator};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
-use crate::types::convert_u256_to_h160;
-use bytes::Bytes;
+
+
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
-use primitive_types::{H160, H256, U256, U512};
-use revm::{Env, Interpreter};
-use serde::de::DeserializeOwned;
+use primitive_types::{H160, U256, U512};
+use revm::{Env};
+
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_traitobject::Any;
+
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::Arc;
+use bytes::Bytes;
+
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum EVMInputTy {
@@ -194,7 +195,7 @@ struct MutatorInput<'a> {
 }
 
 impl<'a, 'de> Deserialize<'de> for MutatorInput<'a> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -246,7 +247,7 @@ impl EVMInput {
     impl_env_mutator_u256!(number, block);
     impl_env_mutator_u256!(chain_id, cfg);
 
-    pub fn prevrandao<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+    pub fn prevrandao<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
         S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
@@ -255,7 +256,7 @@ impl EVMInput {
         return MutationResult::Skipped;
     }
 
-    pub fn gas_price<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+    pub fn gas_price<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
         S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
@@ -264,7 +265,7 @@ impl EVMInput {
         return MutationResult::Skipped;
     }
 
-    pub fn balance<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
+    pub fn balance<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
         S: State + HasCaller<H160> + HasRand + HasMetadata,
     {
@@ -482,10 +483,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         if self.sstate.state.flashloan_data.earned > self.sstate.state.flashloan_data.owed {
             return f64::MAX;
         }
-        let owed_amount = (
-            // should never < 0, otherwise it's a bug
-            self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned
-        );
+        let owed_amount = self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
         if owed_amount == U512::zero() {
             return f64::MAX;

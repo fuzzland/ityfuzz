@@ -17,7 +17,7 @@ use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasExecutionResult;
-use crate::tracer::build_basic_txn;
+
 
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
@@ -90,7 +90,7 @@ where
         _mgr: &mut EM,
         input: &I,
     ) -> Result<ExitKind, Error> {
-        let mut res = self.vm.deref().borrow_mut().execute(input, state);
+        let res = self.vm.deref().borrow_mut().execute(input, state);
         // the execution result is added to the fuzzer state
         // later the feedback/objective can run oracle on this result
         state.set_execution_result(res);

@@ -3,23 +3,23 @@ use crate::input::VMInputT;
 use crate::r#move::types::MoveStagedVMState;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state::{HasCaller, HasItyState};
-use crate::state_input::StagedVMState;
+
 use libafl::inputs::Input;
 use libafl::prelude::{HasMaxSize, MutationResult, State};
 use libafl::state::HasRand;
-use move_binary_format::normalized::Module;
+
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
-use move_core_types::value::MoveTypeLayout;
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_types::values::{Value, ValueImpl};
+
+
+use move_vm_types::values::{Value};
 use primitive_types::U256;
-use serde::de::DeserializeOwned;
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
+use std::fmt::{Debug};
+
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -57,7 +57,7 @@ impl Clone for CloneableValue {
 }
 
 impl Serialize for CloneableValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -66,7 +66,7 @@ impl Serialize for CloneableValue {
 }
 
 impl<'de> Deserialize<'de> for CloneableValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -99,7 +99,7 @@ impl Input for MoveFunctionInput {
 }
 
 impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
-    fn mutate<S>(&mut self, state: &mut S) -> MutationResult
+    fn mutate<S>(&mut self, _state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
@@ -144,7 +144,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
 
     // fn get_abi_cloned(&self) -> Option<BoxedABI>;
-    fn set_as_post_exec(&mut self, out_size: usize) {
+    fn set_as_post_exec(&mut self, _out_size: usize) {
         todo!()
     }
 
@@ -152,7 +152,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
         todo!()
     }
 
-    fn set_step(&mut self, gate: bool) {
+    fn set_step(&mut self, _gate: bool) {
         todo!()
     }
 

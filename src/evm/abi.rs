@@ -1,22 +1,22 @@
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::evm::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
-use crate::evm::vm::abi_max_size;
+
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
-use bytes::Bytes;
+
 use itertools::Itertools;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMetadata, Mutator, Rand};
+use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
 use primitive_types::{H160, U256};
-use rand::random;
+
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter, Write};
+use std::fmt::{Debug, Write};
 use std::ops::{Deref, DerefMut};
 
 use super::concolic::concolic_host::Expr;
@@ -708,7 +708,7 @@ impl ABI for AArray {
             }
         }
 
-        let mut offset = if self.dynamic_size { 32 } else { 0 };
+        let _offset = if self.dynamic_size { 32 } else { 0 };
         //
         // let head_offsets = vec![];
         // let tail_offsets = vec![];

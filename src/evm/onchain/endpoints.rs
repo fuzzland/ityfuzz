@@ -1,14 +1,14 @@
 use crate::evm::uniswap::{
-    get_uniswap_info, PairContext, PathContext, TokenContext, UniswapInfo, UniswapProvider,
+    get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
 use primitive_types::{H160, U256};
 use revm::{Bytecode, LatestSpec};
-use serde::{Deserialize, Serialize};
+
 use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::{format, Debug};
+use std::fmt::{Debug};
 use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;

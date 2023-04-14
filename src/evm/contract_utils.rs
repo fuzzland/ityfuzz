@@ -256,7 +256,7 @@ impl ContractLoader {
                 println!("ABI not found for {}", addr);
                 continue;
             }
-            let mut contract = ContractInfo {
+            let contract = ContractInfo {
                 name: addr.to_string(),
                 abi: Self::parse_abi_str(&abi.unwrap()),
                 code: onchain.get_contract_code(addr, false).bytes().to_vec(),
@@ -273,7 +273,7 @@ impl ContractLoader {
 mod tests {
     use super::*;
     use std::str::FromStr;
-
+    
     #[test]
     fn test_load() {
         let loader = ContractLoader::from_glob("demo/*");

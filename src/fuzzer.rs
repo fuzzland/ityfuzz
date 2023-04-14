@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
-use std::ops::Deref;
+
 use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
@@ -20,7 +20,7 @@ use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
-use crate::tracer::{build_basic_txn, TxnTrace};
+use crate::tracer::{build_basic_txn};
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -34,7 +34,7 @@ use libafl::{
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
 };
-use rand::random;
+
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};

@@ -5,19 +5,19 @@ use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
 use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
-use bytes::Bytes;
+
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
+
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::{IdentStr, Identifier};
+use move_core_types::identifier::{Identifier};
 use move_core_types::language_storage::ModuleId;
-use move_core_types::resolver::ModuleResolver;
+
 use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
 use move_vm_runtime::loader::BinaryType::Module;
 use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctions};
-use move_vm_runtime::{loader, move_vm};
+use move_vm_runtime::native_functions::{NativeFunctions};
+use move_vm_runtime::{loader};
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use move_vm_types::values::Locals;
@@ -87,7 +87,7 @@ where
                 loader::Module::new(module.clone(), &self._module_cache).expect("module failed"),
             ),
         );
-        for (idx, (func_def, func_handle)) in module
+        for (idx, (_func_def, func_handle)) in module
             .function_defs()
             .iter()
             .zip(module.function_handles())
@@ -108,10 +108,10 @@ where
 
     fn fast_static_call(
         &mut self,
-        address: AccountAddress,
-        data: MoveFunctionInput,
-        vm_state: &MoveVMState,
-        state: &mut S,
+        _address: AccountAddress,
+        _data: MoveFunctionInput,
+        _vm_state: &MoveVMState,
+        _state: &mut S,
     ) -> MoveOutput
     where
         MoveVMState: VMStateT,
@@ -125,7 +125,7 @@ where
     fn execute(
         &mut self,
         input: &I,
-        state: &mut S,
+        _state: &mut S,
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput>
     where
         MoveVMState: VMStateT,
@@ -233,7 +233,7 @@ mod tests {
     use super::*;
     use crate::r#move::input::CloneableValue;
     use crate::state::FuzzState;
-    use move_binary_format::file_format::{FunctionDefinitionIndex, TableIndex};
+    
     use move_vm_types::values::Value;
 
     fn _run(
@@ -248,7 +248,7 @@ mod tests {
             MoveFunctionInput,
             FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
         >::new();
-        let loc = mv
+        let _loc = mv
             .deploy(
                 module,
                 None,
@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(mv.modules.len(), 1);
         assert_eq!(mv.functions.len(), 1);
 
-        let mut input = MoveFunctionInput {
+        let input = MoveFunctionInput {
             module: mv.modules.iter().next().unwrap().0.clone(),
             function: Identifier::new("test1").unwrap(),
             args: vec![CloneableValue {

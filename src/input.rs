@@ -1,21 +1,21 @@
 use std::any;
 use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
+
 
 use crate::state_input::StagedVMState;
 use libafl::inputs::Input;
-use libafl::mutators::Mutator;
-use libafl::prelude::{HasLen, HasMaxSize, HasRand, MutationResult, Rand, State};
+
+use libafl::prelude::{HasMaxSize, HasRand, MutationResult, State};
 use libafl::state::HasMetadata;
 
 use crate::evm::abi::BoxedABI;
-use crate::evm::mutation_utils::VMStateHintedMutator;
+
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use primitive_types::U256;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use serde_traitobject::Any;
+use serde::{Serialize};
+
 
 // ST: Should VMInputT be the generic type for both inputs?
 pub trait VMInputT<VS, Loc, Addr>:

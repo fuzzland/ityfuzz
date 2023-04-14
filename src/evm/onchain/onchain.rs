@@ -3,37 +3,39 @@ use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::ContractLoader;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::MiddlewareOp::{AddCorpus, UpdateCode, UpdateSlot};
-use crate::evm::middleware::{add_corpus, Middleware, MiddlewareOp, MiddlewareType};
+
+use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::onchain::flashloan::register_borrow_txn;
-use crate::evm::vm::{FuzzHost, IntermediateExecutionResult, IS_FAST_CALL};
+
+use crate::evm::vm::{FuzzHost, IS_FAST_CALL};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{FuzzState, HasCaller, HasItyState};
+use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
-use libafl::corpus::{Corpus, Testcase};
-use libafl::prelude::{HasCorpus, HasMetadata, Input, MutationResult};
-use libafl::schedulers::Scheduler;
+use libafl::corpus::{Corpus};
+use libafl::prelude::{HasCorpus, HasMetadata, Input};
+
 use libafl::state::State;
-use nix::libc::stat;
-use primitive_types::{H160, H256, U256};
+
+use primitive_types::{H160, U256};
 use revm::Interpreter;
-use serde::{Deserialize, Serialize, Serializer};
-use std::any::Any;
+
+
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
+
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use crate::evm::onchain::flashloan::register_borrow_txn;
+
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<H160>> = None;
 
@@ -154,7 +156,7 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        let pc = interp.program_counter();
+        let _pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {

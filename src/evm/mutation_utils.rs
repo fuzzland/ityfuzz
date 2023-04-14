@@ -12,8 +12,8 @@ use libafl::state::{HasMaxSize, HasRand, State};
 use libafl::{impl_serdeany, Error};
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+
+use std::collections::{HashMap};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantPoolMetadata {
@@ -45,7 +45,7 @@ where
         &mut self,
         state: &mut S,
         input: &mut I,
-        stage_idx: i32,
+        _stage_idx: i32,
     ) -> Result<MutationResult, Error> {
         let idx = state.rand_mut().next() as usize;
 
@@ -108,7 +108,7 @@ where
         &mut self,
         state: &mut S,
         input: &mut I,
-        stage_idx: i32,
+        _stage_idx: i32,
     ) -> Result<MutationResult, Error> {
         let input_len = input.bytes().len();
         if input_len < 8 {

@@ -1,26 +1,22 @@
-use crate::evm::abi::{AEmpty, BoxedABI, A256};
+use std::collections::HashMap;
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::mutator::AccessPattern;
-use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::onchain::flashloan::FlashloanData;
+
+
+
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
-use crate::evm::uniswap::{liquidate_all_token, reserve_parser, PairContext, TokenContext};
+
 use crate::evm::vm::EVMState;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
+
+
 use crate::oracle::{Oracle, OracleCtx};
-use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
-use crate::state_input::StagedVMState;
+use crate::state::{HasExecutionResult};
+
 use bytes::Bytes;
-use libafl::state::HasMetadata;
+
 use primitive_types::{H160, U256, U512};
 use revm::Bytecode;
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
+use crate::evm::uniswap::{liquidate_all_token, TokenContext};
+
 
 pub struct NoOracle {}
 
@@ -77,7 +73,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
         if _stage == 99 {
-            let balance_of_txn =
+            let _balance_of_txn =
                 Bytes::from([self.balance_of.clone(), ctx.input.caller.0.to_vec()].concat());
 
             // get caller balance
@@ -373,7 +369,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
     fn oracle(
         &self,
-        ctx: &mut OracleCtx<
+        _ctx: &mut OracleCtx<
             EVMState,
             H160,
             Bytecode,
@@ -387,7 +383,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         stage: u64,
     ) -> bool {
         if stage == 99 {
-            let harness_txn = Bytes::from(self.harness_func.clone());
+            let _harness_txn = Bytes::from(self.harness_func.clone());
             // let res = ctx
             //     .call_post(
             //         if self.address.is_zero() {

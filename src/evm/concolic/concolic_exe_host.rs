@@ -1,14 +1,11 @@
 use crate::{
     evm::{
-        abi::BoxedABI,
         input::EVMInputT,
         vm::{
-            global_call_context, state_change, EVMState, FuzzHost, CMP_MAP, JMP_MAP, READ_MAP,
-            WRITE_MAP,
+            global_call_context, state_change, EVMState, FuzzHost,
         },
     },
     generic_vm::{
-        vm_executor::{ExecutionResult, GenericVM, MAP_SIZE},
         vm_state::VMStateT,
     },
     input::VMInputT,
@@ -18,15 +15,15 @@ use crate::{
 };
 use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
-use primitive_types::{H160, H256, U256};
-use revm::db::BenchmarkDB;
-use revm::Bytecode;
-use revm::Return::{Continue, Revert};
+use primitive_types::{H160, U256};
+
+
+
 use revm::{
-    CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter,
-    LatestSpec, Return, SelfDestructResult, Spec,
+    CallContext, CallScheme, Contract, Host, Interpreter,
+    LatestSpec,
 };
-use serde::{Deserialize, Serialize};
+
 use std::{fmt::Debug, marker::PhantomData};
 
 #[derive(Clone, Debug)]
@@ -139,7 +136,7 @@ where
         &mut self,
         call_ctx: &CallContext,
         data: Bytes,
-        mut state: &mut S,
+        state: &mut S,
     ) {
         self.host.coverage_changed = false;
 
@@ -147,7 +144,7 @@ where
             global_call_context = Some(call_ctx.clone());
         }
 
-        let mut bytecode = self
+        let bytecode = self
             .host
             .code
             .get(&call_ctx.code_address)
@@ -162,7 +159,7 @@ where
             state_change = false;
         }
 
-        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        let _r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
 
         // remove all concolic hosts
         self.host.remove_all_middlewares();

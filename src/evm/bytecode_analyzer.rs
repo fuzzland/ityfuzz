@@ -1,6 +1,6 @@
 use crate::evm::mutation_utils::ConstantPoolMetadata;
 use libafl::state::{HasMetadata, State};
-use primitive_types::U256;
+
 use revm::Bytecode;
 use std::collections::HashSet;
 

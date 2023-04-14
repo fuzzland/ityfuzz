@@ -1,9 +1,9 @@
-use crate::evm::vm::EVMState;
-use bytes::Bytes;
+
+
 use libafl::corpus::Corpus;
-use libafl::inputs::Input;
+
 use libafl::prelude::HasCorpus;
-use primitive_types::{H160, U256};
+use primitive_types::{U256};
 use std::fmt::Debug;
 
 use crate::evm::abi::BoxedABI;
@@ -58,7 +58,7 @@ where
 
 pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
-    res: &ExecutionResult<Loc, Addr, VS, Out>,
+    _res: &ExecutionResult<Loc, Addr, VS, Out>,
 ) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -138,7 +138,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         if self.from_idx.is_none() {
             return String::from("Begin\n");
         }
-        let mut current_idx = self.from_idx.unwrap();
+        let current_idx = self.from_idx.unwrap();
         let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
@@ -151,7 +151,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
 
         let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
         for t in &self.transactions {
-            for i in 0..t.layer {
+            for _i in 0..t.layer {
                 s.push_str(" == ");
             }
             s.push_str(format!("{:?}\n", t).as_str());

@@ -3,16 +3,16 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::contract_utils::ABIConfig;
+
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
-use crate::evm::onchain::onchain::OnChain;
-use crate::evm::oracle::IERC20OracleFlashloan;
-use crate::evm::types::{EVMFuzzState, EVMStagedVMState};
-use crate::evm::vm::{EVMState, FuzzHost, IntermediateExecutionResult};
+
+
+
+use crate::evm::vm::{FuzzHost};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::oracle::Oracle;
@@ -27,18 +27,23 @@ use libafl::state::HasMetadata;
 use primitive_types::{H160, U256, U512};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize};
-use std::any::Any;
-use std::borrow::BorrowMut;
-use std::cell::{Ref, RefCell};
-use std::cmp::min;
+
+
+use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
+
+
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::process::exit;
+
+
 use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Duration;
+use crate::evm::contract_utils::ABIConfig;
+use crate::evm::onchain::onchain::OnChain;
+use crate::evm::oracle::IERC20OracleFlashloan;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -89,7 +94,7 @@ where
 pub struct DummyPriceOracle;
 
 impl PriceOracle for DummyPriceOracle {
-    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)> {
+    fn fetch_token_price(&mut self, _token_address: H160) -> Option<(u32, u32)> {
         return Some((10000, 18));
     }
 }
@@ -298,7 +303,7 @@ where
         &mut self,
         interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
+        _state: &mut S,
     ) {
         macro_rules! earned {
             ($amount:expr) => {
@@ -410,7 +415,7 @@ where
                 let src = H160::from_slice(&data[16..36]);
                 let dst = H160::from_slice(&data[48..68]);
                 let amount = U256::from_big_endian(&data[68..100]);
-                let make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
+                let _make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
                     [vec![0x0; 31], vec![0x1]].concat(),
                 ));
                 match self.calculate_usd_value_from_addr(call_target, amount) {
