@@ -10,7 +10,7 @@ use crate::tracer::TxnTrace;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct StagedVMState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,

@@ -45,8 +45,8 @@ impl Clone for MoveVMState {
 
 impl Serialize for MoveVMState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         unreachable!()
     }
@@ -54,8 +54,8 @@ impl Serialize for MoveVMState {
 
 impl<'de> Deserialize<'de> for MoveVMState {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         unreachable!()
     }
@@ -156,6 +156,10 @@ impl VMStateT for MoveVMState {
     }
 
     fn get_post_execution_pc(&self) -> usize {
+        todo!()
+    }
+
+    fn get_post_execution_len(&self) -> usize {
         todo!()
     }
 

@@ -25,7 +25,7 @@ use std::sync::Arc;
 pub struct NoOracle {}
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-    for NoOracle
+for NoOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -69,7 +69,7 @@ impl IERC20Oracle {
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-    for IERC20Oracle
+for IERC20Oracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         (self.precondition)(_ctx, _stage)
@@ -121,7 +121,7 @@ impl IERC20OracleFlashloan {
 pub static mut FL_DATA: String = String::new();
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-    for IERC20OracleFlashloan
+for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -202,12 +202,12 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
         #[cfg(feature = "debug")]
         {
-            ctx.fuzz_state
-                .get_execution_result_mut()
-                .new_state
-                .state
-                .flashloan_data
-                .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
+            // ctx.fuzz_state
+            //     .get_execution_result_mut()
+            //     .new_state
+            //     .state
+            //     .flashloan_data
+            //     .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
         }
         for caller in &callers {
             let mut extended_address = vec![0; 12];
@@ -255,17 +255,16 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
-        exec_res.new_state.state.flashloan_data.prev_reserves = new_reserves.clone();
 
-        let liquidation_owed =
+        let (liquidation_owed, _) =
             liquidate_all_token(liquidations_owed.clone(), prev_reserves.clone());
         #[cfg(feature = "debug")]
         {
-            exec_res.new_state.state.flashloan_data.extra_info += format!(
-                "Liquidations owed: {:?} total: {}, old_reserve: {:?}\n",
-                liquidations_owed, liquidation_owed, prev_reserves
-            )
-            .as_str();
+            // exec_res.new_state.state.flashloan_data.extra_info += format!(
+            //     "Liquidations owed: {:?} total: {}, old_reserve: {:?}\n",
+            //     liquidations_owed, liquidation_owed, prev_reserves
+            // )
+            // .as_str();
         }
 
         unliquidated_tokens.iter().for_each(|(token, amount)| {
@@ -280,7 +279,10 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 .insert(*token, *amount - liq);
         });
 
-        let liquidation_earned = liquidate_all_token(liquidations_earned, new_reserves);
+        let (liquidation_earned, adjusted_reserves) = liquidate_all_token(liquidations_earned, new_reserves);
+
+        // println!("Liquidation earned: {}", liquidation_earned);
+        exec_res.new_state.state.flashloan_data.prev_reserves = adjusted_reserves;
 
         if liquidation_earned > liquidation_owed {
             exec_res.new_state.state.flashloan_data.earned +=
@@ -362,7 +364,7 @@ impl FunctionHarnessOracle {
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-    for FunctionHarnessOracle
+for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
         (self.precondition)(ctx, stage)

@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::EVMInput;
+use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
@@ -24,6 +24,8 @@ use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
+use crate::evm::onchain::flashloan::register_borrow_txn;
+use crate::evm::onchain::onchain::BLACKLIST_ADDR;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -81,28 +83,25 @@ impl<'a> EVMCorpusInitializer<'a> {
             };
 
             #[cfg(feature = "flashloan_v2")]
-            match self.executor.host.flashloan_middleware {
+            if match self.executor.host.flashloan_middleware {
                 Some(ref middleware) => {
                     let mut mid = middleware.deref().borrow_mut();
-
-                    let blacklists = mid.on_contract_insertion(
+                    mid.on_contract_insertion(
                         &deployed_address,
                         &contract.abi,
                         &mut self.state,
-                    );
-
-                    for addr in blacklists {
-                        mid.onchain_middlware
-                            .deref()
-                            .borrow_mut()
-                            .blacklist
-                            .insert(addr);
-                    }
+                    )
                 }
-                None => {}
+                None => {false}
+            } {
+                register_borrow_txn(&self.executor.host, self.state, deployed_address);
             }
 
             self.state.add_address(&deployed_address);
+
+            if unsafe {BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address) } {
+                continue;
+            }
 
             for abi in contract.abi {
                 self.add_abi(&abi, self.scheduler, deployed_address);
@@ -123,6 +122,9 @@ impl<'a> EVMCorpusInitializer<'a> {
                     direct_data: Default::default(),
                     #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
+                    #[cfg(feature = "flashloan_v2")]
+                    input_type: EVMInputTy::ABI,
+                    randomness: vec![],
                 };
                 let mut tc = Testcase::new(input);
                 tc.set_exec_time(Duration::from_secs(0));
@@ -151,7 +153,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut default_callers = HashSet::from([
             fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
             fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
-            fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb"),
+            // fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb"),
         ]);
 
         for caller in default_callers {
@@ -163,7 +165,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut contract_callers = HashSet::from([
             fixed_address("e1A425f1AC34A8a441566f93c82dD730639c8510"),
             fixed_address("68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024"),
-            fixed_address("aF97EE5eef1B02E12B650B8127D8E8a6cD722bD2"),
+            // fixed_address("aF97EE5eef1B02E12B650B8127D8E8a6cD722bD2"),
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
@@ -219,8 +221,11 @@ impl<'a> EVMCorpusInitializer<'a> {
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
+            #[cfg(feature = "flashloan_v2")]
+            input_type: EVMInputTy::ABI,
             #[cfg(any(test, feature = "debug"))]
             direct_data: Default::default(),
+            randomness: vec![],
         };
         let mut tc = Testcase::new(input.clone());
         tc.set_exec_time(Duration::from_secs(0));

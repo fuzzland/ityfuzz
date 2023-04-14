@@ -34,7 +34,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::EVMInput;
+use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::middleware::Middleware;
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
@@ -167,11 +167,7 @@ pub fn cmp_fuzzer(
         objective,
     );
     match config.debug_file {
-        None => {
-            fuzzer
-                .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-                .expect("Fuzzing failed");
-        }
+        None => { }
         Some(file) => {
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
@@ -199,11 +195,14 @@ pub fn cmp_fuzzer(
                 let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                 let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
 
-                fuzzer
-                    .evaluate_input_events(
-                        &mut state,
-                        &mut executor,
-                        &mut mgr,
+                let inp = match splitter[0] {
+                    "abi" => {
+                        let caller = H160::from_str(splitter[1]).unwrap();
+                        let contract = H160::from_str(splitter[2]).unwrap();
+                        let input = hex::decode(splitter[3]).unwrap();
+                        let value = U256::from_str(splitter[4]).unwrap();
+                        let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
+                        let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
                         EVMInput {
                             caller,
                             contract,
@@ -215,7 +214,7 @@ pub fn cmp_fuzzer(
                             } else {
                                 Some(value)
                             },
-                            step: is_step,
+                            step: false,
                             env: revm::Env {
                                 cfg: Default::default(),
                                 block: BlockEnv {
@@ -232,9 +231,66 @@ pub fn cmp_fuzzer(
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                             #[cfg(feature = "flashloan_v2")]
                             liquidation_percent,
+
+                            #[cfg(feature = "flashloan_v2")]
+                            input_type: EVMInputTy::ABI,
                             #[cfg(any(test, feature = "debug"))]
                             direct_data: Bytes::from(input.clone()),
-                        },
+                            randomness: vec![],
+                        }
+                    }
+                    "borrow" => {
+                        let caller = H160::from_str(splitter[1]).unwrap();
+                        let contract = H160::from_str(splitter[2]).unwrap();
+                        let randomness = hex::decode(splitter[3]).unwrap();
+                        let value = U256::from_str(splitter[4]).unwrap();
+                        let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
+                        let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
+                        EVMInput {
+                            caller,
+                            contract,
+                            data: None,
+                            sstate: vm_state.clone(),
+                            sstate_idx: 0,
+                            txn_value: if value == U256::zero() {
+                                None
+                            } else {
+                                Some(value)
+                            },
+                            step: false,
+                            env: revm::Env {
+                                cfg: Default::default(),
+                                block: BlockEnv {
+                                    number: U256::from(warp_to),
+                                    coinbase: Default::default(),
+                                    timestamp: U256::from(warp_to * 1000),
+                                    difficulty: Default::default(),
+                                    prevrandao: None,
+                                    basefee: Default::default(),
+                                    gas_limit: Default::default(),
+                                },
+                                tx: Default::default(),
+                            },
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent,
+                            #[cfg(feature = "flashloan_v2")]
+
+                            input_type: EVMInputTy::Borrow,
+                            #[cfg(any(test, feature = "debug"))]
+                            direct_data: Bytes::new(),
+                            randomness,
+                        }
+                    }
+                    _ => {unreachable!()}
+                };
+
+                fuzzer
+                    .evaluate_input_events(
+                        &mut state,
+                        &mut executor,
+                        &mut mgr,
+                        inp,
                         false,
                     )
                     .unwrap();
@@ -258,4 +314,8 @@ pub fn cmp_fuzzer(
             }
         }
     }
+
+    fuzzer
+        .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+        .expect("Fuzzing failed");
 }

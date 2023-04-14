@@ -25,22 +25,30 @@ pub struct BasicTxn<Addr> {
     pub value: Option<U256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
+    #[cfg(feature = "debug")]
+    pub direct_data: Vec<u8>,
+    pub layer: usize
 }
 
 impl<Addr> Debug for BasicTxn<Addr>
-where
-    Addr: Debug,
+    where
+        Addr: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut binding = f.debug_struct("BasicTxn");
-        let ff = binding
+        let mut ff = binding
             .field("caller", &self.caller)
             .field("contract", &self.contract)
             .field("data", &self.data);
+        #[cfg(feature = "debug")]
+        {
+            ff = ff.field("direct_data", &hex::encode(self.direct_data.as_slice()));
+        }
         #[cfg(feature = "full_trace")]
         {
             ff.field("flashloan", &self.flashloan).finish()
         }
+
         #[cfg(not(feature = "full_trace"))]
         {
             ff.finish()
@@ -52,12 +60,12 @@ pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
     res: &ExecutionResult<Loc, Addr, VS, Out>,
 ) -> BasicTxn<Addr>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: VMStateT,
-    Addr: Debug + Serialize + DeserializeOwned + Clone,
-    Loc: Debug + Serialize + DeserializeOwned + Clone,
-    Out: Default,
+    where
+        I: VMInputT<VS, Loc, Addr>,
+        VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
+        Out: Default,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -69,15 +77,18 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
+        #[cfg(feature = "debug")]
+        direct_data: v.get_direct_data(),
+        layer: v.get_state().get_post_execution_len()
     }
 }
 
 pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: VMStateT,
-    Addr: Debug + Serialize + DeserializeOwned + Clone,
-    Loc: Debug + Serialize + DeserializeOwned + Clone,
+    where
+        I: VMInputT<VS, Loc, Addr>,
+        VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
 {
     BasicTxn {
         caller: v.get_caller(),
@@ -89,6 +100,9 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: "".to_string(),
+        #[cfg(feature = "debug")]
+        direct_data: v.get_direct_data(),
+        layer: v.get_state().get_post_execution_len()
     }
 }
 
@@ -96,6 +110,7 @@ where
 pub struct TxnTrace<Loc, Addr> {
     pub transactions: Vec<BasicTxn<Addr>>,
     pub from_idx: Option<usize>,
+    pub is_initial: bool,
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
@@ -104,6 +119,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         Self {
             transactions: Vec::new(),
             from_idx: None,
+            is_initial: false,
             phantom: Default::default(),
         }
     }
@@ -113,11 +129,11 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
     }
 
     pub fn to_string<VS, S>(&self, state: &mut S) -> String
-    where
-        S: HasInfantStateState<Loc, Addr, VS>,
-        VS: VMStateT,
-        Addr: Debug + Serialize + DeserializeOwned + Clone,
-        Loc: Debug + Serialize + DeserializeOwned + Clone,
+        where
+            S: HasInfantStateState<Loc, Addr, VS>,
+            VS: VMStateT,
+            Addr: Debug + Serialize + DeserializeOwned + Clone,
+            Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
         if self.from_idx.is_none() {
             return String::from("Begin\n");
@@ -135,6 +151,9 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
 
         let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
         for t in &self.transactions {
+            for i in 0..t.layer {
+                s.push_str(" == ");
+            }
             s.push_str(format!("{:?}\n", t).as_str());
             s.push_str("\n");
         }
