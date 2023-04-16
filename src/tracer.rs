@@ -20,6 +20,7 @@ pub struct BasicTxn<Addr> {
     pub contract: Addr,
     pub data: Option<String>,
     #[cfg(feature = "evm")]
+    #[serde(skip_serializing)]
     pub data_abi: Option<BoxedABI>,
     #[cfg(feature = "evm")]
     pub value: Option<U256>,
@@ -154,7 +155,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             for _i in 0..t.layer {
                 s.push_str(" == ");
             }
-            s.push_str(format!("{:?}\n", t).as_str());
+            s.push_str(format!("{:?}\n", serde_json::to_string(t).unwrap()).as_str());
             s.push_str("\n");
         }
         s
