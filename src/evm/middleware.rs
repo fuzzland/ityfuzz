@@ -1,7 +1,7 @@
 
 
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::vm::{FuzzHost};
+use crate::evm::host::{FuzzHost};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};

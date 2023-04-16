@@ -12,7 +12,7 @@ use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 
 
 
-use crate::evm::vm::{FuzzHost};
+use crate::evm::host::{FuzzHost};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::oracle::Oracle;

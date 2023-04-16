@@ -1,6 +1,5 @@
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::evm::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
-use crate::evm::vm::abi_max_size;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use bytes::Bytes;

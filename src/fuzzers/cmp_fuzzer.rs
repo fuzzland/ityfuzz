@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER,
-    evm::vm::{EVMExecutor, FuzzHost, JMP_MAP},
+    evm::vm::{EVMExecutor, },
+    evm::host::FuzzHost,
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
     rand_utils::fixed_address,
@@ -24,7 +25,8 @@ use libafl::{
 
 
 
-use crate::evm::vm::{EVMState, ACTIVE_MATCH_EXT_CALL, CMP_MAP};
+use crate::evm::vm::{EVMState};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;

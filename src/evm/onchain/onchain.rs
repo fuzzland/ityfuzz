@@ -9,7 +9,8 @@ use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
 
-use crate::evm::vm::{FuzzHost, IS_FAST_CALL};
+use crate::evm::host::{FuzzHost};
+use crate::evm::vm::{IS_FAST_CALL};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};

@@ -13,3 +13,4 @@ pub mod oracle;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
+pub mod host;

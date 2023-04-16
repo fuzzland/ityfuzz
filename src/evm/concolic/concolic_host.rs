@@ -9,7 +9,7 @@ use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
 
-use crate::evm::vm::{jmp_map, FuzzHost};
+use crate::evm::host::{JMP_MAP, FuzzHost};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -919,7 +919,7 @@ where
                         .as_u64()
                 };
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
-                if jmp_map[idx] == 0 {
+                if JMP_MAP[idx] == 0 {
                     let path_constraint = stack_bv!(1);
                     self.constraints.push(path_constraint.lnot());
                     match self.solve() {

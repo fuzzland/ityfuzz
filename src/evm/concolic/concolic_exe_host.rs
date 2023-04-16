@@ -2,8 +2,11 @@ use crate::{
     evm::{
         input::EVMInputT,
         vm::{
-            global_call_context, state_change, EVMState, FuzzHost,
+            EVMState,
         },
+        host::{
+            GLOBAL_CALL_CONTEXT, STATE_CHANGE, FuzzHost,
+        }
     },
     generic_vm::{
         vm_state::VMStateT,
@@ -141,7 +144,7 @@ where
         self.host.coverage_changed = false;
 
         unsafe {
-            global_call_context = Some(call_ctx.clone());
+            GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
         }
 
         let bytecode = self
@@ -156,7 +159,7 @@ where
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
         unsafe {
-            state_change = false;
+            STATE_CHANGE = false;
         }
 
         let _r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);

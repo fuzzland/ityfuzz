@@ -14,7 +14,6 @@ use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
 use crate::evm::oracle::FL_DATA;
-use crate::evm::vm::JMP_MAP;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -38,6 +37,7 @@ use libafl::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use crate::evm::host::JMP_MAP;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
