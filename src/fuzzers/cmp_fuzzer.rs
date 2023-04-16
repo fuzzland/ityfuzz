@@ -194,6 +194,8 @@ pub fn cmp_fuzzer(
                         let value = U256::from_str(splitter[4]).unwrap();
                         let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                         let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
+                        let repeat = splitter[7].parse::<usize>().unwrap_or(0);
+
                         EVMInput {
                             caller,
                             contract,
@@ -228,6 +230,7 @@ pub fn cmp_fuzzer(
                             #[cfg(any(test, feature = "debug"))]
                             direct_data: Bytes::from(input.clone()),
                             randomness: vec![],
+                            repeat,
                         }
                     }
                     "borrow" => {
@@ -270,6 +273,7 @@ pub fn cmp_fuzzer(
                             #[cfg(any(test, feature = "debug"))]
                             direct_data: Bytes::new(),
                             randomness,
+                            repeat: 1,
                         }
                     }
                     _ => {

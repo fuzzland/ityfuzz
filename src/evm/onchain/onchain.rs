@@ -333,6 +333,8 @@ where
                                 #[cfg(any(test, feature = "debug"))]
                                 direct_data: Default::default(),
                                 randomness: vec![],
+                                repeat: 1,
+
                             };
                             add_corpus(host, state, &input);
                         });

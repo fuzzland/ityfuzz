@@ -23,12 +23,11 @@ use std::ops::Deref;
 use std::rc::Rc;
 use bytes::Bytes;
 
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum EVMInputTy {
     ABI,
     Borrow,
-    Liquidate,
+    Liquidate
 }
 
 pub trait EVMInputT {
@@ -43,10 +42,10 @@ pub trait EVMInputT {
     fn get_input_type(&self) -> EVMInputTy;
     fn get_randomness(&self) -> Vec<u8>;
     fn set_randomness(&mut self, v: Vec<u8>);
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
+
+    fn get_repeat(&self) -> usize;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -68,6 +67,7 @@ pub struct EVMInput {
     #[cfg(any(test, feature = "debug"))]
     pub direct_data: Bytes,
     pub randomness: Vec<u8>,
+    pub repeat: usize,
 }
 
 impl HasLen for EVMInput {
@@ -121,7 +121,6 @@ impl EVMInputT for EVMInput {
         self.txn_value = Some(v);
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy {
         self.input_type.clone()
     }
@@ -134,14 +133,16 @@ impl EVMInputT for EVMInput {
         self.randomness = v;
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8 {
         self.liquidation_percent
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8) {
         self.liquidation_percent = v;
+    }
+
+    fn get_repeat(&self) -> usize {
+        self.repeat
     }
 }
 

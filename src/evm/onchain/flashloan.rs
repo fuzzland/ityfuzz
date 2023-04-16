@@ -131,6 +131,7 @@ where
                 #[cfg(any(test, feature = "debug"))]
                 direct_data: Default::default(),
                 randomness: vec![0],
+                repeat: 1,
             }
         }
         .as_any()

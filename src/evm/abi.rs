@@ -1,22 +1,22 @@
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::evm::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
-
+use crate::evm::vm::abi_max_size;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
-
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMetadata, Rand};
+use libafl::prelude::{HasMetadata, Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
 use primitive_types::{H160, U256};
-
+use rand::random;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
-use std::fmt::{Debug, Write};
+use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
 
 use super::concolic::concolic_host::Expr;
@@ -60,8 +60,8 @@ pub trait CloneABI {
 }
 
 impl<T> CloneABI for T
-where
-    T: ABI + Clone + 'static,
+    where
+        T: ABI + Clone + 'static,
 {
     fn clone_box(&self) -> Box<dyn ABI> {
         Box::new(self.clone())
@@ -152,7 +152,7 @@ impl BoxedABI {
                 .collect_vec(),
             self.b.get_concolic(),
         ]
-        .concat()
+            .concat()
     }
 
     pub fn set_bytes(&mut self, bytes: Vec<u8>) {
@@ -161,11 +161,11 @@ impl BoxedABI {
 }
 
 fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
-where
-    S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<H160>,
-    VS: VMStateT + Default,
-    Loc: Clone + Debug + Serialize + DeserializeOwned,
-    Addr: Clone + Debug + Serialize + DeserializeOwned,
+    where
+        S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<H160>,
+        VS: VMStateT + Default,
+        Loc: Clone + Debug + Serialize + DeserializeOwned,
+        Addr: Clone + Debug + Serialize + DeserializeOwned,
 {
     // TODO(@shou): use a better sampling strategy
     if size == 32 {
@@ -174,10 +174,12 @@ where
             0 => BoxedABI::new(Box::new(A256 {
                 data: vec![0; 32],
                 is_address: false,
+                dont_mutate: false,
             })),
             1 => BoxedABI::new(Box::new(A256 {
                 data: state.get_rand_address().0.into(),
                 is_address: true,
+                dont_mutate: false,
             })),
             _ => unreachable!(),
         }
@@ -219,16 +221,16 @@ where
 
 impl BoxedABI {
     pub fn mutate<Loc, Addr, VS, S>(&mut self, state: &mut S) -> MutationResult
-    where
-        S: State
+        where
+            S: State
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
             + HasCaller<H160>
             + HasMetadata,
-        VS: VMStateT + Default,
-        Loc: Clone + Debug + Serialize + DeserializeOwned,
-        Addr: Clone + Debug + Serialize + DeserializeOwned,
+            VS: VMStateT + Default,
+            Loc: Clone + Debug + Serialize + DeserializeOwned,
+            Addr: Clone + Debug + Serialize + DeserializeOwned,
     {
         self.mutate_with_vm_slots(state, None)
     }
@@ -238,22 +240,25 @@ impl BoxedABI {
         state: &mut S,
         vm_slots: Option<HashMap<U256, U256>>,
     ) -> MutationResult
-    where
-        S: State
+        where
+            S: State
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
             + HasCaller<H160>
             + HasMetadata,
-        VS: VMStateT + Default,
-        Loc: Clone + Debug + Serialize + DeserializeOwned,
-        Addr: Clone + Debug + Serialize + DeserializeOwned,
+            VS: VMStateT + Default,
+            Loc: Clone + Debug + Serialize + DeserializeOwned,
+            Addr: Clone + Debug + Serialize + DeserializeOwned,
     {
         match self.get_type() {
             TEmpty => MutationResult::Skipped,
             T256 => {
                 let v = self.b.deref_mut().as_any();
                 let a256 = v.downcast_mut::<A256>().unwrap();
+                if a256.dont_mutate {
+                    return MutationResult::Skipped;
+                }
                 if a256.is_address {
                     if state.rand_mut().below(100) < 90 {
                         a256.data = state.get_rand_address().0.to_vec();
@@ -312,10 +317,9 @@ impl BoxedABI {
                             let index: usize = state.rand_mut().next() as usize % data_len;
                             aarray.data.remove(index);
                         }
-                        _ => {
-                            unreachable!()
-                        }
+                        _ => {unreachable!()}
                     }
+
                 } else {
                     let index: usize = state.rand_mut().next() as usize % data_len;
                     return aarray.data[index].mutate_with_vm_slots(state, vm_slots);
@@ -402,6 +406,7 @@ impl ABI for AEmpty {
 pub struct A256 {
     pub data: Vec<u8>,
     pub is_address: bool,
+    pub dont_mutate: bool,
 }
 
 fn vec_to_hex(v: &Vec<u8>) -> String {
@@ -700,15 +705,13 @@ impl ABI for AArray {
 
         if self.dynamic_size {
             // to usize
-            let size: usize = bytes[0..32]
-                .iter()
-                .fold(0, |acc, x| (acc << 8) + *x as usize);
+            let size: usize = bytes[0..32].iter().fold(0, |acc, x| (acc << 8) + *x as usize);
             if size != self.data.len() {
                 unreachable!("Array size mismatch");
             }
         }
 
-        let _offset = if self.dynamic_size { 32 } else { 0 };
+        let mut offset = if self.dynamic_size { 32 } else { 0 };
         //
         // let head_offsets = vec![];
         // let tail_offsets = vec![];
@@ -724,6 +727,7 @@ impl ABI for AArray {
         //
         //     }
         // }
+
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -933,14 +937,19 @@ fn get_abi_type_basic(
         "uint" | "int" => Box::new(A256 {
             data: vec![0; abi_bs],
             is_address: false,
+            dont_mutate: false,
         }),
         "address" => Box::new(A256 {
             data: with_address.to_owned().unwrap_or(vec![0; 20]),
             is_address: true,
+            dont_mutate: false,
+
         }),
         "bool" => Box::new(A256 {
             data: vec![0; 1],
             is_address: false,
+            dont_mutate: false,
+
         }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
