@@ -77,7 +77,7 @@ pub fn cmp_fuzzer(
 
     fuzz_host.set_concolic_enabled(config.concolic);
 
-    let _onchain_middleware = match config.onchain.clone() {
+    let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
                 let mid = Rc::new(RefCell::new(
@@ -264,7 +264,7 @@ pub fn cmp_fuzzer(
                             },
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                             #[cfg(feature = "flashloan_v2")]
-                            liquidation_percent,
+                            liquidation_percent: 0,
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::Borrow,
                             #[cfg(any(test, feature = "debug"))]

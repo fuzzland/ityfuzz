@@ -58,7 +58,7 @@ where
 
 pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
-    _res: &ExecutionResult<Loc, Addr, VS, Out>,
+    res: &ExecutionResult<Loc, Addr, VS, Out>,
 ) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
