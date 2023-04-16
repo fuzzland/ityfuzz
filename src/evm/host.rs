@@ -15,7 +15,7 @@ use libafl::prelude::{HasCorpus, Scheduler};
 use libafl::state::State;
 use std::collections::hash_map::DefaultHasher;
 use primitive_types::{H160, H256, U256};
-use revm::{Bytecode, CallContext, CallInputs, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
+use revm::{Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
 use crate::evm::bytecode_analyzer;
@@ -199,7 +199,7 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
 
 impl<VS, I, S> FuzzHost<VS, I, S>
     where
-        S: State + HasCaller<H160> + Clone + Debug + 'static,
+        S: State + HasCaller<H160> + Clone + Debug + HasCorpus<I> + 'static,
         I: VMInputT<VS, H160, H160> + EVMInputT,
         VS: VMStateT,
 {
@@ -357,6 +357,32 @@ impl<VS, I, S> FuzzHost<VS, I, S>
             .open("cov.txt")
             .unwrap();
         file.write_all(data.as_bytes()).unwrap();
+    }
+
+    pub fn find_static_call_read_slot(
+        &self,
+        address: H160,
+        data: Bytes,
+        state: &mut S,
+    ) -> Vec<U256> {
+        let call = Contract::new_with_context::<LatestSpec>(
+            data,
+            self.code.get(&address).expect("no code").clone(),
+            &CallContext {
+                address,
+                caller: Default::default(),
+                code_address: address,
+                apparent_value: Default::default(),
+                scheme: CallScheme::StaticCall,
+            },
+        );
+        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+        let (ret, slots) = interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
+        if ret != Return::Revert {
+            slots
+        } else {
+            vec![]
+        }
     }
 }
 

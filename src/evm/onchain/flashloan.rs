@@ -4,6 +4,7 @@
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
 
+use std::borrow::BorrowMut;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
@@ -44,6 +45,7 @@ use std::time::Duration;
 use crate::evm::contract_utils::ABIConfig;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::oracle::IERC20OracleFlashloan;
+use crate::get_token_ctx;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -252,7 +254,21 @@ where
         (is_erc20, is_pair)
     }
 
-    pub fn on_pair_insertion(&mut self, host: &FuzzHost<VS, I, S>, state: &mut S, token: H160) {
+    #[cfg(feature = "flashloan_v2")]
+    pub fn on_pair_insertion(&mut self, host: &FuzzHost<VS, I, S>, state: &mut S, pair: H160) {
+        let slots = host.find_static_call_read_slot(
+            pair,
+            Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]), // getReserves
+            state,
+        );
+        if slots.len() == 3 {
+            let slot = slots[0];
+            // println!("pairslots: {:?} {:?}", pair, slot);
+            self.flashloan_oracle.deref().borrow_mut().register_pair_reserve_slot(
+                pair,
+                slot,
+            );
+        }
 
     }
 }

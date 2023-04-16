@@ -97,6 +97,8 @@ pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
     #[cfg(feature = "flashloan_v2")]
     pub known_tokens: HashMap<H160, TokenContext>,
+    #[cfg(feature = "flashloan_v2")]
+    pub known_pair_reserve_slot: HashMap<H160, U256>,
 }
 
 impl IERC20OracleFlashloan {
@@ -105,12 +107,19 @@ impl IERC20OracleFlashloan {
             balance_of: hex::decode("70a08231").unwrap(),
             #[cfg(feature = "flashloan_v2")]
             known_tokens: HashMap::new(),
+            #[cfg(feature = "flashloan_v2")]
+            known_pair_reserve_slot: HashMap::new(),
         }
     }
 
     #[cfg(feature = "flashloan_v2")]
     pub fn register_token(&mut self, token: H160, token_ctx: TokenContext) {
         self.known_tokens.insert(token, token_ctx);
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    pub fn register_pair_reserve_slot(&mut self, pair: H160, slot: U256) {
+        self.known_pair_reserve_slot.insert(pair, slot);
     }
 }
 

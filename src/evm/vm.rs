@@ -56,6 +56,19 @@ use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::types::float_scale_to_u512;
 
+#[macro_export]
+macro_rules! get_token_ctx {
+    ($flashloan_mid: expr, $token: expr) => {
+        $flashloan_mid.flashloan_oracle
+                    .deref()
+                    .borrow()
+                    .known_tokens
+                    .get(&$token)
+                    .unwrap()
+    };
+}
+
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostExecutionCtx {
     pub stack: Vec<U256>,
@@ -514,39 +527,6 @@ where
             }
         }
     }
-
-    fn find_static_call_read_slot(
-        &mut self,
-        address: H160,
-        data: Bytes,
-        vm_state: &VS,
-        state: &mut S,
-    ) -> Vec<U256> {
-        let call = Contract::new_with_context::<LatestSpec>(
-            data,
-            self.host.code.get(&address).expect("no code").clone(),
-            &CallContext {
-                address,
-                caller: Default::default(),
-                code_address: address,
-                apparent_value: Default::default(),
-                scheme: CallScheme::StaticCall,
-            },
-        );
-        unsafe {
-            self.host.evmstate = vm_state
-                .as_any()
-                .downcast_ref_unchecked::<EVMState>()
-                .clone();
-        }
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let (ret, slots) = interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
-        if ret != Return::Revert {
-            slots
-        } else {
-            vec![]
-        }
-    }
 }
 
 impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, Vec<u8>, I, S>
@@ -612,28 +592,22 @@ where
         match input.get_input_type() {
             EVMInputTy::Borrow => {
                 let token = input.get_contract();
-                let token_ctx = self
-                    .host
-                    .flashloan_middleware
-                    .as_ref()
-                    .unwrap()
-                    .deref()
-                    .borrow()
-                    .flashloan_oracle
-                    .deref()
-                    .borrow()
-                    .known_tokens
-                    .get(&token)
-                    .unwrap()
-                    .clone();
 
                 let path_idx = input.get_randomness()[0] as usize;
-                match generate_uniswap_router_call(
-                    &token_ctx,
+                let call_info = generate_uniswap_router_call(
+                    get_token_ctx!(self
+                        .host
+                        .flashloan_middleware
+                        .as_ref()
+                        .unwrap()
+                        .deref()
+                        .borrow(), token
+                    ),
                     path_idx,
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
-                ) {
+                );
+                match call_info {
                     Some((abi, value, target)) => {
                         // println!("borrow: {:?} {:?} {:?}", hex::encode(abi.get_bytes()), value, target);
                         let mut res = self.fast_call(
