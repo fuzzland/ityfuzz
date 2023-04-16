@@ -61,7 +61,7 @@ impl Chain {
     pub fn get_chain_rpc(&self) -> String {
         match self {
             Chain::ETH => "https://eth.llamarpc.com",
-            Chain::BSC => "http://bsc.node1.infra.fuzz.land",
+            Chain::BSC => "https://bsc-dataseed4.defibit.io/",
             Chain::POLYGON => "https://polygon-rpc.com/",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
         }
