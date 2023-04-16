@@ -13,13 +13,13 @@ use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
-use ityfuzz::fuzzers::cmp_fuzzer::cmp_fuzzer;
 use ityfuzz::oracle::Oracle;
 use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
+use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -239,7 +239,7 @@ fn main() {
     };
 
     match config.fuzzer_type {
-        FuzzerTypes::CMP => cmp_fuzzer(config),
+        FuzzerTypes::CMP => evm_fuzzer(config),
         // FuzzerTypes::BASIC => basic_fuzzer(config)
         _ => {}
     }

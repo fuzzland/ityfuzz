@@ -1,1 +1,1 @@
-pub mod cmp_fuzzer;
+pub mod evm_fuzzer;
