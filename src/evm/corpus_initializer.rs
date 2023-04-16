@@ -28,12 +28,15 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
 use crate::evm::onchain::flashloan::register_borrow_txn;
+use crate::evm::presets::presets::Preset;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
     scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
     infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
     state: &'a mut EVMFuzzState,
+    #[cfg(feature = "use_presets")]
+    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>
 }
 
 #[macro_export]
@@ -58,6 +61,26 @@ macro_rules! handle_contract_insertion {
     };
 }
 
+
+macro_rules! wrap_input {
+    ($input: expr) => {
+        {
+            let mut tc = Testcase::new($input);
+            tc.set_exec_time(Duration::from_secs(0));
+            tc
+        }
+    };
+}
+
+macro_rules! add_input_to_corpus {
+    ($state: expr, $scheduler: expr, $input: expr) => {
+        let idx = $state.add_tx_to_corpus(wrap_input!($input)).expect("failed to add");
+        $scheduler
+            .on_add($state, idx)
+            .expect("failed to call scheduler on_add");
+    };
+}
+
 impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
         executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -70,7 +93,14 @@ impl<'a> EVMCorpusInitializer<'a> {
             scheduler,
             infant_scheduler,
             state,
+            #[cfg(feature = "use_presets")]
+            presets: vec![]
         }
+    }
+
+    #[cfg(feature = "use_presets")]
+    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState>) {
+        self.presets.push(preset);
     }
 
     pub fn initialize(&mut self, contracts: Vec<ContractInfo>) {
@@ -145,12 +175,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     randomness: vec![],
                     repeat: 1,
                 };
-                let mut tc = Testcase::new(input);
-                tc.set_exec_time(Duration::from_secs(0));
-                let idx = self.state.add_tx_to_corpus(tc).expect("failed to add");
-                self.scheduler
-                    .on_add(self.state, idx)
-                    .expect("failed to call scheduler on_add");
+                add_input_to_corpus!(self.state, self.scheduler, input);
             }
         }
         let mut tc = Testcase::new(StagedVMState::new_with_state(
@@ -248,11 +273,21 @@ impl<'a> EVMCorpusInitializer<'a> {
             repeat: 1,
 
         };
-        let mut tc = Testcase::new(input.clone());
-        tc.set_exec_time(Duration::from_secs(0));
-        let idx = self.state.add_tx_to_corpus(tc).expect("failed to add");
-        scheduler
-            .on_add(self.state, idx)
-            .expect("failed to call scheduler on_add");
+        add_input_to_corpus!(self.state, scheduler, input.clone());
+
+
+        #[cfg(feature = "use_presets")]
+        {
+            let presets = self.presets.clone();
+            for p in presets {
+                let mut presets = p.presets(abi.function, &input, self.executor);
+                presets.iter().for_each(
+                    |preset| {
+                        add_input_to_corpus!(self.state, scheduler, preset.clone());
+                    }
+                );
+            }
+        }
+
     }
 }

@@ -43,6 +43,7 @@ use crate::evm::onchain::onchain::OnChain;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::{BlockEnv, Bytecode};
+use crate::evm::presets::pair::PairPreset;
 
 struct ABIConfig {
     abi: String,
@@ -133,13 +134,19 @@ pub fn evm_fuzzer(
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);
 
-    EVMCorpusInitializer::new(
+    let mut corpus_initializer = EVMCorpusInitializer::new(
         &mut evm_executor,
         &mut scheduler,
         &infant_scheduler,
         &mut state,
-    )
-    .initialize(config.contract_info);
+    );
+
+    #[cfg(feature = "use_presets")]
+    corpus_initializer.register_preset(
+        &PairPreset{}
+    );
+
+    corpus_initializer.initialize(config.contract_info);
 
     evm_executor.host.initialize(&mut state);
 
