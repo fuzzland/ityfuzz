@@ -42,7 +42,9 @@ pub trait EVMInputT {
     fn get_input_type(&self) -> EVMInputTy;
     fn get_randomness(&self) -> Vec<u8>;
     fn set_randomness(&mut self, v: Vec<u8>);
+    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
+    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
 
     fn get_repeat(&self) -> usize;
@@ -121,6 +123,7 @@ impl EVMInputT for EVMInput {
         self.txn_value = Some(v);
     }
 
+    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy {
         self.input_type.clone()
     }
@@ -133,10 +136,12 @@ impl EVMInputT for EVMInput {
         self.randomness = v;
     }
 
+    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8 {
         self.liquidation_percent
     }
 
+    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8) {
         self.liquidation_percent = v;
     }
