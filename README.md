@@ -1,5 +1,8 @@
 # ItyFuzz 🍦
-Fast hybrid fuzzer for EVM, MoveVM (WIP), etc.
+Fast hybrid fuzzer for EVM, MoveVM (WIP), etc. 
+
+You can generate exploits **instantly** by just providing the contract address:
+![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
 [中文版README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf)
 
