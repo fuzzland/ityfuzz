@@ -4,7 +4,7 @@ Fast hybrid fuzzer for EVM, MoveVM (WIP), etc.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[中文版README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf)
+[中文版README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#development)
 
 ### Run ItyFuzz with UI
 Install Docker from https://www.docker.com/ and run our docker image (x86 only, running on non-x86 platform significantly degrades performance):
@@ -41,6 +41,13 @@ Test Coverage:
 | Tests       | Unsupported  | 52.9%       | 100%        |
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
+
+### Grants
+| Grants | Description |
+|:----:|:-----------:|
+| <img src=https://ityfuzz.assets.fuzz.land/sui.jpg width=100px/> | Grants from Sui Foundation for building Move and chain-specfic support |
+| <img src=https://ityfuzz.assets.fuzz.land/web3.png width=100px/> | Grants from Web3 Foundation for building Substrate pallets and Ink! support |
+
 
 # Development
 
