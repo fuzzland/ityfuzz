@@ -305,22 +305,30 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         if exec_res.new_state.state.flashloan_data.earned
             > exec_res.new_state.state.flashloan_data.owed
         {
+            let net = exec_res.new_state.state.flashloan_data.earned
+                - exec_res.new_state.state.flashloan_data.owed;
+            // we scaled by 1e23, so divide by 1e23 to get ETH
+            let net_eth = net / U512::from(1_000_000_000_000_000_000_000_00u128);
             unsafe {
                 #[cfg(not(feature = "debug"))]
                 {
                     FL_DATA = format!(
-                        "[Flashloan] Earned {} more than owed {}",
+                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH)",
                         exec_res.new_state.state.flashloan_data.earned,
                         exec_res.new_state.state.flashloan_data.owed,
+                        net,
+                        net_eth
                     );
                 }
 
                 #[cfg(feature = "debug")]
                 {
                     FL_DATA = format!(
-                        "[Flashloan] Earned {} more than owed {}, extra: {:?}",
+                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}",
                         exec_res.new_state.state.flashloan_data.earned,
                         exec_res.new_state.state.flashloan_data.owed,
+                        net,
+                        net_eth,
                         exec_res.new_state.state.flashloan_data.extra_info
                     );
                 }

@@ -570,7 +570,7 @@ where
             }
             match *interp.instruction_pointer {
                 // 0xfd => {
-                //     // println!("fd {}", interp.program_counter());
+                //     println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
                 // }
                 0x57 => {
                     // JUMPI counter cond
@@ -1029,7 +1029,7 @@ where
         data: Bytes,
         input: &I,
         post_exec: Option<PostExecutionCtx>,
-        state: &mut S,
+        mut state: &mut S,
     ) -> IntermediateExecutionResult {
         self.host.coverage_changed = false;
         self.host.evmstate = vm_state.clone();
@@ -1040,14 +1040,21 @@ where
             global_call_context = Some(call_ctx.clone());
         }
 
-        let bytecode = self
+        let mut bytecode = self
             .host
             .code
             .get(&call_ctx.code_address)
-            .expect("no code")
+            .expect(&*format!("no code {:?}", call_ctx.code_address))
             .clone();
 
+        unsafe {
+            state_change = false;
+        }
+
+        let mut repeats = input.get_repeat();
+
         let mut interp = if let Some(ref post_exec_ctx) = post_exec {
+            repeats = 1;
             unsafe {
                 let new_pc = post_exec_ctx.pc;
                 let call = Contract::new_with_context::<LatestSpec>(
@@ -1078,11 +1085,23 @@ where
             let call = Contract::new_with_context::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
-        unsafe {
-            state_change = false;
+
+        let mut r = Return::Stop;
+        for v in 0..repeats - 1 {
+            // println!("repeat: {:?}", v);
+            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+            interp.stack.data.clear();
+            interp.memory.data.clear();
+            interp.instruction_pointer = interp.contract.bytecode.as_ptr();
+            if r == Revert {
+                interp.return_range = 0..0;
+                break;
+            }
         }
 
-        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        if r != Revert {
+            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        }
 
         let mut result = IntermediateExecutionResult {
             output: interp.return_value(),
@@ -1104,10 +1123,7 @@ where
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
         match self.host.flashloan_middleware {
-            Some(ref m) => m
-                .deref()
-                .borrow_mut()
-                .analyze_call(input, &mut result.new_state.flashloan_data),
+            Some(ref m) => m.deref().borrow_mut().analyze_call(input, &mut result.new_state.flashloan_data),
             None => (),
         }
 
@@ -1547,6 +1563,8 @@ mod tests {
             #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
+            repeat: 1,
+
         };
 
         let mut state = FuzzState::new();
@@ -1586,6 +1604,8 @@ mod tests {
             #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
+            repeat: 1,
+
         };
 
         let execution_result_5 = evm_executor.execute(&input_5, &mut state);

