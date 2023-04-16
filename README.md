@@ -143,7 +143,7 @@ To effectively cache the costly RPC calls to blockchains, third-party APIs, and 
 To run the proxy:
 ```bash
 cd onchain_scripts
-python3 proxy.py
+python3 proxy/main.py
 ```
 
 To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
