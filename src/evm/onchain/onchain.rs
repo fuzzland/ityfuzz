@@ -8,7 +8,7 @@ use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
-
+use crate::handle_contract_insertion;
 use crate::evm::host::{FuzzHost};
 use crate::evm::vm::{IS_FAST_CALL};
 use crate::generic_vm::vm_state::VMStateT;
@@ -288,16 +288,24 @@ where
 
                     // notify flashloan and blacklisting flashloan addresses
                     #[cfg(feature = "flashloan_v2")]
-                    if match host.flashloan_middleware {
-                        Some(ref middleware) => middleware
-                            .deref()
-                            .borrow_mut()
-                            .on_contract_insertion(&address_h160, &parsed_abi, state),
-                        None => false,
-                    } {
-                        println!("borrowing from {:?}", address_h160);
-                        register_borrow_txn(host, state, address_h160);
+                    {
+                        handle_contract_insertion!(
+                            state,
+                            host,
+                            address_h160,
+                            parsed_abi
+                        );
                     }
+                    // if match host.flashloan_middleware {
+                    //     Some(ref middleware) => middleware
+                    //         .deref()
+                    //         .borrow_mut()
+                    //         .on_contract_insertion(&address_h160, &parsed_abi, state),
+                    //     None => false,
+                    // } {
+                    //     println!("borrowing from {:?}", address_h160);
+                    //     register_borrow_txn(host, state, address_h160);
+                    // }
 
                     // add abi to corpus
                     parsed_abi

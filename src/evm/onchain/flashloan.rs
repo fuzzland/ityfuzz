@@ -206,10 +206,10 @@ where
         addr: &H160,
         abi: &Vec<ABIConfig>,
         state: &mut S,
-    ) -> bool {
+    ) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
-            return false;
+            return (false, false);
         }
         self.known_addresses.insert(addr.clone());
 
@@ -228,6 +228,7 @@ where
             .collect::<HashSet<String>>();
 
         let mut is_erc20 = false;
+        let mut is_pair = false;
         // check abi_signatures_token is subset of abi.name
         if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
             self.flashloan_oracle.deref().borrow_mut().register_token(
@@ -238,32 +239,21 @@ where
             );
             self.erc20_address.insert(addr.clone());
             is_erc20 = true;
-            // if the #holder > 10, then add it to the erc20_address
-            // match self.endpoint.fetch_holders(*addr) {
-            //     None => {
-            //         println!("failed to fetch token holders for token {:?}", addr);
-            //     }
-            //     Some(v) => {
-            //         // add some user funds address
-            //         v[0..2].into_iter().for_each(|holder| {
-            //             state.add_address(&holder);
-            //             blacklist.push(*holder);
-            //         });
-            //         // add rich caller
-            //         let rich_account = v.clone().get(2).unwrap().clone();
-            //         state.add_caller(&rich_account);
-            //         blacklist.push(rich_account);
-            //     }
-            // }
         }
 
         // if the contract is pair
         if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
             self.pair_address.insert(addr.clone());
             println!("pair detected @ address {:?}", addr);
+            is_pair = true;
+
         }
 
-        is_erc20
+        (is_erc20, is_pair)
+    }
+
+    pub fn on_pair_insertion(&mut self, host: &FuzzHost<VS, I, S>, state: &mut S, token: H160) {
+
     }
 }
 

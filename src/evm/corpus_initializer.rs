@@ -36,6 +36,28 @@ pub struct EVMCorpusInitializer<'a> {
     state: &'a mut EVMFuzzState,
 }
 
+#[macro_export]
+macro_rules! handle_contract_insertion {
+    ($state: expr, $host: expr, $deployed_address: expr, $abi: expr) => {
+        let (is_erc20, is_pair) = match $host.flashloan_middleware {
+            Some(ref middleware) => {
+                let mut mid = middleware.deref().borrow_mut();
+                mid.on_contract_insertion(&$deployed_address, &$abi, $state)
+            }
+            None => (false, false),
+        };
+        if is_erc20 {
+            register_borrow_txn(&$host, $state, $deployed_address);
+        }
+        if is_pair {
+            let mut mid = $host.flashloan_middleware
+                .as_ref().unwrap()
+                .deref().borrow_mut();
+            mid.on_pair_insertion(&$host, $state, $deployed_address);
+        }
+    };
+}
+
 impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
         executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -85,15 +107,10 @@ impl<'a> EVMCorpusInitializer<'a> {
             };
 
             #[cfg(feature = "flashloan_v2")]
-            if match self.executor.host.flashloan_middleware {
-                Some(ref middleware) => {
-                    let mut mid = middleware.deref().borrow_mut();
-                    mid.on_contract_insertion(&deployed_address, &contract.abi, &mut self.state)
-                }
-                None => false,
-            } {
-                register_borrow_txn(&self.executor.host, self.state, deployed_address);
+            {
+                handle_contract_insertion!(self.state, self.executor.host, deployed_address, contract.abi);
             }
+
 
             self.state.add_address(&deployed_address);
 
