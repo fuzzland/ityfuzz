@@ -104,7 +104,6 @@ pub struct FuzzHost<VS, I, S>
 
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
-    pub token_ctx: HashMap<H160, TokenContext>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -168,7 +167,6 @@ impl<VS, I, S> Clone for FuzzHost<VS, I, S>
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
-            token_ctx: Default::default(),
         }
     }
 }
@@ -231,7 +229,6 @@ impl<VS, I, S> FuzzHost<VS, I, S>
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            token_ctx: Default::default(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
