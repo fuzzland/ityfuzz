@@ -8,6 +8,25 @@ from ratelimit import limits
 import time
 
 
+################### CONFIG ###################
+
+USE_ETHERSCAN_API = False
+ETHERSCAN_API_KEY = {
+    "ETH": "",
+    "BSC": "",
+    "POLYGON": "",
+    "MUMBAI": "",
+}
+QUOTING_METHOD = {
+    "ETH": "subgraph",
+    "BSC": "fuzzland_api",
+    "POLYGON": "subgraph",
+    "MUMBAI": "subgraph"
+}
+
+##############################################
+
+
 headers = {
     'authority': 'etherscan.io',
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,'
@@ -167,33 +186,6 @@ def get_token_name_from_address(network, address):
     raise Exception("Unknown token address")
 
 
-def get_funded_src(network, name):
-    if network == "eth":
-        return "0xBA12222222228d8Ba445958a75a0704d566BF2C8"  # balancer
-    elif network == "bsc":
-        return {
-            "WBNB": "0x0ed7e52944161450477ee417de9cd3a859b14fd0", # cake LP
-            "USDC": "0x2354ef4df11afacb85a5c7f98b624072eccddbb1", # usdc busd LP
-            "USDT": "0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE", # usdt wbnb LP
-            "DAI": "0x66FDB2eCCfB58cF098eaa419e5EfDe841368e489", # busd dai LP
-            "WBTC": "0x0000000000000000000000000000000000001004",
-            "WETH": "0x0000000000000000000000000000000000001004",
-            "BUSD": "0x2354ef4df11afacb85a5c7f98b624072eccddbb1", # usdc busd LP
-            "CAKE": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"  # cake LP
-        }[name]
-    elif network == "polygon":
-        return "0xba12222222228d8ba445958a75a0704d566bf2c8" # balancer
-    elif network == "mumbai":
-        raise Exception("Not supported")
-    else:
-        raise Exception("Unknown network")
-
-
-def get_funded_src_with_balance(network, name, block):
-    src = get_funded_src(network, name)
-    token_address = get_pegged_token(network)[name]
-    return src, fetch_balance(token_address, src, network, block)
-
 data = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  \n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n}'
 data_peg = '{  p0: pairs(block:{number:%s},first:10,where :{token0 : \"%s\", token1: \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n\n   p1: pairs(block:{number:%s},first:10, where :{token1 : \"%s\", token0: \"%s\"}) { \n    id\n    token0 {\n      decimals\n      id\n    }\n    token1 {\n      decimals\n      id\n    }\n  }\n  }'
 
@@ -274,7 +266,6 @@ def get_pair(token, network, block):
             res = res["data"]
 
             for pair in res["p0"] + res["p1"]:
-                reserves = fetch_reserve(pair["id"], network, block)
                 next_tokens.append({
                     "src": "v2",
                     "in": 0 if pair["token0"]["id"] == token else 1,
@@ -283,8 +274,6 @@ def get_pair(token, network, block):
                     "decimals0": pair["token0"]["decimals"],
                     "decimals1": pair["token1"]["decimals"],
                     "src_exact": name,
-                    "initial_reserves_0": reserves[0],
-                    "initial_reserves_1": reserves[1],
                 })
     return next_tokens
 
@@ -303,7 +292,6 @@ def get_pair_pegged(token, network, block):
                                 ).json()["data"]
 
             for pair in res["p0"] + res["p1"]:
-                reserves = fetch_reserve(pair["id"], network, block)
                 next_tokens.append({
                     "in": 0 if pair["token0"]["id"] == token else 1,
                     "pair": pair["id"],
@@ -311,15 +299,20 @@ def get_pair_pegged(token, network, block):
                     "decimals0": pair["token0"]["decimals"],
                     "decimals1": pair["token1"]["decimals"],
                     "src_exact": name,
-                    "initial_reserves_0": reserves[0],
-                    "initial_reserves_1": reserves[1],
+                    "src": "v2_pegged",
                 })
     return next_tokens
 
 
-# max 2 hops
-MAX_HOPS = 1
+# max 1 hops
+MAX_HOPS = 0
 
+def add_reserve_info(pair_data, network, block):
+    if pair_data["src"] == "pegged_weth":
+        return
+    reserves = fetch_reserve(pair_data["pair"], network, block)
+    pair_data["initial_reserves_0"] = reserves[0]
+    pair_data["initial_reserves_1"] = reserves[1]
 
 def get_all_hops(token, network, block, hop=0, known=set()):
     known.add(token)
@@ -352,6 +345,7 @@ def get_pegged_next_hop(token, network, block):
     peg_info = get_pair_pegged(token, network, block)[0]
     # calculate price using reserves
     src = peg_info["in"]
+    add_reserve_info(peg_info, network, block)
     p0 = int(peg_info["initial_reserves_0"], 16)
     p1 = int(peg_info["initial_reserves_1"], 16)
     if src == 0:
@@ -371,10 +365,10 @@ def with_info(routes, network, token):
     }
 
 
-def find_path(network, token, block):
+def find_path_subgraph(network, token, block):
     if token in get_pegged_token(network).values():
         return with_info([[get_pegged_next_hop(token, network, block)]], network, token)
-    hops = get_all_hops(token, network, block)
+    hops = get_all_hops(token, network, block, known=set())
     routes = []
 
     # do a DFS to find all routes
@@ -391,6 +385,9 @@ def find_path(network, token, block):
             dfs(i["next"], path + [i], visited.copy())
 
     dfs(token, [], set())
+    for route in routes:
+        for i in route:
+            add_reserve_info(i, network, block)
     return with_info(routes, network, token)
 
 
@@ -621,7 +618,7 @@ def price(network, token_address):
 
 @app.route("/swap_path/<network>/<token_address>/<block>", methods=["GET"])
 def swap_path(network, token_address, block):
-    return flask.jsonify(find_path(network, token_address.lower(), block))
+    return flask.jsonify(find_path_subgraph(network, token_address.lower(), block))
 
 
 if __name__ == "__main__":
