@@ -6,7 +6,7 @@ ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP�
 安装 Docker，然后运行我们的 Docker 镜像（仅支持 x86，在非 x86 平台上运行会显著降低性能）：
 
 ```bash
-docker run -p 8000:8000 fuzzland/dev-ityfuzz-2
+docker run -p 8000:8000 fuzzland/ityfuzz
 ```
 
 然后，您可以在 http://localhost:8000 访问UI。
