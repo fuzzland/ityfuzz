@@ -277,7 +277,7 @@ where
             repeats = 1;
             unsafe {
                 let new_pc = post_exec_ctx.pc;
-                let call = Contract::new_with_context::<LatestSpec>(
+                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
                     post_exec_ctx.call_data.clone(),
                     bytecode,
                     call_ctx,
@@ -302,7 +302,7 @@ where
                 interp
             }
         } else {
-            let call = Contract::new_with_context::<LatestSpec>(data, bytecode, call_ctx);
+            let call = Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
 
@@ -376,7 +376,7 @@ where
             IS_FAST_CALL = true;
         }
         // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
-        let call = Contract::new_with_context::<LatestSpec>(
+        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
             data,
             self.host
                 .code
@@ -663,7 +663,7 @@ where
         vm_state: &VS,
         state: &mut S,
     ) -> Vec<u8> {
-        let call = Contract::new_with_context::<LatestSpec>(
+        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
             data,
             self.host.code.get(&address).expect("no code").clone(),
             &CallContext {

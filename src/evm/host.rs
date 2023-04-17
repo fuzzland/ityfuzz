@@ -15,7 +15,7 @@ use libafl::prelude::{HasCorpus, Scheduler};
 use libafl::state::State;
 use std::collections::hash_map::DefaultHasher;
 use primitive_types::{H160, H256, U256};
-use revm::{Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
+use revm::{Bytecode, BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
 use revm::db::BenchmarkDB;
 use revm::Return::{Continue, Revert};
 use crate::evm::bytecode_analyzer;
@@ -74,7 +74,7 @@ pub struct FuzzHost<VS, I, S>
     pub evmstate: EVMState,
     // these are internal to the host
     pub env: Env,
-    pub code: HashMap<H160, Bytecode>,
+    pub code: HashMap<H160, Arc<BytecodeLocked>>,
     pub hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     pub address_to_hash: HashMap<H160, Vec<[u8; 4]>>,
     pub _pc: usize,
@@ -116,7 +116,6 @@ impl<VS, I, S> Debug for FuzzHost<VS, I, S>
         f.debug_struct("FuzzHost")
             .field("data", &self.evmstate)
             .field("env", &self.env)
-            .field("code", &self.code)
             .field("hash_to_address", &self.hash_to_address)
             .field("address_to_hash", &self.address_to_hash)
             .field("_pc", &self._pc)
@@ -301,7 +300,7 @@ impl<VS, I, S> FuzzHost<VS, I, S>
         }
         assert!(self
             .code
-            .insert(address, code.to_analysed::<LatestSpec>())
+            .insert(address, Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>()))
             .is_none());
     }
 
@@ -365,7 +364,7 @@ impl<VS, I, S> FuzzHost<VS, I, S>
         data: Bytes,
         state: &mut S,
     ) -> Vec<U256> {
-        let call = Contract::new_with_context::<LatestSpec>(
+        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
             data,
             self.code.get(&address).expect("no code").clone(),
             &CallContext {
@@ -613,11 +612,11 @@ impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
         Some((U256::max_value(), true))
     }
 
-    fn code(&mut self, address: H160) -> Option<(Bytecode, bool)> {
+    fn code(&mut self, address: H160) -> Option<(Arc<BytecodeLocked>, bool)> {
         // println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
-            None => Some((Bytecode::new(), true)),
+            None => Some((Arc::new(Bytecode::new().lock::<LatestSpec>()), true)),
         }
     }
 
@@ -809,7 +808,7 @@ impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
                     panic!("more than one contract found for the same hash");
                 }
                 let mut interp = Interpreter::new::<LatestSpec>(
-                    Contract::new_with_context::<LatestSpec>(
+                    Contract::new_with_context_not_cloned::<LatestSpec>(
                         input_bytes,
                         self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
                         &input.context,
@@ -826,7 +825,7 @@ impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
             let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(
+                Contract::new_with_context_not_cloned::<LatestSpec>(
                     input_bytes.clone(),
                     code.clone(),
                     &input.context,

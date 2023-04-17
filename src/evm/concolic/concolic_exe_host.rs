@@ -155,7 +155,7 @@ where
             .clone();
 
         let mut interp = {
-            let call = Contract::new_with_context::<LatestSpec>(data, bytecode, call_ctx);
+            let call = Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
         unsafe {
