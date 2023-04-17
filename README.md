@@ -11,11 +11,12 @@ Install Docker from https://www.docker.com/ and run our docker image (x86 only, 
 
 
 ```bash
-docker run -p 8000:8000 fuzzland/dev-ityfuzz-2
+docker run -p 8000:8000 fuzzland/ityfuzz
 ```
 
 Then, you can visit the interface at http://localhost:8000
 
+<sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
 
 ### Statistics & Comparison
 
