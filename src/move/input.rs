@@ -12,14 +12,12 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-
-use move_vm_types::values::{Value};
+use move_vm_types::values::Value;
 use primitive_types::U256;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
-use std::fmt::{Debug};
-
+use std::fmt::Debug;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;

@@ -3,17 +3,14 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-
-use std::borrow::BorrowMut;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
+use std::borrow::BorrowMut;
 
-
-
-use crate::evm::host::{FuzzHost};
+use crate::evm::host::FuzzHost;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::oracle::Oracle;
@@ -29,23 +26,20 @@ use primitive_types::{H160, U256, U512};
 use revm::Interpreter;
 use serde::{Deserialize, Serialize};
 
-
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-
-use std::rc::Rc;
-use std::str::FromStr;
-use std::time::Duration;
 use crate::evm::contract_utils::ABIConfig;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::oracle::IERC20OracleFlashloan;
 use crate::get_token_ctx;
+use std::rc::Rc;
+use std::str::FromStr;
+use std::time::Duration;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -248,7 +242,6 @@ where
             self.pair_address.insert(addr.clone());
             println!("pair detected @ address {:?}", addr);
             is_pair = true;
-
         }
 
         (is_erc20, is_pair)
@@ -264,12 +257,11 @@ where
         if slots.len() == 3 {
             let slot = slots[0];
             // println!("pairslots: {:?} {:?}", pair, slot);
-            self.flashloan_oracle.deref().borrow_mut().register_pair_reserve_slot(
-                pair,
-                slot,
-            );
+            self.flashloan_oracle
+                .deref()
+                .borrow_mut()
+                .register_pair_reserve_slot(pair, slot);
         }
-
     }
 }
 

@@ -1,5 +1,4 @@
-
-use crate::evm::input::{EVMInputT};
+use crate::evm::input::EVMInputT;
 
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -15,9 +14,8 @@ use revm::Interpreter;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use std::fmt::Debug;
 use crate::evm::input::EVMInputTy::Borrow;
-
+use std::fmt::Debug;
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;

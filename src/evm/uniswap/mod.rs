@@ -2,18 +2,13 @@ use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256};
 
 use crate::evm::onchain::endpoints::Chain;
 
-
-
-
-
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 
-
-use permutator::{CartesianProductIterator};
+use permutator::CartesianProductIterator;
 use primitive_types::{H160, U256};
 use std::borrow::Borrow;
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use std::ops::Deref;
@@ -269,7 +264,7 @@ pub fn generate_uniswap_router_call(
     if token.is_weth {
         let mut abi = BoxedABI::new(Box::new(AEmpty {}));
         abi.function = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit
-        // U256::from(perct) * unsafe {WETH_MAX}
+                                                 // U256::from(perct) * unsafe {WETH_MAX}
         Some((abi, amount_in, token.weth_address))
     } else {
         if token.swaps.len() == 0 {
@@ -278,31 +273,62 @@ pub fn generate_uniswap_router_call(
         let path_ctx = &token.swaps[path_idx % token.swaps.len()];
         // let amount_in = path_ctx.get_amount_in(perct, reserve);
         let mut path: Vec<H160> = path_ctx
-            .route.iter()
+            .route
+            .iter()
             .rev()
-            .map(|pair| pair.deref().borrow().next_hop).collect();
+            .map(|pair| pair.deref().borrow().next_hop)
+            .collect();
         path.insert(0, token.weth_address);
         path.insert(path.len(), token.address);
-        let mut abi = BoxedABI::new(Box::new(AArray { data: vec![
-            BoxedABI::new(Box::new(A256 { data: vec![0; 32], is_address: false, dont_mutate: false,})),
-            BoxedABI::new(Box::new(AArray { data:
-            path.iter().map(
-                |addr| BoxedABI::new(Box::new(A256 { data: addr.as_bytes().to_vec(), is_address: true, dont_mutate: false, }))
-            ).collect(),
-                dynamic_size: true
-            })),
-            BoxedABI::new(Box::new(A256 { data: to.0.to_vec(), is_address: true, dont_mutate: false, })),
-            BoxedABI::new(Box::new(A256 { data: vec![0xff; 32], is_address: false, dont_mutate: false, })),
-        ], dynamic_size: false }));
-        abi.function = [0xb6,0xf9,0xde,0x95]; // swapExactETHForTokensSupportingFeeOnTransferTokens
+        let mut abi = BoxedABI::new(Box::new(AArray {
+            data: vec![
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(AArray {
+                    data: path
+                        .iter()
+                        .map(|addr| {
+                            BoxedABI::new(Box::new(A256 {
+                                data: addr.as_bytes().to_vec(),
+                                is_address: true,
+                                dont_mutate: false,
+                            }))
+                        })
+                        .collect(),
+                    dynamic_size: true,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: to.0.to_vec(),
+                    is_address: true,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0xff; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+            ],
+            dynamic_size: false,
+        }));
+        abi.function = [0xb6, 0xf9, 0xde, 0x95]; // swapExactETHForTokensSupportingFeeOnTransferTokens
 
         match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
-            None => {
-                Some((abi, amount_in, path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router))
-            },
-            Some(info) => {
-                Some((abi, amount_in, info.uniswap_info.router))
-            }
+            None => Some((
+                abi,
+                amount_in,
+                path_ctx
+                    .route
+                    .last()
+                    .unwrap()
+                    .deref()
+                    .borrow()
+                    .uniswap_info
+                    .router,
+            )),
+            Some(info) => Some((abi, amount_in, info.uniswap_info.router)),
         }
     }
 }

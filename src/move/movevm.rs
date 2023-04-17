@@ -10,14 +10,14 @@ use move_binary_format::access::ModuleAccess;
 
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::{Identifier};
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 
 use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
+use move_vm_runtime::loader;
 use move_vm_runtime::loader::BinaryType::Module;
 use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
-use move_vm_runtime::native_functions::{NativeFunctions};
-use move_vm_runtime::{loader};
+use move_vm_runtime::native_functions::NativeFunctions;
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
 use move_vm_types::values::Locals;
@@ -233,7 +233,7 @@ mod tests {
     use super::*;
     use crate::r#move::input::CloneableValue;
     use crate::state::FuzzState;
-    
+
     use move_vm_types::values::Value;
 
     fn _run(

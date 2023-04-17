@@ -1,8 +1,7 @@
-use crate::generic_vm::vm_executor::{GenericVM};
+use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::state::{HasExecutionResult};
-
+use crate::state::HasExecutionResult;
 
 use libafl::prelude::{HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;

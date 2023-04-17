@@ -4,21 +4,21 @@ use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::ContractLoader;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 
+use crate::evm::host::FuzzHost;
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::handle_contract_insertion;
-use crate::evm::host::{FuzzHost};
-use crate::evm::vm::{IS_FAST_CALL};
+use crate::evm::vm::IS_FAST_CALL;
 use crate::generic_vm::vm_state::VMStateT;
+use crate::handle_contract_insertion;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 use crate::types::convert_u256_to_h160;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
-use libafl::corpus::{Corpus};
+use libafl::corpus::Corpus;
 use libafl::prelude::{HasCorpus, HasMetadata, Input};
 
 use libafl::state::State;
@@ -26,17 +26,15 @@ use libafl::state::State;
 use primitive_types::{H160, U256};
 use revm::Interpreter;
 
-
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 
+use crate::evm::onchain::flashloan::register_borrow_txn;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use crate::evm::onchain::flashloan::register_borrow_txn;
-
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<H160>> = None;
 
@@ -289,12 +287,7 @@ where
                     // notify flashloan and blacklisting flashloan addresses
                     #[cfg(feature = "flashloan_v2")]
                     {
-                        handle_contract_insertion!(
-                            state,
-                            host,
-                            address_h160,
-                            parsed_abi
-                        );
+                        handle_contract_insertion!(state, host, address_h160, parsed_abi);
                     }
                     // if match host.flashloan_middleware {
                     //     Some(ref middleware) => middleware
@@ -343,7 +336,6 @@ where
                                 direct_data: Default::default(),
                                 randomness: vec![],
                                 repeat: 1,
-
                             };
                             add_corpus(host, state, &input);
                         });

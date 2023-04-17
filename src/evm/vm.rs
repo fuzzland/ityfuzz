@@ -11,23 +11,20 @@ use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 
-
 use std::marker::PhantomData;
-use std::ops::{Deref};
+use std::ops::Deref;
 
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
-
 use crate::input::VMInputT;
 
 use crate::state_input::StagedVMState;
-use crate::tracer::{build_basic_txn_from_input};
+use crate::tracer::build_basic_txn_from_input;
 use bytes::Bytes;
 
-
-use libafl::prelude::{HasMetadata};
+use libafl::prelude::HasMetadata;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 
@@ -41,11 +38,12 @@ use revm::{
     Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
 };
 
-use serde::{Deserialize, Serialize};
-use serde_traitobject::Any;
 use crate::evm::bytecode_analyzer;
 use crate::evm::concolic::concolic_exe_host::ConcolicEVMExecutor;
-use crate::evm::host::{FuzzHost, ControlLeak, GLOBAL_CALL_CONTEXT, STATE_CHANGE, COVERAGE_NOT_CHANGED, RET_OFFSET, RET_SIZE, READ_MAP, WRITE_MAP, CMP_MAP, JMP_MAP};
+use crate::evm::host::{
+    ControlLeak, FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
+    RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
+};
 use crate::evm::input::{EVMInputT, EVMInputTy};
 use crate::evm::middleware::MiddlewareType;
 use crate::evm::onchain::flashloan::FlashloanData;
@@ -55,19 +53,21 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::types::float_scale_to_u512;
+use serde::{Deserialize, Serialize};
+use serde_traitobject::Any;
 
 #[macro_export]
 macro_rules! get_token_ctx {
     ($flashloan_mid: expr, $token: expr) => {
-        $flashloan_mid.flashloan_oracle
-                    .deref()
-                    .borrow()
-                    .known_tokens
-                    .get(&$token)
-                    .unwrap()
+        $flashloan_mid
+            .flashloan_oracle
+            .deref()
+            .borrow()
+            .known_tokens
+            .get(&$token)
+            .unwrap()
     };
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostExecutionCtx {
@@ -302,7 +302,8 @@ where
                 interp
             }
         } else {
-            let call = Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
+            let call =
+                Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
 
@@ -343,7 +344,10 @@ where
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
         match self.host.flashloan_middleware {
-            Some(ref m) => m.deref().borrow_mut().analyze_call(input, &mut result.new_state.flashloan_data),
+            Some(ref m) => m
+                .deref()
+                .borrow_mut()
+                .analyze_call(input, &mut result.new_state.flashloan_data),
             None => (),
         }
 
@@ -595,13 +599,14 @@ where
 
                 let path_idx = input.get_randomness()[0] as usize;
                 let call_info = generate_uniswap_router_call(
-                    get_token_ctx!(self
-                        .host
-                        .flashloan_middleware
-                        .as_ref()
-                        .unwrap()
-                        .deref()
-                        .borrow(), token
+                    get_token_ctx!(
+                        self.host
+                            .flashloan_middleware
+                            .as_ref()
+                            .unwrap()
+                            .deref()
+                            .borrow(),
+                        token
                     ),
                     path_idx,
                     input.get_txn_value().unwrap(),
@@ -707,22 +712,22 @@ where
 }
 
 mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-    use std::sync::Arc;
-    use bytes::Bytes;
-    use libafl::prelude::{StdScheduler, tuple_list};
-    use primitive_types::U256;
-    use revm::Bytecode;
+    use crate::evm::host::{FuzzHost, JMP_MAP};
     use crate::evm::input::{EVMInput, EVMInputTy};
     use crate::evm::mutator::AccessPattern;
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::{EVMExecutor, EVMState};
-    use crate::evm::host::{FuzzHost, JMP_MAP};
     use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
     use crate::rand_utils::generate_random_address;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
+    use bytes::Bytes;
+    use libafl::prelude::{tuple_list, StdScheduler};
+    use primitive_types::U256;
+    use revm::Bytecode;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[test]
     fn test_fuzz_executor() {
@@ -779,7 +784,6 @@ mod tests {
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
-
         };
 
         let mut state = FuzzState::new();
@@ -820,7 +824,6 @@ mod tests {
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
-
         };
 
         let execution_result_5 = evm_executor.execute(&input_5, &mut state);

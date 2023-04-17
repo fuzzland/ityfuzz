@@ -9,15 +9,14 @@ use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
-
-use crate::rand_utils::{fixed_address};
-use crate::state::{HasCaller};
+use crate::rand_utils::fixed_address;
+use crate::state::HasCaller;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 
 use libafl::schedulers::Scheduler;
-use libafl::state::{HasCorpus};
+use libafl::state::HasCorpus;
 use primitive_types::{H160, U256};
 use revm::Bytecode;
 
@@ -25,10 +24,10 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
 
-use std::rc::Rc;
-use std::time::Duration;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
+use std::rc::Rc;
+use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -36,7 +35,7 @@ pub struct EVMCorpusInitializer<'a> {
     infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
-    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>
+    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>,
 }
 
 #[macro_export]
@@ -53,28 +52,30 @@ macro_rules! handle_contract_insertion {
             register_borrow_txn(&$host, $state, $deployed_address);
         }
         if is_pair {
-            let mut mid = $host.flashloan_middleware
-                .as_ref().unwrap()
-                .deref().borrow_mut();
+            let mut mid = $host
+                .flashloan_middleware
+                .as_ref()
+                .unwrap()
+                .deref()
+                .borrow_mut();
             mid.on_pair_insertion(&$host, $state, $deployed_address);
         }
     };
 }
 
-
 macro_rules! wrap_input {
-    ($input: expr) => {
-        {
-            let mut tc = Testcase::new($input);
-            tc.set_exec_time(Duration::from_secs(0));
-            tc
-        }
-    };
+    ($input: expr) => {{
+        let mut tc = Testcase::new($input);
+        tc.set_exec_time(Duration::from_secs(0));
+        tc
+    }};
 }
 
 macro_rules! add_input_to_corpus {
     ($state: expr, $scheduler: expr, $input: expr) => {
-        let idx = $state.add_tx_to_corpus(wrap_input!($input)).expect("failed to add");
+        let idx = $state
+            .add_tx_to_corpus(wrap_input!($input))
+            .expect("failed to add");
         $scheduler
             .on_add($state, idx)
             .expect("failed to call scheduler on_add");
@@ -94,7 +95,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             infant_scheduler,
             state,
             #[cfg(feature = "use_presets")]
-            presets: vec![]
+            presets: vec![],
         }
     }
 
@@ -138,9 +139,13 @@ impl<'a> EVMCorpusInitializer<'a> {
 
             #[cfg(feature = "flashloan_v2")]
             {
-                handle_contract_insertion!(self.state, self.executor.host, deployed_address, contract.abi);
+                handle_contract_insertion!(
+                    self.state,
+                    self.executor.host,
+                    deployed_address,
+                    contract.abi
+                );
             }
-
 
             self.state.add_address(&deployed_address);
 
@@ -271,23 +276,18 @@ impl<'a> EVMCorpusInitializer<'a> {
             direct_data: Default::default(),
             randomness: vec![],
             repeat: 1,
-
         };
         add_input_to_corpus!(self.state, scheduler, input.clone());
-
 
         #[cfg(feature = "use_presets")]
         {
             let presets = self.presets.clone();
             for p in presets {
                 let mut presets = p.presets(abi.function, &input, self.executor);
-                presets.iter().for_each(
-                    |preset| {
-                        add_input_to_corpus!(self.state, scheduler, preset.clone());
-                    }
-                );
+                presets.iter().for_each(|preset| {
+                    add_input_to_corpus!(self.state, scheduler, preset.clone());
+                });
             }
         }
-
     }
 }

@@ -5,11 +5,9 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::effects::Op;
 use move_core_types::gas_algebra::NumBytes;
 
-use move_core_types::language_storage::{ModuleId};
+use move_core_types::language_storage::ModuleId;
 
 use move_core_types::value::MoveTypeLayout;
-
-
 
 use move_vm_types::data_store::DataStore;
 use move_vm_types::loaded_data::runtime_types::Type;

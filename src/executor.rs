@@ -18,7 +18,6 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasExecutionResult;
 
-
 // TODO: in the future, we may need to add handlers?
 // handle timeout/crash of executing contract
 pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>

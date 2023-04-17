@@ -8,7 +8,7 @@ use revm::{Bytecode, LatestSpec};
 use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;

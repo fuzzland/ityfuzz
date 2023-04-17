@@ -1,22 +1,18 @@
-use std::collections::HashMap;
 use crate::evm::input::{EVMInput, EVMInputT};
-
-
+use std::collections::HashMap;
 
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 
 use crate::evm::vm::EVMState;
 
-
 use crate::oracle::{Oracle, OracleCtx};
-use crate::state::{HasExecutionResult};
+use crate::state::HasExecutionResult;
 
 use bytes::Bytes;
 
+use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use primitive_types::{H160, U256, U512};
 use revm::Bytecode;
-use crate::evm::uniswap::{liquidate_all_token, TokenContext};
-
 
 pub struct NoOracle {}
 

@@ -9,10 +9,9 @@ use libafl::{impl_serdeany, Error};
 
 use serde::{Deserialize, Serialize};
 
+use rand::random;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use rand::random;
-
 
 pub trait HasVote<I, S>
 where

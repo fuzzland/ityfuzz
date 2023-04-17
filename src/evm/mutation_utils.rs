@@ -13,7 +13,7 @@ use libafl::{impl_serdeany, Error};
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantPoolMetadata {

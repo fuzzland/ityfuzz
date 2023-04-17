@@ -17,7 +17,7 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::RefCell;
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;

@@ -1,45 +1,43 @@
+use crate::evm::bytecode_analyzer;
+use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
+use crate::evm::mutator::AccessPattern;
+use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
+use bytes::Bytes;
+use itertools::Itertools;
+use libafl::prelude::{HasCorpus, Scheduler};
+use libafl::state::State;
+use primitive_types::{H160, H256, U256};
+use revm::db::BenchmarkDB;
+use revm::Return::{Continue, Revert};
+use revm::{
+    Bytecode, BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env,
+    Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
+};
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::fs::OpenOptions;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::io::Write;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use bytes::Bytes;
-use std::hash::Hasher;
-use itertools::Itertools;
-use std::hash::Hash;
-use libafl::prelude::{HasCorpus, Scheduler};
-use libafl::state::State;
-use std::collections::hash_map::DefaultHasher;
-use primitive_types::{H160, H256, U256};
-use revm::{Bytecode, BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec};
-use revm::db::BenchmarkDB;
-use revm::Return::{Continue, Revert};
-use crate::evm::bytecode_analyzer;
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::{
-    CallMiddlewareReturn, Middleware, MiddlewareType,
-};
-use crate::evm::mutator::AccessPattern;
-use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
-
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
+use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
-use crate::evm::vm::{EVMState};
-use crate::input::VMInputT;
 
-use super::concolic::concolic_exe_host::{ConcolicEVMExecutor};
-
-
+use super::concolic::concolic_exe_host::ConcolicEVMExecutor;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -53,7 +51,6 @@ pub static mut CMP_MAP: [U256; MAP_SIZE] = [U256::max_value(); MAP_SIZE];
 pub static mut ABI_MAX_SIZE: [usize; MAP_SIZE] = [0; MAP_SIZE];
 pub static mut STATE_CHANGE: bool = false;
 
-
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 
@@ -64,12 +61,11 @@ pub static mut RET_OFFSET: usize = 0;
 pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
 pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
-
 pub struct FuzzHost<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     pub evmstate: EVMState,
     // these are internal to the host
@@ -103,14 +99,13 @@ pub struct FuzzHost<VS, I, S>
     pub next_slot: U256,
 
     pub access_pattern: Rc<RefCell<AccessPattern>>,
-
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
@@ -135,10 +130,10 @@ impl<VS, I, S> Debug for FuzzHost<VS, I, S>
 
 // all clones would not include middlewares and states
 impl<VS, I, S> Clone for FuzzHost<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     fn clone(&self) -> Self {
         Self {
@@ -197,10 +192,10 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
 }
 
 impl<VS, I, S> FuzzHost<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Clone + Debug + HasCorpus<I> + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Clone + Debug + HasCorpus<I> + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
         let ret = Self {
@@ -256,8 +251,8 @@ impl<VS, I, S> FuzzHost<VS, I, S>
     }
 
     pub fn initialize(&mut self, state: &S)
-        where
-            S: HasHashToAddress,
+    where
+        S: HasHashToAddress,
     {
         self.hash_to_address = state.get_hash_to_address().clone();
         for key in self.hash_to_address.keys() {
@@ -300,7 +295,10 @@ impl<VS, I, S> FuzzHost<VS, I, S>
         }
         assert!(self
             .code
-            .insert(address, Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>()))
+            .insert(
+                address,
+                Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>())
+            )
             .is_none());
     }
 
@@ -376,7 +374,8 @@ impl<VS, I, S> FuzzHost<VS, I, S>
             },
         );
         let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let (ret, slots) = interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
+        let (ret, slots) =
+            interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
         if ret != Return::Revert {
             slots
         } else {
@@ -407,10 +406,10 @@ macro_rules! u256_to_u8 {
 pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
-    where
-        S: State + HasCaller<H160> + Debug + Clone + HasCorpus<I> + 'static,
-        I: VMInputT<VS, H160, H160> + EVMInputT,
-        VS: VMStateT,
+where
+    S: State + HasCaller<H160> + Debug + Clone + HasCorpus<I> + 'static,
+    I: VMInputT<VS, H160, H160> + EVMInputT,
+    VS: VMStateT,
 {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
@@ -477,7 +476,7 @@ impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
                 0x55 => {
                     // SSTORE
                     #[cfg(feature = "dataflow")]
-                        let value = fast_peek!(1);
+                    let value = fast_peek!(1);
                     {
                         let mut key = fast_peek!(0);
                         let v = u256_to_u8!(value) + 1;

@@ -7,26 +7,20 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::FIX_DEPLOYER,
-    evm::vm::{EVMExecutor, },
-    evm::host::FuzzHost,
-    executor::FuzzExecutor,
-    fuzzer::ItyFuzzer,
-    rand_utils::fixed_address,
+    evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
+    executor::FuzzExecutor, fuzzer::ItyFuzzer, rand_utils::fixed_address,
 };
 use libafl::feedbacks::Feedback;
+use libafl::prelude::ShMemProvider;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
-use libafl::prelude::{ShMemProvider};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
 
-
-
-use crate::evm::vm::{EVMState};
 use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
+use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
@@ -40,10 +34,10 @@ use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
+use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::{BlockEnv, Bytecode};
-use crate::evm::presets::pair::PairPreset;
 
 struct ABIConfig {
     abi: String,
@@ -142,9 +136,7 @@ pub fn evm_fuzzer(
     );
 
     #[cfg(feature = "use_presets")]
-    corpus_initializer.register_preset(
-        &PairPreset{}
-    );
+    corpus_initializer.register_preset(&PairPreset {});
 
     corpus_initializer.initialize(config.contract_info);
 

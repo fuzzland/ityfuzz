@@ -1,9 +1,7 @@
-
-
 use libafl::corpus::Corpus;
 
 use libafl::prelude::HasCorpus;
-use primitive_types::{U256};
+use primitive_types::U256;
 use std::fmt::Debug;
 
 use crate::evm::abi::BoxedABI;

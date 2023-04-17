@@ -1,15 +1,12 @@
 use bytes::Bytes;
 use primitive_types::{H160, U256};
 
-
-
-
-use crate::evm::abi::{BoxedABI};
+use crate::evm::abi::BoxedABI;
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::middleware::MiddlewareType::Concolic;
 use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
 
-use crate::evm::host::{JMP_MAP, FuzzHost};
+use crate::evm::host::{FuzzHost, JMP_MAP};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -19,16 +16,13 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 
 use libafl::state::{HasCorpus, State};
 
-use revm::{
-    Host, Interpreter,
-};
+use revm::{Host, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
-
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};

@@ -59,8 +59,8 @@ pub trait CloneABI {
 }
 
 impl<T> CloneABI for T
-    where
-        T: ABI + Clone + 'static,
+where
+    T: ABI + Clone + 'static,
 {
     fn clone_box(&self) -> Box<dyn ABI> {
         Box::new(self.clone())
@@ -151,7 +151,7 @@ impl BoxedABI {
                 .collect_vec(),
             self.b.get_concolic(),
         ]
-            .concat()
+        .concat()
     }
 
     pub fn set_bytes(&mut self, bytes: Vec<u8>) {
@@ -160,11 +160,11 @@ impl BoxedABI {
 }
 
 fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
-    where
-        S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<H160>,
-        VS: VMStateT + Default,
-        Loc: Clone + Debug + Serialize + DeserializeOwned,
-        Addr: Clone + Debug + Serialize + DeserializeOwned,
+where
+    S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<H160>,
+    VS: VMStateT + Default,
+    Loc: Clone + Debug + Serialize + DeserializeOwned,
+    Addr: Clone + Debug + Serialize + DeserializeOwned,
 {
     // TODO(@shou): use a better sampling strategy
     if size == 32 {
@@ -220,16 +220,16 @@ fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
 
 impl BoxedABI {
     pub fn mutate<Loc, Addr, VS, S>(&mut self, state: &mut S) -> MutationResult
-        where
-            S: State
+    where
+        S: State
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
             + HasCaller<H160>
             + HasMetadata,
-            VS: VMStateT + Default,
-            Loc: Clone + Debug + Serialize + DeserializeOwned,
-            Addr: Clone + Debug + Serialize + DeserializeOwned,
+        VS: VMStateT + Default,
+        Loc: Clone + Debug + Serialize + DeserializeOwned,
+        Addr: Clone + Debug + Serialize + DeserializeOwned,
     {
         self.mutate_with_vm_slots(state, None)
     }
@@ -239,16 +239,16 @@ impl BoxedABI {
         state: &mut S,
         vm_slots: Option<HashMap<U256, U256>>,
     ) -> MutationResult
-        where
-            S: State
+    where
+        S: State
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
             + HasCaller<H160>
             + HasMetadata,
-            VS: VMStateT + Default,
-            Loc: Clone + Debug + Serialize + DeserializeOwned,
-            Addr: Clone + Debug + Serialize + DeserializeOwned,
+        VS: VMStateT + Default,
+        Loc: Clone + Debug + Serialize + DeserializeOwned,
+        Addr: Clone + Debug + Serialize + DeserializeOwned,
     {
         match self.get_type() {
             TEmpty => MutationResult::Skipped,
@@ -316,9 +316,10 @@ impl BoxedABI {
                             let index: usize = state.rand_mut().next() as usize % data_len;
                             aarray.data.remove(index);
                         }
-                        _ => {unreachable!()}
+                        _ => {
+                            unreachable!()
+                        }
                     }
-
                 } else {
                     let index: usize = state.rand_mut().next() as usize % data_len;
                     return aarray.data[index].mutate_with_vm_slots(state, vm_slots);
@@ -704,7 +705,9 @@ impl ABI for AArray {
 
         if self.dynamic_size {
             // to usize
-            let size: usize = bytes[0..32].iter().fold(0, |acc, x| (acc << 8) + *x as usize);
+            let size: usize = bytes[0..32]
+                .iter()
+                .fold(0, |acc, x| (acc << 8) + *x as usize);
             if size != self.data.len() {
                 unreachable!("Array size mismatch");
             }
@@ -726,7 +729,6 @@ impl ABI for AArray {
         //
         //     }
         // }
-
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -942,13 +944,11 @@ fn get_abi_type_basic(
             data: with_address.to_owned().unwrap_or(vec![0; 20]),
             is_address: true,
             dont_mutate: false,
-
         }),
         "bool" => Box::new(A256 {
             data: vec![0; 1],
             is_address: false,
             dont_mutate: false,
-
         }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),

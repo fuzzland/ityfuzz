@@ -1,5 +1,5 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::mutation_utils::{byte_mutator};
+use crate::evm::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::EVMStagedVMState;
 use crate::evm::vm::EVMState;
@@ -7,27 +7,26 @@ use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 
-
 use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
 use primitive_types::{H160, U256, U512};
-use revm::{Env};
+use revm::Env;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use bytes::Bytes;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
-use bytes::Bytes;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum EVMInputTy {
     ABI,
     Borrow,
-    Liquidate
+    Liquidate,
 }
 
 pub trait EVMInputT {
@@ -489,7 +488,8 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         if self.sstate.state.flashloan_data.earned > self.sstate.state.flashloan_data.owed {
             return f64::MAX;
         }
-        let owed_amount = self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
+        let owed_amount =
+            self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
         if owed_amount == U512::zero() {
             return f64::MAX;

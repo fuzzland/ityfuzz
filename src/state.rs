@@ -10,7 +10,7 @@ use libafl::prelude::{
     current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
     StdRand,
 };
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use libafl::state::{
@@ -21,12 +21,11 @@ use libafl::state::{
 use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 
-use crate::generic_vm::vm_executor::{ExecutionResult};
+use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
-
 
 pub const ACCOUNT_AMT: u8 = 2;
 pub const CONTRACT_AMT: u8 = 2;

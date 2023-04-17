@@ -1,16 +1,10 @@
 use crate::{
     evm::{
+        host::{FuzzHost, GLOBAL_CALL_CONTEXT, STATE_CHANGE},
         input::EVMInputT,
-        vm::{
-            EVMState,
-        },
-        host::{
-            GLOBAL_CALL_CONTEXT, STATE_CHANGE, FuzzHost,
-        }
+        vm::EVMState,
     },
-    generic_vm::{
-        vm_state::VMStateT,
-    },
+    generic_vm::vm_state::VMStateT,
     input::VMInputT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
     state_input::StagedVMState,
@@ -20,12 +14,7 @@ use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::{H160, U256};
 
-
-
-use revm::{
-    CallContext, CallScheme, Contract, Host, Interpreter,
-    LatestSpec,
-};
+use revm::{CallContext, CallScheme, Contract, Host, Interpreter, LatestSpec};
 
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -135,12 +124,7 @@ where
         )
     }
 
-    pub fn execute_with_concolic(
-        &mut self,
-        call_ctx: &CallContext,
-        data: Bytes,
-        state: &mut S,
-    ) {
+    pub fn execute_with_concolic(&mut self, call_ctx: &CallContext, data: Bytes, state: &mut S) {
         self.host.coverage_changed = false;
 
         unsafe {
@@ -155,7 +139,8 @@ where
             .clone();
 
         let mut interp = {
-            let call = Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
+            let call =
+                Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
         unsafe {

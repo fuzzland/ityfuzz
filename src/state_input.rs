@@ -1,10 +1,8 @@
-
 use libafl::inputs::Input;
 
 use std::fmt::Debug;
 
 use crate::generic_vm::vm_state::VMStateT;
-
 
 use crate::tracer::TxnTrace;
 use serde::de::DeserializeOwned;

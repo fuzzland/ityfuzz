@@ -19,7 +19,7 @@ use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
-use crate::tracer::{build_basic_txn};
+use crate::tracer::build_basic_txn;
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -34,10 +34,10 @@ use libafl::{
     Error, Evaluator, ExecuteInputResult,
 };
 
+use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
-use crate::evm::host::JMP_MAP;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 

@@ -273,7 +273,7 @@ impl ContractLoader {
 mod tests {
     use super::*;
     use std::str::FromStr;
-    
+
     #[test]
     fn test_load() {
         let loader = ContractLoader::from_glob("demo/*");
