@@ -140,6 +140,12 @@ cd ./cli/
 cargo build --release
 ```
 
+(Optional, Must do if `flashloan_v2` enabled) To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built. 
+To run the proxy:
+```bash
+python3 proxy/main.py
+```
+
 You can fuzz a project by providing an address, a block, and a chain type.
 ```bash
 ./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] 
@@ -155,14 +161,6 @@ ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
 If ItyFuzz encounters an unknown slot in the memory, it would pull the slot from chain RPC.
 If ItyFuzz encounters calls to external unknown contract, it would pull the bytecode and ABI of that contract. 
 If its ABI is not available, ItyFuzz would not send any transaction to that contract.
-
-### Onchain Proxy
-
-To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is made. 
-To run the proxy:
-```bash
-python3 proxy/main.py
-```
 
 To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
 
