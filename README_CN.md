@@ -109,6 +109,14 @@ ItyFuzz将自动检测目录中的合约之间的关联（参见`tests/multi-con
 * 您还需要覆盖智能合约中的所有`constructor(...)`使它没有参数。 ItyFuzz假定构造函数没有参数。
 
 ### 在线Fuzz一个项目
+（可选）启用 flashloan_v2 重新构建以获得更好的结果。
+
+```bash
+sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
+cd ./cli/
+cargo build --release
+```
+
 您可以通过提供地址，块和链来fuzz一个项目。
 ```bash
 ./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] 
@@ -129,8 +137,7 @@ ItyFuzz将从Etherscan拉取合约的ABI并fuzz它。如果ItyFuzz遇到Storage�
 
 运行代理：
 ```bash
-cd onchain_scripts
-python3 proxy.py
+python3 proxy/main.py
 ```
 
 然后请将`--onchain-local-proxy-addr http://localhost:5003`附加到您的CLI命令中。 

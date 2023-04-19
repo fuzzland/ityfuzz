@@ -132,6 +132,14 @@ so you should ensure all related contracts (e.g., ERC20 token, Uniswap, etc.) ar
 to make it have no function argument. ItyFuzz assumes constructors have no argument.
 
 ### Fuzz a Project (Online)
+
+(Optional) Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result. 
+```bash
+sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
+cd ./cli/
+cargo build --release
+```
+
 You can fuzz a project by providing an address, a block, and a chain type.
 ```bash
 ./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] 
@@ -153,7 +161,6 @@ If its ABI is not available, ItyFuzz would not send any transaction to that cont
 To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is made. 
 To run the proxy:
 ```bash
-cd onchain_scripts
 python3 proxy/main.py
 ```
 
