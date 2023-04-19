@@ -221,8 +221,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
                 let res_post = ctx.call_post(token, call_data.clone());
 
-                let new_balance = U256::from(res_post.as_slice());
-                let prev_balance = U256::from(res_pre.as_slice());
+                let new_balance = U256::try_from(res_post.as_slice()).unwrap_or(U256::zero());
+                let prev_balance = U256::try_from(res_pre.as_slice()).unwrap_or(U256::zero());
 
                 let token_info = self.known_tokens.get(&token).expect("Token not found");
                 // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();

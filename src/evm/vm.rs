@@ -686,7 +686,11 @@ where
                 .clone();
         }
         let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        if ret == Return::Revert {
+            return vec![];
+        }
+
         interp.return_value().to_vec()
     }
 
