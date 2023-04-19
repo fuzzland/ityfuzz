@@ -1,0 +1,4 @@
+Flask~=2.2.2
+requests~=2.28.1
+retry~=0.9.2
+flask_cors
