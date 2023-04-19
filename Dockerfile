@@ -41,7 +41,6 @@ RUN pip3 install -r ui/requirements.txt
 COPY proxy /app/proxy
 RUN pip3 install -r proxy/requirements.txt
 
-WORKDIR /
 COPY ui/start.sh .
 RUN chmod +x start.sh
 
