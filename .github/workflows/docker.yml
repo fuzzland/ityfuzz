@@ -44,8 +44,8 @@ steps:
     with:
       context: .
       tags: |
-        fuzzland/ityfuzz:latest 
-        ghcr.io/fuzzland/ityfuzz:latest
+        fuzzland/ityfuzz:unstable
+        ghcr.io/fuzzland/ityfuzz:unstable
 
   - name: Image digest
     run: echo ${{ steps.docker_build.outputs.digest }}
