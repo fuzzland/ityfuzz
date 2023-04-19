@@ -153,7 +153,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             for _i in 0..t.layer {
                 s.push_str(" == ");
             }
-            s.push_str(format!("{:?}\n", serde_json::to_string(t).unwrap()).as_str());
+            s.push_str(format!("{}\n", serde_json::to_string(t).unwrap()).as_str());
             s.push_str("\n");
         }
         s
