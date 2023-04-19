@@ -226,15 +226,23 @@ where
         let mut is_erc20 = false;
         let mut is_pair = false;
         // check abi_signatures_token is subset of abi.name
-        if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
-            self.flashloan_oracle.deref().borrow_mut().register_token(
-                addr.clone(),
-                self.endpoint
-                    .fetch_uniswap_path_cached(addr.clone())
-                    .clone(),
-            );
-            self.erc20_address.insert(addr.clone());
-            is_erc20 = true;
+        {
+            let mut oracle = self.flashloan_oracle.deref().try_borrow_mut();
+            // avoid delegate call on token -> make oracle borrow multiple times
+            if oracle.is_ok() {
+                if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
+                    oracle.unwrap().register_token(
+                        addr.clone(),
+                        self.endpoint
+                            .fetch_uniswap_path_cached(addr.clone())
+                            .clone(),
+                    );
+                    self.erc20_address.insert(addr.clone());
+                    is_erc20 = true;
+                }
+            } else {
+                println!("Ignoring token {:?}", addr);
+            }
         }
 
         // if the contract is pair
