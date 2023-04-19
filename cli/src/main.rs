@@ -97,6 +97,9 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     ierc20_oracle: bool,
 
+    #[arg(long, default_value = 20000000)]
+    timeout: u64,
+
     /// Debug?
     #[arg(long)]
     debug_file: Option<String>,
@@ -126,6 +129,10 @@ fn main() {
             }
         }
     };
+
+    unsafe {
+        REVM_TIMEOUT = args.timeout;
+    }
 
     let is_local_proxy = args.onchain_local_proxy_addr.is_some();
 
