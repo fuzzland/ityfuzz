@@ -1,0 +1,6 @@
+/target
+**/target
+/.git
+/.idea
+Cargo.lock
+*.log
