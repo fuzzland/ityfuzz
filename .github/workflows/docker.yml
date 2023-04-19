@@ -12,12 +12,15 @@ env:
 jobs:
   build:
 
-    runs-on: [self-hosted, ubuntu-gcp]
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: 'recursive'
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
 
     - name: Set up Docker Buildx
       id: buildx
