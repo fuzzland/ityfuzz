@@ -143,6 +143,7 @@ cargo build --release
 (Optional, Must do if `flashloan_v2` enabled) To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built. 
 To run the proxy:
 ```bash
+pip3 install -r proxy/requirements.txt
 python3 proxy/main.py
 ```
 
