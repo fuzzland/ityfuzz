@@ -31,6 +31,10 @@ RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ../Cargo.toml
 RUN cargo build --release
 RUN cp target/release/cli /bins/cli_onchain
 
+RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ../Cargo.toml
+RUN cargo build --release
+RUN cp target/release/cli /bins/cli_print_logs
+
 FROM environment
 WORKDIR /app
 COPY --from=builder /bins /bins
