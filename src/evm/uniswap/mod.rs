@@ -244,17 +244,13 @@ impl PathContext {
     }
 }
 
-static mut WETH_MAX: U256 = U256::zero();
 
-pub fn generate_uniswap_router_call(
+pub fn generate_uniswap_borrow_call(
     token: &TokenContext,
     path_idx: usize,
     amount_in: U256,
     to: H160,
 ) -> Option<(BoxedABI, U256, H160)> {
-    unsafe {
-        WETH_MAX = U256::from(10).pow(U256::from(24));
-    }
     // function swapExactETHForTokensSupportingFeeOnTransferTokens(
     //     uint amountOutMin,
     //     address[] calldata path,
@@ -264,7 +260,7 @@ pub fn generate_uniswap_router_call(
     if token.is_weth {
         let mut abi = BoxedABI::new(Box::new(AEmpty {}));
         abi.function = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit
-                                                 // U256::from(perct) * unsafe {WETH_MAX}
+        // U256::from(perct) * unsafe {WETH_MAX}
         Some((abi, amount_in, token.weth_address))
     } else {
         if token.swaps.len() == 0 {
@@ -332,6 +328,91 @@ pub fn generate_uniswap_router_call(
         }
     }
 }
+
+
+pub fn generate_uniswap_liquidate_call(
+    token: &TokenContext,
+    path_idx: usize,
+    amount_in: U256,
+    to: H160,
+) -> Option<(BoxedABI, U256, H160)> {
+    // function swapExactETHForTokensSupportingFeeOnTransferTokens(
+    //     uint amountOutMin,
+    //     address[] calldata path,
+    //     address to,
+    //     uint deadline
+    // )
+    if token.is_weth {
+        let mut abi = BoxedABI::new(Box::new(AEmpty {}));
+        abi.function = [0x2e, 0x1a, 0x7d, 0x4d]; // withdraw
+        // U256::from(perct) * unsafe {WETH_MAX}
+        Some((abi, amount_in, token.weth_address))
+    } else {
+        if token.swaps.len() == 0 {
+            return None;
+        }
+        let path_ctx = &token.swaps[path_idx % token.swaps.len()];
+        // let amount_in = path_ctx.get_amount_in(perct, reserve);
+        let mut path: Vec<H160> = path_ctx
+            .route
+            .iter()
+            .map(|pair| pair.deref().borrow().next_hop)
+            .collect();
+        path.insert(path.len(), token.weth_address);
+        path.insert(0, token.address);
+        let mut abi = BoxedABI::new(Box::new(AArray {
+            data: vec![
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(AArray {
+                    data: path
+                        .iter()
+                        .map(|addr| {
+                            BoxedABI::new(Box::new(A256 {
+                                data: addr.as_bytes().to_vec(),
+                                is_address: true,
+                                dont_mutate: false,
+                            }))
+                        })
+                        .collect(),
+                    dynamic_size: true,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: to.0.to_vec(),
+                    is_address: true,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0xff; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+            ],
+            dynamic_size: false,
+        }));
+        abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
+
+        match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
+            None => Some((
+                abi,
+                amount_in,
+                path_ctx
+                    .route
+                    .last()
+                    .unwrap()
+                    .deref()
+                    .borrow()
+                    .uniswap_info
+                    .router,
+            )),
+            Some(info) => Some((abi, amount_in, info.uniswap_info.router)),
+        }
+    }
+}
+
 
 pub fn liquidate_all_token(
     tokens: Vec<(&TokenContext, U256)>,

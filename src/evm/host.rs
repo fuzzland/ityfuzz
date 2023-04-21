@@ -28,7 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
+use crate::evm::uniswap::{generate_uniswap_borrow_call, TokenContext};
 use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;

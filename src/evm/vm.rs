@@ -47,7 +47,7 @@ use crate::evm::host::{
 use crate::evm::input::{EVMInputT, EVMInputTy};
 use crate::evm::middleware::MiddlewareType;
 use crate::evm::onchain::flashloan::FlashloanData;
-use crate::evm::uniswap::generate_uniswap_router_call;
+use crate::evm::uniswap::generate_uniswap_borrow_call;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::r#const::DEBUG_PRINT_PERCENT;
@@ -598,7 +598,7 @@ where
                 let token = input.get_contract();
 
                 let path_idx = input.get_randomness()[0] as usize;
-                let call_info = generate_uniswap_router_call(
+                let call_info = generate_uniswap_borrow_call(
                     get_token_ctx!(
                         self.host
                             .flashloan_middleware
