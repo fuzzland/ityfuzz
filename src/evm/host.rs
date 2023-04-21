@@ -26,6 +26,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -99,6 +100,9 @@ where
     pub next_slot: U256,
 
     pub access_pattern: Rc<RefCell<AccessPattern>>,
+
+    #[cfg(feature = "print_logs")]
+    pub logs: HashSet<u64>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -161,6 +165,8 @@ where
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
+            #[cfg(feature = "print_logs")]
+            logs: Default::default(),
         }
     }
 }
@@ -223,6 +229,8 @@ where
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            #[cfg(feature = "print_logs")]
+            logs: Default::default(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -666,6 +674,22 @@ where
             self.record_instruction_coverage();
             panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
         }
+        #[cfg(feature = "print_logs")]
+        {
+            let mut hasher = DefaultHasher::new();
+            _data.to_vec().hash(&mut hasher);
+            let h = hasher.finish();
+            if self.logs.contains(&h) {
+                return;
+            }
+            self.logs.insert(h);
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
+            let timestamp = now.as_nanos();
+            println!("log@{} {:?}", timestamp, hex::encode(_data));
+        }
+
     }
 
     fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {

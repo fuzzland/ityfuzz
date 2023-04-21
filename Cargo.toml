@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "deployer_is_attacker", "evm", "print_txn_corpus"]
+default = ["cmp", "dataflow", "deployer_is_attacker", "evm", "print_txn_corpus", ]
 evm = []
 cmp = []
 dataflow = []
@@ -30,6 +30,7 @@ full_trace = []
 force_cache = []
 debug = []
 use_presets = []
+print_logs = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
