@@ -663,35 +663,41 @@ where
 
     fn fast_static_call(
         &mut self,
-        address: H160,
-        data: Bytes,
+        data: &Vec<(H160, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> Vec<u8> {
-        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
-            data,
-            self.host.code.get(&address).expect("no code").clone(),
-            &CallContext {
-                address,
-                caller: Default::default(),
-                code_address: address,
-                apparent_value: Default::default(),
-                scheme: CallScheme::StaticCall,
-            },
-        );
+    ) -> Vec<Vec<u8>> {
         unsafe {
             self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
-        if ret == Return::Revert {
-            return vec![];
-        }
 
-        interp.return_value().to_vec()
+        data.iter().map(
+            |(address, by)| {
+                let ctx = CallContext {
+                    address: *address,
+                    caller: Default::default(),
+                    code_address: *address,
+                    apparent_value: Default::default(),
+                    scheme: CallScheme::StaticCall,
+                };
+                let code = self.host.code.get(&address).expect("no code").clone();
+                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+                    by.clone(),
+                    code.clone(),
+                    &ctx,
+                );
+                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+                let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+                if ret == Return::Revert {
+                    vec![]
+                } else {
+                    interp.return_value().to_vec()
+                }
+            }
+        ).collect::<Vec<Vec<u8>>>()
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {

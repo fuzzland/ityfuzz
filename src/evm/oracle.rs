@@ -183,20 +183,36 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
         let mut new_reserves = prev_reserves.clone();
 
-        for pair_address in reserves {
-            // todo: bring this back
-            // let reserve_slot = ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address)
-            //     .expect("Pair not found")
-            //     .get(&U256::from(8))
-            //     .expect("Reserve not found");
-            // println!("Reserve slot: {}: {:?}", pair_address, ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address));
-            // new_reserves.insert(pair_address, reserve_parser(reserve_slot));
+        let mut query_reserves_batch = reserves.iter().map(
+            |pair_address| {
+                (*pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]))
+            }
+        ).collect::<Vec<(H160, Bytes)>>();
 
-            let output = ctx.call_post(pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]));
-            let reserve0 = U256::from_big_endian(&output[0..32]);
-            let reserve1 = U256::from_big_endian(&output[32..64]);
-            new_reserves.insert(pair_address, (reserve0, reserve1));
-        }
+        ctx.call_post_batch(&query_reserves_batch).iter().zip(
+            reserves.iter()
+        ).for_each(
+            |(output, pair_address)| {
+                let reserve0 = U256::from_big_endian(&output[0..32]);
+                let reserve1 = U256::from_big_endian(&output[32..64]);
+                new_reserves.insert(*pair_address, (reserve0, reserve1));
+            }
+        );
+        //
+        // for pair_address in reserves {
+        //     // todo: bring this back
+        //     // let reserve_slot = ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address)
+        //     //     .expect("Pair not found")
+        //     //     .get(&U256::from(8))
+        //     //     .expect("Reserve not found");
+        //     // println!("Reserve slot: {}: {:?}", pair_address, ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address));
+        //     // new_reserves.insert(pair_address, reserve_parser(reserve_slot));
+        //
+        //     let output = ctx.call_post(pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]));
+        //     let reserve0 = U256::from_big_endian(&output[0..32]);
+        //     let reserve1 = U256::from_big_endian(&output[32..64]);
+        //     new_reserves.insert(pair_address, (reserve0, reserve1));
+        // }
 
         let mut liquidations_owed = Vec::new();
         let mut liquidations_earned = Vec::new();
@@ -210,19 +226,33 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             //     .flashloan_data
             //     .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
         }
-        for caller in &callers {
-            let mut extended_address = vec![0; 12];
-            extended_address.extend_from_slice(caller.0.as_slice());
-            let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
+        let query_balance_batch = callers.iter().map(
+            |caller| {
+                let mut extended_address = vec![0; 12];
+                extended_address.extend_from_slice(caller.0.as_slice());
+                let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
+                tokens.iter().map(
+                    |token| {
+                        (*token, call_data.clone())
+                    }
+                ).collect::<Vec<(H160, Bytes)>>()
+            }
+        ).flatten().collect::<Vec<(H160, Bytes)>>();
 
+        let post_balance_res = ctx.call_post_batch(&query_balance_batch);
+        let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
+
+        let mut idx = 0;
+
+
+        for caller in &callers {
             for token in &tokens {
                 let token = *token;
-                let res_pre = ctx.call_pre(token, call_data.clone());
+                let post_balance = &post_balance_res[idx];
+                let pre_balance = &pre_balance_res[idx];
 
-                let res_post = ctx.call_post(token, call_data.clone());
-
-                let new_balance = U256::try_from(res_post.as_slice()).unwrap_or(U256::zero());
-                let prev_balance = U256::try_from(res_pre.as_slice()).unwrap_or(U256::zero());
+                let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
+                let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
 
                 let token_info = self.known_tokens.get(&token).expect("Token not found");
                 // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
@@ -252,6 +282,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                         *entry += unliquidated;
                     }
                 }
+                idx += 1;
             }
         }
 
