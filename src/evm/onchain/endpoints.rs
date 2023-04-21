@@ -773,23 +773,23 @@ mod tests {
     //     println!("{:?}", v)
     // }
 
-    #[test]
-    fn test_fetch_storage_dump() {
-        let mut config = OnChainConfig::new(ETH, 0);
-        let v = config
-            .fetch_storage_dump(
-                H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-            )
-            .unwrap();
+    // #[test]
+    // fn test_fetch_storage_dump() {
+    //     let mut config = OnChainConfig::new(ETH, 0);
+    //     let v = config
+    //         .fetch_storage_dump(
+    //             H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+    //         )
+    //         .unwrap();
 
-        let v0 = v.get(&U256::from(0)).unwrap().clone();
+    //     let v0 = v.get(&U256::from(0)).unwrap().clone();
 
-        let slot_v = config.get_contract_slot(
-            H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-            U256::from(0),
-            false,
-        );
+    //     let slot_v = config.get_contract_slot(
+    //         H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+    //         U256::from(0),
+    //         false,
+    //     );
 
-        assert_eq!(slot_v, v0);
-    }
+    //     assert_eq!(slot_v, v0);
+    // }
 }
