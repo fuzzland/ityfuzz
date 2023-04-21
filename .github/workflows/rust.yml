@@ -12,22 +12,12 @@ env:
 jobs:
   build:
 
-    runs-on: [self-hosted, ubuntu-gcp]
+    runs-on: [self-hosted, 8xlarge]
 
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: 'recursive'
-
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y libssl-dev libz3-dev pkg-config clang cmake
-
-    - name: Install solc-select
-      run: |
-        sudo apt-get install -y python3-pip
-        pip3 install solc-select
-        solc-select install 0.8.15
-        solc-select use 0.8.15
 
     - name: Build
       run: cargo build --verbose
