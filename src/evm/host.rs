@@ -686,8 +686,8 @@ where
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards");
-            let timestamp = now.as_secs();
-            println!("log@{} {:?} {:?}", timestamp, _topics, hex::encode(_data));
+            let timestamp = now.as_nanos();
+            println!("log@{} {:?}", timestamp, hex::encode(_data));
         }
 
     }
