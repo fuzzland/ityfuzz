@@ -1,11 +1,11 @@
-use bytes::Bytes;
-use primitive_types::{H160, U256};
-use revm::Bytecode;
 use crate::evm::input::EVMInput;
 use crate::evm::oracle::dummy_precondition;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
+use bytes::Bytes;
+use primitive_types::{H160, U256};
+use revm::Bytecode;
 
 pub struct FunctionHarnessOracle {
     pub address: H160,
@@ -36,7 +36,7 @@ impl FunctionHarnessOracle {
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for FunctionHarnessOracle
+    for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
         (self.precondition)(ctx, stage)

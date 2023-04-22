@@ -84,16 +84,9 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
-    fn produce(
-        &mut self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>,
-    );
-    fn notify_end(
-        &mut self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>,
-    );
+    fn produce(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>);
+    fn notify_end(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>);
 }
-
 
 pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
 where

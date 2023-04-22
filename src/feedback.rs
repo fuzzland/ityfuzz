@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -17,6 +16,7 @@ use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
@@ -75,7 +75,9 @@ where
 {
     pub fn new(
         oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
-        producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+        producers: &'a mut Vec<
+            Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+        >,
         executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
@@ -124,10 +126,7 @@ where
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
         // todo(@shou): should it be new stage?
         self.producers.iter().for_each(|producer| {
-            producer
-                .deref()
-                .borrow_mut()
-                .produce(&mut oracle_ctx);
+            producer.deref().borrow_mut().produce(&mut oracle_ctx);
         });
 
         for idx in 0..self.oracle.len() {
@@ -155,10 +154,7 @@ where
         }
 
         self.producers.iter().for_each(|producer| {
-            producer
-                .deref()
-                .borrow_mut()
-                .notify_end(&mut oracle_ctx);
+            producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
         });
 
         Ok(false)

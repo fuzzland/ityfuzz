@@ -1,11 +1,3 @@
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::rc::Rc;
-use bytes::Bytes;
-use primitive_types::{H160, U256, U512};
-use revm::Bytecode;
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
@@ -13,6 +5,14 @@ use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use crate::evm::vm::EVMState;
 use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
+use bytes::Bytes;
+use primitive_types::{H160, U256, U512};
+use revm::Bytecode;
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
@@ -56,7 +56,7 @@ impl IERC20OracleFlashloan {
 pub static mut ORACLE_OUTPUT: String = String::new();
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
-for IERC20OracleFlashloan
+    for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -214,7 +214,6 @@ for IERC20OracleFlashloan
                     .unliquidated_tokens
                     .insert(*token, *amount - liq);
             }
-
         });
 
         let (liquidation_earned, adjusted_reserves) =

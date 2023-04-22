@@ -310,6 +310,4 @@ pub fn evm_fuzzer(
             }
         }
     }
-
-
 }
