@@ -22,6 +22,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
+use ityfuzz::evm::producers::erc20::ERC20Producer;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -182,8 +183,14 @@ fn main() {
             .push(args.onchain_etherscan_api_key.unwrap());
     }
     let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
+    let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new({IERC20OracleFlashloan::new(pair_producer.clone())}));
+    let mut flashloan_oracle = Rc::new(RefCell::new({
+        IERC20OracleFlashloan::new(
+            pair_producer.clone(),
+            erc20_producer.clone(),
+        )
+    }));
 
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
@@ -215,6 +222,10 @@ fn main() {
 
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
+    }
+
+    if args.ierc20_oracle {
+        producers.push(erc20_producer);
     }
 
     let is_onchain = onchain.is_some();

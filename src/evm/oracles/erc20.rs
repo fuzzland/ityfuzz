@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::evm::producers::erc20::ERC20Producer;
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
@@ -22,23 +23,26 @@ pub struct IERC20OracleFlashloan {
     pub known_pair_reserve_slot: HashMap<H160, U256>,
     #[cfg(feature = "flashloan_v2")]
     pub pair_producer: Rc<RefCell<PairProducer>>,
+    #[cfg(feature = "flashloan_v2")]
+    pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
 
 impl IERC20OracleFlashloan {
     #[cfg(not(feature = "flashloan_v2"))]
-    pub fn new(_: Rc<RefCell<PairProducer>>) -> Self {
+    pub fn new(_: Rc<RefCell<PairProducer>>, _: Rc<RefCell<ERC20Producer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
         }
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(pair_producer: Rc<RefCell<PairProducer>>) -> Self {
+    pub fn new(pair_producer: Rc<RefCell<PairProducer>>, erc20_producer: Rc<RefCell<ERC20Producer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
             known_tokens: HashMap::new(),
             known_pair_reserve_slot: HashMap::new(),
             pair_producer,
+            erc20_producer
         }
     }
 
@@ -81,22 +85,6 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
     #[cfg(feature = "flashloan_v2")]
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
-        let tokens = ctx
-            .fuzz_state
-            .get_execution_result()
-            .new_state
-            .state
-            .flashloan_data
-            .oracle_recheck_balance
-            .clone();
-        let reserves = ctx
-            .fuzz_state
-            .get_execution_result()
-            .new_state
-            .state
-            .flashloan_data
-            .oracle_recheck_reserve
-            .clone();
         let prev_reserves = ctx
             .fuzz_state
             .get_execution_result()
@@ -113,7 +101,6 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             .flashloan_data
             .unliquidated_tokens
             .clone();
-        let callers = ctx.fuzz_state.callers_pool.clone();
 
         let mut new_reserves = prev_reserves.clone();
 
@@ -124,84 +111,40 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         let mut liquidations_owed = Vec::new();
         let mut liquidations_earned = Vec::new();
 
-        #[cfg(feature = "debug")]
-        {
-            // ctx.fuzz_state
-            //     .get_execution_result_mut()
-            //     .new_state
-            //     .state
-            //     .flashloan_data
-            //     .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
-        }
-        let query_balance_batch = callers.iter().map(
-            |caller| {
-                let mut extended_address = vec![0; 12];
-                extended_address.extend_from_slice(caller.0.as_slice());
-                let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
-                tokens.iter().map(
-                    |token| {
-                        (*token, call_data.clone())
-                    }
-                ).collect::<Vec<(H160, Bytes)>>()
-            }
-        ).flatten().collect::<Vec<(H160, Bytes)>>();
+        for ((_, token), (prev_balance, new_balance)) in self.erc20_producer.deref().borrow().balances.iter() {
+            let token_info = self.known_tokens.get(token).expect("Token not found");
+            // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
 
-        let post_balance_res = ctx.call_post_batch(&query_balance_batch);
-        let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
+            if prev_balance > new_balance {
+                liquidations_owed.push((token_info, prev_balance - new_balance));
+            } else if prev_balance < new_balance {
+                let to_liquidate = (new_balance - prev_balance)
+                    * U256::from(ctx.input.get_liquidation_percent())
+                    / U256::from(10);
 
-        let mut idx = 0;
-
-
-        for _ in &callers {
-            for token in &tokens {
-                let token = *token;
-                let post_balance = &post_balance_res[idx];
-                let pre_balance = &pre_balance_res[idx];
-                let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
-                let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
-                let token_info = self.known_tokens.get(&token).expect("Token not found");
-                // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
-
-                if prev_balance > new_balance {
-                    liquidations_owed.push((token_info, prev_balance - new_balance));
-                } else if prev_balance < new_balance {
-                    let to_liquidate = (new_balance - prev_balance)
-                        * U256::from(ctx.input.get_liquidation_percent())
-                        / U256::from(10);
-
-                    let unliquidated = new_balance - prev_balance - to_liquidate;
-                    if to_liquidate > U256::from(0) {
-                        liquidations_earned.push((token_info, to_liquidate));
-                    }
-                    // insert if not exists or increase if exists
-                    if unliquidated > U256::from(0) {
-                        let entry = ctx
-                            .fuzz_state
-                            .get_execution_result_mut()
-                            .new_state
-                            .state
-                            .flashloan_data
-                            .unliquidated_tokens
-                            .entry(token)
-                            .or_insert(U256::from(0));
-                        *entry += unliquidated;
-                    }
+                let unliquidated = new_balance - prev_balance - to_liquidate;
+                if to_liquidate > U256::from(0) {
+                    liquidations_earned.push((token_info, to_liquidate));
+                }
+                // insert if not exists or increase if exists
+                if unliquidated > U256::from(0) {
+                    let entry = ctx
+                        .fuzz_state
+                        .get_execution_result_mut()
+                        .new_state
+                        .state
+                        .flashloan_data
+                        .unliquidated_tokens
+                        .entry(*token)
+                        .or_insert(U256::from(0));
+                    *entry += unliquidated;
                 }
             }
         }
-
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
 
         let (liquidation_owed, _) =
             liquidate_all_token(liquidations_owed.clone(), prev_reserves.clone());
-        #[cfg(feature = "debug")]
-        {
-            // exec_res.new_state.state.flashloan_data.extra_info += format!(
-            //     "Liquidations owed: {:?} total: {}, old_reserve: {:?}\n",
-            //     liquidations_owed, liquidation_owed, prev_reserves
-            // )
-            // .as_str();
-        }
 
         unliquidated_tokens.iter().for_each(|(token, amount)| {
             let token_info = self.known_tokens.get(token).expect("Token not found");
@@ -249,8 +192,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         {
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;
-            // we scaled by 1e23, so divide by 1e23 to get ETH
-            let net_eth = net / U512::from(1_000_000_000_000_000_000_000_00u128);
+            // we scaled by 1e24, so divide by 1e24 to get ETH
+            let net_eth = net / U512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
                 #[cfg(not(feature = "debug"))]
                 {

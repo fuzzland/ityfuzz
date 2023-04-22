@@ -9,16 +9,15 @@ use revm::Bytecode;
 use std::collections::HashMap;
 
 pub struct ERC20Producer {
-    pub prev_balances: HashMap<(H160, H160), U256>,
-    pub post_balances: HashMap<(H160, H160), U256>,
+    // (caller, token) -> (pre_balance, post_balance)
+    pub balances: HashMap<(H160, H160), (U256, U256)>,
     pub balance_of: Vec<u8>,
 }
 
 impl ERC20Producer {
     pub fn new() -> Self {
         Self {
-            prev_balances: HashMap::new(),
-            post_balances: HashMap::new(),
+            balances: HashMap::new(),
             balance_of: hex::decode("70a08231").unwrap(),
         }
     }
@@ -73,13 +72,12 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
             for caller in &callers {
                 for token in &tokens {
                     let token = *token;
-                    let post_balance = &post_balance_res[idx];
                     let pre_balance = &pre_balance_res[idx];
-                    let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
+                    let post_balance = &post_balance_res[idx];
                     let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
+                    let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
 
-                    self.prev_balances.insert((*caller, token), prev_balance);
-                    self.post_balances.insert((*caller, token), new_balance);
+                    self.balances.insert((*caller, token), (prev_balance, new_balance));
                     idx += 1;
                 }
             }
@@ -100,7 +98,6 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
             EVMFuzzState,
         >,
     ) {
-        self.prev_balances.clear();
-        self.post_balances.clear();
+        self.balances.clear();
     }
 }
