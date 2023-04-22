@@ -1,7 +1,8 @@
+use std::borrow::BorrowMut;
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::oracle::{Oracle, OracleCtx};
+use crate::oracle::{Oracle, OracleCtx, Producer};
 use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
 use crate::state_input::StagedVMState;
@@ -23,145 +24,6 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
 
-pub struct InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-{
-    oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-    executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
-    map: [bool; MAP_SIZE],
-    phantom: PhantomData<(I, S, Out)>,
-}
-
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Debug
-    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InfantFeedback")
-            // .field("oracle", &self.oracle)
-            .finish()
-    }
-}
-
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Named
-    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-{
-    fn name(&self) -> &str {
-        "InfantFeedback"
-    }
-}
-
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-    InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-where
-    I: VMInputT<VS, Loc, Addr>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-{
-    pub fn new(
-        oracle: &'a Vec<Box<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
-        executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
-    ) -> Self {
-        Self {
-            oracle,
-            executor,
-            map: [false; MAP_SIZE],
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Feedback<I, S>
-    for InfantFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-where
-    S: State
-        + HasClientPerfMonitor
-        + HasExecutionResult<Loc, Addr, VS, Out>
-        + HasCorpus<I>
-        + HasMetadata,
-    I: Input + VMInputT<VS, Loc, Addr> + 'static,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
-{
-    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
-        todo!()
-    }
-
-    fn is_interesting<EMI, OT>(
-        &mut self,
-        state: &mut S,
-        _manager: &mut EMI,
-        input: &I,
-        _observers: &OT,
-        _exit_kind: &ExitKind,
-    ) -> Result<bool, Error>
-    where
-        EMI: EventFirer<I>,
-        OT: ObserversTuple<I, S>,
-    {
-        let mut oracle_ctx = OracleCtx::new(
-            // todo(@shou): we should get a previous state, not incomplete state!
-            state,
-            input.get_state(),
-            self.executor,
-            input,
-        );
-
-        let mut new_stages = vec![];
-        let mut is_interesting = false;
-
-        for idx in 0..self.oracle.len() {
-            let original_stage = if idx >= input.get_staged_state().stage.len() {
-                0
-            } else {
-                input.get_staged_state().stage[idx]
-            };
-            let new_stage = self.oracle[idx].transition(&mut oracle_ctx, original_stage);
-            new_stages.push(new_stage);
-            // todo(@shou): need to test this about collision and investigate why it is giving a huge speed up
-            let slot: usize = (new_stage << 8 ^ original_stage) as usize % MAP_SIZE;
-            if !self.map[slot] {
-                self.map[slot] = true;
-                is_interesting = true;
-            }
-        }
-        state
-            .get_execution_result_mut()
-            .new_state
-            .update_stage(new_stages);
-
-        return Ok(is_interesting);
-    }
-
-    fn append_metadata(
-        &mut self,
-        _state: &mut S,
-        _testcase: &mut Testcase<I>,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -169,6 +31,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<Out>,
@@ -212,9 +75,11 @@ where
 {
     pub fn new(
         oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+        producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
         executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
+            producers,
             oracle,
             executor,
             phantom: Default::default(),
@@ -258,6 +123,13 @@ where
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
         // todo(@shou): should it be new stage?
+        self.producers.iter().for_each(|producer| {
+            producer
+                .deref()
+                .borrow_mut()
+                .produce(&mut oracle_ctx);
+        });
+
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {
                 0
@@ -281,6 +153,14 @@ where
                 return Ok(true);
             }
         }
+
+        self.producers.iter().for_each(|producer| {
+            producer
+                .deref()
+                .borrow_mut()
+                .notify_end(&mut oracle_ctx);
+        });
+
         Ok(false)
     }
 

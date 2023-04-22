@@ -12,14 +12,15 @@ use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
-use ityfuzz::oracle::Oracle;
+use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
-use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
+use ityfuzz::evm::oracles::v2_pair::{PairBalanceOracle};
+use ityfuzz::evm::producers::pair::PairProducer;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 
 /// CLI for ItyFuzz
@@ -180,23 +181,37 @@ fn main() {
             .etherscan_api_key
             .push(args.onchain_etherscan_api_key.unwrap());
     }
+    let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new()));
+    let mut flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new(
+        pair_producer.clone()
+    )));
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);
     // let mut function_oracle =
     //     FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
 
+
     let mut oracles: Vec<
         Rc<RefCell<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
     > = vec![];
+
+    let mut producers: Vec<
+        Rc<RefCell<dyn Producer<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
+    > = vec![];
+
+    if args.pair_oracle {
+        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new(pair_producer.clone()))));
+    }
+
     if args.ierc20_oracle {
         oracles.push(flashloan_oracle.clone());
     }
 
-    if args.pair_oracle {
-        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));
+
+    if args.ierc20_oracle || args.pair_oracle {
+        producers.push(pair_producer);
     }
 
     let is_onchain = onchain.is_some();
@@ -230,6 +245,7 @@ fn main() {
         onchain,
         concolic: args.concolic,
         oracle: oracles,
+        producers,
         flashloan: args.flashloan,
         price_oracle: match args.flashloan_price_oracle.as_str() {
             "onchain" => Box::new(onchain_clone.expect("onchain unavailable but used for flashloan")),

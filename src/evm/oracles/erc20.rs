@@ -1,8 +1,13 @@
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Deref;
+use std::rc::Rc;
 use bytes::Bytes;
 use primitive_types::{H160, U256, U512};
 use revm::Bytecode;
 use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use crate::evm::vm::EVMState;
@@ -15,16 +20,27 @@ pub struct IERC20OracleFlashloan {
     pub known_tokens: HashMap<H160, TokenContext>,
     #[cfg(feature = "flashloan_v2")]
     pub known_pair_reserve_slot: HashMap<H160, U256>,
+    #[cfg(feature = "flashloan_v2")]
+    pub pair_producer: Rc<RefCell<PairProducer>>,
 }
 
 impl IERC20OracleFlashloan {
+    #[cfg(not(feature = "flashloan_v2"))]
     pub fn new() -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
-            #[cfg(feature = "flashloan_v2")]
             known_tokens: HashMap::new(),
-            #[cfg(feature = "flashloan_v2")]
             known_pair_reserve_slot: HashMap::new(),
+        }
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    pub fn new(pair_producer: Rc<RefCell<PairProducer>>) -> Self {
+        Self {
+            balance_of: hex::decode("70a08231").unwrap(),
+            known_tokens: HashMap::new(),
+            known_pair_reserve_slot: HashMap::new(),
+            pair_producer,
         }
     }
 
@@ -191,13 +207,16 @@ for IERC20OracleFlashloan
         unliquidated_tokens.iter().for_each(|(token, amount)| {
             let token_info = self.known_tokens.get(token).expect("Token not found");
             let liq = *amount * U256::from(ctx.input.get_liquidation_percent()) / U256::from(10);
-            liquidations_earned.push((token_info, liq));
-            exec_res
-                .new_state
-                .state
-                .flashloan_data
-                .unliquidated_tokens
-                .insert(*token, *amount - liq);
+            if liq != U256::from(0) {
+                liquidations_earned.push((token_info, liq));
+                exec_res
+                    .new_state
+                    .state
+                    .flashloan_data
+                    .unliquidated_tokens
+                    .insert(*token, *amount - liq);
+            }
+
         });
 
         let (liquidation_earned, adjusted_reserves) =

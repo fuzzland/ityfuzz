@@ -156,8 +156,9 @@ pub fn evm_fuzzer(
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
     let mut oracles = config.oracle;
+    let mut producers = config.producers;
 
-    let objective = OracleFeedback::new(&mut oracles, evm_executor_ref.clone());
+    let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
 
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
@@ -167,7 +168,11 @@ pub fn evm_fuzzer(
         objective,
     );
     match config.debug_file {
-        None => {}
+        None => {
+            fuzzer
+                .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+                .expect("Fuzzing failed");
+        }
         Some(file) => {
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
@@ -306,7 +311,5 @@ pub fn evm_fuzzer(
         }
     }
 
-    fuzzer
-        .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-        .expect("Fuzzing failed");
+
 }
