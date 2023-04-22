@@ -35,7 +35,7 @@ use std::ops::Deref;
 
 use crate::evm::contract_utils::ABIConfig;
 use crate::evm::onchain::onchain::OnChain;
-use crate::evm::oracle::IERC20OracleFlashloan;
+use crate::evm::oracles::erc20::IERC20OracleFlashloan;
 use crate::get_token_ctx;
 use std::rc::Rc;
 use std::str::FromStr;

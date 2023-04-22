@@ -106,13 +106,13 @@ where
         Some(module.self_id().address().clone())
     }
 
+
     fn fast_static_call(
         &mut self,
-        _address: AccountAddress,
-        _data: MoveFunctionInput,
+        _data: &Vec<(AccountAddress, MoveFunctionInput)>,
         _vm_state: &MoveVMState,
         _state: &mut S,
-    ) -> MoveOutput
+    ) -> Vec<MoveOutput>
     where
         MoveVMState: VMStateT,
         AccountAddress: Serialize + DeserializeOwned + Debug,

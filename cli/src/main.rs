@@ -1,7 +1,5 @@
 mod licensing;
 
-use std::cell::RefCell;
-use std::collections::HashSet;
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
@@ -10,16 +8,21 @@ use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
+use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
+use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
+use ityfuzz::evm::producers::pair::PairProducer;
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
-use ityfuzz::oracle::Oracle;
+use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
+use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
-use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
+use ityfuzz::evm::producers::erc20::ERC20Producer;
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -96,6 +99,10 @@ struct Args {
     /// Enable ierc20 oracle
     #[arg(short, long, default_value = "false")]
     ierc20_oracle: bool,
+
+    /// Enable pair oracle
+    #[arg(short, long, default_value = "false")]
+    pair_oracle: bool,
 
     /// Debug?
     #[arg(long)]
@@ -175,8 +182,16 @@ fn main() {
             .etherscan_api_key
             .push(args.onchain_etherscan_api_key.unwrap());
     }
+    let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
+    let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new()));
+    let mut flashloan_oracle = Rc::new(RefCell::new({
+        IERC20OracleFlashloan::new(
+            pair_producer.clone(),
+            erc20_producer.clone(),
+        )
+    }));
+
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);
@@ -186,8 +201,31 @@ fn main() {
     let mut oracles: Vec<
         Rc<RefCell<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
     > = vec![];
+
+    let mut producers: Vec<
+        Rc<
+            RefCell<
+                dyn Producer<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
+            >,
+        >,
+    > = vec![];
+
+    if args.pair_oracle {
+        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new(
+            pair_producer.clone(),
+        ))));
+    }
+
     if args.ierc20_oracle {
         oracles.push(flashloan_oracle.clone());
+    }
+
+    if args.ierc20_oracle || args.pair_oracle {
+        producers.push(pair_producer);
+    }
+
+    if args.ierc20_oracle {
+        producers.push(erc20_producer);
     }
 
     let is_onchain = onchain.is_some();
@@ -210,7 +248,11 @@ fn main() {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
                 }
-                let addresses: Vec<H160> = args.target.split(",").map(|s| H160::from_str(s).unwrap()).collect();
+                let addresses: Vec<H160> = args
+                    .target
+                    .split(",")
+                    .map(|s| H160::from_str(s).unwrap())
+                    .collect();
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
@@ -221,9 +263,12 @@ fn main() {
         onchain,
         concolic: args.concolic,
         oracle: oracles,
+        producers,
         flashloan: args.flashloan,
         price_oracle: match args.flashloan_price_oracle.as_str() {
-            "onchain" => Box::new(onchain_clone.expect("onchain unavailable but used for flashloan")),
+            "onchain" => {
+                Box::new(onchain_clone.expect("onchain unavailable but used for flashloan"))
+            }
             _ => Box::new(DummyPriceOracle {}),
         },
         onchain_storage_fetching: if is_onchain {
@@ -235,7 +280,7 @@ fn main() {
             None
         },
         debug_file: args.debug_file,
-        flashloan_oracle
+        flashloan_oracle,
     };
 
     match config.fuzzer_type {

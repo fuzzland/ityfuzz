@@ -1,8 +1,8 @@
-pub use sentry;
 pub use reqwest;
-use sentry::{Envelope, Level};
+pub use sentry;
 use sentry::protocol::EnvelopeItem;
 use sentry::types::protocol::v7;
+use sentry::{Envelope, Level};
 use std::env;
 
 pub fn init_license() {
@@ -18,8 +18,14 @@ pub fn init_license() {
         message: Some(format!("Run CLI @ {:?}", std::time::SystemTime::now()).into()),
         extra: ({
             let mut map = std::collections::BTreeMap::new();
-            map.insert("args".to_string(), env::args().collect::<Vec<String>>().join(" ").into());
-            map.insert("cwd".to_string(), env::current_dir().unwrap().to_str().unwrap().into());
+            map.insert(
+                "args".to_string(),
+                env::args().collect::<Vec<String>>().join(" ").into(),
+            );
+            map.insert(
+                "cwd".to_string(),
+                env::current_dir().unwrap().to_str().unwrap().into(),
+            );
             map
         }),
 

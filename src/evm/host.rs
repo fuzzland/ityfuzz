@@ -689,7 +689,6 @@ where
             let timestamp = now.as_nanos();
             println!("log@{} {:?}", timestamp, hex::encode(_data));
         }
-
     }
 
     fn selfdestruct(&mut self, _address: H160, _target: H160) -> Option<SelfDestructResult> {

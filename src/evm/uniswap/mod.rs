@@ -278,7 +278,10 @@ pub fn generate_uniswap_router_call(
             .rev()
             .map(|pair| pair.deref().borrow().next_hop)
             .collect();
-        path.insert(0, token.weth_address);
+        // when it is pegged token or weth
+        if path.len() == 0 || path[0] != token.weth_address {
+            path.insert(0, token.weth_address);
+        }
         path.insert(path.len(), token.address);
         let mut abi = BoxedABI::new(Box::new(AArray {
             data: vec![

@@ -13,7 +13,7 @@ use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
-use crate::evm::oracle::FL_DATA;
+use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 #[cfg(feature = "record_instruction_coverage")]
@@ -378,7 +378,7 @@ where
             }
             ExecuteInputResult::Solution => {
                 unsafe {
-                    println!("Flashloan: {}", FL_DATA);
+                    println!("Flashloan: {}", ORACLE_OUTPUT);
                 }
                 println!(
                     "Found a solution! trace: {}",
