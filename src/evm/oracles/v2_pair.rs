@@ -49,16 +49,14 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
     ) -> bool {
         #[cfg(feature = "flashloan_v2")]
         {
-            let prev_reserves = ctx
-                .fuzz_state
-                .get_execution_result()
-                .new_state
-                .state
-                .flashloan_data
-                .prev_reserves
-                .clone();
             for (addr, (r0, r1)) in &self.pair_producer.deref().borrow().reserves {
-                match prev_reserves.get(addr) {
+                match ctx
+                    .fuzz_state
+                    .get_execution_result()
+                    .new_state
+                    .state
+                    .flashloan_data
+                    .prev_reserves.get(addr) {
                     Some((pre_r0, pre_r1)) => {
                         if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
                             unsafe {
