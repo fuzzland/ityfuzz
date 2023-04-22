@@ -71,10 +71,6 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                 }
             }
         }
-        #[cfg(not(feature = "flashloan_v2"))]
-        {
-            unreachable!()
-        }
     }
 
     fn notify_end(

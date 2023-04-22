@@ -26,7 +26,7 @@ pub struct IERC20OracleFlashloan {
 
 impl IERC20OracleFlashloan {
     #[cfg(not(feature = "flashloan_v2"))]
-    pub fn new() -> Self {
+    pub fn new(_: Rc<RefCell<PairProducer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
         }
@@ -117,19 +117,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
         let mut new_reserves = prev_reserves.clone();
 
-        for pair_address in reserves {
-            // todo: bring this back
-            // let reserve_slot = ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address)
-            //     .expect("Pair not found")
-            //     .get(&U256::from(8))
-            //     .expect("Reserve not found");
-            // println!("Reserve slot: {}: {:?}", pair_address, ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address));
-            // new_reserves.insert(pair_address, reserve_parser(reserve_slot));
-
-            let output = ctx.call_post(pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]));
-            let reserve0 = U256::from_big_endian(&output[0..32]);
-            let reserve1 = U256::from_big_endian(&output[32..64]);
-            new_reserves.insert(pair_address, (reserve0, reserve1));
+        for (pair_address, reserve) in &self.pair_producer.deref().borrow().reserves {
+            new_reserves.insert(*pair_address, *reserve);
         }
 
         let mut liquidations_owed = Vec::new();
