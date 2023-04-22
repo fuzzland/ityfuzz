@@ -299,7 +299,7 @@ def get_pair_pegged(token, network, block):
                     "decimals0": pair["token0"]["decimals"],
                     "decimals1": pair["token1"]["decimals"],
                     "src_exact": name,
-                    "src": "v2",
+                    "src": "pegged",
                 })
     return next_tokens
 
