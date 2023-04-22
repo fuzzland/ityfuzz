@@ -50,26 +50,33 @@ for PairBalanceOracle
         >,
         stage: u64,
     ) -> bool {
-        let prev_reserves = ctx
-            .fuzz_state
-            .get_execution_result()
-            .new_state
-            .state
-            .flashloan_data
-            .prev_reserves
-            .clone();
-        for (addr, (r0, r1)) in &self.pair_producer.deref().borrow().reserves {
-            match prev_reserves.get(addr) {
-                Some((pre_r0, pre_r1)) => {
-                    if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
-                        unsafe {
-                            ORACLE_OUTPUT = format!("Imbalanced Pair: {:?}, Reserves: {:?} => {:?}", addr, (r0, r1), (pre_r0, pre_r1));
+        #[cfg(feature = "flashloan_v2")]
+        {
+            let prev_reserves = ctx
+                .fuzz_state
+                .get_execution_result()
+                .new_state
+                .state
+                .flashloan_data
+                .prev_reserves
+                .clone();
+            for (addr, (r0, r1)) in &self.pair_producer.deref().borrow().reserves {
+                match prev_reserves.get(addr) {
+                    Some((pre_r0, pre_r1)) => {
+                        if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
+                            unsafe {
+                                ORACLE_OUTPUT = format!("Imbalanced Pair: {:?}, Reserves: {:?} => {:?}", addr, (r0, r1), (pre_r0, pre_r1));
+                            }
+                            return true;
                         }
-                        return true;
                     }
+                    None => { continue; }
                 }
-                None => { continue; }
             }
+        }
+        #[cfg(not(feature = "flashloan_v2"))]
+        {
+            panic!("Flashloan v2 required to use pair (-p).")
         }
         false
 

@@ -22,6 +22,8 @@ impl PairProducer {
 
 impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState> for PairProducer {
     fn produce(&mut self, ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>) {
+        #[cfg(feature = "flashloan_v2")]
+        {
         let reserves = ctx
             .fuzz_state
             .get_execution_result()
@@ -43,6 +45,11 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
             let reserve1 = U256::from_big_endian(&output[32..64]);
             self.reserves.insert(pair_address, (reserve0, reserve1));
         }
+    }
+    #[cfg(not(feature = "flashloan_v2"))]
+    {
+    panic!("Flashloan v2 required to use pair (-p).")
+    }
     }
 
     fn notify_end(&mut self, ctx: &mut OracleCtx<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>) {

@@ -183,9 +183,20 @@ fn main() {
     }
     let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new(
-        pair_producer.clone()
-    )));
+    let mut flashloan_oracle = Rc::new(RefCell::new(
+        {
+            #[cfg(feature = "flashloan_v2")]
+            {
+                IERC20OracleFlashloan::new(
+                    pair_producer.clone()
+                )
+            }
+            #[cfg(not(feature = "flashloan_v2"))]
+            {
+                IERC20OracleFlashloan::new()
+            }
+        }
+    ));
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);

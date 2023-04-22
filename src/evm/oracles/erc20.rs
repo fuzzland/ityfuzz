@@ -29,8 +29,6 @@ impl IERC20OracleFlashloan {
     pub fn new() -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
-            known_tokens: HashMap::new(),
-            known_pair_reserve_slot: HashMap::new(),
         }
     }
 
