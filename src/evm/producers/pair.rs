@@ -10,12 +10,14 @@ use std::collections::HashMap;
 
 pub struct PairProducer {
     pub reserves: HashMap<H160, (U256, U256)>,
+    pub fetch_reserve: Bytes,
 }
 
 impl PairProducer {
     pub fn new() -> Self {
         Self {
             reserves: HashMap::new(),
+            fetch_reserve: Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]),
         }
     }
 }
@@ -49,7 +51,7 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                 .clone();
             let mut query_reserves_batch = reserves.iter().map(
                 |pair_address| {
-                    (*pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]))
+                    (*pair_address, self.fetch_reserve.clone())
                 }
             ).collect::<Vec<(H160, Bytes)>>();
 
