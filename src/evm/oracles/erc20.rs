@@ -133,20 +133,32 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             //     .flashloan_data
             //     .extra_info += format!("\n\n\n\n=========== New =============\n").as_str();
         }
-        for caller in &callers {
-            let mut extended_address = vec![0; 12];
-            extended_address.extend_from_slice(caller.0.as_slice());
-            let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
+        let query_balance_batch = callers.iter().map(
+            |caller| {
+                let mut extended_address = vec![0; 12];
+                extended_address.extend_from_slice(caller.0.as_slice());
+                let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
+                tokens.iter().map(
+                    |token| {
+                        (*token, call_data.clone())
+                    }
+                ).collect::<Vec<(H160, Bytes)>>()
+            }
+        ).flatten().collect::<Vec<(H160, Bytes)>>();
 
+        let post_balance_res = ctx.call_post_batch(&query_balance_batch);
+        let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
+
+        let mut idx = 0;
+
+
+        for _ in &callers {
             for token in &tokens {
                 let token = *token;
-                let res_pre = ctx.call_pre(token, call_data.clone());
-
-                let res_post = ctx.call_post(token, call_data.clone());
-
-                let new_balance = U256::try_from(res_post.as_slice()).unwrap_or(U256::zero());
-                let prev_balance = U256::try_from(res_pre.as_slice()).unwrap_or(U256::zero());
-
+                let post_balance = &post_balance_res[idx];
+                let pre_balance = &pre_balance_res[idx];
+                let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
+                let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
                 let token_info = self.known_tokens.get(&token).expect("Token not found");
                 // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
 

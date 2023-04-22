@@ -53,21 +53,34 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                 .clone();
 
             let callers = ctx.fuzz_state.callers_pool.clone();
+            let query_balance_batch = callers.iter().map(
+                |caller| {
+                    let mut extended_address = vec![0; 12];
+                    extended_address.extend_from_slice(caller.0.as_slice());
+                    let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
+                    tokens.iter().map(
+                        |token| {
+                            (*token, call_data.clone())
+                        }
+                    ).collect::<Vec<(H160, Bytes)>>()
+                }
+            ).flatten().collect::<Vec<(H160, Bytes)>>();
+            let post_balance_res = ctx.call_post_batch(&query_balance_batch);
+            let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
+
+            let mut idx = 0;
 
             for caller in &callers {
-                let mut extended_address = vec![0; 12];
-                extended_address.extend_from_slice(caller.0.as_slice());
-                let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
-
                 for token in &tokens {
                     let token = *token;
-                    let res_pre = ctx.call_pre(token, call_data.clone());
+                    let post_balance = &post_balance_res[idx];
+                    let pre_balance = &pre_balance_res[idx];
+                    let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
+                    let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
 
-                    let res_post = ctx.call_post(token, call_data.clone());
-                    let new_balance = U256::try_from(res_post.as_slice()).unwrap_or(U256::zero());
-                    let prev_balance = U256::try_from(res_pre.as_slice()).unwrap_or(U256::zero());
                     self.prev_balances.insert((*caller, token), prev_balance);
                     self.post_balances.insert((*caller, token), new_balance);
+                    idx += 1;
                 }
             }
         }

@@ -57,18 +57,16 @@ where
         }
     }
 
-    pub(crate) fn call_pre(&mut self, address: Addr, data: By) -> Out {
+    pub(crate) fn call_pre_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
         self.executor.deref().borrow_mut().fast_static_call(
-            address,
             data,
             self.pre_state,
             self.fuzz_state,
         )
     }
 
-    pub(crate) fn call_post(&mut self, address: Addr, data: By) -> Out {
+    pub(crate) fn call_post_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
         self.executor.deref().borrow_mut().fast_static_call(
-            address,
             data,
             &self.post_state,
             self.fuzz_state,

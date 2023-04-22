@@ -47,19 +47,21 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                 .flashloan_data
                 .oracle_recheck_reserve
                 .clone();
-            for pair_address in reserves {
-                // todo: bring this back
-                // let reserve_slot = ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address)
-                //     .expect("Pair not found")
-                //     .get(&U256::from(8))
-                //     .expect("Reserve not found");
-                // println!("Reserve slot: {}: {:?}", pair_address, ctx.fuzz_state.get_execution_result().new_state.state.get(&pair_address));
-                // new_reserves.insert(pair_address, reserve_parser(reserve_slot));
-                let output = ctx.call_post(pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]));
-                let reserve0 = U256::from_big_endian(&output[0..32]);
-                let reserve1 = U256::from_big_endian(&output[32..64]);
-                self.reserves.insert(pair_address, (reserve0, reserve1));
-            }
+            let mut query_reserves_batch = reserves.iter().map(
+                |pair_address| {
+                    (*pair_address, Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]))
+                }
+            ).collect::<Vec<(H160, Bytes)>>();
+
+            ctx.call_post_batch(&query_reserves_batch).iter().zip(
+                reserves.iter()
+            ).for_each(
+                |(output, pair_address)| {
+                    let reserve0 = U256::from_big_endian(&output[0..32]);
+                    let reserve1 = U256::from_big_endian(&output[32..64]);
+                    self.reserves.insert(*pair_address, (reserve0, reserve1));
+                }
+            );
         }
     }
 
