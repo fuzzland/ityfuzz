@@ -10,7 +10,6 @@ use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracle::{FunctionHarnessOracle, IERC20OracleFlashloan};
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
 use ityfuzz::oracle::Oracle;
@@ -19,6 +18,8 @@ use primitive_types::{H160, U256};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
+use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
+use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 
 /// CLI for ItyFuzz
@@ -96,6 +97,10 @@ struct Args {
     /// Enable ierc20 oracle
     #[arg(short, long, default_value = "false")]
     ierc20_oracle: bool,
+
+    /// Enable pair oracle
+    #[arg(short, long, default_value = "false")]
+    pair_oracle: bool,
 
     /// Debug?
     #[arg(long)]
@@ -188,6 +193,10 @@ fn main() {
     > = vec![];
     if args.ierc20_oracle {
         oracles.push(flashloan_oracle.clone());
+    }
+
+    if args.pair_oracle {
+        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));
     }
 
     let is_onchain = onchain.is_some();
