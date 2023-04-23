@@ -26,4 +26,4 @@ jobs:
       run: cargo test --verbose
 
     - name: Run integration tests
-      run: python3 integration_test.py
+      run: NO_TELEMETRY=1 python3 integration_test.py

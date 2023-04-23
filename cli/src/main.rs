@@ -1,5 +1,3 @@
-mod licensing;
-
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
@@ -23,6 +21,23 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
+use std::env;
+
+
+pub fn init_sentry() {
+    let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
+        release: sentry::release_name!(),
+        ..Default::default()
+    }));
+    if let Ok(value) = env::var("NO_TELEMETRY") {
+        if value == "1" {
+            println!("Telemetry is disabled.");
+            unsafe {
+                ityfuzz::telemetry::TELEMETRY_ENABLED = false;
+            }
+        }
+    }
+}
 
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
@@ -115,8 +130,12 @@ enum TargetType {
 }
 
 fn main() {
-    licensing::init_license();
+    init_sentry();
     let args = Args::parse();
+    ityfuzz::telemetry::report_campaign(
+        args.onchain,
+        args.target.clone()
+    );
     let target_type: TargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => Glob,
