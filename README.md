@@ -186,3 +186,7 @@ If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HE
 ```bash
 apt install libz3-dev
 ```
+
+### Telemetry
+ItyFuzz collects telemetry data to help us improve the fuzzer. The data is collected anonymously and is not used for any commercial purpose.
+You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variable.

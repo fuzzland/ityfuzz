@@ -38,6 +38,7 @@ use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -377,6 +378,9 @@ where
                 Ok((res, Some(idx)))
             }
             ExecuteInputResult::Solution => {
+                report_vulnerability(
+                    unsafe {ORACLE_OUTPUT.clone()},
+                );
                 unsafe {
                     println!("Flashloan: {}", ORACLE_OUTPUT);
                 }
