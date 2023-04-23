@@ -89,6 +89,7 @@ where
                 H160::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
                 // uniswap router
                 H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+                H160::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
                 H160::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
                 H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
@@ -108,6 +109,7 @@ where
                 H160::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
                 // uniswap router
                 H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+                H160::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
                 H160::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
             ]),
