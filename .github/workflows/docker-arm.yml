@@ -46,8 +46,8 @@ jobs:
         platforms: linux/arm64
         push: true
         tags: |
-          fuzzland/ityfuzz:unstable
-          ghcr.io/fuzzland/ityfuzz:unstable
+          fuzzland/ityfuzz:unstable-arm
+          ghcr.io/fuzzland/ityfuzz:unstable-arm
 
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
