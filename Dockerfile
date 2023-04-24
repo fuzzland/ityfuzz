@@ -1,4 +1,4 @@
-FROM rust:buster as environment
+FROM rust:buster as run_environment
 RUN apt-get update && apt-get install -y \
     curl \
     jq \
@@ -6,12 +6,16 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-setuptools \
     python3-wheel \
-    python3-venv libz3-dev libssl-dev clang pkg-config cmake clang \
+    python3-venv libz3-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --upgrade pip
 RUN mkdir /bins
 
-FROM environment as builder
+FROM run_environment as build_environment
+RUN apt-get update && apt-get install -y clang pkg-config cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM build_environment as builder
 WORKDIR /builder
 
 COPY Cargo.toml .
@@ -36,7 +40,7 @@ RUN sed -i -e 's/"print_txn_corpus",//g' ../Cargo.toml
 RUN cargo build --release
 RUN cp target/release/cli /bins/cli_print_logs
 
-FROM environment
+FROM run_environment
 WORKDIR /app
 COPY --from=builder /bins /bins
 
