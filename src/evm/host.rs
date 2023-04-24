@@ -370,25 +370,26 @@ where
         data: Bytes,
         state: &mut S,
     ) -> Vec<U256> {
-        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
-            data,
-            self.code.get(&address).expect("no code").clone(),
-            &CallContext {
-                address,
-                caller: Default::default(),
-                code_address: address,
-                apparent_value: Default::default(),
-                scheme: CallScheme::StaticCall,
-            },
-        );
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let (ret, slots) =
-            interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
-        if ret != Return::Revert {
-            slots
-        } else {
-            vec![]
-        }
+        return vec![];
+        // let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+        //     data,
+        //     self.code.get(&address).expect("no code").clone(),
+        //     &CallContext {
+        //         address,
+        //         caller: Default::default(),
+        //         code_address: address,
+        //         apparent_value: Default::default(),
+        //         scheme: CallScheme::StaticCall,
+        //     },
+        // );
+        // let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+        // let (ret, slots) =
+        //     interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
+        // if ret != Return::Revert {
+        //     slots
+        // } else {
+        //     vec![]
+        // }
     }
 }
 
