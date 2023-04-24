@@ -108,7 +108,7 @@ class ItyFuzzOnchain(ItyFuzz):
 
     def to_command(self):
         cmd = [self.path]
-        cmd += ["-o", "-i"]
+        cmd += ["-o", "-i", "-p"]
         cmd += ["-t", self.targets]
         cmd += ["-c", self.chain]
         cmd += ["--onchain-block-number", self.block_num if self.block_num else "0"]
