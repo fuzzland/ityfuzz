@@ -1,4 +1,4 @@
-name: Docker Build
+name: Docker Build ARM
 
 on:
   push:
