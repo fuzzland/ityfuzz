@@ -22,6 +22,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use std::env;
+use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::oracles::bug::BugOracle;
 
 
@@ -123,6 +124,9 @@ struct Args {
     // Enable oracle for detecting whether bug() is called
     #[arg(long, default_value = "true")]
     bug_oracle: bool,
+
+    #[arg(long, default_value = "false")]
+    panic_on_bug: bool,
 
     /// Debug?
     #[arg(long)]
@@ -246,6 +250,12 @@ fn main() {
 
     if args.bug_oracle {
         oracles.push(Rc::new(RefCell::new(BugOracle::new())));
+
+        if args.panic_on_bug {
+            unsafe {
+                PANIC_ON_BUG = true;
+            }
+        }
     }
 
     if args.ierc20_oracle || args.pair_oracle {

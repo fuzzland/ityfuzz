@@ -24,13 +24,13 @@ def test_one(path):
     # run fuzzer and check whether the stdout has string success
     start_time = time.time()
     p = subprocess.run(" ".join([
-        TIMEOUT_BIN, "3m", "./cli/target/release/cli", "-t", f"'{path}/*'",  "-f"]),
+        TIMEOUT_BIN, "3m", "./cli/target/release/cli", "-t", f"'{path}/*'",  "-f", "--panic-on-bug"]),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=True
     )
 
-    if b"target hit" not in p.stderr:
+    if b"target hit" not in p.stderr and b"bug() hit" not in p.stdout:
         print(p.stderr.decode("utf-8"))
         print(p.stdout.decode("utf-8"))
         raise Exception(f"Failed to fuzz {path}")

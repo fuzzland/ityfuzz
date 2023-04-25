@@ -15,8 +15,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
-pub static mut BUG_STMT_HIT: bool = false;
-
 pub struct BugOracle;
 
 impl BugOracle {
@@ -48,12 +46,15 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         >,
         stage: u64,
     ) -> bool {
-        unsafe {
-            ORACLE_OUTPUT = format!(
-                "[bug] bug() hit at contract {:?}",
-                ctx.input.contract
-            )
+        let is_hit = ctx.post_state.bug_hit;
+        if is_hit {
+            unsafe {
+                ORACLE_OUTPUT = format!(
+                    "[bug] bug() hit at contract {:?}",
+                    ctx.input.contract
+                )
+            }
         }
-        return unsafe {BUG_STMT_HIT};
+        return is_hit;
     }
 }

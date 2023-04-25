@@ -106,6 +106,7 @@ pub struct EVMState {
     pub post_execution: Vec<PostExecutionCtx>,
     pub leaked_func_hash: Option<u64>,
     pub flashloan_data: FlashloanData,
+    pub bug_hit: bool,
 }
 
 impl Default for EVMState {
@@ -115,6 +116,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             leaked_func_hash: None,
             flashloan_data: FlashloanData::new(),
+            bug_hit: false,
         }
     }
 }
@@ -174,6 +176,7 @@ impl EVMState {
             post_execution: vec![],
             leaked_func_hash: None,
             flashloan_data: FlashloanData::new(),
+            bug_hit: false,
         }
     }
 
@@ -255,6 +258,7 @@ where
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
+        self.host.bug_hit = false;
 
         unsafe {
             GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
@@ -421,7 +425,7 @@ where
         input: &I,
         state: &mut S,
     ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
-        let mut _vm_state = unsafe {
+        let mut vm_state = unsafe {
             input
                 .get_state()
                 .as_any()
@@ -441,14 +445,14 @@ where
         let contract_address = input.get_contract();
 
         let mut r = if is_step {
-            let mut post_exec = _vm_state.post_execution.pop().unwrap().clone();
+            let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
             self.host.origin = post_exec.caller;
             // we need push the output of CALL instruction
             post_exec.stack.push(U256::one());
             // post_exec.pc += 1;
             self.execute_from_pc(
                 &post_exec.get_call_ctx(),
-                &_vm_state,
+                &vm_state,
                 data,
                 input,
                 Some(post_exec),
@@ -485,7 +489,7 @@ where
                     apparent_value: value,
                     scheme: CallScheme::Call,
                 },
-                &_vm_state,
+                &vm_state,
                 data,
                 input,
                 None,
@@ -515,6 +519,8 @@ where
             },
             _ => {}
         }
+
+        r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
         #[cfg(feature = "record_instruction_coverage")]
         if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
             self.host.record_instruction_coverage();
