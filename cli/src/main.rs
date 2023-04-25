@@ -22,6 +22,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use std::env;
+use ityfuzz::evm::oracles::bug::BugOracle;
 
 
 pub fn init_sentry() {
@@ -118,6 +119,10 @@ struct Args {
     /// Enable pair oracle
     #[arg(short, long, default_value = "false")]
     pair_oracle: bool,
+
+    // Enable oracle for detecting whether bug() is called
+    #[arg(long, default_value = "true")]
+    bug_oracle: bool,
 
     /// Debug?
     #[arg(long)]
@@ -237,6 +242,10 @@ fn main() {
 
     if args.ierc20_oracle {
         oracles.push(flashloan_oracle.clone());
+    }
+
+    if args.bug_oracle {
+        oracles.push(Rc::new(RefCell::new(BugOracle::new())));
     }
 
     if args.ierc20_oracle || args.pair_oracle {

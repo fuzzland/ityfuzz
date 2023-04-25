@@ -27,6 +27,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::evm::oracles::bug::BUG_STMT_HIT;
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -673,7 +674,10 @@ where
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
             #[cfg(feature = "record_instruction_coverage")]
             self.record_instruction_coverage();
-            panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
+            unsafe {
+                BUG_STMT_HIT = true;
+            }
+            println!("target hit");
         }
         #[cfg(feature = "print_logs")]
         {
