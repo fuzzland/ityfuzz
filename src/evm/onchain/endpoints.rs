@@ -13,6 +13,7 @@ use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum Chain {
@@ -140,7 +141,9 @@ impl OnChainConfig {
     ) -> Self {
         Self {
             endpoint_url,
-            client: reqwest::blocking::Client::new(),
+            client: reqwest::blocking::Client::builder()
+                .timeout(Duration::from_secs(20))
+                .build().expect("build client failed"),
             chain_id,
             block_number: if block_number == 0 {
                 "latest".to_string()
@@ -166,6 +169,22 @@ impl OnChainConfig {
 
     pub fn add_etherscan_api_key(&mut self, key: String) {
         self.etherscan_api_key.push(key);
+    }
+
+    pub fn get_with_retry(&self, endpoint: String) -> reqwest::blocking::Response {
+        let mut retry = 0;
+        loop {
+            let resp = self.client.get(&endpoint).send();
+            if let Ok(resp) = resp {
+                if resp.status().is_success() {
+                    return resp;
+                }
+            }
+            retry += 1;
+            if retry > 3 {
+                panic!("get {} failed for {} retries", endpoint, retry);
+            }
+        }
     }
 
     pub fn fetch_storage_all(&mut self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
@@ -547,11 +566,7 @@ impl OnChainConfig {
                 self.local_proxy_addr, self.chain_name, token_address, self.block_number
             );
 
-            let res = self
-                .client
-                .get(endpoint)
-                .send()
-                .expect("failed to fetch swap path");
+            let res = self.get_with_retry(endpoint);
             let data = res.text().unwrap().trim().to_string();
             let data_parsed: Value =
                 serde_json::from_str(&data).expect("failed to parse API result");
