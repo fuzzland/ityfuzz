@@ -382,7 +382,7 @@ where
                     unsafe {ORACLE_OUTPUT.clone()},
                 );
                 unsafe {
-                    println!("Flashloan: {}", ORACLE_OUTPUT);
+                    println!("Oracle: {}", ORACLE_OUTPUT);
                 }
                 println!(
                     "Found a solution! trace: {}",

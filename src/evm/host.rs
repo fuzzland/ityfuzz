@@ -62,6 +62,8 @@ pub static mut RET_OFFSET: usize = 0;
 pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
 pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
+pub static mut PANIC_ON_BUG: bool = false;
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -100,6 +102,8 @@ where
     pub next_slot: U256,
 
     pub access_pattern: Rc<RefCell<AccessPattern>>,
+
+    pub bug_hit: bool,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
@@ -165,6 +169,7 @@ where
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
+            bug_hit: false,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         }
@@ -229,6 +234,7 @@ where
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            bug_hit: false,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         };
@@ -673,7 +679,10 @@ where
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
             #[cfg(feature = "record_instruction_coverage")]
             self.record_instruction_coverage();
-            panic!("target hit, {:?} - {:?}", hex::encode(_data), _topics);
+            if unsafe {PANIC_ON_BUG} {
+                panic!("target hit");
+            }
+            self.bug_hit = true;
         }
         #[cfg(feature = "print_logs")]
         {
