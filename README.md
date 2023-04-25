@@ -7,11 +7,10 @@ You can generate exploits **instantly** by just providing the contract address:
 [中文版README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#development)
 
 ### Run ItyFuzz with UI
-Install Docker from https://www.docker.com/ and run our docker image (x86 only, running on non-x86 platform significantly degrades performance):
+Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
 
-
-```bash
-docker run -p 8000:8000 fuzzland/ityfuzz
+```
+docker run -p 8000:8000 fuzzland/ityfuzz:stable
 ```
 
 Then, you can visit the interface at http://localhost:8000
@@ -156,6 +155,10 @@ Example:
 Fuzzing WETH contract (`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`) on Ethereum mainnet at latest block.
 ```bash
 ./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH
+```
+Fuzzing with flashloan and oracles enabled:
+```bash
+./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p
 ```
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
