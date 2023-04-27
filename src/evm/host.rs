@@ -77,7 +77,7 @@ where
     pub hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     pub address_to_hash: HashMap<H160, Vec<[u8; 4]>>,
     pub _pc: usize,
-    pub pc_to_addresses: HashMap<(H160, usize), HashSet<H160>>,
+    pub pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
@@ -763,6 +763,7 @@ where
         // if calling sender, then definitely control leak
         if self.origin == input.contract {
             record_func_hash!();
+            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
@@ -783,6 +784,7 @@ where
                 ARBITRARY_CALL = true;
             }
             // random sample a key from hash_to_address
+            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             match self.address_to_hash.get_mut(&input.context.code_address) {
                 None => {}
                 Some(hashes) => {
@@ -797,10 +799,10 @@ where
 
         // control leak check
         assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&(input.contract, self._pc)) {
-            self.pc_to_addresses.insert((input.contract, self._pc), HashSet::new());
+        if !self.pc_to_addresses.contains_key(&self._pc) {
+            self.pc_to_addresses.insert(self._pc, HashSet::new());
         }
-        let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.contract, self._pc)).unwrap();
+        let addresses_at_pc = self.pc_to_addresses.get_mut(&self._pc).unwrap();
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call
