@@ -730,6 +730,7 @@ where
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
         self.call_count += 1;
+        #[cfg(feature = "debug")]
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }

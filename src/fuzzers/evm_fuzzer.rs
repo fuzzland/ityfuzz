@@ -19,7 +19,9 @@ use libafl::{
     Evaluator, Fuzzer,
 };
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CALL_UNTIL, CMP_MAP, JMP_MAP};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
+#[cfg(feature = "debug")]
+use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
@@ -191,6 +193,7 @@ pub fn evm_fuzzer(
                 }
 
                 // [is_step] [caller] [target] [input] [value]
+                #[cfg(feature = "debug")]
                 unsafe {CALL_UNTIL = u8::MAX;}
 
                 let inp = match splitter[0] {
@@ -205,6 +208,7 @@ pub fn evm_fuzzer(
                         let reentrancy_call_limits = splitter[8].parse::<u8>().unwrap_or(u8::MAX);
                         let is_step = splitter[9].parse::<bool>().unwrap_or(false);
 
+                        #[cfg(feature = "debug")]
                         unsafe {CALL_UNTIL = reentrancy_call_limits;}
                         EVMInput {
                             caller,
