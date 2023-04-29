@@ -142,7 +142,6 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
-        println!("from_idx: {:?}", self.from_idx);
         if self.from_idx.is_none() {
             return String::from("Begin\n");
         }
@@ -162,7 +161,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             for _i in 0..t.layer {
                 s.push_str(" == ");
             }
-            s.push_str(format!("{:?} {}\n", self.from_idx, serde_json::to_string(t).unwrap()).as_str());
+            s.push_str(format!("{}\n", serde_json::to_string(t).unwrap()).as_str());
             s.push_str("\n");
         }
         s
