@@ -437,7 +437,7 @@ where
         let is_step = input.is_step();
         let caller = input.get_caller();
         let mut data = Bytes::from(input.to_bytes());
-        #[cfg(any(test, feature = "debug"))]
+        #[cfg(any(test, feature = "reexecution"))]
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }

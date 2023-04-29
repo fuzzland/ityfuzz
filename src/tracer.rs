@@ -24,7 +24,7 @@ pub struct BasicTxn<Addr> {
     pub value: Option<U256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
-    #[cfg(feature = "debug")]
+    #[cfg(feature = "reexecution")]
     pub direct_data: Vec<u8>,
     pub layer: usize,
     pub additional_info: Option<Vec<u8>>,
@@ -41,7 +41,7 @@ where
             .field("contract", &self.contract)
             .field("data", &self.data)
             .field("additional_info", &hex::encode(self.additional_info.as_ref().unwrap_or(&vec![])));
-        #[cfg(feature = "debug")]
+        #[cfg(feature = "reexecution")]
         {
             ff = ff.field("direct_data", &hex::encode(self.direct_data.as_slice()));
         }
@@ -78,7 +78,7 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
-        #[cfg(feature = "debug")]
+        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: if res.additional_info.is_none() {
@@ -106,7 +106,7 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: "".to_string(),
-        #[cfg(feature = "debug")]
+        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: None,

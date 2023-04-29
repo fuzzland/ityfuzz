@@ -20,7 +20,7 @@ use libafl::{
 };
 
 use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
-#[cfg(feature = "debug")]
+#[cfg(feature = "reexecution")]
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
@@ -193,7 +193,7 @@ pub fn evm_fuzzer(
                 }
 
                 // [is_step] [caller] [target] [input] [value]
-                #[cfg(feature = "debug")]
+                #[cfg(feature = "reexecution")]
                 unsafe {CALL_UNTIL = u8::MAX;}
 
                 let inp = match splitter[0] {
@@ -208,7 +208,7 @@ pub fn evm_fuzzer(
                         let reentrancy_call_limits = splitter[8].parse::<u8>().unwrap_or(u8::MAX);
                         let is_step = splitter[9].parse::<bool>().unwrap_or(false);
 
-                        #[cfg(feature = "debug")]
+                        #[cfg(feature = "reexecution")]
                         unsafe {CALL_UNTIL = reentrancy_call_limits;}
                         EVMInput {
                             caller,
@@ -241,7 +241,7 @@ pub fn evm_fuzzer(
 
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
-                            #[cfg(any(test, feature = "debug"))]
+                            #[cfg(any(test, feature = "reexecution"))]
                             direct_data: Bytes::from(input.clone()),
                             randomness: vec![],
                             repeat,
@@ -284,7 +284,7 @@ pub fn evm_fuzzer(
                             liquidation_percent: 0,
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::Borrow,
-                            #[cfg(any(test, feature = "debug"))]
+                            #[cfg(any(test, feature = "reexecution"))]
                             direct_data: Bytes::new(),
                             randomness,
                             repeat: 1,

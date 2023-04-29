@@ -334,7 +334,7 @@ where
                                 liquidation_percent: 0,
                                 #[cfg(feature = "flashloan_v2")]
                                 input_type: EVMInputTy::ABI,
-                                #[cfg(any(test, feature = "debug"))]
+                                #[cfg(any(test, feature = "reexecution"))]
                                 direct_data: Default::default(),
                                 randomness: vec![],
                                 repeat: 1,

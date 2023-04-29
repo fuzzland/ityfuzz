@@ -183,7 +183,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
         unreachable!("MoveVM does not have an ABI")
     }
 
-    #[cfg(any(test, feature = "debug"))]
+    #[cfg(any(test, feature = "reexecution"))]
     fn get_direct_data(&self) -> Vec<u8> {
         todo!()
     }

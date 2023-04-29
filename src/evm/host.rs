@@ -66,7 +66,7 @@ pub static mut PANIC_ON_BUG: bool = false;
 
 
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
-#[cfg(feature = "debug")]
+#[cfg(feature = "reexecution")]
 pub static mut CALL_UNTIL: u8 = u8::MAX;
 
 pub struct FuzzHost<VS, I, S>
@@ -730,7 +730,7 @@ where
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
         self.call_count += 1;
-        #[cfg(feature = "debug")]
+        #[cfg(feature = "reexecution")]
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }

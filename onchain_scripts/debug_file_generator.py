@@ -460,6 +460,24 @@ BDEXExp = [
 
 BEGO = ""
 
+Fp1 = Web3.toChecksumAddress( "0xbd9797d280096edf522cfbbe1e0257c4c9c4828a")
+Fp1Exp = [
+    {
+        "ty": "borrow",
+        "caller": ATTACKER,
+        "target": Fp1,
+        "value": int(5e18),
+        "rand": 20
+    },
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": Fp1,
+        "name": "balanceOf", "args": [Web3.toChecksumAddress(ATTACKER)],
+        # "liquidation_percent": 10,
+    }
+]
 
-generate_debug_file("bsc", AESExp)
+
+generate_debug_file("bsc", Fp1Exp)
 
