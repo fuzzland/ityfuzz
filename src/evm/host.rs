@@ -64,6 +64,11 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
+
+// for debugging purpose, return ControlLeak when the calls amount exceeds this value
+#[cfg(feature = "debug")]
+pub static mut CALL_UNTIL: u8 = u8::MAX;
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -104,6 +109,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
+    pub call_count: u8,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
@@ -170,6 +176,7 @@ where
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         }
@@ -235,6 +242,7 @@ where
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         };
@@ -721,6 +729,11 @@ where
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
+        self.call_count += 1;
+        if self.call_count >= unsafe {CALL_UNTIL} {
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
 
