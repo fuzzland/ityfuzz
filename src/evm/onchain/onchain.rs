@@ -290,12 +290,12 @@ where
                     let mut abi_hashes_to_add = HashSet::new();
                     if is_proxy_call {
                         // check caller's hash and see what is missing
-                        let caller_hashes = host.address_to_hash.get(&caller).unwrap_or(&vec![]);
+                        let caller_hashes = host.address_to_hash.get(&caller).unwrap_or(&vec![]).clone();
                         let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
                         for hash in caller_hashes {
-                            if !new_hashes.contains(hash) {
-                                abi_hashes_to_add.insert(hash.clone());
-                                host.add_one_hashes(caller, hash.clone());
+                            if !new_hashes.contains(&hash) {
+                                abi_hashes_to_add.insert(hash);
+                                host.add_one_hashes(caller, hash);
                             }
                         }
                         println!("Propagating hashes {:?} for proxy {:?}", abi_hashes_to_add, caller);
