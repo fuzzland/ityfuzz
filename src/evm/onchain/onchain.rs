@@ -245,6 +245,7 @@ where
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
+                let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
                     0x3b | 0x3c => interp.stack.peek(0).unwrap(),
@@ -258,18 +259,24 @@ where
                 }
                 let force_cache = force_cache!(self.calls, address_h160);
                 let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
-                println!("fetching code3 {:?}", hex::encode(contract_code.bytes()));
 
                 if !self.loaded_code.contains(&address_h160)
                     && !force_cache
                     && !contract_code.is_empty()
                 {
                     self.loaded_code.insert(address_h160);
-                    if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) {
+                    if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
+                        *interp.instruction_pointer == 0x3b ||
+                        *interp.instruction_pointer == 0x3c {
                         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                         host.set_code(address_h160, contract_code);
                         return;
                     }
+
+                    let is_proxy_call = match *interp.instruction_pointer {
+                        0xf2 | 0xf4 => true,
+                        _ => false,
+                    };
 
                     println!("fetching abi {:?}", address_h160);
                     let abi = self.endpoint.fetch_abi(address_h160);
@@ -280,10 +287,26 @@ where
                     };
 
                     // set up host
-                    host.add_hashes(
-                        address_h160,
-                        parsed_abi.iter().map(|abi| abi.function).collect(),
-                    );
+                    let mut abi_hashes_to_add = HashSet::new();
+                    if is_proxy_call {
+                        // check caller's hash and see what is missing
+                        let caller_hashes = host.address_to_hash.get(&caller).unwrap_or(&vec![]);
+                        let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                        for hash in caller_hashes {
+                            if !new_hashes.contains(hash) {
+                                abi_hashes_to_add.insert(hash.clone());
+                                host.add_one_hashes(caller, hash.clone());
+                            }
+                        }
+                        println!("Propagating hashes {:?} for proxy {:?}", abi_hashes_to_add, caller);
+                    } else {
+                        abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                        host.add_hashes(
+                            address_h160,
+                            parsed_abi.iter().map(|abi| abi.function).collect(),
+                        );
+                    }
+
                     state.add_address(&address_h160);
 
                     // notify flashloan and blacklisting flashloan addresses
@@ -312,12 +335,23 @@ where
                                 return;
                             }
 
+                            let target = if is_proxy_call {
+                                caller
+                            } else {
+                                address_h160
+                            };
+
+                            if !abi_hashes_to_add.contains(&abi.function) {
+                                println!("Skipping abi {:?} for {:?} because already exists", abi.function, target);
+                                return;
+                            }
+
                             let mut abi_instance = get_abi_type_boxed(&abi.abi);
                             abi_instance
                                 .set_func_with_name(abi.function, abi.function_name.clone());
                             let input = EVMInput {
                                 caller: state.get_rand_caller(),
-                                contract: address_h160.clone(),
+                                contract: target,
                                 data: Some(abi_instance),
                                 sstate: StagedVMState::new_uninitialized(),
                                 sstate_idx: 0,

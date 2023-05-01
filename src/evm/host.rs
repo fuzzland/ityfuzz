@@ -300,6 +300,26 @@ where
         }
     }
 
+    pub fn add_one_hashes(&mut self, address: H160, hash: [u8; 4]) {
+        match self.address_to_hash.get_mut(&address) {
+            Some(s) => {
+                s.push(hash);
+            }
+            None => {
+                self.address_to_hash.insert(address, vec![hash]);
+            }
+        }
+
+        match self.hash_to_address.get_mut(&hash) {
+            Some(s) => {
+                s.insert(address);
+            }
+            None => {
+                self.hash_to_address.insert(hash, HashSet::from([address]));
+            }
+        }
+    }
+
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
         #[cfg(any(feature = "evaluation", feature = "record_instruction_coverage"))]
         {
