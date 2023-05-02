@@ -64,6 +64,11 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
+
+// for debugging purpose, return ControlLeak when the calls amount exceeds this value
+#[cfg(feature = "reexecution")]
+pub static mut CALL_UNTIL: u8 = u8::MAX;
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -77,7 +82,7 @@ where
     pub hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     pub address_to_hash: HashMap<H160, Vec<[u8; 4]>>,
     pub _pc: usize,
-    pub pc_to_addresses: HashMap<(H160, usize), HashSet<H160>>,
+    pub pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
@@ -104,6 +109,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
+    pub call_count: u8,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
@@ -170,6 +176,7 @@ where
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         }
@@ -235,6 +242,7 @@ where
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         };
@@ -741,6 +749,12 @@ where
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
+        self.call_count += 1;
+        #[cfg(feature = "reexecution")]
+        if self.call_count >= unsafe {CALL_UNTIL} {
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
 
@@ -783,6 +797,7 @@ where
         // if calling sender, then definitely control leak
         if self.origin == input.contract {
             record_func_hash!();
+            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
@@ -803,6 +818,7 @@ where
                 ARBITRARY_CALL = true;
             }
             // random sample a key from hash_to_address
+            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             match self.address_to_hash.get_mut(&input.context.code_address) {
                 None => {}
                 Some(hashes) => {
@@ -817,10 +833,10 @@ where
 
         // control leak check
         assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&(input.contract, self._pc)) {
-            self.pc_to_addresses.insert((input.contract, self._pc), HashSet::new());
+        if !self.pc_to_addresses.contains_key(&self._pc) {
+            self.pc_to_addresses.insert(self._pc, HashSet::new());
         }
-        let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.contract, self._pc)).unwrap();
+        let addresses_at_pc = self.pc_to_addresses.get_mut(&self._pc).unwrap();
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call

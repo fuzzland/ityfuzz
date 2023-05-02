@@ -1,5 +1,5 @@
 # ItyFuzz 🍦
-Fast hybrid fuzzer for EVM, MoveVM (WIP), etc. 
+Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.  
 
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
@@ -10,6 +10,7 @@ You can generate exploits **instantly** by just providing the contract address:
 Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
 
 ```
+docker pull fuzzland/ityfuzz:stable
 docker run -p 8000:8000 fuzzland/ityfuzz:stable
 ```
 

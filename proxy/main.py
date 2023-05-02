@@ -61,13 +61,13 @@ def get_endpoint(network):
 
 def get_rpc(network):
     if network == "eth":
-        return "https://eth.llamarpc.com"
+        return "https://white-dry-replica.quiknode.pro/0864a1bd29d3befccdf5cb38a2ed100f7852ca59/"
     elif network == "bsc":
         # BSC mod to geth make it no longer possible to use debug_storageRangeAt
         # so, we use our own node that supports eth_getStorageAll
-        return "https://bsc-dataseed2.ninicoin.io/" # "http://bsc.node1.infra.fuzz.land:4949"
+        return "https://maximum-prettiest-grass.bsc.quiknode.pro/1ef79ca3b6a4442355923ab9faa10af92c82667b/" # "http://bsc.node1.infra.fuzz.land:4949"
     elif network == "polygon":
-        return "https://polygon-rpc.com/"
+        return "https://damp-boldest-haze.matic.quiknode.pro/d41f06b2d3b6f7a01040ec4b9170df996d711549/"
     elif network == "mumbai":
         return "https://rpc-mumbai.maticvigil.com"
     else:
