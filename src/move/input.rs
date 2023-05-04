@@ -72,6 +72,12 @@ impl<'de> Deserialize<'de> for CloneableValue {
     }
 }
 
+impl CloneableValue {
+    pub fn from(value: Value) -> Self {
+        CloneableValue { value }
+    }
+}
+
 impl MoveFunctionInputT for MoveFunctionInput {
     fn module_id(&self) -> &ModuleId {
         &self.module

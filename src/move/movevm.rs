@@ -95,6 +95,8 @@ where
         {
             let name = module.identifier_at(func_handle.name);
             let function: Arc<Function> = self._module_cache.function_at(pre_mc_func_idx + idx);
+
+            println!("deployed function: {:?} returns {:?}", function.parameter_types, function.return_types());
             self.functions
                 .entry(module.self_id())
                 .or_insert_with(HashMap::new)
@@ -170,41 +172,42 @@ where
         let ret =
             current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
 
-        for v in interp.operand_stack.value {
-            println!("val: {:?}", v);
+        let mut out: MoveOutput = MoveOutput::default();
+
+        for (v, t) in interp.operand_stack.value.iter().zip(
+            function
+                .return_types()
+                .iter()
+        ) {
+            let abilities = resolver.loader.abilities(t).expect("unknown type");
+            macro_rules! insert_if_not_exist {
+                ($loc: ident, $t: expr, $v: expr) => {
+                    match state.$loc.get_mut($t) {
+                        Some(arr) => {
+                            arr.push($v.clone());
+                        }
+                        None => {
+                            state.useful_value.insert($t.clone(), vec![$v.clone()]);
+                        }
+                    }
+                };
+            }
+            if !abilities.has_copy() {
+                insert_if_not_exist!(useful_value, t, v);
+            }
+
+            if !abilities.has_drop() {
+                insert_if_not_exist!(value_to_drop, t, v);
+            }
+
+            out.push((t.clone(), v.clone()));
+            println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
-
-        function.return_types().iter().for_each(|ty| {
-            let abilities = resolver.loader.abilities(ty);
-            println!("ty: {:?} - ability {:?}", ty, abilities);
-        });
-
         println!("ret: {:?}", ret);
-
-        //
-        // match ret {
-        //     Ok(ret) => ExecutionResult {
-        //         new_state: StagedVMState::new_with_state(self.state.clone()),
-        //         output: ret
-        //             .return_values
-        //             .into_iter()
-        //             .map(|(bytes, _layout)| bytes)
-        //             .collect::<Vec<Vec<u8>>>()
-        //             .into_iter()
-        //             .flatten()
-        //             .collect(),
-        //         reverted: false,
-        //     },
-        //     Err(err) => ExecutionResult {
-        //         new_state: StagedVMState::new_uninitialized(),
-        //         output: vec![],
-        //         reverted: false,
-        //     },
-        // }
         ExecutionResult {
             new_state: StagedVMState::new_with_state(state),
-            output: vec![],
-            reverted: false,
+            output: out,
+            reverted: ret.is_ok(),
             additional_info: None
         }
     }
@@ -231,18 +234,23 @@ where
 }
 
 mod tests {
+    use std::borrow::Borrow;
+    use move_vm_types::loaded_data::runtime_types::CachedStructIndex;
+    use move_vm_types::loaded_data::runtime_types::Type::Struct;
     use super::*;
     use crate::r#move::input::CloneableValue;
     use crate::state::FuzzState;
 
-    use move_vm_types::values::Value;
+    use move_vm_types::values::{Reference, ReferenceImpl, Value, ValueImpl};
+    use move_vm_types::values::ContainerRef::Local;
+    use crate::r#move::movevm::values::ContainerRef;
+    use move_vm_types::values::ValueImpl::Container;
 
     fn _run(
         bytecode: &str,
-    ) -> MoveVM<
-        MoveFunctionInput,
-        FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
-    > {
+        args: Vec<CloneableValue>,
+        func: &str,
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput> {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
         let mut mv = MoveVM::<
@@ -263,16 +271,16 @@ mod tests {
 
         let input = MoveFunctionInput {
             module: mv.modules.iter().next().unwrap().0.clone(),
-            function: Identifier::new("test1").unwrap(),
-            args: vec![CloneableValue {
-                value: Value::u64(20),
-            }],
+            function: Identifier::new(func).unwrap(),
+            args,
             ty_args: vec![],
             caller: AccountAddress::new([1; 32]),
             vm_state: StagedVMState {
                 state: MoveVMState {
                     resources: Default::default(),
                     _gv_slot: Default::default(),
+                    value_to_drop: Default::default(),
+                    useful_value: Default::default(),
                 },
                 stage: vec![],
                 initialized: false,
@@ -282,8 +290,7 @@ mod tests {
         };
 
         let res = mv.execute(&input, &mut FuzzState::new());
-        println!("{:?}", res);
-        return mv;
+        return res;
     }
 
     #[test]
@@ -295,7 +302,12 @@ mod tests {
         // }
 
         let module_hex = "a11ceb0b0500000006010002030205050703070a0e0818200c38130000000100000001030007546573744d6f6405746573743100000000000000000000000000000000000000000000000000000000000000030001000001040b00060200000000000000180200";
-        _run(module_hex);
+        _run(module_hex,
+             vec![CloneableValue {
+                 value: Value::u64(20),
+             }],
+                "test1",
+        );
     }
 
     #[test]
@@ -310,6 +322,47 @@ mod tests {
         // }
 
         let module_hex = "a11ceb0b0500000008010002020204030605050b0607111e082f200a4f050c540b000000010200000200010001030108000007546573744d6f640a546573745374727563740574657374310464617461000000000000000000000000000000000000000000000000000000000000000300020103030001000002030b0012000200";
-        _run(module_hex);
+        _run(module_hex,
+             vec![CloneableValue {
+                 value: Value::u64(20),
+             }],
+             "test1",
+        );
+    }
+
+    #[test]
+    fn test_args() {
+        let module_hex = "a11ceb0b060000000901000202020403060a05100a071a290843200a63070c6a270d91010200020000020000040001000003020300000108000106080001030b50726f66696c65496e666f046e616d650770726f66696c650574657374310574657374320375726c0000000000000000000000000000000000000000000000000000000000000000000202010305030001000000040601000000000000000602000000000000001200020101000000040b0010001402000000";
+        let res = _run(module_hex,
+             vec![],
+             "test2",
+        );
+
+        println!("{:?}", res);
+        let (ty, struct_obj) = res.output[0].clone();
+        assert_eq!(ty, Struct(CachedStructIndex {
+            0: 0,
+        }));
+
+        if let Container(borrowed) = struct_obj.0.borrow() {
+            println!("borrowed: {:?} from {:?}", borrowed, struct_obj);
+            let reference = Value(ValueImpl::ContainerRef(ContainerRef::Local(
+                borrowed.copy_by_ref(),
+            )));
+
+            println!("reference: {:?} from {:?}", reference, struct_obj);
+
+
+            let res2 = _run(module_hex,
+                            vec![CloneableValue::from(reference)],
+                            "test1",
+            );
+
+            println!("{:?}", res2);
+        } else {
+            unreachable!()
+        }
+
+
     }
 }

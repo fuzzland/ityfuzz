@@ -20,6 +20,8 @@ use std::collections::HashMap;
 pub struct MoveVMState {
     pub resources: HashMap<AccountAddress, HashMap<Type, Value>>,
     pub _gv_slot: HashMap<(AccountAddress, Type), GlobalValue>,
+    pub value_to_drop: HashMap<Type, Vec<Value>>,
+    pub useful_value: HashMap<Type, Vec<Value>>,
 }
 
 impl MoveVMState {
@@ -27,6 +29,8 @@ impl MoveVMState {
         Self {
             resources: HashMap::new(),
             _gv_slot: HashMap::new(),
+            value_to_drop: Default::default(),
+            useful_value: Default::default(),
         }
     }
 }
@@ -37,6 +41,8 @@ impl Clone for MoveVMState {
         MoveVMState {
             resources: self.resources.clone(),
             _gv_slot: HashMap::new(),
+            value_to_drop: Default::default(),
+            useful_value: Default::default(),
         }
     }
 }
@@ -176,6 +182,8 @@ impl Default for MoveVMState {
         Self {
             resources: HashMap::new(),
             _gv_slot: HashMap::new(),
+            value_to_drop: Default::default(),
+            useful_value: Default::default(),
         }
     }
 }
