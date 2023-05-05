@@ -18,9 +18,13 @@ use primitive_types::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
 use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use itertools::Itertools;
+use move_vm_runtime::loader::{Function, Module};
 use move_vm_types::loaded_data::runtime_types::Type;
 use crate::mutation_utils::byte_mutator;
 
@@ -31,10 +35,32 @@ pub trait MoveFunctionInputT {
     fn ty_args(&self) -> &Vec<Type>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionDefaultable {
+    pub function: Option<Function>
+}
+
+impl Default for FunctionDefaultable {
+    fn default() -> Self {
+        FunctionDefaultable {
+            function: None
+        }
+    }
+}
+
+impl FunctionDefaultable {
+    pub fn get_function(&self) -> &Function {
+        self.function.as_ref().unwrap()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MoveFunctionInput {
     pub module: ModuleId,
     pub function: Identifier,
+
+    #[serde(skip_serializing,skip_deserializing)]
+    pub function_info: Arc<FunctionDefaultable>,
+
     pub args: Vec<CloneableValue>,
     pub ty_args: Vec<Type>,
 
@@ -42,6 +68,19 @@ pub struct MoveFunctionInput {
 
     pub vm_state: MoveStagedVMState,
     pub vm_state_idx: usize,
+}
+
+impl Debug for MoveFunctionInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MoveFunctionInput")
+            .field("module", &self.module)
+            .field("args", &self.args)
+            .field("ty_args", &self.ty_args)
+            .field("caller", &self.caller)
+            .field("vm_state", &self.vm_state)
+            .field("vm_state_idx", &self.vm_state_idx)
+            .finish()
+    }
 }
 
 
@@ -268,7 +307,12 @@ macro_rules! mutate_by {
 }
 impl MoveFunctionInput {
 
-    pub fn mutate_container<S>(&self, _state: &mut S, container: &mut Container, ty: &Type) -> MutationResult
+    pub fn mutate_container<S>(
+                               _state: &mut S,
+                               container: &mut Container,
+                               useful_value: &mut HashMap<Type, Vec<Value>>,
+                               ty: &Type
+    ) -> MutationResult
     where
         S: State
         + HasRand
@@ -284,7 +328,7 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
-                match self.vm_state.state.useful_value.get(&ty) {
+                match useful_value.get(&ty) {
                     None => {panic!("wtf")} // todo: fix this
                     Some(vs) => {
                         let nth = _state.rand_mut().below(vs.len() as u64);
@@ -308,7 +352,7 @@ impl MoveFunctionInput {
         }
     }
 
-    pub fn mutate_value_impl<S>(&self, _state: &mut S, value: &mut CloneableValue, ty: &Type) -> MutationResult
+    pub fn mutate_value_impl<S>(&mut self, _state: &mut S, nth: usize, ty: &Type) -> MutationResult
         where
             S: State
             + HasRand
@@ -328,8 +372,13 @@ impl MoveFunctionInput {
             };
         }
 
+        enum MutateType<'a> {
+            U128,
+            U256,
+            Container(&'a mut Container),
+        }
 
-        match value.value.0 {
+        let further_mutation = match &mut self.args[nth].value.0 {
             ValueImpl::Invalid => {
                 unreachable!()
             }
@@ -354,29 +403,42 @@ impl MoveFunctionInput {
                 v = _state.get_rand_address();
                 return MutationResult::Mutated;
             }
-            // libafl byte level mutation
             ValueImpl::U128(_) => {
-                return mutate_by!(_state, value);
+                MutateType::U128
+                // return mutate_by!(_state, value);
             }
             ValueImpl::U256(_) => {
-                return mutate_by!(_state, value);
+                MutateType::U256
+                // return mutate_by!(_state, value);
             }
             ValueImpl::Container(ref mut cont) => {
-                self.mutate_container(_state, cont, ty);
-                return MutationResult::Mutated;
+                MutateType::Container(cont)
             }
             ValueImpl::ContainerRef(ref mut cont) => {
                 match cont {
                     ContainerRef::Local(v) => {
-                        // todo: unwrap ty
-                        self.mutate_container(_state, v, ty);
-                        return MutationResult::Mutated;
+                        MutateType::Container(v)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
                 }
             }
             ValueImpl::IndexedRef(_) => {unreachable!("indexed ref cant be mutated")}
+        };
+
+        match further_mutation {
+            MutateType::U128 => {
+                mutate_by!( _state, &mut self.args[nth])
+            }
+            MutateType::U256 => {
+                mutate_by!( _state, &mut self.args[nth])
+            }
+            MutateType::Container(cont) => {
+                Self::mutate_container(_state, cont, &mut self.vm_state.state.useful_value, ty);
+                return MutationResult::Mutated;
+            }
         }
+
+
     }
 }
 
@@ -387,10 +449,15 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
             + HasRand
             + HasMaxSize
             + HasItyState<ModuleId, AccountAddress, MoveVMState>
-            + HasCaller<AccountAddress>,
+            + HasCaller<AccountAddress> + HasMetadata,
     {
-        let nth = _state.rand_mut().below(self.args.len() as u64);
-
+        let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
+        let ty = self.function_info.get_function().parameter_types[nth].clone();
+        self.mutate_value_impl(
+            _state,
+            nth,
+            &ty,
+        );
 
 
         MutationResult::Mutated

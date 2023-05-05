@@ -272,6 +272,7 @@ mod tests {
         let input = MoveFunctionInput {
             module: mv.modules.iter().next().unwrap().0.clone(),
             function: Identifier::new(func).unwrap(),
+            function_info: Default::default(),
             args,
             ty_args: vec![],
             caller: AccountAddress::new([1; 32]),
