@@ -172,7 +172,7 @@ where
         let ret =
             current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
 
-        let mut out: MoveOutput = MoveOutput::default();
+        let mut out: MoveOutput = MoveOutput { vars: vec![] };
 
         for (v, t) in interp.operand_stack.value.iter().zip(
             function
@@ -200,7 +200,7 @@ where
                 insert_if_not_exist!(value_to_drop, t, v);
             }
 
-            out.push((t.clone(), v.clone()));
+            out.vars.push((t.clone(), v.clone()));
             println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
         println!("ret: {:?}", ret);
@@ -336,7 +336,7 @@ mod tests {
         );
 
         println!("{:?}", res);
-        let (ty, struct_obj) = res.output[0].clone();
+        let (ty, struct_obj) = res.output.vars[0].clone();
         assert_eq!(ty, Struct(CachedStructIndex {
             0: 0,
         }));

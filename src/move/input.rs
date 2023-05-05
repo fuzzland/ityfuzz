@@ -352,7 +352,7 @@ impl MoveFunctionInput {
         }
     }
 
-    pub fn mutate_value_impl<S>(&mut self, _state: &mut S, nth: usize, ty: &Type) -> MutationResult
+    pub fn mutate_value_impl<S>(&mut self, _state: &mut S, nth: usize, ) -> MutationResult
         where
             S: State
             + HasRand
@@ -363,9 +363,10 @@ impl MoveFunctionInput {
         macro_rules! mutate_u {
             ($ty: ty, $v: expr) => {
                 {
-                    let orig = $v;
-                    while $v == orig {
-                        $v = _state.rand_mut().below(<$ty>::MAX as u64) as $ty;
+                    let orig = *$v;
+                    while *$v == orig {
+                        *$v = _state.rand_mut().below(<$ty>::MAX as u64) as $ty;
+                        println!("mutate_u: {} {}", $v, orig);
                     }
                     MutationResult::Mutated
                 }
@@ -383,20 +384,20 @@ impl MoveFunctionInput {
                 unreachable!()
             }
             // value level mutation
-            ValueImpl::U8(mut v) => {
+            ValueImpl::U8(ref mut v) => {
                 return mutate_u!(u8, v);
             }
-            ValueImpl::U16(mut v) => {
+            ValueImpl::U16(ref mut v) => {
                 return mutate_u!(u16, v);
             }
-            ValueImpl::U32(mut v) => {
+            ValueImpl::U32(ref mut v) => {
                 return mutate_u!(u32, v);
             }
-            ValueImpl::U64(mut v) => {
+            ValueImpl::U64(ref mut v) => {
                 return mutate_u!(u64, v);
             }
-            ValueImpl::Bool(mut v) => {
-                v=!v;
+            ValueImpl::Bool(ref mut v) => {
+                *v=!*v;
                 return MutationResult::Mutated;
             }
             ValueImpl::Address(mut v) => {
@@ -433,7 +434,8 @@ impl MoveFunctionInput {
                 mutate_by!( _state, &mut self.args[nth])
             }
             MutateType::Container(cont) => {
-                Self::mutate_container(_state, cont, &mut self.vm_state.state.useful_value, ty);
+                let ty = self.function_info.get_function().parameter_types[nth].clone();
+                Self::mutate_container(_state, cont, &mut self.vm_state.state.useful_value, &ty);
                 return MutationResult::Mutated;
             }
         }
@@ -452,11 +454,9 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
             + HasCaller<AccountAddress> + HasMetadata,
     {
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
-        let ty = self.function_info.get_function().parameter_types[nth].clone();
         self.mutate_value_impl(
             _state,
             nth,
-            &ty,
         );
 
 
@@ -545,3 +545,51 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
         todo!()
     }
 }
+
+
+mod tests {
+    use std::sync::Arc;
+    use move_core_types::account_address::AccountAddress;
+    use move_core_types::identifier::Identifier;
+    use move_core_types::language_storage::ModuleId;
+    use move_vm_types::values::{Value, ValueImpl};
+    use crate::input::VMInputT;
+    use crate::r#move::input::{CloneableValue, MoveFunctionInput};
+    use crate::r#move::types::MoveFuzzState;
+    use crate::state::FuzzState;
+    use crate::state_input::StagedVMState;
+
+    #[test]
+    fn test_integer() {
+        macro_rules! test_u {
+            ($e: expr) => {
+                let dummy_addr = AccountAddress::from([0; 32]);
+                let mut v = MoveFunctionInput {
+                    module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
+                    function: Identifier::new("test").unwrap(),
+                    function_info: Arc::new(Default::default()),
+                    args: vec![
+                        CloneableValue::from(Value(
+                            $e
+                        ))
+                    ],
+                    ty_args: vec![],
+                    caller: dummy_addr,
+                    vm_state: StagedVMState::new_uninitialized(),
+                    vm_state_idx: 0,
+                };
+                v.mutate::<MoveFuzzState>(&mut Default::default());
+                let o = (v.args[0].value.equals(&Value($e)).expect("failed to compare"));
+                assert!(!o, "value was not mutated");
+
+                println!("{:?}", v.args[0]);
+            };
+        }
+
+        test_u!(ValueImpl::U8(0));
+        test_u!(ValueImpl::U16(0));
+        test_u!(ValueImpl::U32(0));
+        test_u!(ValueImpl::U64(0));
+    }
+}
+
