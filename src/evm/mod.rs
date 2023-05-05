@@ -7,7 +7,6 @@ pub mod corpus_initializer;
 pub mod host;
 pub mod input;
 pub mod middleware;
-pub mod mutation_utils;
 pub mod mutator;
 pub mod onchain;
 pub mod oracle;

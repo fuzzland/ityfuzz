@@ -1,4 +1,4 @@
-use crate::evm::mutation_utils::ConstantPoolMetadata;
+use crate::mutation_utils::ConstantPoolMetadata;
 use libafl::state::{HasMetadata, State};
 
 use revm::Bytecode;

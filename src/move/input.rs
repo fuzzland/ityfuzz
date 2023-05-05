@@ -5,25 +5,30 @@ use crate::r#move::vm_state::MoveVMState;
 use crate::state::{HasCaller, HasItyState};
 
 use libafl::inputs::Input;
-use libafl::prelude::{HasMaxSize, MutationResult, State};
+use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, MutationResult, Rand, State};
 use libafl::state::HasRand;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use move_vm_types::values::Value;
+use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
 use primitive_types::U256;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
+use std::borrow::BorrowMut;
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
+use itertools::Itertools;
+use move_vm_types::loaded_data::runtime_types::Type;
+use crate::mutation_utils::byte_mutator;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
     fn function_name(&self) -> &Identifier;
     fn args(&self) -> &Vec<CloneableValue>;
-    fn ty_args(&self) -> &Vec<TypeTag>;
+    fn ty_args(&self) -> &Vec<Type>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +36,7 @@ pub struct MoveFunctionInput {
     pub module: ModuleId,
     pub function: Identifier,
     pub args: Vec<CloneableValue>,
-    pub ty_args: Vec<TypeTag>,
+    pub ty_args: Vec<Type>,
 
     pub caller: AccountAddress,
 
@@ -39,17 +44,19 @@ pub struct MoveFunctionInput {
     pub vm_state_idx: usize,
 }
 
-impl MoveFunctionInput {}
 
 #[derive(Debug)]
 pub struct CloneableValue {
     pub value: Value,
+    // for mutator
+    pub bytes: Vec<u8>,
 }
 
 impl Clone for CloneableValue {
     fn clone(&self) -> Self {
         CloneableValue {
             value: self.value.clone(),
+            bytes: vec![],
         }
     }
 }
@@ -74,7 +81,15 @@ impl<'de> Deserialize<'de> for CloneableValue {
 
 impl CloneableValue {
     pub fn from(value: Value) -> Self {
-        CloneableValue { value }
+        CloneableValue { value, bytes: vec![] }
+    }
+
+    pub fn get_value(&self) -> &Value {
+        &self.value
+    }
+
+    pub fn get_value_mut(&mut self) -> &mut Value {
+        &mut self.value
     }
 }
 
@@ -91,7 +106,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
         &self.args
     }
 
-    fn ty_args(&self) -> &Vec<TypeTag> {
+    fn ty_args(&self) -> &Vec<Type> {
         &self.ty_args
     }
 }
@@ -99,6 +114,269 @@ impl MoveFunctionInputT for MoveFunctionInput {
 impl Input for MoveFunctionInput {
     fn generate_name(&self, idx: usize) -> String {
         format!("{}_{}_{}", idx, self.module, self.function)
+    }
+}
+
+
+impl Input for CloneableValue {
+    fn generate_name(&self, idx: usize) -> String {
+        format!("{}_{}", idx, self.value)
+    }
+}
+
+impl HasBytesVec for CloneableValue {
+    fn bytes(&self) -> &[u8] {
+        unimplemented!()
+    }
+
+    fn bytes_mut(&mut self) -> &mut Vec<u8> {
+        macro_rules! leb_tns {
+            ($v: expr) => {
+                {
+                    self.bytes.copy_from_slice(&$v.to_le_bytes());
+                    &mut self.bytes
+                }
+            };
+            (vec, $v: expr) => {
+                {
+                    let sl = $v.borrow().deref().iter().map(|x| x.to_le_bytes()).flatten().collect::<Vec<u8>>();
+                    self.bytes.copy_from_slice(sl.as_slice());
+                    &mut self.bytes
+                }
+            };
+        }
+        match &self.value.0 {
+            ValueImpl::Container(v) => {
+                match v {
+                    Container::VecU8(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    Container::VecU64(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    Container::VecU128(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    Container::VecU16(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    Container::VecU32(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    Container::VecU256(v) => {
+                        return leb_tns!(vec, v)
+                    }
+                    // cant be mutated
+                    _ => unreachable!()
+                }
+            }
+            ValueImpl::U128(v) => {
+                self.bytes = v.to_le_bytes().to_vec();
+                &mut self.bytes
+            }
+            ValueImpl::U256(v) => {
+                self.bytes = v.to_le_bytes().to_vec();
+                &mut self.bytes
+            }
+            // ValueImpl::ContainerRef(_) => {}
+            // ValueImpl::IndexedRef(_) => {}
+            _ => unreachable!()
+        }
+    }
+}
+
+impl CloneableValue {
+    fn commit(&mut self) {
+        macro_rules! from_le {
+            ($ty: ty, $v: expr) => {
+                {
+                    let num_bytes = (<$ty>::BITS / 8) as usize;
+                    let vc = self.bytes.chunks(num_bytes)
+                        .filter(|x| x.len() == num_bytes)
+                        .map(|x| <$ty>::from_le_bytes(x.try_into().unwrap())).collect_vec();
+                    $v.borrow_mut()
+                        .take()
+                        .copy_from_slice(
+                            &vc
+                        )
+                }
+            };
+
+            (u256, $ty: ty, $v: expr) => {
+                {
+                    let num_bytes = 32;
+                    let vc = self.bytes.chunks(num_bytes)
+                        .filter(|x| x.len() == num_bytes)
+                        .map(|x| <$ty>::from_le_bytes(x.try_into().unwrap())).collect_vec();
+                    $v.borrow_mut()
+                        .take()
+                        .copy_from_slice(
+                            &vc
+                        )
+                }
+            };
+        }
+        match &mut self.value.0 {
+            ValueImpl::Container(v) => {
+                match v {
+                    Container::VecU8(vv) => {
+                        vv.borrow_mut()
+                            .take()
+                            .copy_from_slice(&self.bytes)
+                    }
+                    Container::VecU64(vv) => {
+                        from_le!(u64, vv)
+                    }
+                    Container::VecU128(v) => {
+                        from_le!(u128, v)
+                    }
+                    Container::VecU16(v) => {
+                        from_le!(u16, v)
+                    }
+                    Container::VecU32(v) => {
+                        from_le!(u32, v)
+                    }
+                    Container::VecU256(v) => {
+                        from_le!(u256, move_core_types::u256::U256, v)
+                    }
+                    // cant be mutated
+                    _ => unreachable!()
+                }
+            }
+            ValueImpl::U128(v) => {
+                *v = u128::from_le_bytes(self.bytes.as_slice().try_into().unwrap())
+            }
+            ValueImpl::U256(v) => {
+                *v = move_core_types::u256::U256::from_le_bytes(self.bytes.as_slice().try_into().unwrap())
+            }
+            // ValueImpl::ContainerRef(_) => {}
+            // ValueImpl::IndexedRef(_) => {}
+            _ => unreachable!()
+        }
+    }
+}
+
+
+macro_rules! mutate_by {
+    ( $state: expr, $value: expr) => {
+        {
+            let res = byte_mutator($state, $value, Default::default());
+            $value.commit();
+            res
+        }
+    };
+}
+impl MoveFunctionInput {
+
+    pub fn mutate_container<S>(&self, _state: &mut S, container: &mut Container, ty: &Type) -> MutationResult
+    where
+        S: State
+        + HasRand
+        + HasMaxSize
+        + HasItyState<ModuleId, AccountAddress, MoveVMState>
+        + HasCaller<AccountAddress> + HasMetadata,
+    {
+
+        let mut value = CloneableValue::from(Value(
+            ValueImpl::Container(container.clone())
+        ));
+        match container {
+            Container::Locals(_) => {unreachable!("locals cant be mutated")}
+            Container::Vec(v) => {unreachable!("wtf is this")}
+            Container::Struct(ref mut v) => {
+                match self.vm_state.state.useful_value.get(&ty) {
+                    None => {panic!("wtf")} // todo: fix this
+                    Some(vs) => {
+                        let nth = _state.rand_mut().below(vs.len() as u64);
+                        if let ValueImpl::Container(Container::Struct(new_struct)) = vs[nth as usize].0.clone() {
+                            *v.borrow_mut() = new_struct.clone();
+                            return MutationResult::Mutated
+                        } else {
+                            panic!("wtf")
+                        }
+                    }
+                }
+            }
+            Container::VecU8(_) => {mutate_by!( _state, &mut value)}
+            Container::VecU64(_) => {mutate_by!( _state, &mut value)}
+            Container::VecU128(_) => {mutate_by!( _state, &mut value)}
+            Container::VecBool(_) => {todo!("bool")}
+            Container::VecAddress(_) => {todo!("address")}
+            Container::VecU16(_) => {mutate_by!( _state, &mut value)}
+            Container::VecU32(_) => {mutate_by!( _state, &mut value)}
+            Container::VecU256(_) => {mutate_by!( _state, &mut value)}
+        }
+    }
+
+    pub fn mutate_value_impl<S>(&self, _state: &mut S, value: &mut CloneableValue, ty: &Type) -> MutationResult
+        where
+            S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<ModuleId, AccountAddress, MoveVMState>
+            + HasCaller<AccountAddress> + HasMetadata,
+    {
+        macro_rules! mutate_u {
+            ($ty: ty, $v: expr) => {
+                {
+                    let orig = $v;
+                    while $v == orig {
+                        $v = _state.rand_mut().below(<$ty>::MAX as u64) as $ty;
+                    }
+                    MutationResult::Mutated
+                }
+            };
+        }
+
+
+        match value.value.0 {
+            ValueImpl::Invalid => {
+                unreachable!()
+            }
+            // value level mutation
+            ValueImpl::U8(mut v) => {
+                return mutate_u!(u8, v);
+            }
+            ValueImpl::U16(mut v) => {
+                return mutate_u!(u16, v);
+            }
+            ValueImpl::U32(mut v) => {
+                return mutate_u!(u32, v);
+            }
+            ValueImpl::U64(mut v) => {
+                return mutate_u!(u64, v);
+            }
+            ValueImpl::Bool(mut v) => {
+                v=!v;
+                return MutationResult::Mutated;
+            }
+            ValueImpl::Address(mut v) => {
+                v = _state.get_rand_address();
+                return MutationResult::Mutated;
+            }
+            // libafl byte level mutation
+            ValueImpl::U128(_) => {
+                return mutate_by!(_state, value);
+            }
+            ValueImpl::U256(_) => {
+                return mutate_by!(_state, value);
+            }
+            ValueImpl::Container(ref mut cont) => {
+                self.mutate_container(_state, cont, ty);
+                return MutationResult::Mutated;
+            }
+            ValueImpl::ContainerRef(ref mut cont) => {
+                match cont {
+                    ContainerRef::Local(v) => {
+                        // todo: unwrap ty
+                        self.mutate_container(_state, v, ty);
+                        return MutationResult::Mutated;
+                    }
+                    ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
+                }
+            }
+            ValueImpl::IndexedRef(_) => {unreachable!("indexed ref cant be mutated")}
+        }
     }
 }
 
@@ -111,8 +389,13 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
             + HasItyState<ModuleId, AccountAddress, MoveVMState>
             + HasCaller<AccountAddress>,
     {
-        unimplemented!()
+        let nth = _state.rand_mut().below(self.args.len() as u64);
+
+
+
+        MutationResult::Mutated
     }
+
     fn get_caller_mut(&mut self) -> &mut AccountAddress {
         &mut self.caller
     }
@@ -165,6 +448,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
             "{}::{}({:?})",
             self.module, self.function, self.args
         ))
+
     }
     fn as_any(&self) -> &dyn any::Any {
         self
