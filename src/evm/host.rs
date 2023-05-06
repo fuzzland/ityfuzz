@@ -35,6 +35,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 #[cfg(feature = "record_instruction_coverage")]
 use crate::r#const::DEBUG_PRINT_PERCENT;
+use crate::rand_utils::generate_random_address;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 
@@ -735,17 +736,47 @@ where
 
     fn create<SPEC: Spec>(
         &mut self,
-        _inputs: &mut CreateInputs,
+        inputs: &mut CreateInputs,
+        state: &mut S,
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
-            // println!("create");
+            // todo: use nonce + hash instead
+            let r_addr = generate_random_address();
+            let mut interp = Interpreter::new::<LatestSpec>(
+                Contract::new_with_context::<LatestSpec>(
+                    Bytes::new(),
+                    Bytecode::new_raw(inputs.init_code.clone()),
+                    &CallContext {
+                        address: r_addr,
+                        caller: inputs.caller,
+                        code_address: r_addr,
+                        apparent_value: inputs.value,
+                        scheme: CallScheme::Call,
+                    },
+                ),
+                1e10 as u64,
+            );
+            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+            if ret == Return::Continue {
+                self.set_code(
+                    r_addr,
+                    Bytecode::new_raw(interp.return_value()),
+                );
+                (
+                    Continue,
+                    Some(r_addr),
+                    Gas::new(0),
+                    interp.return_value(),
+                )
+            } else {
+                (
+                    ret,
+                    Some(r_addr),
+                    Gas::new(0),
+                    Bytes::new(),
+                )
+            }
         }
-        return (
-            Continue,
-            Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()),
-            Gas::new(0),
-            Bytes::new(),
-        );
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
