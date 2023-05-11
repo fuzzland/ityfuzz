@@ -187,7 +187,7 @@ where
                             arr.push($v.clone());
                         }
                         None => {
-                            state.useful_value.insert($t.clone(), vec![$v.clone()]);
+                            state.$loc.insert($t.clone(), vec![$v.clone()]);
                         }
                     }
                 };

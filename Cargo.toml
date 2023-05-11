@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", ]
+default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "flashloan_v2"]
 evm = []
 cmp = []
 dataflow = []
