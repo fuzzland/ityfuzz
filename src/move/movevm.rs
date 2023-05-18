@@ -533,13 +533,18 @@ mod tests {
                     resources: Default::default(),
                     _gv_slot: Default::default(),
                     value_to_drop: Default::default(),
+                    _value_to_drop_amt: Default::default(),
                     useful_value: Default::default(),
+                    _useful_value_amt: Default::default(),
+                    ref_in_use: vec![],
                 },
                 stage: vec![],
                 initialized: false,
                 trace: Default::default(),
             },
             vm_state_idx: 0,
+            _deps: vec![],
+            _deps_amount: vec![],
         };
         let mut res= ExecutionResult::empty_result();
         res = mv.execute(&input.clone(), &mut FuzzState::new());

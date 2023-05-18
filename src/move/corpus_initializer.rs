@@ -120,18 +120,7 @@ impl MoveCorpusInitializer
                     }
                     None => {
                         // dependent on structs
-                        let (input, deps) = self.build_input_dependent_struct(&module_id, func);
-                        match self.state
-                            .metadata_mut()
-                            .get_mut::<StructDependentInputsMetadata>() {
-                            Some(metadata) => {
-                                metadata.add(input, deps);
-                            }
-                            None => {
-                                panic!("failed to get metadata");
-                            }
-                        }
-
+                        todo!()
                     }
                 }
             }
@@ -197,6 +186,8 @@ impl MoveCorpusInitializer
                                 )),
                                 deps
                             )
+                        } else {
+                            unreachable!()
                         }
                     }
                     _ => unreachable!()
@@ -213,26 +204,7 @@ impl MoveCorpusInitializer
                 )
             }
             Type::Reference(ty) | Type::MutableReference(ty)  => {
-                match Self::gen_default_value(state, ty) {
-                    Some(v) => {
-                        if let Value(ValueImpl::Container(c)) = v {
-                            Some(Value(ValueImpl::ContainerRef(
-                                ContainerRef::Local(c)
-                            )))
-                        } else {
-                            let Value(inner) = v;
-                            Some(Value(ValueImpl::IndexedRef(
-                                values::IndexedRef {
-                                    idx: 0,
-                                    container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(
-                                        vec![inner]
-                                    )))),
-                                }
-                            )))
-                        }
-                    }
-                    None => None
-                }
+                todo!("reference")
             }
             _ => unreachable!()
         }
@@ -254,49 +226,31 @@ impl MoveCorpusInitializer
         }
     }
 
-    fn build_input_dependent_struct(&mut self, module_id: &ModuleId, function: Arc<Function>) -> (MoveFunctionInput, Vec<Type>) {
-        let deps = function.parameter_types.iter().map(
-            |v| self.find_struct_deps(Box::new(v.clone()))
-        ).flatten().collect_vec();
-
-        let input = MoveFunctionInput {
-            module: module_id.clone(),
-            function: function.name.clone(),
-            function_info: Arc::new(FunctionDefaultable {
-                function: Some(function),
-            }),
-            args: vec![],
-            ty_args: vec![],
-            caller: self.state.get_rand_caller(),
-            vm_state: self.default_state.clone(),
-            vm_state_idx: 0,
-        };
-
-        return (input, deps);
-    }
-
     fn build_input(&mut self, module_id: &ModuleId, function: Arc<Function>) -> Option<MoveFunctionInput> {
-        let mut values = vec![];
-
-        for parameter_type in &function.parameter_types {
-            let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
-            if default_val.is_none() {
-                return None;
-            }
-            values.push(CloneableValue::from(default_val.unwrap()));
-        }
-        let input = MoveFunctionInput {
-            module: module_id.clone(),
-            function: function.name.clone(),
-            function_info: Arc::new(FunctionDefaultable {
-                function: Some(function),
-            }),
-            args: values,
-            ty_args: vec![],
-            caller: self.state.get_rand_caller(),
-            vm_state: StagedVMState::new_uninitialized(),
-            vm_state_idx: 0,
-        };
-        return Some(input);
+        todo!("build input");
+        // let mut values = vec![];
+        //
+        // for parameter_type in &function.parameter_types {
+        //     let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
+        //     if default_val.is_none() {
+        //         return None;
+        //     }
+        //     values.push(CloneableValue::from(default_val.unwrap()));
+        // }
+        // let input = MoveFunctionInput {
+        //     module: module_id.clone(),
+        //     function: function.name.clone(),
+        //     function_info: Arc::new(FunctionDefaultable {
+        //         function: Some(function),
+        //     }),
+        //     args: values,
+        //     ty_args: vec![],
+        //     caller: self.state.get_rand_caller(),
+        //     vm_state: StagedVMState::new_uninitialized(),
+        //     vm_state_idx: 0,
+        //     _deps: vec![],
+        //     _deps_amount: vec![],
+        // };
+        // return Some(input);
     }
 }
