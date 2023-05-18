@@ -128,6 +128,40 @@ impl MoveVMState {
             sample_value_inner!(value_to_drop, StructUsage::Drop)
         };
     }
+
+    pub fn restock(&mut self, ty: &Type, value: StructUsage, is_ref: bool) {
+        match value {
+            StructUsage::Useful(v) => {
+                let it = self.useful_value.get_mut(ty).unwrap();
+                match it.iter().position(|x| *x == Value(ValueImpl::Container(Container::Struct(v)))) {
+                    Some(offset) => {
+                        self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
+                    }
+                    None => {
+                        it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
+                        self._useful_value_amt.get_mut(ty).unwrap().push(1);
+                    }
+                }
+            }
+            StructUsage::Drop(v) => {
+                let it = self.value_to_drop.get_mut(ty).unwrap();
+                match it.iter().position(|x| *x == Value(ValueImpl::Container(Container::Struct(v)))) {
+                    Some(offset) => {
+                        self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
+                    }
+                    None => {
+                        it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
+                        self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
+                    }
+                }
+            }
+        }
+
+        if is_ref {
+            let offset = self.ref_in_use.iter().position(|x| *x == value).unwrap();
+            self.ref_in_use.remove(offset);
+        }
+    }
 }
 
 impl Clone for MoveVMState {
