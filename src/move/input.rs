@@ -569,8 +569,8 @@ impl MoveFunctionInput {
     pub fn mutate_container<S>(
                                _state: &mut S,
                                container: &mut Container,
-                               useful_value: &mut HashMap<Type, Vec<Value>>,
-                               to_drop_value: &mut HashMap<Type, Vec<Value>>,
+                               vm_state: &mut MoveVMState,
+                               is_ref: bool,
                                ty: &Type,
     ) -> MutationResult
     where
@@ -588,40 +588,15 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
-                if _state.rand_mut().next() % 2 == 0 {
-                    match useful_value.get(&ty) {
-                        None => {
-                            return MutationResult::Skipped
-                        } // todo: fix this
-                        Some(vs) => {
-                            let nth = _state.rand_mut().below(vs.len() as u64);
-                            if let ValueImpl::Container(Container::Struct(new_struct)) = vs[nth as usize].0.clone() {
-                                *v.borrow_mut() = new_struct.clone();
-                                return MutationResult::Mutated
-                            } else {
-                                panic!("wtf")
-                            }
-                        }
-                    }
+                if let Value(ValueImpl::Container(Container::Struct(new_struct))) = vm_state.sample_value(
+                    _state,
+                    ty,
+                    is_ref,
+                ) {
+                    *v.borrow_mut() = new_struct.clone();
+                    return MutationResult::Mutated
                 } else {
-                    let (res, offset) = match to_drop_value.get(&ty) {
-                        None => {
-                            (MutationResult::Skipped, 0)
-                        } // todo: fix this
-                        Some(vs) => {
-                            let nth = _state.rand_mut().below(vs.len() as u64);
-                            if let ValueImpl::Container(Container::Struct(new_struct)) = vs[nth as usize].0.clone() {
-                                *v.borrow_mut() = new_struct.clone();
-                                (MutationResult::Mutated, nth as usize)
-                            } else {
-                                panic!("wtf")
-                            }
-                        }
-                    };
-                    if res == MutationResult::Mutated {
-                        to_drop_value.get_mut(&ty).unwrap().remove(offset);
-                    }
-                    res
+                    panic!("wtf")
                 }
             }
             Container::VecU8(_) => {mutate_by!( _state, &mut value)}
@@ -639,8 +614,8 @@ impl MoveFunctionInput {
         _state: &mut S,
         value: &mut CloneableValue,
         ty: Type,
-        useful_value: &mut HashMap<Type, Vec<Value>>,
-        to_drop_value: &mut HashMap<Type, Vec<Value>>,
+        vm_state: &mut MoveVMState,
+        is_ref: bool,
     ) -> MutationResult
         where
             S: State
@@ -665,7 +640,7 @@ impl MoveFunctionInput {
         enum MutateType<'a> {
             U128,
             U256,
-            Container(&'a mut Container),
+            Container(&'a mut Container, Type, bool),
             Indexed(&'a mut Container, usize),
         }
 
@@ -703,12 +678,17 @@ impl MoveFunctionInput {
                 // return mutate_by!(_state, value);
             }
             ValueImpl::Container(ref mut cont) => {
-                MutateType::Container(cont)
+                MutateType::Container(cont, ty.clone(), false)
             }
             ValueImpl::ContainerRef(ref mut cont) => {
                 match cont {
                     ContainerRef::Local(v) => {
-                        MutateType::Container(v)
+                        let inner_ty = if let Type::Reference(inner_ty) = ty.clone() {
+                            *inner_ty
+                        } else {
+                            unreachable!("non mutable reference")
+                        };
+                        MutateType::Container(v, inner_ty, true)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
                 }
@@ -731,11 +711,11 @@ impl MoveFunctionInput {
             MutateType::U256 => {
                 mutate_by!( _state, value)
             }
-            MutateType::Container(cont) => {
+            MutateType::Container(cont, inner_ty,is_ref) => {
                 Self::mutate_container(_state, cont,
-                                       useful_value,
-                                       to_drop_value,
-                                       &ty)
+                                       vm_state,
+                                       is_ref,
+                                       &inner_ty)
             }
             MutateType::Indexed(vec_container, index) => {
                 match vec_container {
@@ -747,7 +727,13 @@ impl MoveFunctionInput {
                         };
 
                         let mut mutable_value = CloneableValue::from(Value((**inner_vec).borrow().get(index).unwrap().clone()));
-                        let res = Self::mutate_value_impl(_state,&mut mutable_value, inner_ty, useful_value, to_drop_value);
+                        let res = Self::mutate_value_impl(
+                            _state,
+                            &mut mutable_value,
+                            inner_ty,
+                            vm_state,
+                            true
+                        );
                         (**inner_vec).borrow_mut()[index] = mutable_value.value.0.clone();
                         res
                     }
@@ -774,8 +760,8 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
             _state,
             &mut self.args[nth],
             self.function_info.get_function().parameter_types[nth].clone(),
-            &mut self.vm_state.state.useful_value,
-            &mut self.vm_state.state.value_to_drop,
+            &mut self.vm_state.state,
+            false
         )
     }
 
