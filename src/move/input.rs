@@ -717,15 +717,7 @@ impl MoveFunctionInput {
                 match &mut cont.container_ref {
                     ContainerRef::Local(vec_container) => {
                         // MutateType::Indexed(v, cont.idx)
-                        let index = cont.idx;
-                        match vec_container {
-                            Container::Vec(inner_vec) => {
-                                let value = (**inner_vec).borrow_mut().get_mut(index).unwrap();
-                                // self.mutate_value_impl(_state, nth, )
-                                todo!()
-                            }
-                            _ => unreachable!("wtf is this")
-                        }
+                        MutateType::Indexed(vec_container, cont.idx)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
                 }
@@ -745,11 +737,22 @@ impl MoveFunctionInput {
                                        to_drop_value,
                                        &ty)
             }
-            MutateType::Indexed(cont, idx) => {
-                Self::mutate_container(_state, cont,
-                                       useful_value,
-                                       to_drop_value,
-                                       &ty)
+            MutateType::Indexed(vec_container, index) => {
+                match vec_container {
+                    Container::Vec(inner_vec) => {
+                        let inner_ty = if let Type::MutableReference(inner_ty) = ty{
+                            *inner_ty
+                        } else {
+                            unreachable!("non mutable reference")
+                        };
+
+                        let mut mutable_value = CloneableValue::from(Value((**inner_vec).borrow().get(index).unwrap().clone()));
+                        let res = Self::mutate_value_impl(_state,&mut mutable_value, inner_ty, useful_value, to_drop_value);
+                        (**inner_vec).borrow_mut()[index] = mutable_value.value.0.clone();
+                        res
+                    }
+                    _ => unreachable!("wtf is this")
+                }
             }
         }
 
