@@ -13,37 +13,41 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 
-use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
+use move_vm_runtime::interpreter::{CallStack, DummyTracer, ExitCode, Frame, Interpreter, ItyFuzzTracer, Stack};
 use move_vm_runtime::loader;
 use move_vm_runtime::loader::BinaryType::Module;
 use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
 use move_vm_runtime::native_functions::NativeFunctions;
 use move_vm_types::gas::UnmeteredGasMeter;
 use move_vm_types::values;
-use move_vm_types::values::Locals;
+use move_vm_types::values::{Locals, Reference, StructRef, Value, ValueImpl, VMValueCast};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use move_binary_format::errors::VMResult;
+use move_binary_format::file_format::Bytecode;
+use move_core_types::u256;
 
-struct MoveVM<I, S> {
-    modules: HashMap<ModuleId, Arc<loader::Module>>,
+pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
+pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
+pub static mut MOVE_READ_MAP: [bool; MAP_SIZE] = [false; MAP_SIZE];
+pub static mut MOVE_WRITE_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
+pub static mut MOVE_STATE_CHANGED: bool = false;
+pub struct MoveVM<I, S> {
     // for comm with move_vm
-    _module_cache: ModuleCache,
-    functions: HashMap<ModuleId, HashMap<Identifier, Arc<Function>>>,
+    pub functions: HashMap<ModuleId, HashMap<Identifier, Arc<Function>>>,
+    pub loader: Loader,
     _phantom: std::marker::PhantomData<(I, S)>,
 }
 
 impl<I, S> MoveVM<I, S> {
     pub fn new() -> Self {
-        let modules = HashMap::new();
-        let _module_cache = ModuleCache::new();
         let functions = HashMap::new();
         Self {
-            modules,
-            _module_cache,
             functions,
+            loader: Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default()),
             _phantom: Default::default(),
         }
     }
@@ -55,6 +59,192 @@ impl<I, S> MoveVM<I, S> {
     }
 }
 
+pub struct MoveVMTracer {
+
+}
+
+impl ItyFuzzTracer for MoveVMTracer {
+    fn on_step(&mut self, interpreter: &Interpreter, frame: &Frame, pc: u16, instruction: &Bytecode) {
+        macro_rules! fast_peek_back {
+            ($interp: expr) => { &$interp.operand_stack.value[$interp.operand_stack.value.len() - 1] };
+            ($interp: expr, $kth: expr) => { &$interp.operand_stack.value[$interp.operand_stack.value.len() - $kth] };
+        }
+        macro_rules! distance {
+            ($cond:expr, $l:expr, $v:expr) => {
+                if !($cond) {
+                    if *$l > *$v {
+                        (*$l - *$v) as u128
+                    } else {
+                        (*$v - *$l) as u128
+                    }
+                } else {
+                    0u128
+                }
+            };
+        }
+
+        match instruction {
+            // COV MAP
+            Bytecode::BrTrue(offset) => {
+                if let Value(ValueImpl::Bool(b)) = fast_peek_back!(interpreter) {
+                    let next_pc = if *b { *offset } else { pc + 1 };
+                    let map_offset = next_pc as usize % MAP_SIZE;
+                    unsafe {MOVE_COV_MAP[map_offset] = (MOVE_COV_MAP[map_offset] + 1) % 255;}
+                } else {
+                    unreachable!("brtrue with non-bool value")
+                }
+            }
+            Bytecode::BrFalse(offset) => {
+                if let Value(ValueImpl::Bool(b)) = fast_peek_back!(interpreter) {
+                    let next_pc = if !*b { *offset } else { pc + 1 };
+                    let map_offset = next_pc as usize % MAP_SIZE;
+                    unsafe {MOVE_COV_MAP[map_offset] = (MOVE_COV_MAP[map_offset] + 1) % 255;}
+                } else {
+                    unreachable!("brfalse with non-bool value")
+                }
+            }
+
+
+            // CMP MAP
+            Bytecode::Eq => {
+                let distance = match (fast_peek_back!(interpreter), fast_peek_back!(interpreter, 2)) {
+                    (Value(ValueImpl::U8(l)), Value(ValueImpl::U8(r))) => distance!(*l==*r, l, r),
+                    (Value(ValueImpl::U16(l)), Value(ValueImpl::U16(r))) => distance!(*l==*r, l, r),
+                    (Value(ValueImpl::U32(l)), Value(ValueImpl::U32(r))) => distance!(*l==*r, l, r),
+                    (Value(ValueImpl::U64(l)), Value(ValueImpl::U64(r))) => distance!(*l==*r, l, r),
+                    (Value(ValueImpl::U128(l)), Value(ValueImpl::U128(r))) => distance!(*l==*r, l, r),
+                    (Value(ValueImpl::U256(l)), Value(ValueImpl::U256(r))) => distance!(*l==*r, &l.unchecked_as_u128(), &r.unchecked_as_u128()),
+                    (Value(ValueImpl::Bool(l)), Value(ValueImpl::Bool(r))) => if l == r { 0 } else { 1 },
+                    _ => u128::MAX
+                };
+
+                let map_offset = pc as usize % MAP_SIZE;
+                if unsafe { MOVE_CMP_MAP[map_offset] > distance } {
+                    unsafe { MOVE_CMP_MAP[map_offset] = distance; }
+                }
+            }
+            Bytecode::Neq => {}
+            Bytecode::Lt | Bytecode::Le => {
+                let distance = match (fast_peek_back!(interpreter), fast_peek_back!(interpreter, 2)) {
+                    (Value(ValueImpl::U8(l)), Value(ValueImpl::U8(r))) => distance!(*l <= *r, l, r),
+                    (Value(ValueImpl::U16(l)), Value(ValueImpl::U16(r))) => distance!(*l <= *r, l, r),
+                    (Value(ValueImpl::U32(l)), Value(ValueImpl::U32(r))) => distance!(*l <= *r, l, r),
+                    (Value(ValueImpl::U64(l)), Value(ValueImpl::U64(r))) => distance!(*l <= *r, l, r),
+                    (Value(ValueImpl::U128(l)), Value(ValueImpl::U128(r))) => distance!(*l <= *r, l, r),
+                    (Value(ValueImpl::U256(l)), Value(ValueImpl::U256(r))) => distance!(*l <= *r, &l.unchecked_as_u128(), &r.unchecked_as_u128()),
+                    _ => u128::MAX
+                };
+
+                let map_offset = pc as usize % MAP_SIZE;
+                if unsafe { MOVE_CMP_MAP[map_offset] > distance } {
+                    unsafe { MOVE_CMP_MAP[map_offset] = distance; }
+                }
+            }
+            Bytecode::Gt | Bytecode::Ge => {
+                let distance = match (fast_peek_back!(interpreter), fast_peek_back!(interpreter, 2)) {
+                    (Value(ValueImpl::U8(l)), Value(ValueImpl::U8(r))) => distance!(*l >= *r, l, r),
+                    (Value(ValueImpl::U16(l)), Value(ValueImpl::U16(r))) => distance!(*l >= *r, l, r),
+                    (Value(ValueImpl::U32(l)), Value(ValueImpl::U32(r))) => distance!(*l >= *r, l, r),
+                    (Value(ValueImpl::U64(l)), Value(ValueImpl::U64(r))) => distance!(*l >= *r, l, r),
+                    (Value(ValueImpl::U128(l)), Value(ValueImpl::U128(r))) => distance!(*l >= *r, l, r),
+                    (Value(ValueImpl::U256(l)), Value(ValueImpl::U256(r))) => distance!(*l >= *r, &l.unchecked_as_u128(), &r.unchecked_as_u128()),
+                    _ => u128::MAX
+                };
+
+                let map_offset = pc as usize % MAP_SIZE;
+                if unsafe { MOVE_CMP_MAP[map_offset] > distance } {
+                    unsafe { MOVE_CMP_MAP[map_offset] = distance; }
+                }
+            }
+
+            // RW MAP & Onchain stuffs
+            Bytecode::MutBorrowGlobal(sd_idx) |
+            Bytecode::ImmBorrowGlobal(sd_idx) |
+            Bytecode::Exists(sd_idx) |
+            Bytecode::MoveFrom(sd_idx) => unsafe {
+                let addr_off = if let Value(ValueImpl::Address(addr)) = fast_peek_back!(interpreter) {
+                    u128::from_le_bytes(
+                        addr.as_slice()[addr.len() - 16..]
+                            .try_into()
+                            .expect("slice with incorrect length"),
+                    )
+                } else {
+                    unreachable!("borrow_global with non-address value")
+                };
+                let offset = sd_idx.0 as u16;
+                let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
+                if !MOVE_READ_MAP[map_offset] {
+                    MOVE_READ_MAP[map_offset] = true;
+                }
+            }
+            Bytecode::MutBorrowGlobalGeneric(sd_idx) |
+            Bytecode::ImmBorrowGlobalGeneric(sd_idx) |
+            Bytecode::ExistsGeneric(sd_idx) |
+            Bytecode::MoveFromGeneric(sd_idx) => unsafe {
+                let addr_off = if let Value(ValueImpl::Address(addr)) = fast_peek_back!(interpreter) {
+                    u128::from_le_bytes(
+                        addr.as_slice()[addr.len() - 16..]
+                            .try_into()
+                            .expect("slice with incorrect length"),
+                    )
+                } else {
+                    unreachable!("borrow_global with non-address value")
+                };
+                let offset = sd_idx.0 as u16;
+                let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
+                if !MOVE_READ_MAP[map_offset] {
+                    MOVE_READ_MAP[map_offset] = true;
+                }
+            }
+            Bytecode::MoveTo(sd_idx) => unsafe {
+                let addr_struct: StructRef = fast_peek_back!(interpreter, 2).clone().cast().unwrap();
+                let addr = addr_struct.borrow_field(0).unwrap()
+                    .value_as::<Reference>().unwrap()
+                    .read_ref().unwrap()
+                    .value_as::<AccountAddress>().unwrap();
+
+
+                let addr_off = u128::from_le_bytes(
+                    addr.as_slice()[addr.len() - 16..]
+                        .try_into()
+                        .expect("slice with incorrect length"),
+                );
+                let offset = sd_idx.0 as u16;
+                let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
+                if MOVE_WRITE_MAP[map_offset] == 0 {
+                    MOVE_WRITE_MAP[map_offset] = 1;
+                }
+            }
+            Bytecode::MoveToGeneric(sd_idx) => unsafe {
+                let addr_struct: StructRef = fast_peek_back!(interpreter, 2).clone().cast().unwrap();
+                let addr = addr_struct.borrow_field(0).unwrap()
+                    .value_as::<Reference>().unwrap()
+                    .read_ref().unwrap()
+                    .value_as::<AccountAddress>().unwrap();
+
+
+                let addr_off = u128::from_le_bytes(
+                    addr.as_slice()[addr.len() - 16..]
+                        .try_into()
+                        .expect("slice with incorrect length"),
+                );
+                let offset = sd_idx.0 as u16;
+                let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
+                if MOVE_WRITE_MAP[map_offset] == 0 {
+                    MOVE_WRITE_MAP[map_offset] = 1;
+                }
+            }
+
+
+            // Onchain stuffs
+            Bytecode::Call(_) => {}
+            Bytecode::CallGeneric(_) => {}
+            _ => {}
+        }
+    }
+}
+
+
 impl<I, S>
     GenericVM<
         MoveVMState,
@@ -62,7 +252,7 @@ impl<I, S>
         MoveFunctionInput,
         ModuleId,
         AccountAddress,
-        values::Value,
+        u128,
         MoveOutput,
         I,
         S,
@@ -77,35 +267,26 @@ where
         _deployed_address: AccountAddress,
         _state: &mut S,
     ) -> Option<AccountAddress> {
-        let pre_mc_func_idx = self._module_cache.functions.len();
-        self._module_cache
-            .insert(&self.get_natives(), module.self_id(), module.clone())
-            .expect("internal deploy error");
-        self.modules.insert(
-            module.self_id(),
-            Arc::new(
-                loader::Module::new(module.clone(), &self._module_cache).expect("module failed"),
-            ),
-        );
-        for (idx, (_func_def, func_handle)) in module
-            .function_defs()
-            .iter()
-            .zip(module.function_handles())
-            .enumerate()
-        {
-            let name = module.identifier_at(func_handle.name);
-            let function: Arc<Function> = self._module_cache.function_at(pre_mc_func_idx + idx);
-
-            println!("deployed function: {:?} returns {:?}", function.parameter_types, function.return_types());
+        let func_off = self.loader.module_cache.read().functions.len();
+        let module_name = module.name().to_owned();
+        let deployed_module_idx = module.self_id();
+        self.loader.module_cache.write().insert(&self.get_natives(),
+                                                deployed_module_idx.clone(),
+                                                module).expect("internal deploy error");
+        for f in &self.loader.module_cache.read().functions[func_off..] {
+            println!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
             self.functions
-                .entry(module.self_id())
+                .entry(deployed_module_idx.clone())
                 .or_insert_with(HashMap::new)
-                .insert(name.to_owned(), function);
+                .insert(f.name.to_owned(), f.clone());
         }
 
-        println!("deployed structs: {:?}", self._module_cache.structs);
-
-        Some(module.self_id().address().clone())
+        println!("deployed structs: {:?}", self.loader.module_cache.read().structs);
+        println!("module cache: {:?}  {:?}",
+                 self.loader.module_cache.read().modules.binaries,
+                 self.loader.module_cache.read().modules.id_map
+        );
+        Some(deployed_module_idx.address().clone())
     }
 
 
@@ -132,50 +313,122 @@ where
     where
         MoveVMState: VMStateT,
     {
-        let module = self.modules.get(&input.module_id()).unwrap();
-        let function = self
+        let initial_function = self
             .functions
             .get(&input.module_id())
             .unwrap()
             .get(input.function_name())
             .unwrap();
 
-        let mut locals = Locals::new(function.local_count());
-        for (i, value) in input.args().into_iter().enumerate() {
-            locals.store_loc(i, value.clone().value).unwrap();
-        }
+        println!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
 
-        let mut current_frame = Frame {
-            pc: 0,
-            locals,
-            function: function.clone(),
-            ty_args: vec![],
-        };
 
+        // setup interpreter
         let mut interp = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             paranoid_type_checks: false,
         };
 
-        let mut loader = Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default());
+        let mut state = input.get_state().clone();
+        unsafe {
+            MOVE_STATE_CHANGED = false;
+        }
 
-        loader.set_structs(self._module_cache.structs.clone());
-
-        let resolver = Resolver {
-            loader: &loader,
-            binary: Module(module.clone()),
+        // set up initial frame
+        let mut current_frame = {
+            let mut locals = Locals::new(initial_function.local_count());
+            for (i, value) in input.args().into_iter().enumerate() {
+                locals.store_loc(i, value.clone().value).unwrap();
+            }
+            Frame {
+                pc: 0,
+                locals,
+                function: initial_function.clone(),
+                ty_args: vec![],
+            }
         };
 
-        let mut state = input.get_state().clone();
+        let mut call_stack = vec![];
+        let mut reverted = false;
+        loop {
+            let resolver = current_frame.resolver(&self.loader);
+            let ret =
+                current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter, &mut MoveVMTracer{});
+            println!("{:?}", ret);
 
-        let ret =
-            current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
+            if ret.is_err() {
+                reverted = true;
+                break;
+            }
+
+            match ret.unwrap() {
+                ExitCode::Return => {
+                    match call_stack.pop() {
+                        Some(frame) => {
+                            current_frame = frame;
+                            current_frame.pc += 1;
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+                ExitCode::Call(fh_idx) => {
+                    let func = resolver.function_from_handle(fh_idx);
+                    let argc = func.local_count();
+                    let mut locals = Locals::new(argc);
+                    for i in 0..argc {
+                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap()).unwrap();
+                    }
+                    println!("locals: {:?}", locals);
+                    // todo: handle native here
+                    if func.is_native() {
+                        todo!("native function call")
+                    }
+                    call_stack.push(current_frame);
+                    current_frame = Frame {
+                        pc: 0,
+                        locals,
+                        function: func.clone(),
+                        ty_args: vec![],
+                    };
+                }
+                ExitCode::CallGeneric(fh_idx) => {
+                    let ty_args = resolver
+                        .instantiate_generic_function(fh_idx, &current_frame.ty_args).unwrap();
+                    let func = resolver.function_from_instantiation(fh_idx);
+
+                    let argc = func.local_count();
+                    let mut locals = Locals::new(argc);
+                    for i in 0..argc {
+                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap()).unwrap();
+                    }
+
+                    // todo: handle native here
+                    if func.is_native() {
+                        todo!("native function call")
+                    }
+                    call_stack.push(current_frame);
+                    current_frame = Frame {
+                        pc: 0,
+                        locals,
+                        function: func.clone(),
+                        ty_args,
+                    };
+                }
+            }
+        }
+
+        let resolver = current_frame.resolver(&self.loader);
+
 
         let mut out: MoveOutput = MoveOutput { vars: vec![] };
 
+        println!("{:?}", interp.operand_stack.value);
+
         for (v, t) in interp.operand_stack.value.iter().zip(
-            function
+            initial_function
                 .return_types()
                 .iter()
         ) {
@@ -203,48 +456,46 @@ where
             out.vars.push((t.clone(), v.clone()));
             println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
-        println!("ret: {:?}", ret);
         ExecutionResult {
             new_state: StagedVMState::new_with_state(state),
             output: out,
-            reverted: ret.is_ok(),
+            reverted,
             additional_info: None
         }
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {
-        todo!()
+        unsafe { &mut MOVE_COV_MAP }
     }
 
     fn get_read(&self) -> &'static mut [bool; MAP_SIZE] {
-        todo!()
+        unsafe { &mut MOVE_READ_MAP }
     }
 
     fn get_write(&self) -> &'static mut [u8; MAP_SIZE] {
-        todo!()
+        unsafe { &mut MOVE_WRITE_MAP }
     }
 
-    fn get_cmp(&self) -> &'static mut [values::Value; MAP_SIZE] {
-        todo!()
+    fn get_cmp(&self) -> &'static mut [u128; MAP_SIZE] {
+        unsafe { &mut MOVE_CMP_MAP }
     }
 
     fn state_changed(&self) -> bool {
-        todo!()
+        unsafe { MOVE_STATE_CHANGED }
     }
 }
 
 mod tests {
     use std::borrow::Borrow;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use move_vm_types::loaded_data::runtime_types::CachedStructIndex;
     use move_vm_types::loaded_data::runtime_types::Type::Struct;
     use super::*;
-    use crate::r#move::input::CloneableValue;
+    use crate::r#move::input::{CloneableValue};
     use crate::state::FuzzState;
 
-    use move_vm_types::values::{Reference, ReferenceImpl, Value, ValueImpl};
-    use move_vm_types::values::ContainerRef::Local;
-    use crate::r#move::movevm::values::ContainerRef;
-    use move_vm_types::values::ValueImpl::Container;
+    use move_vm_types::values::{ContainerRef, Reference, ReferenceImpl, Value, ValueImpl};
 
     fn _run(
         bytecode: &str,
@@ -253,6 +504,7 @@ mod tests {
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput> {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
+        let module_idx = module.self_id();
         let mut mv = MoveVM::<
             MoveFunctionInput,
             FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
@@ -266,11 +518,11 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(mv.modules.len(), 1);
         assert_eq!(mv.functions.len(), 1);
 
         let input = MoveFunctionInput {
-            module: mv.modules.iter().next().unwrap().0.clone(),
+            // take the first module
+            module: mv.loader.module_cache.read().modules.id_map.iter().next().unwrap().0.clone(),
             function: Identifier::new(func).unwrap(),
             function_info: Default::default(),
             args,
@@ -289,8 +541,8 @@ mod tests {
             },
             vm_state_idx: 0,
         };
-
-        let res = mv.execute(&input, &mut FuzzState::new());
+        let mut res= ExecutionResult::empty_result();
+        res = mv.execute(&input.clone(), &mut FuzzState::new());
         return res;
     }
 
@@ -341,7 +593,7 @@ mod tests {
             0: 0,
         }));
 
-        if let Container(borrowed) = struct_obj.0.borrow() {
+        if let ValueImpl::Container(borrowed) = struct_obj.0.borrow() {
             println!("borrowed: {:?} from {:?}", borrowed, struct_obj);
             let reference = Value(ValueImpl::ContainerRef(ContainerRef::Local(
                 borrowed.copy_by_ref(),
@@ -361,5 +613,26 @@ mod tests {
         }
 
 
+    }
+
+    #[test]
+    fn test_use_stdlib() {
+
+        let module_hex = "a11ceb0b060000000801000202020403060a0510080718290841200a61070c68240002000002000004000100000301020001070200010301020b50726f66696c65496e666f046e616d650770726f66696c650574657374310574657374320375726c00000000000000000000000000000000000000000000000000000000000000000002020103050300010000010431030b00150201010000030631020c000d001100060c000000000000000200";
+        let res = _run(module_hex,
+                       vec![
+                           CloneableValue::from(Value(ValueImpl::IndexedRef(
+                                 values::IndexedRef {
+                                     idx: 0,
+                                     container_ref: ContainerRef::Local(
+                                         values::Container::Locals(
+                                             Rc::new(RefCell::new(vec![ValueImpl::U8(2)]))
+                                         )
+                                     ),
+                                 }
+                           ))),
+                       ],
+                       "test2",
+        );
     }
 }

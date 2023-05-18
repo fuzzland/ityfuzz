@@ -12,7 +12,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
+use move_vm_types::values::{Container, ContainerRef, IndexedRef, Value, ValueImpl};
 use primitive_types::U256;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -24,9 +24,11 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use itertools::Itertools;
+use libafl::impl_serdeany;
 use move_vm_runtime::loader::{Function, Module};
 use move_vm_types::loaded_data::runtime_types::Type;
 use crate::mutation_utils::byte_mutator;
+use crate::r#move::movevm::MoveVM;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -36,7 +38,7 @@ pub trait MoveFunctionInputT {
 }
 
 pub struct FunctionDefaultable {
-    pub function: Option<Function>
+    pub function: Option<Arc<Function>>
 }
 
 impl Default for FunctionDefaultable {
@@ -51,6 +53,70 @@ impl FunctionDefaultable {
     pub fn get_function(&self) -> &Function {
         self.function.as_ref().unwrap()
     }
+
+    pub fn new(function: Arc<Function>) -> Self {
+        FunctionDefaultable {
+            function: Some(function)
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StructDependentInputsMetadata {
+    pub uninit_inputs: Vec<MoveFunctionInput>,
+    pub ref_count: HashMap<usize, usize>,
+    pub dependencies: HashMap<Type, Vec<usize>>,
+}
+
+impl StructDependentInputsMetadata {
+    pub fn new() -> Self {
+        StructDependentInputsMetadata {
+            uninit_inputs: vec![],
+            ref_count: HashMap::new(),
+            dependencies: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, input: MoveFunctionInput, deps: Vec<Type>) {
+        let idx = self.uninit_inputs.len();
+        self.uninit_inputs.push(input);
+        self.ref_count.insert(idx, deps.len());
+        for dep in deps {
+            self.dependencies.entry(dep).or_insert_with(Vec::new).push(idx);
+        }
+    }
+
+    pub fn found_ty(&mut self, ty: Type) -> Vec<MoveFunctionInput> {
+        let dep_inputs_idx = self.dependencies.remove(&ty);
+        if dep_inputs_idx.is_none() {
+            return vec![];
+        }
+        let mut freed_input = vec![];
+        for input_idx in dep_inputs_idx.unwrap() {
+            let ref_cnt = self.ref_count.get(&input_idx);
+            match ref_cnt {
+                None => continue,
+                Some(cnt) => {
+                    if *cnt > 1 {
+                        self.ref_count.insert(input_idx, cnt - 1);
+                    } else {
+                        freed_input.push(input_idx);
+                    }
+                }
+            }
+        }
+        freed_input.iter()
+            .sorted_by(|a, b| b.cmp(a)) // prevent index error
+            .map(|idx| self.uninit_inputs.remove(*idx)).collect()
+    }
+}
+
+impl_serdeany!(StructDependentInputsMetadata);
+
+
+pub enum StructUsage {
+    Useful(Rc<RefCell<Vec<ValueImpl>>>),
+    Drop(Rc<RefCell<Vec<ValueImpl>>>),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -63,11 +129,12 @@ pub struct MoveFunctionInput {
 
     pub args: Vec<CloneableValue>,
     pub ty_args: Vec<Type>,
-
     pub caller: AccountAddress,
-
     pub vm_state: MoveStagedVMState,
     pub vm_state_idx: usize,
+
+    pub _deps: Vec<Type>,
+    pub _deps_amount: Vec<usize>
 }
 
 impl Debug for MoveFunctionInput {
@@ -299,7 +366,163 @@ macro_rules! mutate_by {
         }
     };
 }
+
+pub const MOVE_MAX_VEC_SIZE: u64 = 10;
+
 impl MoveFunctionInput {
+    //
+    // pub fn slash_in_use(&self, vm_state: &mut MoveVMState) {
+    //     let mut useful_removal = HashMap::new();
+    //     let mut to_drop_removal = HashMap::new();
+    //     for i in self._in_use {
+    //         match i {
+    //             StructUsage::Useful(ty, idx) => {
+    //                 useful_removal.entry(ty).or_insert_with(Vec::new).push(idx);
+    //             }
+    //             StructUsage::Drop(ty, idx) => {
+    //                 to_drop_removal.entry(ty).or_insert_with(Vec::new).push(idx);
+    //             }
+    //         }
+    //     }
+    //     for (ty, mut idxs) in useful_removal {
+    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
+    //             vm_state.useful_value.get_mut(&ty).unwrap().remove(*idx);
+    //         }
+    //     }
+    //
+    //     for (ty, mut idxs) in to_drop_removal {
+    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
+    //             vm_state.value_to_drop.get_mut(&ty).unwrap().remove(*idx);
+    //         }
+    //     }
+    // }
+    pub fn _sample_ty<S>(ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool) -> Option<(Value, StructUsage)>
+    where S: HasRand{
+        macro_rules! remove_one {
+            ($item: ident, $wrapper: ident) => {
+                match vm_state.$item.get_mut(ty) {
+                    Some(v) => {
+                        let idx = state.rand_mut().below(v.len());
+                        if is_ref {
+                            let selected = v[idx as usize].clone();
+                            Some(selected, $wrapper(selected))
+                        } else {
+                            let selected = v.remove(idx as usize);
+                            Some(selected, $wrapper(selected))
+                        }
+                    }
+                    None => None
+                }
+            };
+        }
+
+        let rand = state.rand_mut().next();
+
+        let res = if rand % 2 == 0 {
+            remove_one!(useful_value, StructUsage::Useful)
+        } else {
+            remove_one!(value_to_drop, StructUsage::Drop)
+        };
+
+        if res.is_none() {
+            return {
+                if rand % 2 != 0 {
+                    remove_one!(useful_value, StructUsage::Useful)
+                } else {
+                    remove_one!(value_to_drop, StructUsage::Drop)
+                }
+            }
+        } else {
+            res
+        }
+    }
+
+    // only called by mutator when a new vm_state is selected
+    pub fn _ensure_assigned(ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool) -> Option<Value>
+        where S: HasRand {
+        match ty {
+            Type::Struct(_) => {
+                let (selected, usage) = Self::_sample_ty(ty, vm_state, state, is_ref).unwrap();
+                if is_ref { vm_state._in_use.push(usage); }
+                Some(selected)
+            }
+            Type::Vector(inner_ty) => {
+                match **inner_ty {
+                    Type::Vector(_) => {
+                        todo!("vector of vector")
+                    }
+                    // Vec<Struct> slash all items in vector
+                    Type::Struct(_) => {
+                        if let Value(ValueImpl::Container(Container::Vec(inner))) = v {
+                            (**inner).borrow_mut().clear()
+                        } else {
+                            unreachable!("vector should be container")
+                        }
+                    }
+                    Type::Reference(inner_ty) => {
+                        todo!("vector of reference")
+                    }
+                    Type::MutableReference(inner_ty) => {
+                        todo!("vector of mutable reference")
+                    }
+                    _ => false
+                }
+            }
+            Type::Reference(inner_ty) => {
+                let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
+                    Some(v) => v,
+                    None => return None
+                };
+                Value(ValueImpl::IndexedRef(
+                    IndexedRef {
+                        idx: 0,
+                        container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
+                    }
+                ))
+            }
+            // todo: ensure really mutated
+            Type::MutableReference(inner_ty) => {
+                let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
+                    Some(v) => v,
+                    None => return None
+                };
+
+                Value(ValueImpl::IndexedRef(
+                    IndexedRef {
+                        idx: 0,
+                        container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
+                    }
+                ))
+            }
+            _ => None
+        }
+    }
+
+    pub fn ensure_assigned<S>(&mut self,vm_state: &mut MoveVMState, state: &mut S)
+        where S: HasRand {
+        for p in &mut self.args {
+            match Self::_ensure_assigned(p.ty, vm_state, state, false) {
+                Some(v) => p.value = v,
+                None => {}
+            }
+        }
+    }
+
+    pub fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
+        for (ty, amount) in self._deps.iter().zip(self._deps_amount.iter()) {
+            let counts = match vm_state.value_to_drop.get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            } + match vm_state.useful_value.get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            };
+            if counts < *amount {
+                return false;
+            }
+        }
+        true
+    }
 
     pub fn mutate_container<S>(
                                _state: &mut S,
@@ -584,28 +807,32 @@ mod tests {
     use std::collections::HashMap;
     use libafl::mutators::MutationResult;
     use crate::r#move::types::MoveStagedVMState;
+
     macro_rules! get_dummy_func {
         ($tys: expr) => {
             {
                 let mut f = FunctionDefaultable::default();
                 f.function = Some(
-                    Function {
-                        file_format_version: 0,
-                        index: Default::default(),
-                        code: vec![],
-                        parameters: Default::default(),
-                        return_: Default::default(),
-                        locals: Default::default(),
-                        type_parameters: vec![],
-                        native: None,
-                        def_is_native: false,
-                        def_is_friend_or_private: false,
-                        scope: Scope::Module(ModuleId::new(AccountAddress::from([0; 32]), Identifier::new("test").unwrap())),
-                        name: Identifier::new("test").unwrap(),
-                        return_types: vec![],
-                        local_types: vec![],
-                        parameter_types: $tys,
-                    }
+                    Arc::new(
+
+                        Function {
+                            file_format_version: 0,
+                            index: Default::default(),
+                            code: vec![],
+                            parameters: Default::default(),
+                            return_: Default::default(),
+                            locals: Default::default(),
+                            type_parameters: vec![],
+                            native: None,
+                            def_is_native: false,
+                            def_is_friend_or_private: false,
+                            scope: Scope::Module(ModuleId::new(AccountAddress::from([0; 32]), Identifier::new("test").unwrap())),
+                            name: Identifier::new("test").unwrap(),
+                            return_types: vec![],
+                            local_types: vec![],
+                            parameter_types: $tys,
+                        }
+                    )
                 );
                 f
             }

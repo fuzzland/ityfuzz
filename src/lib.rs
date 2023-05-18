@@ -1,4 +1,5 @@
 #![feature(downcast_unchecked)]
+#![feature(unchecked_math)]
 extern crate core;
 
 pub mod r#const;
