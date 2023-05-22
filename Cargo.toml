@@ -62,6 +62,3 @@ move-core-types = { path = "./externals/move/language/move-core/types", features
 move-stdlib = { path = "./externals/move/language/move-stdlib" }
 move-vm-runtime = { path = "./externals/move/language/move-vm/runtime", features = ["lazy_natives"] }
 move-vm-types = { path = "./externals/move/language/move-vm/types" }
-
-[profile.release]
-incremental = true
