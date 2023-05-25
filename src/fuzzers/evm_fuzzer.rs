@@ -26,7 +26,7 @@ use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasExecutionResult};
+use crate::state::{FuzzState, HasCaller, HasExecutionResult};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
@@ -159,7 +159,7 @@ pub fn evm_fuzzer(
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
-    state.add_deployer_to_callers(deployer);
+    state.add_caller(deployer);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");

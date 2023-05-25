@@ -1,3 +1,4 @@
+/// Implements LibAFL's State trait supporting our fuzzing logic.
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::VMInputT;
 
@@ -27,57 +28,78 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
 
+/// Amount of accounts and contracts that can be caller during fuzzing.
+/// We will generate random addresses for these accounts and contracts.
 pub const ACCOUNT_AMT: u8 = 2;
 pub const CONTRACT_AMT: u8 = 2;
 
-// Note: Probably a better design is to use StdState with a custom corpus?
-// What are other metadata we need?
-// shou: may need intermediate info for future adding concolic execution
+/// Trait providing state functions needed by ItyFuzz
 pub trait HasItyState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
 {
+    /// Get a random VMState from the infant state corpus selected by scheduler
+    /// If the corpus is empty, return None
+    /// If the corpus is not empty, return Some((index of VMState in corpus, VMState))
     fn get_infant_state<SC>(
         &mut self,
         scheduler: &SC,
     ) -> Option<(usize, StagedVMState<Loc, Addr, VS>)>
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>;
+
+    /// Add a VMState to the infant state corpus
     fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS>, scheduler: &SC)
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>;
 }
 
+/// Trait providing caller/address functions
+/// Callers are the addresses that can send transactions
+/// Address are any addresses collected during execution, superset of callers
 pub trait HasCaller<Addr> {
-    // address are for ABI mutation
-    // caller are for transaction sender mutation
-    // caller pool is a subset of address pool
+    /// Get a random address from the address set, used for ABI mutation
     fn get_rand_address(&mut self) -> Addr;
+    /// Get a random caller from the caller set, used for transaction sender mutation
     fn get_rand_caller(&mut self) -> Addr;
+    /// Add a caller to the caller set
     fn add_caller(&mut self, caller: &Addr);
+    /// Add an address to the address set
     fn add_address(&mut self, caller: &Addr);
 }
 
+/// [Deprecated] Trait providing functions for getting current input index in the input corpus
 pub trait HasCurrentInputIdx {
+    /// Get the current input index in the input corpus
     fn get_current_input_idx(&self) -> usize;
+    /// Set the current input index in the input corpus
     fn set_current_input_idx(&mut self, idx: usize);
 }
 
+
+/// Trait providing functions for getting [`InfantStateState`]
 pub trait HasInfantStateState<Loc, Addr, VS>
 where
     VS: Default + VMStateT,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
 {
+    /// Get the [`InfantStateState`] from the state
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS>;
 }
 
+
+/// [Deprecated] Trait providing functions for mapping between function hash with the
+/// contract addresses that have the function
 pub trait HasHashToAddress {
+    /// Get the mapping between function hash with the address
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
 }
 
+
+/// Trait providing functions for getting the current execution result
 pub trait HasExecutionResult<Loc, Addr, VS, Out>
 where
     VS: Default + VMStateT,
@@ -85,11 +107,23 @@ where
     Addr: Clone + Debug + Serialize + DeserializeOwned,
     Out: Default,
 {
+    /// Get the current execution result
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out>;
+    /// Get the current execution result mutably
     fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out>;
+    /// Set the current execution result
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>);
 }
 
+
+/// The global state of ItyFuzz, containing all the information needed for fuzzing
+/// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference
+///
+/// VI: The type of input
+/// VS: The type of VMState
+/// Loc: The type of the call target
+/// Addr: The type of the address (e.g., H160 address for EVM)
+/// Out: The type of the output
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "Addr: Serialize + DeserializeOwned, Out: Serialize + DeserializeOwned")]
 pub struct FuzzState<VI, VS, Loc, Addr, Out>
@@ -100,28 +134,49 @@ where
     Loc: Debug + Serialize + DeserializeOwned + Clone,
     Out: Default,
 {
+    /// InfantStateState wraps the infant state corpus with [`State`] trait so that it is easier to use
     #[serde(deserialize_with = "InfantStateState::deserialize")]
     pub infant_states_state: InfantStateState<Loc, Addr, VS>,
-    #[cfg(not(feature = "evaluation"))]
-    #[serde(deserialize_with = "InMemoryCorpus::deserialize")]
-    txn_corpus: InMemoryCorpus<VI>,
+
+    /// The input corpus
     #[cfg(feature = "evaluation")]
     #[serde(deserialize_with = "OnDiskCorpus::deserialize")]
     txn_corpus: OnDiskCorpus<VI>,
+    #[cfg(not(feature = "evaluation"))]
+    #[serde(deserialize_with = "InMemoryCorpus::deserialize")]
+    txn_corpus: InMemoryCorpus<VI>,
+
+    /// The solution corpus
     #[serde(deserialize_with = "OnDiskCorpus::deserialize")]
     solutions: OnDiskCorpus<VI>,
+
+    /// Amount of total executions
     executions: usize,
+
+    /// Metadata of the state, required for implementing [HasMetadata] and [HasNamedMetadata] trait
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
-    // used for concolic execution
+
+    /// Current input index, used for concolic execution
     current_input_idx: usize,
+
+    /// The current execution result
     #[serde(deserialize_with = "ExecutionResult::deserialize")]
     execution_result: ExecutionResult<Loc, Addr, VS, Out>,
+
+    /// Caller and address pools, required for implementing [`HasCaller`] trait
     pub callers_pool: Vec<Addr>,
     pub addresses_pool: Vec<Addr>,
+
+    /// Random number generator, required for implementing [`HasRand`] trait
     pub rand_generator: RomuDuoJrRand,
+
+    /// Maximum size for input, required for implementing [`HasMaxSize`] trait, used mainly for limiting the size of the arrays for ETH ABI
     pub max_size: usize,
+
+    /// Mapping between function hash with the contract addresses that have the function, required for implementing [`HasHashToAddress`] trait
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
+
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
 
@@ -133,6 +188,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Create a new [`FuzzState`] with default values
     pub fn new() -> Self {
         let seed = current_nanos();
         println!("Seed: {}", seed);
@@ -157,10 +213,7 @@ where
         }
     }
 
-    pub fn add_deployer_to_callers(&mut self, deployer: Addr) {
-        self.add_caller(&deployer);
-    }
-
+    /// Add an input testcase to the input corpus
     pub fn add_tx_to_corpus(&mut self, input: Testcase<VI>) -> Result<usize, Error> {
         self.txn_corpus.add(input)
     }
@@ -174,6 +227,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Create a new [`FuzzState`] with default values
     fn default() -> Self {
         Self::new()
     }
@@ -187,16 +241,19 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get a random address from the address pool, used for ABI mutation
     fn get_rand_address(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.addresses_pool.len() as u64);
         self.addresses_pool[idx as usize].clone()
     }
 
+    /// Get a random caller from the caller pool, used for mutating the caller
     fn get_rand_caller(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.callers_pool.len() as u64);
         self.callers_pool[idx as usize].clone()
     }
 
+    /// Add a caller to the caller pool
     fn add_caller(&mut self, addr: &Addr) {
         if !self.callers_pool.contains(addr) {
             self.callers_pool.push(addr.clone());
@@ -204,6 +261,7 @@ where
         self.add_address(addr);
     }
 
+    /// Add an address to the address pool
     fn add_address(&mut self, caller: &Addr) {
         if !self.addresses_pool.contains(caller) {
             self.addresses_pool.push(caller.clone());
@@ -211,7 +269,8 @@ where
     }
 }
 
-// shou: To use power schedule, we need to make it as a state lol, i'll submit a pr to libafl
+/// InfantStateState wraps the infant state corpus
+/// shou: To use power schedule, we need to make it as a funny state lol, i'll submit a pr to libafl
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InfantStateState<Loc, Addr, VS>
 where
@@ -231,6 +290,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Create a new [`InfantStateState`] with default values
     pub fn new() -> Self {
         Self {
             infant_state: IndexedInMemoryCorpus::new(),
@@ -248,6 +308,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the hash to address map
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
         &self.hash_to_address
     }
@@ -318,6 +379,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get a infant state from the infant state corpus using the scheduler
     fn get_infant_state<SC>(
         &mut self,
         scheduler: &SC,
@@ -338,6 +400,8 @@ where
         Some((idx, state.input().clone().unwrap()))
     }
 
+    /// Add a new infant state to the infant state corpus
+    /// and setup the scheduler
     fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS>, scheduler: &SC)
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
@@ -351,18 +415,6 @@ where
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
     }
-
-    // fn get_rand_caller(&mut self) -> H160 {
-    //     self.default_callers[self.rand_generator.below(self.default_callers.len() as u64) as usize]
-    // }
-    //
-    // fn add_vm_input(&mut self, input: EVMInput) -> usize {
-    //     let mut tc = Testcase::new(input.as_any().downcast_ref::<VI>().unwrap().clone());
-    //     tc.set_exec_time(Duration::from_secs(0));
-    //     let idx = self.txn_corpus.add(tc).expect("failed to add");
-    //     idx
-    // }
-    //
 }
 
 impl<VI, VS, Loc, Addr, Out> HasCurrentInputIdx for FuzzState<VI, VS, Loc, Addr, Out>
@@ -373,10 +425,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the current input index
     fn get_current_input_idx(&self) -> usize {
         self.current_input_idx
     }
 
+    /// Set the current input index
     fn set_current_input_idx(&mut self, idx: usize) {
         self.current_input_idx = idx;
     }
@@ -391,6 +445,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the infant state state ([`InfantStateState`])
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS> {
         &mut self.infant_states_state
     }
@@ -404,10 +459,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the maximum size of the input
     fn max_size(&self) -> usize {
         self.max_size
     }
 
+    /// Set the maximum size of the input
     fn set_max_size(&mut self, max_size: usize) {
         self.max_size = max_size;
     }
@@ -423,10 +480,12 @@ where
 {
     type Rand = StdRand;
 
+    /// Get the random number generator
     fn rand(&self) -> &Self::Rand {
         &self.rand_generator
     }
 
+    /// Get the mutable random number generator
     fn rand_mut(&mut self) -> &mut Self::Rand {
         &mut self.rand_generator
     }
@@ -440,10 +499,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the number of executions
     fn executions(&self) -> &usize {
         &self.executions
     }
 
+    /// Get the mutable number of executions
     fn executions_mut(&mut self) -> &mut usize {
         &mut self.executions
     }
@@ -457,10 +518,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the metadata
     fn metadata(&self) -> &SerdeAnyMap {
         &self.metadata
     }
 
+    /// Get the mutable metadata
     fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
         &mut self.metadata
     }
@@ -479,10 +542,12 @@ where
     #[cfg(feature = "evaluation")]
     type Corpus = OnDiskCorpus<VI>;
 
+    /// Get the corpus
     fn corpus(&self) -> &Self::Corpus {
         &self.txn_corpus
     }
 
+    /// Get the mutable corpus
     fn corpus_mut(&mut self) -> &mut Self::Corpus {
         &mut self.txn_corpus
     }
@@ -498,10 +563,12 @@ where
 {
     type Solutions = OnDiskCorpus<VI>;
 
+    /// Get the solutions
     fn solutions(&self) -> &Self::Solutions {
         &self.solutions
     }
 
+    /// Get the mutable solutions
     fn solutions_mut(&mut self) -> &mut Self::Solutions {
         &mut self.solutions
     }
@@ -515,10 +582,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the client performance monitor
     fn introspection_monitor(&self) -> &ClientPerfMonitor {
         todo!()
     }
 
+    /// Get the mutable client performance monitor
     fn introspection_monitor_mut(&mut self) -> &mut ClientPerfMonitor {
         todo!()
     }
@@ -533,14 +602,17 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the execution result
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out> {
         &self.execution_result
     }
 
+    /// Get the mutable execution result
     fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out> {
         &mut self.execution_result
     }
 
+    /// Set the execution result
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>) {
         self.execution_result = res
     }
@@ -554,10 +626,12 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Get the named metadata
     fn named_metadata(&self) -> &NamedSerdeAnyMap {
         &self.named_metadata
     }
 
+    /// Get the mutable named metadata
     fn named_metadata_mut(&mut self) -> &mut NamedSerdeAnyMap {
         &mut self.named_metadata
     }

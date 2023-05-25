@@ -1,3 +1,5 @@
+//! Providing telemetry for the fuzzing campaign
+
 pub use reqwest;
 use std::env;
 use serde_json::json;
@@ -7,7 +9,8 @@ pub static mut TELEMETRY_ENABLED: bool = true;
 
 const TELEMETRY_HOST: &str = "https://telemetry.fuzz.land/api/v1/";
 
-// only send (is_onchain, first 10 bytes of contract_address / name)
+/// sends a ping to the telemetry server when campaign starts
+/// only send (is_onchain, first 10 bytes of contract_address / name)
 pub fn report_campaign(is_onchain: bool, contracts: String) {
 
     if unsafe {TELEMETRY_ENABLED} {
@@ -20,7 +23,7 @@ pub fn report_campaign(is_onchain: bool, contracts: String) {
     }
 }
 
-// only send whether the vulnerability hit
+/// sends a ping to the telemetry server when vulnerability is found
 pub fn report_vulnerability(vuln: String) {
     if unsafe {TELEMETRY_ENABLED} {
         reqwest::blocking::get(TELEMETRY_HOST.to_owned() + "vuln/" + vuln.as_str())

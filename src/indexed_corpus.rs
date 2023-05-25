@@ -1,3 +1,5 @@
+/// A corpus in memory with self-incementing indexes for items.
+
 use core::cell::RefCell;
 use std::collections::HashMap;
 
@@ -13,15 +15,18 @@ pub trait HasIndexed {}
 
 impl<I> HasIndexed for IndexedInMemoryCorpus<I> where I: Input {}
 
-/// A corpus handling all in memory.
+/// A corpus in memory with self-incementing indexes for items.
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "I: serde::de::DeserializeOwned")]
 pub struct IndexedInMemoryCorpus<I>
 where
     I: Input,
 {
+    /// Mapping from index to testcase
     entries: HashMap<usize, RefCell<Testcase<I>>>,
+    /// Current index
     current_idx: usize,
+    /// Current testcase scheduled
     current: Option<usize>,
 }
 
@@ -85,7 +90,7 @@ impl<I> IndexedInMemoryCorpus<I>
 where
     I: Input,
 {
-    #[must_use]
+    /// Create a new empty corpus
     pub fn new() -> Self {
         Self {
             entries: Default::default(),

@@ -1,3 +1,6 @@
+/// Implements the feedback mechanism needed by ItyFuzz.
+/// Implements Oracle, Comparison, Dataflow feedbacks.
+
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -24,6 +27,9 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
 
+/// OracleFeedback is a wrapper around a set of oracles and producers.
+/// It executes the producers and then oracles after each successful execution. If any of the oracle
+/// returns true, then it returns true and report a vulnerability found.
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -31,8 +37,11 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// A set of producers that produce data needed by oracles
     producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+    /// A set of oracles that check for vulnerabilities
     oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+    /// VM executor
     executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<Out>,
 }
@@ -73,6 +82,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Create a new [`OracleFeedback`]
     pub fn new(
         oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
         producers: &'a mut Vec<
@@ -104,12 +114,15 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
-    // since OracleFeedback is just a wrapper around one stateless oracle
-    // we don't need to do initialization
+    /// since OracleFeedback is just a wrapper around one stateless oracle
+    /// we don't need to do initialization
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
     }
 
+    /// Called after every execution.
+    /// It executes the producers and then oracles after each successful execution.
+    /// Returns true if any of the oracle returns true.
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
@@ -123,9 +136,11 @@ where
         OT: ObserversTuple<I, S>,
     {
 
+        // set up oracle context
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
 
+        // cleanup producers by calling `notify_end` hooks
         macro_rules! before_exit {
             () => {
                 self.producers.iter().for_each(|producer| {
@@ -133,11 +148,13 @@ where
                 });
             };
         }
-        // todo(@shou): should it be new stage?
+
+        // execute producers
         self.producers.iter().for_each(|producer| {
             producer.deref().borrow_mut().produce(&mut oracle_ctx);
         });
 
+        // execute oracles and update stages if needed
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {
                 0
@@ -169,6 +186,7 @@ where
         Ok(false)
     }
 
+    // dummy method
     fn append_metadata(
         &mut self,
         _state: &mut S,
@@ -177,6 +195,7 @@ where
         Ok(())
     }
 
+    // dummy method
     fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
         Ok(())
     }
@@ -188,8 +207,13 @@ where
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
 pub struct DataflowFeedback<'a, VS, Loc, Addr, Out> {
+    /// global write map that OR all the write maps from each execution
+    /// `[bool;4]` means 4 categories of write map, representing which bucket the written value fails into
+    /// 0 - 2^2, 2^2 - 2^4, 2^4 - 2^6, 2^6 - inf are 4 buckets
     global_write_map: [[bool; 4]; MAP_SIZE],
+    /// global read map recording whether a slot is read or not
     read_map: &'a mut [bool],
+    /// write map of the current execution
     write_map: &'a mut [u8],
     phantom: PhantomData<(VS, Loc, Addr, Out)>,
 }
@@ -212,6 +236,7 @@ impl<'a, VS, Loc, Addr, Out> Named for DataflowFeedback<'a, VS, Loc, Addr, Out> 
 
 #[cfg(feature = "dataflow")]
 impl<'a, VS, Loc, Addr, Out> DataflowFeedback<'a, VS, Loc, Addr, Out> {
+    /// create a new dataflow feedback
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
             global_write_map: [[false; 4]; MAP_SIZE],
@@ -236,6 +261,7 @@ where
         Ok(())
     }
 
+    /// Returns true if the dataflow analysis determines that the execution is interesting.
     fn is_interesting<EMI, OT>(
         &mut self,
         _state: &mut S,
@@ -251,8 +277,11 @@ where
         let mut interesting = false;
         let mut seq: usize = 0;
         for i in 0..MAP_SIZE {
+            // if the global read map slot is true, and that slot in write map is also true
             if self.read_map[i] && self.write_map[i] != 0 {
                 seq += i;
+
+                // bucketing
                 let category = if self.write_map[i] < (2 << 2) {
                     0
                 } else if self.write_map[i] < (2 << 4) {
@@ -262,6 +291,7 @@ where
                 } else {
                     3
                 };
+                // update the global write map, if the current write map is not set, then it is interesting
                 if !self.global_write_map[seq % MAP_SIZE][category] {
                     // println!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
                     interesting = true;
@@ -269,6 +299,8 @@ where
                 }
             }
         }
+
+        // clean up the write map for the next execution
         for i in 0..MAP_SIZE {
             self.write_map[i] = 0;
         }
@@ -288,14 +320,37 @@ where
     }
 }
 
+
+/// CmpFeedback is a feedback that uses cmp analysis to determine
+/// whether a state is interesting or not.
+///
+/// Logic: For each comparison encountered in execution, we calculate the absolute
+/// difference (distance) between the two operands.
+/// Smaller distance means the operands are closer to each other,
+/// and thus more likely the comparison will be true, opening up more paths. Our goal is to
+/// minimize the distance between the two operands of any comparisons.
+///
+/// We use this distance to update the min_map, which records the minimum distance
+/// for each comparison. If the current distance is smaller than the min_map, then we update the
+/// min_map and mark the it as interesting.
+///
+/// We also use a set of hashes of already encountered VMStates so that we don't re-analyze them.
+///
+/// When we consider an execution interesting, we use a votable scheduler to vote on whether
+/// the VMState is interesting or not. With more votes, the VMState is more likely to be selected
+/// for fuzzing.
+///
 #[cfg(feature = "cmp")]
 pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> {
+    /// global min map recording the minimum distance for each comparison
     min_map: [SlotTy; MAP_SIZE],
+    /// min map recording the minimum distance for each comparison in the current execution
     current_map: &'a mut [SlotTy],
-    known_jmp_map: [u8; MAP_SIZE],
+    /// a set of hashes of already encountered VMStates so that we don't re-analyze them
     known_states: HashSet<u64>,
-    known_pcs: HashSet<usize>,
+    /// votable scheduler that can vote on whether a VMState is interesting or not
     scheduler: &'a SC,
+    /// the VM providing information about the current execution
     vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<(Addr, Out)>,
 }
@@ -311,6 +366,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Create a new CmpFeedback.
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
         scheduler: &'a SC,
@@ -319,9 +375,7 @@ where
         Self {
             min_map: [SlotTy::from(u128::MAX); MAP_SIZE],
             current_map,
-            known_jmp_map: [0; MAP_SIZE],
             known_states: Default::default(),
-            known_pcs: Default::default(),
             scheduler,
             vm,
             phantom: Default::default(),
@@ -368,6 +422,8 @@ where
         Ok(())
     }
 
+    /// It uses scheduler voting to determine whether a VM State is interesting or not.
+    /// If it returns true, the VM State is added to corpus but not necessarily it is interesting.
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S0,
@@ -383,6 +439,7 @@ where
         let mut cmp_interesting = false;
         let cov_interesting = false;
 
+        // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {
                 self.min_map[i] = self.current_map[i];
@@ -395,11 +452,14 @@ where
             //     }
             // }
         }
+
+        // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
 
+        // if coverage has increased, vote for the state
         if cov_interesting {
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
@@ -417,11 +477,13 @@ where
                 != 0;
 
             if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
+                // the state is already added to corpus previously, just dont add it again to corpus
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
                 }
 
+                // ensure dataflow / coverage-wise is interesting for new encountered VM state
                 let mut df_interesting = false;
                 for i in 0..MAP_SIZE {
                     if cur_read_map[i] && cur_write_map[i] != 0 {
