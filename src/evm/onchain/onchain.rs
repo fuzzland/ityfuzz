@@ -268,7 +268,7 @@ where
                 }
                 if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-                    host.set_code(address_h160, contract_code.clone());
+                    host.set_code(address_h160, contract_code.clone(), state);
                 }
                 if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
                     *interp.instruction_pointer == 0x3b ||
@@ -370,7 +370,6 @@ where
                             liquidation_percent: 0,
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
-                            #[cfg(any(test, feature = "debug"))]
                             direct_data: Default::default(),
                             randomness: vec![],
                             repeat: 1,

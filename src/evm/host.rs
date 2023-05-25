@@ -66,8 +66,7 @@ pub static mut PANIC_ON_BUG: bool = false;
 
 
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
-#[cfg(feature = "reexecution")]
-pub static mut CALL_UNTIL: u8 = u8::MAX;
+pub static mut CALL_UNTIL: u32 = u32::MAX;
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -104,7 +103,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub call_count: u8,
+    pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
@@ -296,7 +295,26 @@ where
         }
     }
 
-    pub fn set_code(&mut self, address: H160, code: Bytecode) {
+    pub fn set_code(&mut self, address: H160, mut code: Bytecode, state: &mut S) {
+        unsafe {
+            if self.middlewares_enabled {
+                match self.flashloan_middleware.clone() {
+                    Some(m) => {
+                        let mut middleware = m.deref().borrow_mut();
+                        middleware.on_insert(&mut code, address, self, state);
+                    }
+                    _ => {}
+                }
+                for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
+                {
+                    middleware
+                        .deref()
+                        .deref()
+                        .borrow_mut()
+                        .on_insert(&mut code, address, self, state);
+                }
+            }
+        }
         assert!(self
             .code
             .insert(
@@ -659,6 +677,7 @@ where
                 self.set_code(
                     r_addr,
                     Bytecode::new_raw(interp.return_value()),
+                    state
                 );
                 (
                     Continue,
@@ -679,7 +698,6 @@ where
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
         self.call_count += 1;
-        #[cfg(feature = "reexecution")]
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }

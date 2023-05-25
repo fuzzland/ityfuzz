@@ -16,8 +16,6 @@ use std::{marker::PhantomData, time::Duration};
 use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
-#[cfg(feature = "record_instruction_coverage")]
-use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::HasExecutionResult;
 use crate::tracer::build_basic_txn;
 use libafl::{
@@ -285,6 +283,7 @@ where
             let is_corpus = self
                 .feedback
                 .is_interesting(state, manager, &input, observers, &exitkind)?;
+
             if is_corpus {
                 res = ExecuteInputResult::Corpus;
                 #[cfg(feature = "print_txn_corpus")]
@@ -292,12 +291,15 @@ where
                     unsafe {
                         DUMP_FILE_COUNT += 1;
                     }
-                    let txn_text = state
+
+                    let tx_trace = state
                         .get_execution_result()
                         .new_state
                         .trace
-                        .clone()
-                        .to_string(state);
+                        .clone();
+                    let txn_text = tx_trace.to_string(state);
+
+                    let txn_text_replayable = tx_trace.to_file_str(state);
 
                     let data = format!(
                         "Reverted? {} \n Txn: {}",
@@ -316,6 +318,10 @@ where
                     let mut file =
                         File::create(format!("corpus/{}", unsafe { DUMP_FILE_COUNT })).unwrap();
                     file.write_all(data.as_bytes()).unwrap();
+
+                    let mut replayable_file =
+                        File::create(format!("corpus/{}_replayable", unsafe { DUMP_FILE_COUNT })).unwrap();
+                    replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
                 }
             }
         }

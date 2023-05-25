@@ -195,18 +195,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             // we scaled by 1e24, so divide by 1e24 to get ETH
             let net_eth = net / U512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
-                #[cfg(not(feature = "reexecution"))]
-                {
-                    ORACLE_OUTPUT = format!(
-                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH)",
-                        exec_res.new_state.state.flashloan_data.earned,
-                        exec_res.new_state.state.flashloan_data.owed,
-                        net,
-                        net_eth
-                    );
-                }
 
-                #[cfg(feature = "reexecution")]
+
                 {
                     ORACLE_OUTPUT = format!(
                         "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}",

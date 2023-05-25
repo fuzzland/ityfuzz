@@ -124,7 +124,6 @@ where
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                 #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: 0,
-                #[cfg(any(test, feature = "reexecution"))]
                 direct_data: Default::default(),
                 randomness: vec![0],
                 repeat: 1,
@@ -575,7 +574,6 @@ pub struct FlashloanData {
     pub earned: U512,
     pub prev_reserves: HashMap<H160, (U256, U256)>,
     pub unliquidated_tokens: HashMap<H160, U256>,
-    #[cfg(feature = "reexecution")]
     pub extra_info: String,
 }
 
@@ -589,7 +587,6 @@ impl FlashloanData {
             earned: Default::default(),
             prev_reserves: Default::default(),
             unliquidated_tokens: Default::default(),
-            #[cfg(feature = "reexecution")]
             extra_info: Default::default(),
         }
     }

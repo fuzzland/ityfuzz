@@ -240,11 +240,6 @@ where
         }
     }
 
-    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
-        let bytecode = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
-        self.host.set_code(address, bytecode.clone());
-    }
-
     pub fn execute_from_pc(
         &mut self,
         call_ctx: &CallContext,
@@ -437,7 +432,6 @@ where
         let is_step = input.is_step();
         let caller = input.get_caller();
         let mut data = Bytes::from(input.to_bytes());
-        #[cfg(any(test, feature = "reexecution"))]
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
@@ -590,7 +584,7 @@ where
         println!("contract = {:?}", hex::encode(interp.return_value()));
         let contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-        self.host.set_code(deployed_address, contract_code);
+        self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
     }
 

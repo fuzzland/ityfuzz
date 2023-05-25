@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt::{Debug};
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
@@ -49,17 +50,28 @@ impl InstructionCoverage {
     }
 
     pub fn record_instruction_coverage(&mut self) {
+        // println!("total_instr: {:?}", self.total_instr);
+        // println!("total_instr_set: {:?}", self.total_instr_set);
+        // println!("pc_coverage: {:?}",  self.pc_coverage);
+
         let mut data = format!(
-            "coverage: {:?}",
+            "=================== Coverage Report =================== \n{}",
             self.total_instr
                 .keys()
-                .map(|k| (
-                    k,
-                    self.pc_coverage.get(k).unwrap_or(&Default::default()).len(),
-                    self.total_instr.get(k).unwrap()
-                ))
-                .collect::<Vec<_>>()
+                .map(|k| {
+                    let cov = self.pc_coverage.get(k).unwrap_or(&Default::default()).len();
+                    let total = self.total_instr.get(k).unwrap();
+                    format!("Contract: {:?}, Instruction Coverage: {} / {} ({:.2}%)",
+                        k,
+                        cov,
+                        *total,
+                        cov as f64 / *total as f64 * 100.0
+                    )
+                })
+                .join("\n")
         );
+
+        println!("\n\n{}", data);
 
         let mut not_covered: HashMap<H160, HashSet<usize>> = HashMap::new();
         for (addr, covs) in &self.total_instr_set {
@@ -96,7 +108,7 @@ impl InstructionCoverage {
             .write(true)
             .append(false)
             .create(true)
-            .open("cov.txt")
+            .open(format!("cov_{}.txt", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
             .unwrap();
         file.write_all(data.as_bytes()).unwrap();
     }

@@ -65,7 +65,6 @@ pub struct EVMInput {
     pub access_pattern: Rc<RefCell<AccessPattern>>,
     #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
-    #[cfg(any(test, feature = "reexecution"))]
     pub direct_data: Bytes,
     pub randomness: Vec<u8>,
     pub repeat: usize,
@@ -508,7 +507,6 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         self.data.clone()
     }
 
-    #[cfg(any(test, feature = "reexecution"))]
     fn get_direct_data(&self) -> Vec<u8> {
         self.direct_data.to_vec()
     }
