@@ -1,5 +1,3 @@
-#[cfg(feature = "record_instruction_coverage")]
-use crate::r#const::DEBUG_PRINT_PERCENT;
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};

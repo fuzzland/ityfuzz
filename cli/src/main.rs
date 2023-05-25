@@ -3,7 +3,7 @@ use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::input::EVMInput;
-use ityfuzz::evm::middleware::Middleware;
+use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
@@ -128,9 +128,9 @@ struct Args {
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
-    /// Debug?
+    /// Replay?
     #[arg(long)]
-    debug_file: Option<String>,
+    replay_file: Option<String>,
 }
 
 enum TargetType {
@@ -317,7 +317,7 @@ fn main() {
         } else {
             None
         },
-        debug_file: args.debug_file,
+        replay_file: args.replay_file,
         flashloan_oracle,
     };
 

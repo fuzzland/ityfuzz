@@ -13,7 +13,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 
-use move_vm_runtime::interpreter::{CallStack, Frame, Interpreter, Stack};
+use move_vm_runtime::interpreter::{CallStack, DummyTracer, Frame, Interpreter, Stack};
 use move_vm_runtime::loader;
 use move_vm_runtime::loader::BinaryType::Module;
 use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
@@ -168,7 +168,7 @@ where
         let mut state = input.get_state().clone();
 
         let ret =
-            current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter);
+            current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter, &mut DummyTracer{});
 
         for v in interp.operand_stack.value {
             println!("val: {:?}", v);

@@ -45,7 +45,7 @@ use crate::evm::host::{
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{EVMInputT, EVMInputTy};
-use crate::evm::middleware::MiddlewareType;
+use crate::evm::middlewares::middleware::MiddlewareType;
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::uniswap::generate_uniswap_router_call;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
@@ -240,11 +240,6 @@ where
         }
     }
 
-    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
-        let bytecode = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
-        self.host.set_code(address, bytecode.clone());
-    }
-
     pub fn execute_from_pc(
         &mut self,
         call_ctx: &CallContext,
@@ -437,7 +432,6 @@ where
         let is_step = input.is_step();
         let caller = input.get_caller();
         let mut data = Bytes::from(input.to_bytes());
-        #[cfg(any(test, feature = "reexecution"))]
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
@@ -522,10 +516,6 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        #[cfg(feature = "record_instruction_coverage")]
-        if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-            self.host.record_instruction_coverage();
-        }
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
@@ -594,7 +584,7 @@ where
         println!("contract = {:?}", hex::encode(interp.return_value()));
         let contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-        self.host.set_code(deployed_address, contract_code);
+        self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
     }
 

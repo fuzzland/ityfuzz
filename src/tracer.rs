@@ -24,7 +24,6 @@ pub struct BasicTxn<Addr> {
     pub value: Option<U256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
-    #[cfg(feature = "reexecution")]
     pub direct_data: Vec<u8>,
     pub layer: usize,
     pub additional_info: Option<Vec<u8>>,
@@ -41,7 +40,6 @@ where
             .field("contract", &self.contract)
             .field("data", &self.data)
             .field("additional_info", &hex::encode(self.additional_info.as_ref().unwrap_or(&vec![])));
-        #[cfg(feature = "reexecution")]
         {
             ff = ff.field("direct_data", &hex::encode(self.direct_data.as_slice()));
         }
@@ -78,7 +76,6 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
-        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: if res.additional_info.is_none() {
@@ -106,7 +103,6 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: "".to_string(),
-        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: None,
@@ -167,7 +163,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         s
     }
 
-    pub fn to_file_str_evm<VS, S>(&self, state: &mut S) -> String
+    pub fn to_file_str<VS, S>(&self, state: &mut S) -> String
         where
             S: HasInfantStateState<Loc, Addr, VS>,
             VS: VMStateT,
@@ -188,7 +184,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             return String::from("[REDACTED]\n");
         }
 
-        let mut s = Self::to_file_str_evm(&testcase_input.as_ref().unwrap().trace.clone(), state);
+        let mut s = Self::to_file_str(&testcase_input.as_ref().unwrap().trace.clone(), state);
 
         for t in &self.transactions {
             let liq_perct = match t.data {

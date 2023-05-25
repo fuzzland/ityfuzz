@@ -133,7 +133,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
                 self.executor
                     .host
-                    .set_code(contract.deployed_address, contract_code);
+                    .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
 
@@ -171,7 +171,6 @@ impl<'a> EVMCorpusInitializer<'a> {
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    #[cfg(any(test, feature = "reexecution"))]
                     direct_data: Default::default(),
                     #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
@@ -220,7 +219,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             self.state.add_caller(&caller);
             self.executor
                 .host
-                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
+                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
         }
     }
 
@@ -272,7 +271,6 @@ impl<'a> EVMCorpusInitializer<'a> {
             liquidation_percent: 0,
             #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
-            #[cfg(any(test, feature = "reexecution"))]
             direct_data: Default::default(),
             randomness: vec![],
             repeat: 1,
