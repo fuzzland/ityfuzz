@@ -122,8 +122,17 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
+
+        macro_rules! before_exit {
+            () => {
+                self.producers.iter().for_each(|producer| {
+                    producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
+                });
+            };
+        }
         // todo(@shou): should it be new stage?
         self.producers.iter().for_each(|producer| {
             producer.deref().borrow_mut().produce(&mut oracle_ctx);
@@ -141,22 +150,22 @@ where
                 .oracle(&mut oracle_ctx, original_stage)
             {
                 // ensure the execution is finished
-                if state
+                before_exit!();
+
+                let res = if state
                     .get_execution_result()
                     .new_state
                     .state
                     .has_post_execution()
                 {
-                    return Ok(false);
-                }
-                return Ok(true);
+                    false
+                } else { true };
+                return Ok(res);
             }
         }
 
-        self.producers.iter().for_each(|producer| {
-            producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
-        });
 
+        before_exit!();
         Ok(false)
     }
 

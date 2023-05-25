@@ -33,6 +33,8 @@ use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
+use crate::rand_utils::generate_random_address;
+
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 
@@ -62,6 +64,11 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
+
+// for debugging purpose, return ControlLeak when the calls amount exceeds this value
+#[cfg(feature = "reexecution")]
+pub static mut CALL_UNTIL: u8 = u8::MAX;
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<H160> + Debug + Clone + 'static,
@@ -75,7 +82,7 @@ where
     pub hash_to_address: HashMap<[u8; 4], HashSet<H160>>,
     pub address_to_hash: HashMap<H160, Vec<[u8; 4]>>,
     pub _pc: usize,
-    pub pc_to_addresses: HashMap<(H160, usize), HashSet<H160>>,
+    pub pc_to_addresses: HashMap<usize, HashSet<H160>>,
     pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
@@ -97,6 +104,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
+    pub call_count: u8,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
@@ -157,6 +165,7 @@ where
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         }
@@ -201,6 +210,7 @@ where
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             bug_hit: false,
+            call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
         };
@@ -262,6 +272,26 @@ where
                 None => {
                     self.hash_to_address.insert(hash, HashSet::from([address]));
                 }
+            }
+        }
+    }
+
+    pub fn add_one_hashes(&mut self, address: H160, hash: [u8; 4]) {
+        match self.address_to_hash.get_mut(&address) {
+            Some(s) => {
+                s.push(hash);
+            }
+            None => {
+                self.address_to_hash.insert(address, vec![hash]);
+            }
+        }
+
+        match self.hash_to_address.get_mut(&hash) {
+            Some(s) => {
+                s.insert(address);
+            }
+            None => {
+                self.hash_to_address.insert(hash, HashSet::from([address]));
             }
         }
     }
@@ -604,20 +634,56 @@ where
 
     fn create<SPEC: Spec>(
         &mut self,
-        _inputs: &mut CreateInputs,
+        inputs: &mut CreateInputs,
+        state: &mut S,
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
-            // println!("create");
+            // todo: use nonce + hash instead
+            let r_addr = generate_random_address();
+            let mut interp = Interpreter::new::<LatestSpec>(
+                Contract::new_with_context::<LatestSpec>(
+                    Bytes::new(),
+                    Bytecode::new_raw(inputs.init_code.clone()),
+                    &CallContext {
+                        address: r_addr,
+                        caller: inputs.caller,
+                        code_address: r_addr,
+                        apparent_value: inputs.value,
+                        scheme: CallScheme::Call,
+                    },
+                ),
+                1e10 as u64,
+            );
+            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+            if ret == Return::Continue {
+                self.set_code(
+                    r_addr,
+                    Bytecode::new_raw(interp.return_value()),
+                );
+                (
+                    Continue,
+                    Some(r_addr),
+                    Gas::new(0),
+                    interp.return_value(),
+                )
+            } else {
+                (
+                    ret,
+                    Some(r_addr),
+                    Gas::new(0),
+                    Bytes::new(),
+                )
+            }
         }
-        return (
-            Continue,
-            Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()),
-            Gas::new(0),
-            Bytes::new(),
-        );
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
+        self.call_count += 1;
+        #[cfg(feature = "reexecution")]
+        if self.call_count >= unsafe {CALL_UNTIL} {
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
 
@@ -660,6 +726,7 @@ where
         // if calling sender, then definitely control leak
         if self.origin == input.contract {
             record_func_hash!();
+            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
@@ -680,6 +747,7 @@ where
                 ARBITRARY_CALL = true;
             }
             // random sample a key from hash_to_address
+            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             match self.address_to_hash.get_mut(&input.context.code_address) {
                 None => {}
                 Some(hashes) => {
@@ -694,10 +762,10 @@ where
 
         // control leak check
         assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&(input.contract, self._pc)) {
-            self.pc_to_addresses.insert((input.contract, self._pc), HashSet::new());
+        if !self.pc_to_addresses.contains_key(&self._pc) {
+            self.pc_to_addresses.insert(self._pc, HashSet::new());
         }
-        let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.contract, self._pc)).unwrap();
+        let addresses_at_pc = self.pc_to_addresses.get_mut(&self._pc).unwrap();
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call

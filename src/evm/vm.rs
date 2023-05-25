@@ -65,7 +65,7 @@ macro_rules! get_token_ctx {
             .borrow()
             .known_tokens
             .get(&$token)
-            .unwrap()
+            .expect(format!("unknown token : {:?}", $token).as_str())
     };
 }
 
@@ -259,6 +259,7 @@ where
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
+        self.host.call_count = 0;
 
         unsafe {
             GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
@@ -436,7 +437,7 @@ where
         let is_step = input.is_step();
         let caller = input.get_caller();
         let mut data = Bytes::from(input.to_bytes());
-        #[cfg(any(test, feature = "debug"))]
+        #[cfg(any(test, feature = "reexecution"))]
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
@@ -530,6 +531,11 @@ where
                         .downcast_ref_unchecked::<VS>()
                         .clone(),
                 ),
+                additional_info: Some(if r.ret == ControlLeak {
+                    vec![self.host.call_count as u8]
+                } else {
+                    vec![u8::MAX]
+                })
             }
         }
     }
@@ -616,10 +622,11 @@ where
                 );
                 match call_info {
                     Some((abi, value, target)) => {
+                        let bys = abi.get_bytes();
                         // println!("borrow: {:?} {:?} {:?}", hex::encode(abi.get_bytes()), value, target);
                         let mut res = self.fast_call(
                             target,
-                            Bytes::from(abi.get_bytes()),
+                            Bytes::from(bys),
                             input.get_state(),
                             state,
                             value,
@@ -646,6 +653,7 @@ where
                                         .downcast_ref_unchecked::<VS>()
                                         .clone(),
                                 ),
+                                additional_info: Some(vec![input.get_randomness()[0]])
                             }
                         }
                     }
@@ -653,6 +661,7 @@ where
                         output: vec![],
                         reverted: false,
                         new_state: StagedVMState::new_with_state(input.get_state().clone()),
+                        additional_info: None
                     },
                 }
             }
@@ -674,6 +683,8 @@ where
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
+            self.host.bug_hit = false;
+            self.host.call_count = 0;
         }
 
         data.iter().map(

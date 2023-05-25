@@ -60,6 +60,6 @@ where
     #[cfg(feature = "evm")]
     fn get_txn_value_temp(&self) -> Option<U256>;
 
-    #[cfg(any(test, feature = "debug"))]
+    #[cfg(any(test, feature = "reexecution"))]
     fn get_direct_data(&self) -> Vec<u8>;
 }

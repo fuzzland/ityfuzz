@@ -20,6 +20,7 @@ where
     pub reverted: bool,
     #[serde(deserialize_with = "StagedVMState::deserialize")]
     pub new_state: StagedVMState<Loc, Addr, VS>,
+    pub additional_info: Option<Vec<u8>>,
 }
 
 impl<Loc, Addr, VS, Out> ExecutionResult<Loc, Addr, VS, Out>
@@ -34,6 +35,7 @@ where
             output: Out::default(),
             reverted: false,
             new_state: StagedVMState::new_uninitialized(),
+            additional_info: None,
         }
     }
 }

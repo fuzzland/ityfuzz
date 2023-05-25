@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
-use crate::evm::contract_utils::ContractLoader;
+use crate::evm::contract_utils::{ABIConfig, ContractLoader};
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
@@ -48,6 +48,7 @@ where
 {
     pub loaded_data: HashSet<(H160, U256)>,
     pub loaded_code: HashSet<H160>,
+    pub loaded_abi: HashSet<H160>,
     pub calls: HashMap<(H160, usize), HashSet<H160>>,
     pub locs: HashMap<(H160, usize), HashSet<U256>>,
     pub endpoint: OnChainConfig,
@@ -98,6 +99,7 @@ where
         Self {
             loaded_data: Default::default(),
             loaded_code: Default::default(),
+            loaded_abi: Default::default(),
             calls: Default::default(),
             locs: Default::default(),
             endpoint,
@@ -245,6 +247,7 @@ where
             }
 
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
+                let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
                     0x3b | 0x3c => interp.stack.peek(0).unwrap(),
@@ -253,98 +256,128 @@ where
                     }
                 };
                 let address_h160 = convert_u256_to_h160(address);
-                if host.code.contains_key(&address_h160) {
+                if self.loaded_abi.contains(&address_h160) {
                     return;
                 }
                 let force_cache = force_cache!(self.calls, address_h160);
                 let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
-                println!("fetching code3 {:?}", hex::encode(contract_code.bytes()));
-
-                if !self.loaded_code.contains(&address_h160)
-                    && !force_cache
-                    && !contract_code.is_empty()
-                {
+                if contract_code.is_empty() || force_cache {
                     self.loaded_code.insert(address_h160);
-                    if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) {
-                        bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-                        host.set_code(address_h160, contract_code);
-                        return;
-                    }
+                    self.loaded_abi.insert(address_h160);
+                    return;
+                }
+                if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
+                    bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
+                    host.set_code(address_h160, contract_code.clone());
+                }
+                if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
+                    *interp.instruction_pointer == 0x3b ||
+                    *interp.instruction_pointer == 0x3c {
+                    return;
+                }
 
-                    println!("fetching abi {:?}", address_h160);
-                    let abi = self.endpoint.fetch_abi(address_h160);
+                // setup abi
+                self.loaded_abi.insert(address_h160);
+                let is_proxy_call = match *interp.instruction_pointer {
+                    0xf2 | 0xf4 => true,
+                    _ => false,
+                };
 
-                    let parsed_abi = match abi {
-                        Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
-                        None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
+                println!("fetching abi {:?}", address_h160);
+                let abi = self.endpoint.fetch_abi(address_h160);
+
+                let parsed_abi = match abi {
+                    Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
+                    None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
+                };
+
+                // set up host
+                let mut abi_hashes_to_add = HashSet::new();
+                if is_proxy_call {
+                    // check caller's hash and see what is missing
+                    let caller_hashes = match host.address_to_hash.get(&caller) {
+                        Some(v) => v.clone(),
+                        None => vec![]
                     };
-
-                    // set up host
+                    let caller_hashes_set = caller_hashes.iter().cloned().collect::<HashSet<_>>();
+                    let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                    for hash in new_hashes {
+                        if !caller_hashes_set.contains(&hash) {
+                            abi_hashes_to_add.insert(hash);
+                            host.add_one_hashes(caller, hash);
+                        }
+                    }
+                    println!("Propagating hashes {:?} for proxy {:?}",
+                             abi_hashes_to_add
+                                 .iter()
+                                .map(|x| hex::encode(x))
+                                 .collect::<Vec<_>>(),
+                             caller
+                    );
+                } else {
+                    abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
                     host.add_hashes(
                         address_h160,
                         parsed_abi.iter().map(|abi| abi.function).collect(),
                     );
-                    state.add_address(&address_h160);
-
-                    // notify flashloan and blacklisting flashloan addresses
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        handle_contract_insertion!(state, host, address_h160, parsed_abi);
-                    }
-                    // if match host.flashloan_middleware {
-                    //     Some(ref middleware) => middleware
-                    //         .deref()
-                    //         .borrow_mut()
-                    //         .on_contract_insertion(&address_h160, &parsed_abi, state),
-                    //     None => false,
-                    // } {
-                    //     println!("borrowing from {:?}", address_h160);
-                    //     register_borrow_txn(host, state, address_h160);
-                    // }
-
-                    // add abi to corpus
-                    parsed_abi
-                        .iter()
-                        .filter(|v| !v.is_constructor)
-                        .for_each(|abi| {
-                            #[cfg(not(feature = "fuzz_static"))]
-                            if abi.is_static {
-                                return;
-                            }
-
-                            let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                            abi_instance
-                                .set_func_with_name(abi.function, abi.function_name.clone());
-                            let input = EVMInput {
-                                caller: state.get_rand_caller(),
-                                contract: address_h160.clone(),
-                                data: Some(abi_instance),
-                                sstate: StagedVMState::new_uninitialized(),
-                                sstate_idx: 0,
-                                txn_value: if abi.is_payable {
-                                    Some(U256::zero())
-                                } else {
-                                    None
-                                },
-                                step: false,
-
-                                env: Default::default(),
-                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                                #[cfg(feature = "flashloan_v2")]
-                                liquidation_percent: 0,
-                                #[cfg(feature = "flashloan_v2")]
-                                input_type: EVMInputTy::ABI,
-                                #[cfg(any(test, feature = "debug"))]
-                                direct_data: Default::default(),
-                                randomness: vec![],
-                                repeat: 1,
-                            };
-                            add_corpus(host, state, &input);
-                        });
                 }
+                let target = if is_proxy_call {
+                    caller
+                } else {
+                    address_h160
+                };
+                state.add_address(&target);
 
-                bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-                host.set_code(address_h160, contract_code);
+                // notify flashloan and blacklisting flashloan addresses
+                #[cfg(feature = "flashloan_v2")]
+                {
+                    handle_contract_insertion!(state, host, target,
+                        parsed_abi.iter().filter(
+                            |x| abi_hashes_to_add.contains(&x.function)
+                        ).cloned().collect::<Vec<ABIConfig>>()
+                    );
+                }
+                // add abi to corpus
+                parsed_abi
+                    .iter()
+                    .filter(|v| !v.is_constructor)
+                    .filter( |v| abi_hashes_to_add.contains(&v.function))
+                    .for_each(|abi| {
+                        #[cfg(not(feature = "fuzz_static"))]
+                        if abi.is_static {
+                            return;
+                        }
+
+                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                        abi_instance
+                            .set_func_with_name(abi.function, abi.function_name.clone());
+                        let input = EVMInput {
+                            caller: state.get_rand_caller(),
+                            contract: target,
+                            data: Some(abi_instance),
+                            sstate: StagedVMState::new_uninitialized(),
+                            sstate_idx: 0,
+                            txn_value: if abi.is_payable {
+                                Some(U256::zero())
+                            } else {
+                                None
+                            },
+                            step: false,
+
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent: 0,
+                            #[cfg(feature = "flashloan_v2")]
+                            input_type: EVMInputTy::ABI,
+                            #[cfg(any(test, feature = "debug"))]
+                            direct_data: Default::default(),
+                            randomness: vec![],
+                            repeat: 1,
+                        };
+                        add_corpus(host, state, &input);
+                    });
+
             }
             _ => {}
         }

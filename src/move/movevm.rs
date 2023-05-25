@@ -205,6 +205,7 @@ where
             new_state: StagedVMState::new_with_state(state),
             output: vec![],
             reverted: false,
+            additional_info: None
         }
     }
 
