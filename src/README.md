@@ -2,7 +2,7 @@
 This directory contains source code of the project.
 
 # Workflow
-
+todo
 
 
 # Structure
@@ -14,18 +14,19 @@ Folders:
 - `fuzzers` - Definition of fuzzers for each VM.
 
 Files:
-- `lib.rs` - entry point of the project.
-- `const.rs` - constants used in the project.
 - `executor.rs` - definition of `Executor` trait from LibAFL.
 - `feedback.rs` - definition of `Feedback` trait from LibAFL for collecting and analyzing feedback like coverage and comparison.
 - `indexed_corpus.rs` - just a corpus that has self-increment ID for each testcase.
 - `input.rs` - definition of `Input` trait from LibAFL.
 - `oracle.rs` - definition of `Oracle` trait.
-- `rand_utils.rs` - random utilities.
 - `scheduler.rs` - definition of `Scheduler` trait from LibAFL, implements infant scheduler proposed in paper.
 - `state.rs` - definition of `State` trait from LibAFL that supports infant corpus proposed in paper.
 - `state_input.rs` - implementation of `Input` trait for VM states.
-- `telemetry.rs` - collecting runtime information.
 - `tracer.rs` - traces of the snapshot of the state, used for regenerating the transactions leading to the VM state.
-- `types.rs` - types used in the project.
+
+Utils:
+- `rand_utils.rs` - random utilities.
+- `types.rs` - utilities for type conversion.
+- `telemetry.rs` - utilities for reporting fuzzing campaign telemetry information.
+- `const.rs` - constants used in the project.
 

@@ -1,3 +1,5 @@
+/// Implements fuzzing logic for ItyFuzz
+
 use crate::{
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
@@ -40,6 +42,18 @@ use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
+/// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
+///
+/// CS: The scheduler for the input corpus
+/// IS: The scheduler for the infant state corpus
+/// F: The feedback for the input corpus (e.g., coverage map)
+/// IF: The feedback for the infant state corpus (e.g., comparison, etc.)
+/// I: The VM input type
+/// OF: The objective for the input corpus (e.g., oracles)
+/// S: The fuzzer state type
+/// VS: The VM state type
+/// Addr: The address type (e.g., H160)
+/// Loc: The call target location type (e.g., H160)
 #[derive(Debug)]
 pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
@@ -54,12 +68,18 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// The scheduler for the input corpus
     scheduler: CS,
+    /// The feedback for the input corpus (e.g., coverage map)
     feedback: F,
+    /// The feedback for the infant state corpus (e.g., comparison, etc.)
     infant_feedback: IF,
+    /// The scheduler for the infant state corpus
     infant_scheduler: &'a IS,
+    /// The objective for the input corpus (e.g., oracles)
     objective: OF,
-    // map from hash of a testcase can do (e.g., coverage map) to the (testcase idx, fav factor)
+    /// Map from hash of a testcase can do (e.g., coverage map) to the (testcase idx, fav factor)
+    /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
 }
@@ -78,6 +98,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Creates a new ItyFuzzer
     pub fn new(
         scheduler: CS,
         infant_scheduler: &'a IS,
@@ -96,6 +117,8 @@ where
         }
     }
 
+    /// Called every time a new testcase is added to the corpus
+    /// Setup the minimizer map
     pub fn on_add_corpus(
         &mut self,
         input: &I,
@@ -109,6 +132,8 @@ where
             .insert(hash, (testcase_idx, input.fav_factor()));
     }
 
+    /// Called every time a testcase is replaced for the corpus
+    /// Update the minimizer map
     pub fn on_replace_corpus(
         &mut self,
         (hash, new_fav_factor, _): (u64, f64, usize),
@@ -119,6 +144,10 @@ where
         res.1 = new_fav_factor;
     }
 
+    /// Determine if a testcase should be replaced based on the minimizer map
+    /// If the new testcase has a higher fav factor, replace the old one
+    /// Returns None if the testcase should not be replaced
+    /// Returns Some((hash, new_fav_factor, testcase_idx)) if the testcase should be replaced
     pub fn should_replace(
         &self,
         input: &I,
@@ -127,8 +156,10 @@ where
         let mut hasher = DefaultHasher::new();
         coverage.hash(&mut hasher);
         let hash = hasher.finish();
+        // if the coverage is same
         if let Some((testcase_idx, fav_factor)) = self.minimizer_map.get(&hash) {
             let new_fav_factor = input.fav_factor();
+            // if the new testcase has a higher fav factor, replace the old one
             if new_fav_factor > *fav_factor {
                 return Some((hash, new_fav_factor, testcase_idx.clone()));
             }
@@ -137,8 +168,7 @@ where
     }
 }
 
-// implement fuzzer trait for ItyFuzzer
-// Seems that we can get rid of this impl and just use StdFuzzer?
+/// Implement fuzzer trait for ItyFuzzer
 impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
 where
@@ -155,6 +185,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Fuzz one input
     fn fuzz_one(
         &mut self,
         stages: &mut ST,
@@ -175,6 +206,7 @@ where
         Ok(idx)
     }
 
+    /// Fuzz loop
     fn fuzz_loop(
         &mut self,
         stages: &mut ST,
@@ -220,6 +252,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
         &mut self,
         state: &mut S,
@@ -232,12 +265,11 @@ where
         executor.observers_mut().pre_exec_all(state, &input)?;
         mark_feature_time!(state, PerfFeature::PreExecObservers);
 
+        // execute the input
         start_timer!(state);
         let exitkind = executor.run_target(self, state, manager, &input)?;
         mark_feature_time!(state, PerfFeature::TargetExecution);
-
         *state.executions_mut() += 1;
-        // println!("{}", *state.executions());
 
         start_timer!(state);
         executor
@@ -269,6 +301,7 @@ where
                 .add_txn(txn);
         }
 
+        // add the new VM state to infant state corpus if it is interesting
         if is_infant_interesting && !reverted {
             state.add_infant_state(
                 &state.get_execution_result().new_state.clone(),
@@ -286,6 +319,8 @@ where
 
             if is_corpus {
                 res = ExecuteInputResult::Corpus;
+
+                // Debugging prints
                 #[cfg(feature = "print_txn_corpus")]
                 {
                     unsafe {
@@ -327,6 +362,7 @@ where
         }
 
         match res {
+            // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
                 self.objective.discard_metadata(state, &input)?;
                 match self.should_replace(&input, unsafe { &JMP_MAP }) {
@@ -350,6 +386,7 @@ where
                     }
                 }
             }
+            // if the input is interesting, we need to add it to the input corpus
             ExecuteInputResult::Corpus => {
                 // Not a solution
                 self.objective.discard_metadata(state, &input)?;
@@ -361,6 +398,7 @@ where
                 self.scheduler.on_add(state, idx)?;
                 self.on_add_corpus(&input, unsafe { &JMP_MAP }, idx);
 
+                // Fire the event for CLI
                 if send_events {
                     // TODO set None for fast targets
                     let observers_buf = if manager.configuration() == EventConfig::AlwaysUnique {
@@ -383,6 +421,7 @@ where
                 }
                 Ok((res, Some(idx)))
             }
+            // find the solution
             ExecuteInputResult::Solution => {
                 report_vulnerability(
                     unsafe {ORACLE_OUTPUT.clone()},
@@ -422,6 +461,7 @@ where
         }
     }
 
+    /// never called!
     fn add_input(
         &mut self,
         _state: &mut S,

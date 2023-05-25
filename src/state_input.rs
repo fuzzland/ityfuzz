@@ -1,3 +1,5 @@
+/// Implements wrappers around VMState that can be stored in a corpus.
+
 use libafl::inputs::Input;
 
 use std::fmt::Debug;
@@ -8,6 +10,9 @@ use crate::tracer::TxnTrace;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+
+/// StagedVMState is a wrapper around a VMState that can be stored in a corpus.
+/// It also has stage field that is used to store the stage of the oracle execution on such a VMState.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct StagedVMState<Loc, Addr, VS>
 where
@@ -16,10 +21,10 @@ where
     Loc: Debug,
 {
     #[serde(deserialize_with = "VS::deserialize")]
-    pub state: VS,
-    pub stage: Vec<u64>,
-    pub initialized: bool,
-    pub trace: TxnTrace<Loc, Addr>,
+    pub state: VS,  // VM state
+    pub stage: Vec<u64>,  // Stages of each oracle execution
+    pub initialized: bool,  // Whether the VMState is initialized, uninitialized VMState will be initialized during mutation
+    pub trace: TxnTrace<Loc, Addr>,  // Trace building up such a VMState
 }
 
 impl<Loc, Addr, VS> StagedVMState<Loc, Addr, VS>
@@ -28,6 +33,7 @@ where
     Addr: Debug,
     Loc: Debug,
 {
+    /// Create a new StagedVMState with a given VMState
     pub fn new_with_state(state: VS) -> Self {
         Self {
             state,
@@ -37,6 +43,7 @@ where
         }
     }
 
+    /// Create a new uninitialized StagedVMState
     pub fn new_uninitialized() -> Self {
         Self {
             state: Default::default(),
@@ -44,11 +51,6 @@ where
             initialized: false,
             trace: TxnTrace::new(),
         }
-    }
-
-    pub fn update_stage(&mut self, stage: Vec<u64>) {
-        self.stage = stage;
-        self.initialized = true;
     }
 }
 
