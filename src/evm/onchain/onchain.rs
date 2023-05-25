@@ -5,7 +5,7 @@ use crate::evm::contract_utils::ContractLoader;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
-use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::endpoints::OnChainConfig;
@@ -24,7 +24,7 @@ use libafl::prelude::{HasCorpus, HasMetadata, Input};
 use libafl::state::State;
 
 use primitive_types::{H160, U256};
-use revm::Interpreter;
+use revm::{Bytecode, Interpreter};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -348,6 +348,10 @@ where
             }
             _ => {}
         }
+    }
+
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+
     }
 
     fn get_type(&self) -> MiddlewareType {

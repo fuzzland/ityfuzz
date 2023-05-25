@@ -3,8 +3,8 @@ use primitive_types::{H160, U256};
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::middleware::MiddlewareType::Concolic;
-use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
+use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 
 use crate::evm::host::{FuzzHost, JMP_MAP};
 use crate::generic_vm::vm_executor::MAP_SIZE;
@@ -16,7 +16,7 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 
 use libafl::state::{HasCorpus, State};
 
-use revm::{Host, Interpreter};
+use revm::{Bytecode, Host, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
@@ -995,6 +995,10 @@ where
             let new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
             add_corpus(host, state, &new_evm_input);
         }
+    }
+
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+
     }
 
     fn get_type(&self) -> MiddlewareType {

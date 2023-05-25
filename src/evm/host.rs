@@ -1,6 +1,6 @@
 use crate::evm::bytecode_analyzer;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
@@ -33,8 +33,6 @@ use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-#[cfg(feature = "record_instruction_coverage")]
-use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 
@@ -88,12 +86,7 @@ where
     pub flashloan_middleware: Option<Rc<RefCell<Flashloan<VS, I, S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub pc_coverage: HashMap<H160, HashSet<usize>>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub total_instr: HashMap<H160, usize>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub total_instr_set: HashMap<H160, HashSet<usize>>,
+
     pub origin: H160,
 
     pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
@@ -158,14 +151,8 @@ where
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             coverage_changed: false,
             flashloan_middleware: None,
-            #[cfg(feature = "record_instruction_coverage")]
-            pc_coverage: self.pc_coverage.clone(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
             origin: self.origin.clone(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr_set: Default::default(),
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
@@ -186,21 +173,6 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
 
-pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
-    let mut i = 0;
-    let bytes = bytecode.bytes();
-    let mut complete_bytes = vec![];
-
-    while i < bytes.len() {
-        let op = *bytes.get(i).unwrap();
-        complete_bytes.push(i);
-        i += 1;
-        if op >= 0x60 && op <= 0x7f {
-            i += op as usize - 0x5f;
-        }
-    }
-    complete_bytes.into_iter().collect()
-}
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
@@ -223,14 +195,8 @@ where
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             coverage_changed: false,
             flashloan_middleware: None,
-            #[cfg(feature = "record_instruction_coverage")]
-            pc_coverage: Default::default(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
             origin: Default::default(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr_set: Default::default(),
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -301,12 +267,6 @@ where
     }
 
     pub fn set_code(&mut self, address: H160, code: Bytecode) {
-        #[cfg(any(feature = "evaluation", feature = "record_instruction_coverage"))]
-        {
-            let pcs = instructions_pc(&code.clone());
-            self.total_instr.insert(address, pcs.len());
-            self.total_instr_set.insert(address, pcs);
-        }
         assert!(self
             .code
             .insert(
@@ -314,60 +274,6 @@ where
                 Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>())
             )
             .is_none());
-    }
-
-    #[cfg(feature = "record_instruction_coverage")]
-    pub(crate) fn record_instruction_coverage(&mut self) {
-        let mut data = format!(
-            "coverage: {:?}",
-            self.total_instr
-                .keys()
-                .map(|k| (
-                    k,
-                    self.pc_coverage.get(k).unwrap_or(&Default::default()).len(),
-                    self.total_instr.get(k).unwrap()
-                ))
-                .collect::<Vec<_>>()
-        );
-
-        let mut not_covered: HashMap<H160, HashSet<usize>> = HashMap::new();
-        for (addr, covs) in &self.total_instr_set {
-            for cov in covs {
-                match self.pc_coverage.get_mut(addr) {
-                    Some(covs) => {
-                        if !covs.contains(cov) {
-                            not_covered
-                                .entry(*addr)
-                                .or_insert(HashSet::new())
-                                .insert(*cov);
-                        }
-                    }
-                    None => {
-                        not_covered
-                            .entry(*addr)
-                            .or_insert(HashSet::new())
-                            .insert(*cov);
-                    }
-                }
-            }
-        }
-
-        data.push_str("\n\n\nnot covered: ");
-        not_covered.iter().for_each(|(addr, pcs)| {
-            data.push_str(&format!(
-                "{:?}: {:?}\n\n",
-                addr,
-                pcs.into_iter().sorted().collect::<Vec<_>>()
-            ));
-        });
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .open("cov.txt")
-            .unwrap();
-        file.write_all(data.as_bytes()).unwrap();
     }
 
     pub fn find_static_call_read_slot(
@@ -429,13 +335,6 @@ where
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, _is_static: bool, state: &mut S) -> Return {
-        #[cfg(feature = "record_instruction_coverage")]
-        {
-            let address = interp.contract.address;
-            let pc = interp.program_counter().clone();
-            self.pc_coverage.entry(address).or_default().insert(pc);
-        }
-
         unsafe {
             if self.middlewares_enabled {
                 match self.flashloan_middleware.clone() {
@@ -677,8 +576,6 @@ where
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
-            #[cfg(feature = "record_instruction_coverage")]
-            self.record_instruction_coverage();
             if unsafe {PANIC_ON_BUG} {
                 panic!("target hit");
             }

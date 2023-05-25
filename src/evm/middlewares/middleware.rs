@@ -23,6 +23,7 @@ pub enum MiddlewareType {
     OnChain,
     Concolic,
     Flashloan,
+    InstructionCoverage
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -85,5 +86,11 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     );
+
+    unsafe fn on_insert(&mut self,
+                        bytecode: &mut Bytecode,
+                        address: H160,
+                        host: &mut FuzzHost<VS, I, S>,
+                        state: &mut S);
     fn get_type(&self) -> MiddlewareType;
 }

@@ -38,6 +38,7 @@ use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::{BlockEnv, Bytecode};
+use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 
 struct ABIConfig {
     abi: String,
@@ -167,13 +168,17 @@ pub fn evm_fuzzer(
         infant_feedback,
         objective,
     );
-    match config.debug_file {
+    match config.replay_file {
         None => {
             fuzzer
                 .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
                 .expect("Fuzzing failed");
         }
         Some(file) => {
+            // add the instruction collector middleware to the fuzzer
+            let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
+            evm_executor_ref.borrow_mut().host.add_middlewares(cov_middleware);
+
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
             f.read_to_string(&mut transactions)

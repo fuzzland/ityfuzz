@@ -4,8 +4,8 @@
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
-use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
+use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use std::borrow::BorrowMut;
@@ -23,7 +23,7 @@ use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
 use libafl::state::HasMetadata;
 use primitive_types::{H160, U256, U512};
-use revm::Interpreter;
+use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 
 use std::cell::RefCell;
@@ -536,6 +536,10 @@ where
                 .oracle_recheck_balance
                 .insert(call_target);
         }
+    }
+
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+
     }
 
     fn get_type(&self) -> MiddlewareType {

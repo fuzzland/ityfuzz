@@ -45,7 +45,7 @@ use crate::evm::host::{
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{EVMInputT, EVMInputTy};
-use crate::evm::middleware::MiddlewareType;
+use crate::evm::middlewares::middleware::MiddlewareType;
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::uniswap::generate_uniswap_router_call;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
@@ -521,10 +521,6 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        #[cfg(feature = "record_instruction_coverage")]
-        if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-            self.host.record_instruction_coverage();
-        }
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
