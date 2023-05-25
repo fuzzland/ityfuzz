@@ -12,6 +12,8 @@ use crate::state::HasInfantStateState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+/// Represent a basic transaction using less memory.
+/// It can be serialized and converted to string.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn<Addr> {
     pub caller: Addr,
@@ -55,6 +57,8 @@ where
     }
 }
 
+/// Turn an input (VMInput + VMState) to a basic transaction
+/// Includes additional info from execution results
 pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
     res: &ExecutionResult<Loc, Addr, VS, Out>,
@@ -86,6 +90,7 @@ where
     }
 }
 
+/// [Deprecated]: Turn an input (VMInput + VMState) to a basic transaction
 pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -109,28 +114,31 @@ where
     }
 }
 
+/// Represent a trace of transactions with starting VMState ID (from_idx).
+/// If VMState ID is None, it means that the trace is from the initial state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TxnTrace<Loc, Addr> {
-    pub transactions: Vec<BasicTxn<Addr>>,
-    pub from_idx: Option<usize>,
-    pub is_initial: bool,
+    pub transactions: Vec<BasicTxn<Addr>>,  // Transactions
+    pub from_idx: Option<usize>,  // Starting VMState ID
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
 impl<Loc, Addr> TxnTrace<Loc, Addr> {
+    /// Create a new TxnTrace
     pub(crate) fn new() -> Self {
         Self {
             transactions: Vec::new(),
             from_idx: None,
-            is_initial: false,
             phantom: Default::default(),
         }
     }
 
+    /// Add a transaction to the trace
     pub fn add_txn(&mut self, txn: BasicTxn<Addr>) {
         self.transactions.push(txn);
     }
 
+    /// Convert the trace to a human-readable string
     pub fn to_string<VS, S>(&self, state: &mut S) -> String
     where
         S: HasInfantStateState<Loc, Addr, VS>,
