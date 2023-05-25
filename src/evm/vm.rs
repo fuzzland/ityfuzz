@@ -529,7 +529,7 @@ where
                     vec![self.host.call_count as u8]
                 } else {
                     vec![u8::MAX]
-                })
+                }),
             }
         }
     }
@@ -647,7 +647,7 @@ where
                                         .downcast_ref_unchecked::<VS>()
                                         .clone(),
                                 ),
-                                additional_info: Some(vec![input.get_randomness()[0]])
+                                additional_info: Some(vec![input.get_randomness()[0]]),
                             }
                         }
                     }
@@ -655,7 +655,7 @@ where
                         output: vec![],
                         reverted: false,
                         new_state: StagedVMState::new_with_state(input.get_state().clone()),
-                        additional_info: None
+                        additional_info: None,
                     },
                 }
             }
@@ -681,8 +681,8 @@ where
             self.host.call_count = 0;
         }
 
-        data.iter().map(
-            |(address, by)| {
+        data.iter()
+            .map(|(address, by)| {
                 let ctx = CallContext {
                     address: *address,
                     caller: Default::default(),
@@ -703,8 +703,8 @@ where
                 } else {
                     interp.return_value().to_vec()
                 }
-            }
-        ).collect::<Vec<Vec<u8>>>()
+            })
+            .collect::<Vec<Vec<u8>>>()
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {

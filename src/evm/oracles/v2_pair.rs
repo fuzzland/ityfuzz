@@ -56,7 +56,9 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                     .new_state
                     .state
                     .flashloan_data
-                    .prev_reserves.get(addr) {
+                    .prev_reserves
+                    .get(addr)
+                {
                     Some((pre_r0, pre_r1)) => {
                         if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
                             unsafe {

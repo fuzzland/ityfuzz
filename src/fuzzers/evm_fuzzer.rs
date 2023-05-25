@@ -10,6 +10,7 @@ use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer, rand_utils::fixed_address,
 };
+use glob::glob;
 use libafl::feedbacks::Feedback;
 use libafl::prelude::ShMemProvider;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
@@ -18,10 +19,9 @@ use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
-use glob::glob;
 
+use crate::evm::host::CALL_UNTIL;
 use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
-use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
@@ -33,6 +33,7 @@ use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::{EVMInput, EVMInputTy};
 
+use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
@@ -40,7 +41,6 @@ use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use primitive_types::{H160, U256};
 use revm::{BlockEnv, Bytecode};
-use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 
 struct ABIConfig {
     abi: String,
@@ -202,7 +202,9 @@ pub fn evm_fuzzer(
                     }
 
                     // [is_step] [caller] [target] [input] [value]
-                    unsafe {CALL_UNTIL = u32::MAX;}
+                    unsafe {
+                        CALL_UNTIL = u32::MAX;
+                    }
 
                     let inp = match splitter[0] {
                         "abi" => {
@@ -213,10 +215,13 @@ pub fn evm_fuzzer(
                             let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                             let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
                             let repeat = splitter[7].parse::<usize>().unwrap_or(0);
-                            let reentrancy_call_limits = splitter[8].parse::<u32>().unwrap_or(u32::MAX);
+                            let reentrancy_call_limits =
+                                splitter[8].parse::<u32>().unwrap_or(u32::MAX);
                             let is_step = splitter[9].parse::<bool>().unwrap_or(false);
 
-                            unsafe {CALL_UNTIL = reentrancy_call_limits;}
+                            unsafe {
+                                CALL_UNTIL = reentrancy_call_limits;
+                            }
                             EVMInput {
                                 caller,
                                 contract,

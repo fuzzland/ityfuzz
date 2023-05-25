@@ -21,7 +21,6 @@ impl BugOracle {
     pub fn new() -> Self {
         Self {}
     }
-
 }
 
 impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
@@ -49,10 +48,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         let is_hit = ctx.post_state.bug_hit;
         if is_hit {
             unsafe {
-                ORACLE_OUTPUT = format!(
-                    "[bug] bug() hit at contract {:?}",
-                    ctx.input.contract
-                )
+                ORACLE_OUTPUT = format!("[bug] bug() hit at contract {:?}", ctx.input.contract)
             }
         }
         return is_hit;

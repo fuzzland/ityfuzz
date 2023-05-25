@@ -1,5 +1,4 @@
 /// Implements fuzzing logic for ItyFuzz
-
 use crate::{
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
@@ -35,10 +34,10 @@ use libafl::{
 };
 
 use crate::evm::host::JMP_MAP;
+use crate::telemetry::report_vulnerability;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
-use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -327,11 +326,7 @@ where
                         DUMP_FILE_COUNT += 1;
                     }
 
-                    let tx_trace = state
-                        .get_execution_result()
-                        .new_state
-                        .trace
-                        .clone();
+                    let tx_trace = state.get_execution_result().new_state.trace.clone();
                     let txn_text = tx_trace.to_string(state);
 
                     let txn_text_replayable = tx_trace.to_file_str(state);
@@ -355,8 +350,11 @@ where
                     file.write_all(data.as_bytes()).unwrap();
 
                     let mut replayable_file =
-                        File::create(format!("corpus/{}_replayable", unsafe { DUMP_FILE_COUNT })).unwrap();
-                    replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+                        File::create(format!("corpus/{}_replayable", unsafe { DUMP_FILE_COUNT }))
+                            .unwrap();
+                    replayable_file
+                        .write_all(txn_text_replayable.as_bytes())
+                        .unwrap();
                 }
             }
         }
@@ -423,9 +421,7 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
-                report_vulnerability(
-                    unsafe {ORACLE_OUTPUT.clone()},
-                );
+                report_vulnerability(unsafe { ORACLE_OUTPUT.clone() });
                 unsafe {
                     println!("Oracle: {}", ORACLE_OUTPUT);
                 }

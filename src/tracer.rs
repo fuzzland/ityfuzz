@@ -44,7 +44,10 @@ where
             .field("caller", &self.caller)
             .field("contract", &self.contract)
             .field("data", &self.data)
-            .field("additional_info", &hex::encode(self.additional_info.as_ref().unwrap_or(&vec![])));
+            .field(
+                "additional_info",
+                &hex::encode(self.additional_info.as_ref().unwrap_or(&vec![])),
+            );
         {
             ff = ff.field("direct_data", &hex::encode(self.direct_data.as_slice()));
         }
@@ -121,8 +124,8 @@ where
 /// If VMState ID is None, it means that the trace is from the initial state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TxnTrace<Loc, Addr> {
-    pub transactions: Vec<BasicTxn<Addr>>,  // Transactions
-    pub from_idx: Option<usize>,  // Starting VMState ID
+    pub transactions: Vec<BasicTxn<Addr>>, // Transactions
+    pub from_idx: Option<usize>,           // Starting VMState ID
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
@@ -181,11 +184,11 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
 
     /// Serialize the trace so that it can be replayed by using --replay-file option
     pub fn to_file_str<VS, S>(&self, state: &mut S) -> String
-        where
-            S: HasInfantStateState<Loc, Addr, VS>,
-            VS: VMStateT,
-            Addr: Debug + Serialize + DeserializeOwned + Clone,
-            Loc: Debug + Serialize + DeserializeOwned + Clone,
+    where
+        S: HasInfantStateState<Loc, Addr, VS>,
+        VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
         // If from_idx is None, it means that the trace is from the initial state
         if self.from_idx.is_none() {
@@ -211,9 +214,13 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             // get liquidation percentage (EVM Specific)
             let liq_perct = match t.data {
                 None => 0,
-                Some(ref data) => {
-                    data.split("liq percent: ").take(2).last().unwrap_or("0").parse::<u64>().unwrap_or(0)
-                }
+                Some(ref data) => data
+                    .split("liq percent: ")
+                    .take(2)
+                    .last()
+                    .unwrap_or("0")
+                    .parse::<u64>()
+                    .unwrap_or(0),
             };
             match t.data_abi {
                 None => {
@@ -222,7 +229,10 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                         s.push_str("borrow ");
                         s.push_str(format!("{:?} ", t.caller).as_str());
                         s.push_str(format!("{:?} ", t.contract).as_str());
-                        s.push_str(format!("{} ", hex::encode(t.additional_info.as_ref().unwrap())).as_str());
+                        s.push_str(
+                            format!("{} ", hex::encode(t.additional_info.as_ref().unwrap()))
+                                .as_str(),
+                        );
                         s.push_str(format!("{} ", t.value.unwrap_or(U256::zero())).as_str());
                         s.push_str(format!("{} ", liq_perct).as_str());
                         // todo: this is warp_to
@@ -240,7 +250,10 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                         // todo: this is repeat
                         s.push_str(format!("{} ", 1).as_str());
                         // reentrancy info
-                        s.push_str(format!("{} ", t.additional_info.as_ref().unwrap_or(&vec![0])[0]).as_str());
+                        s.push_str(
+                            format!("{} ", t.additional_info.as_ref().unwrap_or(&vec![0])[0])
+                                .as_str(),
+                        );
                     } else {
                         println!("t: {:?}", t);
                         unreachable!("No abi and no borrow txn bytes");
@@ -259,8 +272,19 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                     // todo: this is repeat
                     s.push_str(format!("{} ", 1).as_str());
                     // reentrancy info
-                    s.push_str(format!("{} ", t.additional_info.as_ref().unwrap_or(&vec![0])[0]).as_str());
-                    s.push_str(format!("{} ", t.data.as_ref().unwrap_or(&String::from("")).contains("Stepping with return")).as_str());
+                    s.push_str(
+                        format!("{} ", t.additional_info.as_ref().unwrap_or(&vec![0])[0]).as_str(),
+                    );
+                    s.push_str(
+                        format!(
+                            "{} ",
+                            t.data
+                                .as_ref()
+                                .unwrap_or(&String::from(""))
+                                .contains("Stepping with return")
+                        )
+                        .as_str(),
+                    );
                 }
             }
             s.push_str("\n");

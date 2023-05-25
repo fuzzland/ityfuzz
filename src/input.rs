@@ -1,5 +1,4 @@
 /// Defines trait for VM inputs that are sent to any smart contract VM
-
 use std::any;
 use std::fmt::Debug;
 
@@ -74,7 +73,6 @@ where
 
     /// Determine whether a input is better than another
     fn fav_factor(&self) -> f64;
-
 
     ///// EVM Specific!! ////
     // TODO: Move these to a separate trait

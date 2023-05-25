@@ -1,6 +1,5 @@
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
-
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
 use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
@@ -60,7 +59,6 @@ struct VoteData {
 }
 
 impl_serdeany!(VoteData);
-
 
 /// The number of inputs (or VMState) already removed from the corpus
 #[cfg(feature = "full_trace")]
@@ -199,7 +197,8 @@ where
             }
         }
 
-        if idx == usize::MAX {  // if we didn't find an input, just use the last one
+        if idx == usize::MAX {
+            // if we didn't find an input, just use the last one
             idx = *data.sorted_votes.last().unwrap();
         }
 

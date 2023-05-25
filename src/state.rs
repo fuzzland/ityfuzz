@@ -78,7 +78,6 @@ pub trait HasCurrentInputIdx {
     fn set_current_input_idx(&mut self, idx: usize);
 }
 
-
 /// Trait providing functions for getting [`InfantStateState`]
 pub trait HasInfantStateState<Loc, Addr, VS>
 where
@@ -90,14 +89,12 @@ where
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS>;
 }
 
-
 /// [Deprecated] Trait providing functions for mapping between function hash with the
 /// contract addresses that have the function
 pub trait HasHashToAddress {
     /// Get the mapping between function hash with the address
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
 }
-
 
 /// Trait providing functions for getting the current execution result
 pub trait HasExecutionResult<Loc, Addr, VS, Out>
@@ -114,7 +111,6 @@ where
     /// Set the current execution result
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>);
 }
-
 
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
 /// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference

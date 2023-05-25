@@ -266,13 +266,17 @@ where
                     self.loaded_abi.insert(address_h160);
                     return;
                 }
-                if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
+                if !self.loaded_code.contains(&address_h160)
+                    && !host.code.contains_key(&address_h160)
+                {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                     host.set_code(address_h160, contract_code.clone(), state);
                 }
-                if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
-                    *interp.instruction_pointer == 0x3b ||
-                    *interp.instruction_pointer == 0x3c {
+                if unsafe { IS_FAST_CALL }
+                    || self.blacklist.contains(&address_h160)
+                    || *interp.instruction_pointer == 0x3b
+                    || *interp.instruction_pointer == 0x3c
+                {
                     return;
                 }
 
@@ -297,51 +301,59 @@ where
                     // check caller's hash and see what is missing
                     let caller_hashes = match host.address_to_hash.get(&caller) {
                         Some(v) => v.clone(),
-                        None => vec![]
+                        None => vec![],
                     };
                     let caller_hashes_set = caller_hashes.iter().cloned().collect::<HashSet<_>>();
-                    let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                    let new_hashes = parsed_abi
+                        .iter()
+                        .map(|abi| abi.function)
+                        .collect::<HashSet<_>>();
                     for hash in new_hashes {
                         if !caller_hashes_set.contains(&hash) {
                             abi_hashes_to_add.insert(hash);
                             host.add_one_hashes(caller, hash);
                         }
                     }
-                    println!("Propagating hashes {:?} for proxy {:?}",
-                             abi_hashes_to_add
-                                 .iter()
-                                .map(|x| hex::encode(x))
-                                 .collect::<Vec<_>>(),
-                             caller
+                    println!(
+                        "Propagating hashes {:?} for proxy {:?}",
+                        abi_hashes_to_add
+                            .iter()
+                            .map(|x| hex::encode(x))
+                            .collect::<Vec<_>>(),
+                        caller
                     );
                 } else {
-                    abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                    abi_hashes_to_add = parsed_abi
+                        .iter()
+                        .map(|abi| abi.function)
+                        .collect::<HashSet<_>>();
                     host.add_hashes(
                         address_h160,
                         parsed_abi.iter().map(|abi| abi.function).collect(),
                     );
                 }
-                let target = if is_proxy_call {
-                    caller
-                } else {
-                    address_h160
-                };
+                let target = if is_proxy_call { caller } else { address_h160 };
                 state.add_address(&target);
 
                 // notify flashloan and blacklisting flashloan addresses
                 #[cfg(feature = "flashloan_v2")]
                 {
-                    handle_contract_insertion!(state, host, target,
-                        parsed_abi.iter().filter(
-                            |x| abi_hashes_to_add.contains(&x.function)
-                        ).cloned().collect::<Vec<ABIConfig>>()
+                    handle_contract_insertion!(
+                        state,
+                        host,
+                        target,
+                        parsed_abi
+                            .iter()
+                            .filter(|x| abi_hashes_to_add.contains(&x.function))
+                            .cloned()
+                            .collect::<Vec<ABIConfig>>()
                     );
                 }
                 // add abi to corpus
                 parsed_abi
                     .iter()
                     .filter(|v| !v.is_constructor)
-                    .filter( |v| abi_hashes_to_add.contains(&v.function))
+                    .filter(|v| abi_hashes_to_add.contains(&v.function))
                     .for_each(|abi| {
                         #[cfg(not(feature = "fuzz_static"))]
                         if abi.is_static {
@@ -349,8 +361,7 @@ where
                         }
 
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance
-                            .set_func_with_name(abi.function, abi.function_name.clone());
+                        abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
                         let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: target,
@@ -376,14 +387,18 @@ where
                         };
                         add_corpus(host, state, &input);
                     });
-
             }
             _ => {}
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
-
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: H160,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {

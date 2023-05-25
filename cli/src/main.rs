@@ -2,12 +2,15 @@ use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
+use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
+use ityfuzz::evm::oracles::bug::BugOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
+use ityfuzz::evm::producers::erc20::ERC20Producer;
 use ityfuzz::evm::producers::pair::PairProducer;
 use ityfuzz::evm::types::EVMFuzzState;
 use ityfuzz::evm::vm::EVMState;
@@ -17,14 +20,10 @@ use ityfuzz::state::FuzzState;
 use primitive_types::{H160, U256};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::env;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
-use ityfuzz::evm::producers::erc20::ERC20Producer;
-use std::env;
-use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::oracles::bug::BugOracle;
-
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -141,10 +140,7 @@ enum TargetType {
 fn main() {
     init_sentry();
     let args = Args::parse();
-    ityfuzz::telemetry::report_campaign(
-        args.onchain,
-        args.target.clone()
-    );
+    ityfuzz::telemetry::report_campaign(args.onchain, args.target.clone());
     let target_type: TargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => Glob,
@@ -214,10 +210,7 @@ fn main() {
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
     let mut flashloan_oracle = Rc::new(RefCell::new({
-        IERC20OracleFlashloan::new(
-            pair_producer.clone(),
-            erc20_producer.clone(),
-        )
+        IERC20OracleFlashloan::new(pair_producer.clone(), erc20_producer.clone())
     }));
 
     // let harness_code = "oracle_harness()";

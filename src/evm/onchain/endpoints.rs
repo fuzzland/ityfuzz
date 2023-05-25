@@ -149,7 +149,8 @@ impl OnChainConfig {
             endpoint_url,
             client: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(20))
-                .build().expect("build client failed"),
+                .build()
+                .expect("build client failed"),
             chain_id,
             block_number: if block_number == 0 {
                 "latest".to_string()

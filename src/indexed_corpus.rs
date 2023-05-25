@@ -1,5 +1,4 @@
 /// A corpus in memory with self-incementing indexes for items.
-
 use core::cell::RefCell;
 use std::collections::HashMap;
 

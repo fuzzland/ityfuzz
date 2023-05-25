@@ -1,19 +1,19 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug};
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
-use itertools::Itertools;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use revm::{Bytecode, Interpreter};
 use crate::evm::host::FuzzHost;
 use crate::evm::input::EVMInputT;
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use itertools::Itertools;
+use libafl::inputs::Input;
+use libafl::prelude::{HasCorpus, HasMetadata, State};
 use primitive_types::H160;
+use revm::{Bytecode, Interpreter};
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
     let mut i = 0;
@@ -31,14 +31,12 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
     complete_bytes.into_iter().collect()
 }
 
-
 #[derive(Clone, Debug)]
 pub struct InstructionCoverage {
     pub pc_coverage: HashMap<H160, HashSet<usize>>,
     pub total_instr: HashMap<H160, usize>,
     pub total_instr_set: HashMap<H160, HashSet<usize>>,
 }
-
 
 impl InstructionCoverage {
     pub fn new() -> Self {
@@ -61,7 +59,8 @@ impl InstructionCoverage {
                 .map(|k| {
                     let cov = self.pc_coverage.get(k).unwrap_or(&Default::default()).len();
                     let total = self.total_instr.get(k).unwrap();
-                    format!("Contract: {:?}, Instruction Coverage: {} / {} ({:.2}%)",
+                    format!(
+                        "Contract: {:?}, Instruction Coverage: {} / {} ({:.2}%)",
                         k,
                         cov,
                         *total,
@@ -108,18 +107,23 @@ impl InstructionCoverage {
             .write(true)
             .append(false)
             .create(true)
-            .open(format!("cov_{}.txt", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
+            .open(format!(
+                "cov_{}.txt",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            ))
             .unwrap();
         file.write_all(data.as_bytes()).unwrap();
     }
 }
 
-
 impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
-    where
-        I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
+where
+    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
         + HasCaller<H160>
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
@@ -139,7 +143,13 @@ impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
         self.pc_coverage.entry(address).or_default().insert(pc);
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: H160,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
         let pcs = instructions_pc(&bytecode.clone());
         self.total_instr.insert(address, pcs.len());
         self.total_instr_set.insert(address, pcs);

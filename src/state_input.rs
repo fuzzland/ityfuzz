@@ -1,5 +1,4 @@
 /// Implements wrappers around VMState that can be stored in a corpus.
-
 use libafl::inputs::Input;
 
 use std::fmt::Debug;
@@ -9,7 +8,6 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::tracer::TxnTrace;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-
 
 /// StagedVMState is a wrapper around a VMState that can be stored in a corpus.
 /// It also has stage field that is used to store the stage of the oracle execution on such a VMState.
@@ -21,10 +19,10 @@ where
     Loc: Debug,
 {
     #[serde(deserialize_with = "VS::deserialize")]
-    pub state: VS,  // VM state
-    pub stage: Vec<u64>,  // Stages of each oracle execution
-    pub initialized: bool,  // Whether the VMState is initialized, uninitialized VMState will be initialized during mutation
-    pub trace: TxnTrace<Loc, Addr>,  // Trace building up such a VMState
+    pub state: VS, // VM state
+    pub stage: Vec<u64>,            // Stages of each oracle execution
+    pub initialized: bool, // Whether the VMState is initialized, uninitialized VMState will be initialized during mutation
+    pub trace: TxnTrace<Loc, Addr>, // Trace building up such a VMState
 }
 
 impl<Loc, Addr, VS> StagedVMState<Loc, Addr, VS>

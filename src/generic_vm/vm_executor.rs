@@ -55,7 +55,12 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default;
 
-    fn fast_static_call(&mut self, data: &Vec<(Addr, By)>, vm_state: &VS, state: &mut S) -> Vec<Out>
+    fn fast_static_call(
+        &mut self,
+        data: &Vec<(Addr, By)>,
+        vm_state: &VS,
+        state: &mut S,
+    ) -> Vec<Out>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,

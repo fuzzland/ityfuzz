@@ -270,7 +270,6 @@ impl<'a> Solving<'a> {
     }
 }
 
-
 pub enum SymbolicTy<'a> {
     BV(BV<'a>),
     Bool(Bool<'a>),
@@ -283,7 +282,7 @@ impl<'a> SymbolicTy<'a> {
             _ => panic!("expected bv"),
         }
     }
-    
+
     pub fn expect_bool(self) -> Bool<'a> {
         match self {
             SymbolicTy::Bool(b) => b,
@@ -308,11 +307,7 @@ impl<'a> Solving<'a> {
             ($lhs:expr, $rhs:expr, $op:ident) => {
                 self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
                     .expect_bv()
-                    .$op(
-                        &self
-                            .generate_z3_bv($rhs.as_ref().unwrap(), ctx)
-                            .expect_bv(),
-                    )
+                    .$op(&self.generate_z3_bv($rhs.as_ref().unwrap(), ctx).expect_bv())
             };
         }
         // println!("generate_z3_bv: {:?}", bv);
@@ -362,7 +357,9 @@ impl<'a> Solving<'a> {
                 let rhs = self.generate_z3_bv(bv.rhs.as_ref().unwrap(), ctx);
                 match (lhs, rhs) {
                     (SymbolicTy::BV(lhs), SymbolicTy::BV(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
-                    (SymbolicTy::Bool(lhs), SymbolicTy::Bool(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
+                    (SymbolicTy::Bool(lhs), SymbolicTy::Bool(rhs)) => {
+                        SymbolicTy::Bool(lhs._eq(&rhs))
+                    }
                     _ => panic!("op {:?} not supported as operands", bv.op),
                 }
             }
@@ -1020,8 +1017,13 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
-
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: H160,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {

@@ -1,6 +1,5 @@
 /// Implements the feedback mechanism needed by ItyFuzz.
 /// Implements Oracle, Comparison, Dataflow feedbacks.
-
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -135,7 +134,6 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-
         // set up oracle context
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
@@ -176,11 +174,12 @@ where
                     .has_post_execution()
                 {
                     false
-                } else { true };
+                } else {
+                    true
+                };
                 return Ok(res);
             }
         }
-
 
         before_exit!();
         Ok(false)
@@ -319,7 +318,6 @@ where
         Ok(())
     }
 }
-
 
 /// CmpFeedback is a feedback that uses cmp analysis to determine
 /// whether a state is interesting or not.

@@ -1,5 +1,4 @@
 /// Utilities for generating random values for different types.
-
 use primitive_types::H160;
 use rand::thread_rng;
 use rand::Rng;

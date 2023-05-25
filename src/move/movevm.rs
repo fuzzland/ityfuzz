@@ -106,7 +106,6 @@ where
         Some(module.self_id().address().clone())
     }
 
-
     fn fast_static_call(
         &mut self,
         _data: &Vec<(AccountAddress, MoveFunctionInput)>,
@@ -167,8 +166,13 @@ where
 
         let mut state = input.get_state().clone();
 
-        let ret =
-            current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter, &mut DummyTracer{});
+        let ret = current_frame.execute_code(
+            &resolver,
+            &mut interp,
+            &mut state,
+            &mut UnmeteredGasMeter,
+            &mut DummyTracer {},
+        );
 
         for v in interp.operand_stack.value {
             println!("val: {:?}", v);
@@ -205,7 +209,7 @@ where
             new_state: StagedVMState::new_with_state(state),
             output: vec![],
             reverted: false,
-            additional_info: None
+            additional_info: None,
         }
     }
 

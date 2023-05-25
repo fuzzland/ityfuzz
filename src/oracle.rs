@@ -1,5 +1,4 @@
 /// Implementation of the oracle (i.e., invariant checker)
-
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -69,23 +68,20 @@ where
 
     /// Conduct a batch of static calls on the state before the execution
     pub(crate) fn call_pre_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
-        self.executor.deref().borrow_mut().fast_static_call(
-            data,
-            self.pre_state,
-            self.fuzz_state,
-        )
+        self.executor
+            .deref()
+            .borrow_mut()
+            .fast_static_call(data, self.pre_state, self.fuzz_state)
     }
 
     /// Conduct a batch of static calls on the state after the execution
     pub(crate) fn call_post_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
-        self.executor.deref().borrow_mut().fast_static_call(
-            data,
-            &self.post_state,
-            self.fuzz_state,
-        )
+        self.executor
+            .deref()
+            .borrow_mut()
+            .fast_static_call(data, &self.post_state, self.fuzz_state)
     }
 }
-
 
 /// Producer trait provides functions needed to produce data for the oracle
 pub trait Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>

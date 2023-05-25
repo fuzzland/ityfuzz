@@ -1,4 +1,5 @@
 use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::producers::erc20::ERC20Producer;
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
@@ -13,7 +14,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use crate::evm::producers::erc20::ERC20Producer;
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
@@ -36,13 +36,16 @@ impl IERC20OracleFlashloan {
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(pair_producer: Rc<RefCell<PairProducer>>, erc20_producer: Rc<RefCell<ERC20Producer>>) -> Self {
+    pub fn new(
+        pair_producer: Rc<RefCell<PairProducer>>,
+        erc20_producer: Rc<RefCell<ERC20Producer>>,
+    ) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
             known_tokens: HashMap::new(),
             known_pair_reserve_slot: HashMap::new(),
             pair_producer,
-            erc20_producer
+            erc20_producer,
         }
     }
 
@@ -111,7 +114,9 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         let mut liquidations_owed = Vec::new();
         let mut liquidations_earned = Vec::new();
 
-        for ((_, token), (prev_balance, new_balance)) in self.erc20_producer.deref().borrow().balances.iter() {
+        for ((_, token), (prev_balance, new_balance)) in
+            self.erc20_producer.deref().borrow().balances.iter()
+        {
             let token_info = self.known_tokens.get(token).expect("Token not found");
             // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
 
@@ -195,8 +200,6 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             // we scaled by 1e24, so divide by 1e24 to get ETH
             let net_eth = net / U512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
-
-
                 {
                     ORACLE_OUTPUT = format!(
                         "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}",

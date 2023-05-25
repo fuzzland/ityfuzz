@@ -217,9 +217,11 @@ impl<'a> EVMCorpusInitializer<'a> {
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
-            self.executor
-                .host
-                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
+            self.executor.host.set_code(
+                caller,
+                Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+                self.state,
+            );
         }
     }
 

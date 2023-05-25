@@ -64,7 +64,6 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
-
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
@@ -180,7 +179,6 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
-
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
@@ -624,7 +622,7 @@ where
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
-            if unsafe {PANIC_ON_BUG} {
+            if unsafe { PANIC_ON_BUG } {
                 panic!("target hit");
             }
             self.bug_hit = true;
@@ -674,31 +672,17 @@ where
             );
             let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
             if ret == Return::Continue {
-                self.set_code(
-                    r_addr,
-                    Bytecode::new_raw(interp.return_value()),
-                    state
-                );
-                (
-                    Continue,
-                    Some(r_addr),
-                    Gas::new(0),
-                    interp.return_value(),
-                )
+                self.set_code(r_addr, Bytecode::new_raw(interp.return_value()), state);
+                (Continue, Some(r_addr), Gas::new(0), interp.return_value())
             } else {
-                (
-                    ret,
-                    Some(r_addr),
-                    Gas::new(0),
-                    Bytes::new(),
-                )
+                (ret, Some(r_addr), Gas::new(0), Bytes::new())
             }
         }
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
         self.call_count += 1;
-        if self.call_count >= unsafe {CALL_UNTIL} {
+        if self.call_count >= unsafe { CALL_UNTIL } {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
