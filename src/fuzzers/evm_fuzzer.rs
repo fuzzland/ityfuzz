@@ -177,7 +177,7 @@ pub fn evm_fuzzer(
         Some(file) => {
             // add the instruction collector middleware to the fuzzer
             let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
-            evm_executor_ref.borrow_mut().host.add_middlewares(cov_middleware);
+            evm_executor_ref.borrow_mut().host.add_middlewares(cov_middleware.clone());
 
             let mut f = File::open(file).expect("Failed to open file");
             let mut transactions = String::new();
@@ -313,6 +313,9 @@ pub fn evm_fuzzer(
 
                 vm_state = state.get_execution_result().new_state.clone();
             }
+
+            // dump coverage:
+            cov_middleware.borrow_mut().record_instruction_coverage();
         }
     }
 }
