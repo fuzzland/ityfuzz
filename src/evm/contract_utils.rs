@@ -1,10 +1,12 @@
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::DefaultHasher;
 
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 
-use primitive_types::H160;
+use primitive_types::{H160, U256};
 use std::io::Read;
 use std::path::Path;
 
@@ -13,13 +15,13 @@ extern crate crypto;
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::rand_utils::{fixed_address, generate_random_address};
+use crate::types::convert_u256_to_h160;
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
-
 #[derive(Debug, Clone)]
 pub struct ABIConfig {
     pub abi: String,
@@ -133,13 +135,17 @@ impl ContractLoader {
     }
 
     pub fn from_prefix(prefix: &str) -> Self {
+        let mut hasher = DefaultHasher::new();
+        prefix.hash(&mut hasher);
+        let deployed_address = convert_u256_to_h160(U256::from(hasher.finish()));
+
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
             code: vec![],
             is_code_deployed: false,
             constructor_args: vec![], // todo: fill this
-            deployed_address: generate_random_address(),
+            deployed_address,
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {

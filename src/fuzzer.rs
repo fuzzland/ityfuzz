@@ -38,6 +38,7 @@ use crate::telemetry::report_vulnerability;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 
@@ -350,7 +351,9 @@ where
                     file.write_all(data.as_bytes()).unwrap();
 
                     let mut replayable_file =
-                        File::create(format!("corpus/{}_replayable", unsafe { DUMP_FILE_COUNT }))
+                        File::create(format!("corpus/{}_replayable@{}", unsafe { DUMP_FILE_COUNT },
+                            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
+                        ))
                             .unwrap();
                     replayable_file
                         .write_all(txn_text_replayable.as_bytes())
