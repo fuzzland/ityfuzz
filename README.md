@@ -43,12 +43,6 @@ Test Coverage:
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
-### Grants
-| Grants | Description |
-|:----:|:-----------:|
-| <img src=https://ityfuzz.assets.fuzz.land/sui.jpg width=100px/> | Grants from Sui Foundation for building Move and chain-specfic support |
-| <img src=https://ityfuzz.assets.fuzz.land/web3.png width=100px/> | Grants from Web3 Foundation for building Substrate pallets and Ink! support |
-
 
 # Development
 
@@ -194,3 +188,17 @@ apt install libz3-dev
 ### Telemetry
 ItyFuzz collects telemetry data to help us improve the fuzzer. The data is collected anonymously and is not used for any commercial purpose.
 You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variable.
+
+
+### Acknowledgement
+
+This work was supported in part by NSF grants CCF-1900968, CCF1908870, and CNS1817122 and SKY Lab industrial sponsors and
+affiliates Astronomer, Google, IBM, Intel, Lacework, Microsoft, Mohamed Bin Zayed University of Artificial Intelligence, Nexla, Samsung SDS, Uber, and VMware. Any opinions, findings, conclusions,
+or recommendations in this repo do not necessarily reflect the position or the policy of the
+sponsors.
+
+Grants:
+| Grants | Description |
+|:----:|:-----------:|
+| <img src=https://ityfuzz.assets.fuzz.land/sui.jpg width=100px/> | Grants from Sui Foundation for building Move and chain-specfic support |
+| <img src=https://ityfuzz.assets.fuzz.land/web3.png width=100px/> | Grants from Web3 Foundation for building Substrate pallets and Ink! support |
