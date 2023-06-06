@@ -158,7 +158,7 @@ pub fn evm_fuzzer(
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
-    state.add_caller(deployer);
+    state.add_caller(&deployer);
     feedback
         .init_state(& mut state)
         .expect("Failed to init state");
