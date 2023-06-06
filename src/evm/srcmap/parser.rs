@@ -40,7 +40,6 @@ pub fn uncompress_srcmap_single(map: String, files: &Vec<String>) -> Vec<SourceM
     let mut counter = 0;
     for part in map.split(';') {
         let parts = part.split(':').collect::<Vec<&str>>();
-        println!("{:?}", parts);
         let parts_len = parts.len();
 
         let has_offset = parts_len > 0 && parts[0] != "";
@@ -92,7 +91,6 @@ pub fn decode_instructions(bytecode: Vec<u8>, map: String, files: &Vec<String>) 
     let mut uncompressed_map = uncompress_srcmap_single(map, files);
     let bytecode_len = bytecode.len();
 
-    println!("uncompressed_map: {:?}", uncompressed_map);
     let mut idx = 0;
     let mut srcmap_idx = 0;
 
