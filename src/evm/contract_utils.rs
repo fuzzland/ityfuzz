@@ -1,7 +1,7 @@
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-
+use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use std::fs::File;
 
 use primitive_types::H160;
@@ -132,14 +132,14 @@ impl ContractLoader {
         hex::decode(data).expect("Failed to parse hex file")
     }
 
-    pub fn from_prefix(prefix: &str) -> Self {
+    pub fn from_prefix(prefix: &str, state: &mut EVMFuzzState) -> Self {
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
             code: vec![],
             is_code_deployed: false,
             constructor_args: vec![], // todo: fill this
-            deployed_address: generate_random_address(),
+            deployed_address: generate_random_address(state),
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {
@@ -200,7 +200,7 @@ impl ContractLoader {
     // |- contract1.bin
     // |- contract2.abi
     // |- contract2.bin
-    pub fn from_glob(p: &str) -> Self {
+    pub fn from_glob(p: &str, state: &mut EVMFuzzState) -> Self {
         let mut prefix_file_count: HashMap<String, u8> = HashMap::new();
         for i in glob(p).expect("not such folder") {
             match i {
@@ -226,7 +226,7 @@ impl ContractLoader {
         for (prefix, count) in prefix_file_count {
             if count == 2 {
                 for contract in
-                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str()).contracts
+                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str(), state).contracts
                 {
                     contracts.push(contract);
                 }
@@ -236,7 +236,7 @@ impl ContractLoader {
         ContractLoader { contracts }
     }
 
-    pub fn from_glob_target(p: &str, target: &str) -> Self {
+    pub fn from_glob_target(p: &str, target: &str, state: &mut EVMFuzzState) -> Self {
         let prefix = Path::new(p).join(target);
         let abi_path = prefix.with_extension("abi");
         let bin_path = prefix.with_extension("bin");
@@ -245,7 +245,7 @@ impl ContractLoader {
             panic!("ABI or BIN file not found for {}", target);
         }
 
-        Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
+        Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str(), state)
     }
 
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<H160>) -> Self {

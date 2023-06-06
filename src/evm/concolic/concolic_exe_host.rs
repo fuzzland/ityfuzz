@@ -12,6 +12,7 @@ use crate::{
 };
 use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
+use libafl::prelude::HasRand;
 use primitive_types::{H160, U256};
 
 use revm::{CallContext, CallScheme, Contract, Host, Interpreter, LatestSpec};
@@ -82,6 +83,7 @@ impl<VS, I, S> ConcolicEVMExecutor<I, S, VS>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State
+        + HasRand
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata

@@ -53,7 +53,7 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
+    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>, mut state: EVMFuzzState
 ) {
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
 
@@ -66,7 +66,6 @@ pub fn evm_fuzzer(
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let calibration = CalibrationStage::new(&feedback);
-    let mut state: EVMFuzzState = FuzzState::new();
 
     let mut scheduler = QueueScheduler::new();
 
@@ -161,7 +160,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(deployer);
     feedback
-        .init_state(&mut state)
+        .init_state(& mut state)
         .expect("Failed to init state");
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
