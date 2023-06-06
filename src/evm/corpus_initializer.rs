@@ -21,13 +21,15 @@ use primitive_types::{H160, U256};
 use revm::Bytecode;
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
 use std::rc::Rc;
 use std::time::Duration;
+use itertools::Itertools;
+use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
