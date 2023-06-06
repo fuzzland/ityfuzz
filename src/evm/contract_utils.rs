@@ -7,11 +7,13 @@ use std::fs::File;
 use primitive_types::H160;
 use std::io::Read;
 use std::path::Path;
+use itertools::Itertools;
 
 extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
+use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 use crate::rand_utils::{fixed_address, generate_random_address};
 
 use self::crypto::digest::Digest;
@@ -38,6 +40,7 @@ pub struct ContractInfo {
     pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
     pub deployed_address: H160,
+    pub source_map: Option<HashMap<usize, SourceMapLocation>>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,7 +135,7 @@ impl ContractLoader {
         hex::decode(data).expect("Failed to parse hex file")
     }
 
-    pub fn from_prefix(prefix: &str) -> Self {
+    pub fn from_prefix(prefix: &str, source_map_info: Option<ContractsSourceMapInfo>) -> Self {
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
@@ -140,6 +143,9 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: vec![], // todo: fill this
             deployed_address: generate_random_address(),
+            source_map: source_map_info.map(|info|
+                info.get(prefix).expect("combined.json provided but contract not found").clone()
+            ),
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {
@@ -202,6 +208,7 @@ impl ContractLoader {
     // |- contract2.bin
     pub fn from_glob(p: &str) -> Self {
         let mut prefix_file_count: HashMap<String, u8> = HashMap::new();
+        let mut contract_combined_json_info = None;
         for i in glob(p).expect("not such folder") {
             match i {
                 Ok(path) => {
@@ -214,6 +221,8 @@ impl ContractLoader {
                         *prefix_file_count
                             .entry(path_str.replace(".bin", "").clone())
                             .or_insert(0) += 1;
+                    } else if path_str.ends_with("combined.json") {
+                        contract_combined_json_info = Some(path_str.to_string());
                     } else {
                         println!("Found unknown file in folder: {:?}", path.display())
                     }
@@ -222,11 +231,22 @@ impl ContractLoader {
             }
         }
 
+        let parsed_contract_info = match contract_combined_json_info {
+            None => None,
+            Some(file_name) => {
+                let mut combined_json = File::open(file_name).unwrap();
+                let mut buf = String::new();
+                combined_json.read_to_string(&mut buf).unwrap();
+                Some(parse_combined_json(buf))
+            }
+        };
+
         let mut contracts: Vec<ContractInfo> = vec![];
         for (prefix, count) in prefix_file_count {
             if count == 2 {
                 for contract in
-                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str()).contracts
+                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str(),
+                                      parsed_contract_info.clone()).contracts
                 {
                     contracts.push(contract);
                 }
@@ -234,18 +254,6 @@ impl ContractLoader {
         }
 
         ContractLoader { contracts }
-    }
-
-    pub fn from_glob_target(p: &str, target: &str) -> Self {
-        let prefix = Path::new(p).join(target);
-        let abi_path = prefix.with_extension("abi");
-        let bin_path = prefix.with_extension("bin");
-
-        if !(abi_path.exists() && bin_path.exists()) {
-            panic!("ABI or BIN file not found for {}", target);
-        }
-
-        Self::from_prefix((prefix.to_str().unwrap().to_owned() + &String::from('*')).as_str())
     }
 
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<H160>) -> Self {
@@ -263,11 +271,49 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
+                source_map: None,
             };
             contracts.push(contract);
         }
         Self { contracts }
     }
+}
+
+type ContractSourceMap = HashMap<usize, SourceMapLocation>;
+type ContractsSourceMapInfo = HashMap<String, HashMap<usize, SourceMapLocation>>;
+
+pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
+    let map_json = serde_json::from_str::<serde_json::Value>(&json).unwrap();
+
+    let contracts = map_json["contracts"].as_object().expect("contracts not found");
+    let file_list = map_json["sourceList"].as_array()
+        .expect("sourceList not found")
+        .iter()
+        .map(|x| x.as_str().expect("sourceList is not string").to_string())
+        .collect::<Vec<String>>();
+
+    let mut result = ContractsSourceMapInfo::new();
+
+    for (contract_name, contract_info) in contracts {
+        let splitter = contract_name.split(':').collect::<Vec<&str>>();
+        let file_name = splitter.iter().take(splitter.len()-1).join(":");
+        let contract_name = splitter.last().unwrap().to_string();
+
+        let bin_runtime = contract_info["bin-runtime"].as_str().expect("bin-runtime not found");
+        let bin_runtime_bytes = hex::decode(bin_runtime).expect("bin-runtime is not hex");
+
+        let srcmap_runtime = contract_info["srcmap-runtime"].as_str().expect("srcmap-runtime not found");
+
+        result.insert(
+            contract_name.clone(),
+            decode_instructions(
+                bin_runtime_bytes,
+                srcmap_runtime.to_string(),
+                &file_list
+            )
+        );
+    }
+    result
 }
 
 mod tests {
