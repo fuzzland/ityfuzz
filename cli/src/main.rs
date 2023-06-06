@@ -131,6 +131,11 @@ struct Args {
     /// Replay?
     #[arg(long)]
     replay_file: Option<String>,
+
+    // allow users to pass the path through CLI
+    #[arg(long, default_value = "corpus")]
+    corpus_path: String,
+
 }
 
 enum TargetType {
@@ -319,6 +324,7 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
+        corpus_path:args.corpus_path,
     };
 
     match config.fuzzer_type {

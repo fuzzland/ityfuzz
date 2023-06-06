@@ -176,6 +176,7 @@ pub fn evm_fuzzer(
         feedback,
         infant_feedback,
         objective,
+        config.corpus_path,
     );
     match config.replay_file {
         None => {
