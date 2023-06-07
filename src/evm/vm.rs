@@ -1,3 +1,4 @@
+/// EVM executor implementation
 use itertools::Itertools;
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
@@ -56,6 +57,8 @@ use crate::types::float_scale_to_u512;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
 
+/// Get the token context from the flashloan middleware,
+/// which contains uniswap pairs of that token
 #[macro_export]
 macro_rules! get_token_ctx {
     ($flashloan_mid: expr, $token: expr) => {
@@ -69,24 +72,41 @@ macro_rules! get_token_ctx {
     };
 }
 
+/// A post execution context
+/// When control is leaked, we dump the current execution context. This context includes
+/// all information needed to continue subsequent execution (e.g., stack, pc, memory, etc.)
+/// Post execution context is attached to VM state if control is leaked.
+///
+/// When EVM input has `step` set to true, then we continue execution from the post
+/// execution context available. If `step` is false, then we conduct reentrancy
+/// (i.e., don't need to continue execution from the post execution context
+/// but we execute the input directly
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostExecutionCtx {
+    /// Stack snapshot of VM
     pub stack: Vec<U256>,
+    /// Memory snapshot of VM
+    pub memory: Vec<u8>,
+
+    /// Program counter
     pub pc: usize,
+    /// Current offset of the output buffer
     pub output_offset: usize,
+    /// Length of the output buffer
     pub output_len: usize,
 
+    /// Call data of the current call
     pub call_data: Bytes,
 
+    /// Call context of the current call
     pub address: H160,
     pub caller: H160,
     pub code_address: H160,
     pub apparent_value: U256,
-
-    pub memory: Vec<u8>,
 }
 
 impl PostExecutionCtx {
+    /// Convert the post execution context to revm [`CallContext`]
     fn get_call_ctx(&self) -> CallContext {
         CallContext {
             address: self.address,
@@ -100,21 +120,32 @@ impl PostExecutionCtx {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EVMState {
+    /// State of the EVM, which is mapping of U256 slot to U256 value for each contract
     pub state: HashMap<H160, HashMap<U256, U256>>,
-    // If control leak happens, we add state with incomplete execution to the corpus
-    // More than one when the control is leaked again with the call based on the incomplete state
+
+    /// Post execution context
+    /// If control leak happens, we add the post execution context to the VM state,
+    /// which contains all information needed to continue execution.
+    ///
+    /// There can be more than one [`PostExecutionCtx`] when the control is leaked again
+    /// on the incomplete state (i.e., double+ reentrancy)
     pub post_execution: Vec<PostExecutionCtx>,
-    pub leaked_func_hash: Option<u64>,
+
+    /// Flashloan information
+    /// (e.g., how much flashloan is taken, and how much tokens are liquidated)
     pub flashloan_data: FlashloanData,
+
+    /// Is bug() call in Solidity hit?
     pub bug_hit: bool,
 }
 
 impl Default for EVMState {
+    /// Default VM state, containing empty state, no post execution context,
+    /// and no flashloan usage
     fn default() -> Self {
         Self {
             state: HashMap::new(),
             post_execution: Vec::new(),
-            leaked_func_hash: None,
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
         }
@@ -122,6 +153,7 @@ impl Default for EVMState {
 }
 
 impl VMStateT for EVMState {
+    /// Calculate the hash of the VM state
     fn get_hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
         for i in self.post_execution.iter() {
@@ -137,14 +169,20 @@ impl VMStateT for EVMState {
         }
         s.finish()
     }
+
+    /// Check whether current state has post execution context
+    /// This can also used to check whether a state is intermediate state (i.e., not yet
+    /// finished execution)
     fn has_post_execution(&self) -> bool {
         self.post_execution.len() > 0
     }
 
+    /// Get length needed for return data length of the call that leads to control leak
     fn get_post_execution_needed_len(&self) -> usize {
         self.post_execution.last().unwrap().output_len
     }
 
+    /// Get the PC of last post execution context
     fn get_post_execution_pc(&self) -> usize {
         match self.post_execution.last() {
             Some(i) => i.pc,
@@ -152,10 +190,12 @@ impl VMStateT for EVMState {
         }
     }
 
+    /// Get amount of post execution context
     fn get_post_execution_len(&self) -> usize {
         self.post_execution.len()
     }
 
+    /// Get flashloan information
     #[cfg(feature = "full_trace")]
     fn get_flashloan(&self) -> String {
         format!(
@@ -170,31 +210,39 @@ impl VMStateT for EVMState {
 }
 
 impl EVMState {
+    /// Create a new EVM state, containing empty state, no post execution context
     pub(crate) fn new() -> Self {
         Self {
             state: HashMap::new(),
             post_execution: vec![],
-            leaked_func_hash: None,
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
         }
     }
 
+    /// Get all storage slots of a specific contract
     pub fn get(&self, address: &H160) -> Option<&HashMap<U256, U256>> {
         self.state.get(address)
     }
 
+    /// Get all storage slots of a specific contract (mutable)
     pub fn get_mut(&mut self, address: &H160) -> Option<&mut HashMap<U256, U256>> {
         self.state.get_mut(address)
     }
 
+    /// Insert all storage slots of a specific contract
     pub fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
         self.state.insert(address, storage);
     }
 }
 
+
+/// Is current EVM execution fast call
+/// - Fast call is a call that does not change the state of the contract
 pub static mut IS_FAST_CALL: bool = false;
 
+
+/// EVM executor, wrapper of revm
 #[derive(Debug, Clone)]
 pub struct EVMExecutor<I, S, VS>
 where
@@ -202,18 +250,29 @@ where
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
+    /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
     pub host: FuzzHost<VS, I, S>,
+    /// [Depreciated] Deployer address
     deployer: H160,
     phandom: PhantomData<(I, S, VS)>,
 }
 
+
+/// Execution result that may have control leaked
+/// Contains raw information of revm output and execution
 #[derive(Clone, Debug)]
 pub struct IntermediateExecutionResult {
+    /// Output of the execution
     pub output: Bytes,
+    /// The new state after execution
     pub new_state: EVMState,
+    /// Program counter after execution
     pub pc: usize,
+    /// Return value after execution
     pub ret: Return,
+    /// Stack after execution
     pub stack: Vec<U256>,
+    /// Memory after execution
     pub memory: Vec<u8>,
 }
 
@@ -232,6 +291,7 @@ where
         + 'static,
     VS: Default + VMStateT + 'static,
 {
+    /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: H160) -> Self {
         Self {
             host: fuzz_host,
@@ -240,6 +300,18 @@ where
         }
     }
 
+    /// Execute from a specific program counter and context
+    ///
+    /// `call_ctx` is the context of the call (e.g., caller address, callee address, etc.)
+    /// `vm_state` is the VM state to execute on
+    /// `data` is the input (function hash + serialized ABI args)
+    /// `input` is the additional input information (e.g., access pattern, etc.)
+    ///     If post execution context exists, then this is the return buffer of the call that leads
+    ///     to control leak. This is like we are fuzzing the subsequent execution wrt the return
+    ///     buffer of the control leak call.
+    /// `post_exec` is the post execution context to use, if any
+    ///     If `post_exec` is `None`, then the execution is from the beginning, otherwise it is from
+    ///     the post execution context.
     pub fn execute_from_pc(
         &mut self,
         call_ctx: &CallContext,
@@ -249,17 +321,24 @@ where
         post_exec: Option<PostExecutionCtx>,
         mut state: &mut S,
     ) -> IntermediateExecutionResult {
+        // Initial setups
         self.host.coverage_changed = false;
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
         self.host.call_count = 0;
-
+        let mut repeats = input.get_repeat();
+        // Initially, there is no state change
+        unsafe {
+            STATE_CHANGE = false;
+        }
+        // Ensure that the call context is correct
         unsafe {
             GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
         }
 
+        // Get the bytecode
         let mut bytecode = self
             .host
             .code
@@ -267,15 +346,13 @@ where
             .expect(&*format!("no code {:?}", call_ctx.code_address))
             .clone();
 
-        unsafe {
-            STATE_CHANGE = false;
-        }
-
-        let mut repeats = input.get_repeat();
-
+        // Create the interpreter
         let mut interp = if let Some(ref post_exec_ctx) = post_exec {
+            // If there is a post execution context, then we need to create the interpreter from
+            // the post execution context
             repeats = 1;
             unsafe {
+                // setup the pc, memory, and stack as the post execution context
                 let new_pc = post_exec_ctx.pc;
                 let call = Contract::new_with_context_not_cloned::<LatestSpec>(
                     post_exec_ctx.call_data.clone(),
@@ -293,20 +370,24 @@ where
                     post_exec_ctx.memory.len(),
                 ));
                 interp.memory.set(0, &post_exec_ctx.memory);
-
                 interp.memory.set(
                     post_exec_ctx.output_offset,
                     &data[4..min(post_exec_ctx.output_len + 4, data.len())],
                 );
+                // set return buffer as the input
+                // we remove the first 4 bytes because the first 4 bytes is the function hash (00000000 here)
                 interp.return_data_buffer = data.slice(4..);
                 interp
             }
         } else {
+            // if there is no post execution context, then we create the interpreter from the
+            // beginning
             let call =
                 Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
             Interpreter::new::<LatestSpec>(call, 1e10 as u64)
         };
 
+        // Execute the contract for `repeats` times or until revert
         let mut r = Return::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
@@ -319,11 +400,11 @@ where
                 break;
             }
         }
-
         if r != Revert {
             r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
         }
 
+        // Build the result
         let mut result = IntermediateExecutionResult {
             output: interp.return_value(),
             new_state: self.host.evmstate.clone(),
@@ -333,6 +414,7 @@ where
             memory: interp.memory.data().clone(),
         };
 
+        // [todo] remove this
         unsafe {
             if self.host.coverage_changed {
                 COVERAGE_NOT_CHANGED = 0;
@@ -367,6 +449,7 @@ where
         result
     }
 
+    /// Conduct a fast call that does not change the state
     fn fast_call(
         &mut self,
         address: H160,
@@ -416,11 +499,13 @@ where
         }
     }
 
+    /// Execute a transaction, wrapper of [`EVMExecutor::execute_from_pc`]
     fn execute_abi(
         &mut self,
         input: &I,
         state: &mut S,
     ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
+        // Get necessary info from input
         let mut vm_state = unsafe {
             input
                 .get_state()
@@ -428,17 +513,17 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone()
         };
-        // todo(@shou): is this correct?
         let is_step = input.is_step();
         let caller = input.get_caller();
         let mut data = Bytes::from(input.to_bytes());
+        // use direct data (mostly used for debugging) if there is no data
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
-
         let value = input.get_txn_value().unwrap_or(U256::zero());
         let contract_address = input.get_contract();
 
+        // Execute the transaction
         let mut r = if is_step {
             let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
             self.host.origin = post_exec.caller;
@@ -454,27 +539,6 @@ where
                 state,
             )
         } else {
-            let _input_len_concolic = data.len() * 8;
-
-            // TODO: implement baseline here
-            if self.host.middlewares_enabled && self.host.concolic_enabled {
-                unsafe {
-                    // here probably we should reset the number to 0?
-                    // or let concolic run for ten times?
-                    if COVERAGE_NOT_CHANGED > 10000 {
-                        COVERAGE_NOT_CHANGED = 0;
-                        let mut txntrace = input.get_staged_state().trace.clone();
-                        txntrace.add_txn(build_basic_txn_from_input(input));
-                        let mut concolic_exe_host = ConcolicEVMExecutor::new(
-                            self.host.clone(),
-                            self.deployer,
-                            contract_address,
-                            txntrace,
-                        );
-                        concolic_exe_host.execute_all(state);
-                    }
-                }
-            }
             self.host.origin = caller;
             self.execute_from_pc(
                 &CallContext {
@@ -551,6 +615,7 @@ where
         + 'static,
     VS: VMStateT + Default + 'static,
 {
+    /// Deploy a contract
     fn deploy(
         &mut self,
         code: Bytecode,
@@ -588,18 +653,22 @@ where
         Some(deployed_address)
     }
 
+    /// Execute an input (transaction)
     #[cfg(not(feature = "flashloan_v2"))]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         self.execute_abi(input, state)
     }
 
+    /// Execute an input (can be transaction or borrow)
     #[cfg(feature = "flashloan_v2")]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
         match input.get_input_type() {
+            // buy (borrow because we have infinite ETH) tokens with ETH using uniswap
             EVMInputTy::Borrow => {
                 let token = input.get_contract();
 
                 let path_idx = input.get_randomness()[0] as usize;
+                // generate the call to uniswap router for buying tokens using ETH
                 let call_info = generate_uniswap_router_call(
                     get_token_ctx!(
                         self.host
@@ -614,10 +683,10 @@ where
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
                 );
+                // execute the transaction to get the state with the token borrowed
                 match call_info {
                     Some((abi, value, target)) => {
                         let bys = abi.get_bytes();
-                        // println!("borrow: {:?} {:?} {:?}", hex::encode(abi.get_bytes()), value, target);
                         let mut res = self.fast_call(
                             target,
                             Bytes::from(bys),
@@ -626,7 +695,6 @@ where
                             value,
                             input.get_caller(),
                         );
-                        // println!("borrow: {:?}", ret);
                         #[cfg(feature = "flashloan_v2")]
                         match self.host.flashloan_middleware {
                             Some(ref m) => m
@@ -635,7 +703,6 @@ where
                                 .analyze_call(input, &mut res.new_state.flashloan_data),
                             None => (),
                         }
-
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
@@ -652,6 +719,7 @@ where
                         }
                     }
                     None => ExecutionResult {
+                        // we don't have enough liquidity to buy the token
                         output: vec![],
                         reverted: false,
                         new_state: StagedVMState::new_with_state(input.get_state().clone()),
@@ -666,6 +734,7 @@ where
         }
     }
 
+    /// Execute a static call
     fn fast_static_call(
         &mut self,
         data: &Vec<(H160, Bytes)>,

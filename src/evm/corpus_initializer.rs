@@ -1,3 +1,5 @@
+/// Utilities to initialize the corpus
+/// Add all potential calls with default args to the corpus
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};

@@ -712,12 +712,9 @@ where
                     hash.hash(&mut s);
                     let _hash = s.finish();
                     ABI_MAX_SIZE[(_hash as usize) % MAP_SIZE] = RET_SIZE;
-                    self.evmstate.leaked_func_hash = Some(_hash);
                 }
             };
         }
-
-        self.evmstate.leaked_func_hash = None;
 
         // middlewares
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;

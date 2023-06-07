@@ -4,7 +4,7 @@ The producer is the component that is responsible for producing information used
 
 ### Lifecycle
 
-Transactions finished execution
-=> `Producer.produce` is called (generates data)
-=> All `Oracle.oracle`s are called 
+Transactions finished execution  
+=> `Producer.produce` is called (generates data)  
+=> All `Oracle.oracle`s are called   
 => `Producer.notify_end` is called (remove cache)
