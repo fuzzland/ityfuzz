@@ -53,10 +53,6 @@ struct Args {
     #[arg(long)]
     target_type: Option<String>,
 
-    /// target single contract (Default: None)
-    #[arg(long)]
-    target_contract: Option<String>,
-
     /// Fuzzer type
     #[arg(long, default_value = "cmp")]
     fuzzer_type: String,
@@ -282,16 +278,7 @@ fn main() {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: match target_type {
             Glob => {
-                if args.target_contract.is_none() {
-                    ContractLoader::from_glob(args.target.as_str(), &mut state).contracts
-                } else {
-                    ContractLoader::from_glob_target(
-                        args.target.as_str(),
-                        args.target_contract.unwrap().as_str(),
-                        &mut state,
-                    )
-                    .contracts
-                }
+                ContractLoader::from_glob(args.target.as_str(), &mut state).contracts
             }
             Address => {
                 if onchain.is_none() {
