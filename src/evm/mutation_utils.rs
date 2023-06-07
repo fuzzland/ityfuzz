@@ -1,3 +1,4 @@
+/// Mutation utilities for the EVM
 use crate::input::VMInputT;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
@@ -15,13 +16,21 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
+/// Constants in the contracts
+///
+/// This is metadata attached to the global fuzz state
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantPoolMetadata {
+    /// Vector of constants in the contracts
     pub constants: Vec<Vec<u8>>,
 }
 
 impl_serdeany!(ConstantPoolMetadata);
 
+/// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant in the contract
+///
+/// We discover that sometimes directly setting the bytes to the constants allow us to increase
+/// test coverage.
 pub struct ConstantHintedMutator;
 
 impl Named for ConstantHintedMutator {
@@ -41,6 +50,7 @@ where
     S: State + HasRand + HasMetadata,
     I: Input + HasBytesVec,
 {
+    /// Mutate the input to a constant in the contract
     fn mutate(
         &mut self,
         state: &mut S,
@@ -68,6 +78,10 @@ where
     }
 }
 
+/// [`VMStateHintedMutator`] is a mutator that mutates the input to a value in the VM state
+///
+/// Similar to [`ConstantHintedMutator`], we discover that sometimes directly setting the bytes to
+/// the values in the VM state allow us to increase test coverage.
 pub struct VMStateHintedMutator<'a> {
     pub vm_slots: &'a HashMap<U256, U256>,
 }
@@ -84,6 +98,7 @@ impl<'a> VMStateHintedMutator<'a> {
     }
 }
 
+/// Mutate the input to a value in the VM state
 pub fn mutate_with_vm_slot<S: State + HasRand>(
     vm_slots: &HashMap<U256, U256>,
     state: &mut S,
@@ -104,6 +119,7 @@ where
     S: State + HasRand,
     I: Input + HasBytesVec,
 {
+    /// Mutate the input to a value in the VM state
     fn mutate(
         &mut self,
         state: &mut S,
@@ -124,6 +140,9 @@ where
     }
 }
 
+
+/// Mutator that mutates the `CONSTANT SIZE` input bytes (e.g., uint256) in various ways provided by
+/// [`libafl::mutators`]. It also uses the [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
 pub fn byte_mutator<I, S>(
     state: &mut S,
     input: &mut I,
@@ -163,6 +182,8 @@ where
     }
 }
 
+/// Mutator that mutates the `VARIABLE SIZE` input bytes (e.g., string) in various ways provided by
+/// [`libafl::mutators`]. It also uses the [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
 pub fn byte_mutator_with_expansion<I, S>(
     state: &mut S,
     input: &mut I,
