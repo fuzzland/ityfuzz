@@ -753,7 +753,7 @@ mod tests {
     fn test_fuzz_executor() {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
-            FuzzHost::new(Arc::new(StdScheduler::new()), &mut FuzzState::new(0)),
+            FuzzHost::new(Arc::new(StdScheduler::new())),
             generate_random_address(&mut state),
         );
         let mut observers = tuple_list!();

@@ -8,7 +8,7 @@ use primitive_types::H160;
 use std::io::Read;
 use std::path::Path;
 use itertools::Itertools;
-
+use crate::state::FuzzState;
 extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_load() {
-        let loader = ContractLoader::from_glob("demo/*");
+        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0));
         println!(
             "{:?}",
             loader
