@@ -1,14 +1,15 @@
+/// Load contract from file system or remote
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-
+use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
 use std::fs::File;
 
 use primitive_types::H160;
 use std::io::Read;
 use std::path::Path;
 use itertools::Itertools;
-
+use crate::state::FuzzState;
 extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
@@ -135,14 +136,14 @@ impl ContractLoader {
         hex::decode(data).expect("Failed to parse hex file")
     }
 
-    pub fn from_prefix(prefix: &str, source_map_info: Option<ContractsSourceMapInfo>) -> Self {
+    pub fn from_prefix(prefix: &str, state: &mut EVMFuzzState, source_map_info: Option<ContractsSourceMapInfo>) -> Self {
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
             code: vec![],
             is_code_deployed: false,
             constructor_args: vec![], // todo: fill this
-            deployed_address: generate_random_address(),
+            deployed_address: generate_random_address(state),
             source_map: source_map_info.map(|info|
                 info.get(prefix).expect("combined.json provided but contract not found").clone()
             ),
@@ -206,7 +207,7 @@ impl ContractLoader {
     // |- contract1.bin
     // |- contract2.abi
     // |- contract2.bin
-    pub fn from_glob(p: &str) -> Self {
+    pub fn from_glob(p: &str, state: &mut EVMFuzzState) -> Self {
         let mut prefix_file_count: HashMap<String, u8> = HashMap::new();
         let mut contract_combined_json_info = None;
         for i in glob(p).expect("not such folder") {
@@ -246,6 +247,7 @@ impl ContractLoader {
             if count == 2 {
                 for contract in
                     Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str(),
+                                      state,
                                       parsed_contract_info.clone()).contracts
                 {
                     contracts.push(contract);
@@ -255,6 +257,7 @@ impl ContractLoader {
 
         ContractLoader { contracts }
     }
+
 
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<H160>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
@@ -322,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_load() {
-        let loader = ContractLoader::from_glob("demo/*");
+        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0));
         println!(
             "{:?}",
             loader

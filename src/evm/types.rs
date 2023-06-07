@@ -1,3 +1,4 @@
+/// Common generic types for EVM fuzzing
 use crate::evm::input::EVMInput;
 use crate::evm::mutator::FuzzMutator;
 use crate::evm::vm::EVMState;

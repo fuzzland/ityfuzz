@@ -189,8 +189,11 @@ where
     Out: Default,
 {
     /// Create a new [`FuzzState`] with default values
-    pub fn new() -> Self {
-        let seed = current_nanos();
+    pub fn new(lparam_seed: u64) -> Self {
+        let mut seed: u64 = lparam_seed;
+        if lparam_seed == 0 {
+            seed = current_nanos();
+        }
         println!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
@@ -206,7 +209,7 @@ where
             execution_result: ExecutionResult::empty_result(),
             callers_pool: Vec::new(),
             addresses_pool: Vec::new(),
-            rand_generator: RomuDuoJrRand::with_seed(1667840158231589000),
+            rand_generator: RomuDuoJrRand::with_seed(seed),
             max_size: 20,
             hash_to_address: Default::default(),
             phantom: Default::default(),
@@ -229,7 +232,7 @@ where
 {
     /// Create a new [`FuzzState`] with default values
     fn default() -> Self {
-        Self::new()
+        Self::new(0)
     }
 }
 
