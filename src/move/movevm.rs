@@ -254,7 +254,7 @@ mod tests {
                 module,
                 None,
                 AccountAddress::new([0; 32]),
-                &mut FuzzState::new(),
+                &mut FuzzState::new(0),
             )
             .unwrap();
 
@@ -281,7 +281,7 @@ mod tests {
             vm_state_idx: 0,
         };
 
-        let res = mv.execute(&input, &mut FuzzState::new());
+        let res = mv.execute(&input, &mut FuzzState::new(0));
         println!("{:?}", res);
         return mv;
     }

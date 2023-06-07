@@ -132,6 +132,10 @@ struct Args {
     #[arg(long, default_value = "corpus")]
     corpus_path: String,
 
+    // random seed  
+    #[arg(long, default_value = "1667840158231589000")]
+    seed: u64,
+
 }
 
 enum TargetType {
@@ -268,12 +272,13 @@ fn main() {
     }
 
     let is_onchain = onchain.is_some();
+    let mut state: EVMFuzzState = FuzzState::new(args.seed);
 
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: match target_type {
             Glob => {
-                ContractLoader::from_glob(args.target.as_str()).contracts
+                ContractLoader::from_glob(args.target.as_str(), &mut state).contracts
             }
             Address => {
                 if onchain.is_none() {
@@ -316,7 +321,7 @@ fn main() {
     };
 
     match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config),
+        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
         // FuzzerTypes::BASIC => basic_fuzzer(config)
         _ => {}
     }

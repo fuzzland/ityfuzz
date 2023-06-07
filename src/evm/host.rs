@@ -5,7 +5,7 @@ use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, Scheduler};
+use libafl::prelude::{HasCorpus, Scheduler, HasRand};
 use libafl::state::State;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
@@ -376,7 +376,7 @@ pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
-    S: State + HasCaller<H160> + Debug + Clone + HasCorpus<I> + 'static,
+    S: State +HasRand + HasCaller<H160> + Debug + Clone + HasCorpus<I> +  'static,
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
@@ -657,7 +657,7 @@ where
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
             // todo: use nonce + hash instead
-            let r_addr = generate_random_address();
+            let r_addr = generate_random_address(state);
             let mut interp = Interpreter::new::<LatestSpec>(
                 Contract::new_with_context::<LatestSpec>(
                     Bytes::new(),

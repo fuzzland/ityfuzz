@@ -53,7 +53,7 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
+    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
 ) {
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
 
@@ -66,7 +66,6 @@ pub fn evm_fuzzer(
     let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     let calibration = CalibrationStage::new(&feedback);
-    let mut state: EVMFuzzState = FuzzState::new();
 
     let mut scheduler = QueueScheduler::new();
 
@@ -142,7 +141,7 @@ pub fn evm_fuzzer(
         &mut evm_executor,
         &mut scheduler,
         &infant_scheduler,
-        &mut state,
+        state,
     );
 
     #[cfg(feature = "use_presets")]
@@ -150,7 +149,7 @@ pub fn evm_fuzzer(
 
     corpus_initializer.initialize(config.contract_info);
 
-    evm_executor.host.initialize(&mut state);
+    evm_executor.host.initialize(state);
 
     // now evm executor is ready, we can clone it
 
@@ -161,7 +160,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
     feedback
-        .init_state(&mut state)
+        .init_state(state)
         .expect("Failed to init state");
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
@@ -181,7 +180,7 @@ pub fn evm_fuzzer(
     match config.replay_file {
         None => {
             fuzzer
-                .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+                .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
                 .expect("Fuzzing failed");
         }
         Some(files) => {
@@ -306,7 +305,7 @@ pub fn evm_fuzzer(
                     };
 
                     fuzzer
-                        .evaluate_input_events(&mut state, &mut executor, &mut mgr, inp, false)
+                        .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                         .unwrap();
 
                     println!("============ Execution result {} =============", idx);

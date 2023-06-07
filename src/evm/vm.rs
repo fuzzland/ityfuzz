@@ -24,7 +24,7 @@ use crate::state_input::StagedVMState;
 use crate::tracer::build_basic_txn_from_input;
 use bytes::Bytes;
 
-use libafl::prelude::HasMetadata;
+use libafl::prelude::{HasMetadata, HasRand};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 
@@ -221,6 +221,7 @@ impl<VS, I, S> EVMExecutor<I, S, VS>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State
+        + HasRand
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata
@@ -540,6 +541,7 @@ impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, Vec<u8>, I, S>
 where
     I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
     S: State
+        + HasRand
         + HasCorpus<I>
         + HasItyState<H160, H160, VS>
         + HasMetadata
@@ -745,12 +747,14 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
+    use primitive_types::{H160};
 
     #[test]
     fn test_fuzz_executor() {
+        let mut state: EVMFuzzState = FuzzState::new(0);
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
             FuzzHost::new(Arc::new(StdScheduler::new())),
-            generate_random_address(),
+            generate_random_address(&mut state),
         );
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
@@ -768,8 +772,8 @@ mod tests {
             .deploy(
                 Bytecode::new_raw(Bytes::from(deployment_bytecode)),
                 None,
-                generate_random_address(),
-                &mut FuzzState::new(),
+                generate_random_address(&mut state),
+                &mut FuzzState::new(0),
             )
             .unwrap();
 
@@ -778,7 +782,7 @@ mod tests {
         let function_hash = hex::decode("90b6e333").unwrap();
 
         let input_0 = EVMInput {
-            caller: generate_random_address(),
+            caller: generate_random_address(&mut state),
             contract: deployment_loc,
             data: None,
             sstate: StagedVMState::new_uninitialized(),
@@ -803,7 +807,7 @@ mod tests {
             repeat: 1,
         };
 
-        let mut state = FuzzState::new();
+        let mut state = FuzzState::new(0);
 
         // process(0)
         let execution_result_0 = evm_executor.execute(&input_0, &mut state);
@@ -818,7 +822,7 @@ mod tests {
         // process(5)
 
         let input_5 = EVMInput {
-            caller: generate_random_address(),
+            caller: generate_random_address(&mut state),
             contract: deployment_loc,
             data: None,
             sstate: StagedVMState::new_uninitialized(),
