@@ -334,7 +334,7 @@ fn main() {
     };
 
     match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config, state),
+        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
         // FuzzerTypes::BASIC => basic_fuzzer(config)
         _ => {}
     }
