@@ -976,11 +976,12 @@ pub fn get_abi_type_boxed_with_address(abi_name: &String, address: Vec<u8>) -> B
 ///
 /// # Example
 /// ```
+/// use ityfuzz::evm::abi::split_with_parenthesis;
 /// let s = "a,b,(c,d),e";
 /// let result = split_with_parenthesis(s);
 /// assert_eq!(result, vec!["a", "b", "(c,d)", "e"]);
 /// ```
-fn split_with_parenthesis(s: &str) -> Vec<String> {
+pub fn split_with_parenthesis(s: &str) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();
     let mut current: String = String::new();
     let mut parenthesis: i32 = 0;
@@ -1006,7 +1007,8 @@ fn split_with_parenthesis(s: &str) -> Vec<String> {
 ///
 /// # Example
 /// ```
-/// let result = get_abi_type("uint256".to_string(), &None);
+/// use ityfuzz::evm::abi::get_abi_type;
+/// let result = get_abi_type(&"uint256".to_string(), &None);
 /// // result is a A256 with default value 0
 /// ```
 pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
