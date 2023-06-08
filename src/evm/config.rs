@@ -1,3 +1,4 @@
+/// Configuration for the EVM fuzzer
 use crate::evm::contract_utils::ContractInfo;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 

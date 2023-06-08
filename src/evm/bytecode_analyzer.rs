@@ -1,9 +1,13 @@
+/// Analysis passes for EVM bytecode
 use crate::evm::mutation_utils::ConstantPoolMetadata;
 use libafl::state::{HasMetadata, State};
 
 use revm::Bytecode;
 use std::collections::HashSet;
 
+/// Find all constants in the bytecode by observing PUSH instructions.
+///
+/// Check tests below for usage.
 pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
     let mut idx = 0;
     let bytecode_len = bytecode.len();
@@ -65,7 +69,8 @@ pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
     constants
 }
 
-// this can be costly, ensure sampling to be cheap
+/// Add constants in smart contract to the global state's [`ConstantPoolMetadata`]
+/// this can be costly, ensure sampling to be cheap
 pub fn add_analysis_result_to_state<S>(bytecode: &Bytecode, state: &mut S)
 where
     S: HasMetadata + State,
