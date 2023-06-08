@@ -64,7 +64,12 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
-
+// resut type
+enum IsSetCode {
+    None,
+    SetCode {address: H160, code: Bytecode},
+    Other,
+}
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
@@ -107,6 +112,7 @@ where
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
+    is_setcode:IsSetCode,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -167,6 +173,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            is_setcode: IsSetCode::None,
         }
     }
 }
@@ -212,6 +219,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            is_setcode:IsSetCode::None,
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -291,6 +299,19 @@ where
             }
             None => {
                 self.hash_to_address.insert(hash, HashSet::from([address]));
+            }
+        }
+    }
+
+    pub fn set_code_status(&mut self, address: Option<H160>, mut code: Option<Bytecode>) {
+        match (address, code) {
+            (Some(address), Some(code)) =>{
+                let newaddr = address.clone();
+                let newcode = code.clone();
+                self.is_setcode = IsSetCode::SetCode {address:newaddr,  code:newcode };
+            }
+            _ => {
+               ();
             }
         }
     }
@@ -392,6 +413,7 @@ where
                     }
                     _ => {}
                 }
+                self.set_code_status(None, None);
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
@@ -400,6 +422,16 @@ where
                         .borrow_mut()
                         .on_step(interp, self, state);
                 }
+
+                match &self.is_setcode {
+                    IsSetCode::SetCode {address, code} =>{
+                        if self.code.contains_key(address) == false {
+                            self.set_code(address.clone(), code.clone(), state);
+                        }
+                    }
+                    _ => {}
+                }
+                self.set_code_status(None, None);
             }
 
             macro_rules! fast_peek {
