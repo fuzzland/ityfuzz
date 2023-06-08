@@ -311,7 +311,7 @@ where
                 self.is_setcode = IsSetCode::SetCode {address:newaddr,  code:newcode };
             }
             _ => {
-               ();
+               self.is_setcode = IsSetCode::None;
             }
         }
     }
@@ -425,9 +425,7 @@ where
 
                 match &self.is_setcode {
                     IsSetCode::SetCode {address, code} =>{
-                        if self.code.contains_key(address) == false {
-                            self.set_code(address.clone(), code.clone(), state);
-                        }
+                        self.set_code(address.clone(), code.clone(), state);
                     }
                     _ => {}
                 }
