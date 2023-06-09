@@ -64,12 +64,6 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
-// resut type
-enum IsSetCode {
-    None,
-    SetCode {address: H160, code: Bytecode},
-    Other,
-}
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
@@ -112,7 +106,8 @@ where
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
-    is_setcode:IsSetCode,
+    // set_code data
+    pub setcode_data: HashMap<H160, Bytecode>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -173,7 +168,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
-            is_setcode: IsSetCode::None,
+            setcode_data:self.setcode_data.clone(),
         }
     }
 }
@@ -219,7 +214,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
-            is_setcode:IsSetCode::None,
+            setcode_data:HashMap::new(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -306,12 +301,13 @@ where
     pub fn set_code_status(&mut self, address: Option<H160>, mut code: Option<Bytecode>) {
         match (address, code) {
             (Some(address), Some(code)) =>{
-                let newaddr = address.clone();
-                let newcode = code.clone();
-                self.is_setcode = IsSetCode::SetCode {address:newaddr,  code:newcode };
+                if self.setcode_data.contains_key(&address) == true {
+                    self.setcode_data.remove(&address); // update code
+                }
+                self.setcode_data.insert(address, code);
             }
             _ => {
-               self.is_setcode = IsSetCode::None;
+                self.setcode_data.clear();
             }
         }
     }
@@ -423,12 +419,10 @@ where
                         .on_step(interp, self, state);
                 }
 
-                match &self.is_setcode {
-                    IsSetCode::SetCode {address, code} =>{
-                        self.set_code(address.clone(), code.clone(), state);
-                    }
-                    _ => {}
+                for (address, code) in &self.setcode_data.clone() {
+                    self.set_code(address.clone(), code.clone(), state);
                 }
+
                 self.set_code_status(None, None);
             }
 
