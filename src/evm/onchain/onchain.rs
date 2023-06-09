@@ -268,7 +268,7 @@ where
                 }
                 if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-                    host.set_code_status(Some(address_h160), Some(contract_code.clone()));
+                    host.set_codedata(address_h160, contract_code.clone());
                 }
                 if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
                     *interp.instruction_pointer == 0x3b ||

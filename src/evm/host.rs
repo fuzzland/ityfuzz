@@ -298,18 +298,12 @@ where
         }
     }
 
-    pub fn set_code_status(&mut self, address: Option<H160>, mut code: Option<Bytecode>) {
-        match (address, code) {
-            (Some(address), Some(code)) =>{
-                if self.setcode_data.contains_key(&address) == true {
-                    self.setcode_data.remove(&address); // update code
-                }
-                self.setcode_data.insert(address, code);
-            }
-            _ => {
-                self.setcode_data.clear();
-            }
-        }
+    pub fn set_codedata(&mut self, address: H160, mut code: Bytecode) {
+        self.setcode_data.insert(address, code);
+    }
+
+    pub fn clear_codedata(&mut self) {
+        self.setcode_data.clear();
     }
 
     pub fn set_code(&mut self, address: H160, mut code: Bytecode, state: &mut S) {
@@ -409,7 +403,7 @@ where
                     }
                     _ => {}
                 }
-                self.set_code_status(None, None);
+                self.clear_codedata();
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
@@ -422,8 +416,7 @@ where
                 for (address, code) in &self.setcode_data.clone() {
                     self.set_code(address.clone(), code.clone(), state);
                 }
-
-                self.set_code_status(None, None);
+                self.clear_codedata();
             }
 
             macro_rules! fast_peek {
