@@ -416,7 +416,6 @@ where
                 for (address, code) in &self.setcode_data.clone() {
                     self.set_code(address.clone(), code.clone(), state);
                 }
-                self.clear_codedata();
             }
 
             macro_rules! fast_peek {
