@@ -1,3 +1,4 @@
+/// Configuration for the EVM fuzzer
 use crate::evm::contract_utils::ContractInfo;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 
@@ -50,6 +51,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     pub producers: Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
     pub price_oracle: Box<dyn PriceOracle>,
-    pub debug_file: Option<String>,
+    pub replay_file: Option<String>,
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+    pub corpus_path: String,
 }

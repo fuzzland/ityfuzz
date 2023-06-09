@@ -1,11 +1,11 @@
 use crate::evm::bytecode_analyzer;
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, Scheduler};
+use libafl::prelude::{HasCorpus, Scheduler, HasRand};
 use libafl::state::State;
 use primitive_types::{H160, H256, U256};
 use revm::db::BenchmarkDB;
@@ -33,8 +33,8 @@ use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-#[cfg(feature = "record_instruction_coverage")]
-use crate::r#const::DEBUG_PRINT_PERCENT;
+use crate::rand_utils::generate_random_address;
+
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use crate::types::float_scale_to_u512;
 
@@ -64,10 +64,8 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
-
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
-#[cfg(feature = "reexecution")]
-pub static mut CALL_UNTIL: u8 = u8::MAX;
+pub static mut CALL_UNTIL: u32 = u32::MAX;
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -93,12 +91,7 @@ where
     pub flashloan_middleware: Option<Rc<RefCell<Flashloan<VS, I, S>>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub pc_coverage: HashMap<H160, HashSet<usize>>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub total_instr: HashMap<H160, usize>,
-    #[cfg(feature = "record_instruction_coverage")]
-    pub total_instr_set: HashMap<H160, HashSet<usize>>,
+
     pub origin: H160,
 
     pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
@@ -109,10 +102,12 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub call_count: u8,
+    pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
+    // set_code data
+    pub setcode_data: HashMap<H160, Bytecode>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -164,14 +159,8 @@ where
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             coverage_changed: false,
             flashloan_middleware: None,
-            #[cfg(feature = "record_instruction_coverage")]
-            pc_coverage: self.pc_coverage.clone(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr: self.total_instr.clone(),
             middlewares_latent_call_actions: vec![],
             origin: self.origin.clone(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr_set: Default::default(),
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
@@ -179,6 +168,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            setcode_data:self.setcode_data.clone(),
         }
     }
 }
@@ -193,21 +183,6 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
 
-pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
-    let mut i = 0;
-    let bytes = bytecode.bytes();
-    let mut complete_bytes = vec![];
-
-    while i < bytes.len() {
-        let op = *bytes.get(i).unwrap();
-        complete_bytes.push(i);
-        i += 1;
-        if op >= 0x60 && op <= 0x7f {
-            i += op as usize - 0x5f;
-        }
-    }
-    complete_bytes.into_iter().collect()
-}
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
@@ -230,14 +205,8 @@ where
             middlewares: Rc::new(RefCell::new(HashMap::new())),
             coverage_changed: false,
             flashloan_middleware: None,
-            #[cfg(feature = "record_instruction_coverage")]
-            pc_coverage: Default::default(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr: Default::default(),
             middlewares_latent_call_actions: vec![],
             origin: Default::default(),
-            #[cfg(feature = "record_instruction_coverage")]
-            total_instr_set: Default::default(),
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -245,6 +214,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            setcode_data:HashMap::new(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -328,12 +298,33 @@ where
         }
     }
 
-    pub fn set_code(&mut self, address: H160, code: Bytecode) {
-        #[cfg(any(feature = "evaluation", feature = "record_instruction_coverage"))]
-        {
-            let pcs = instructions_pc(&code.clone());
-            self.total_instr.insert(address, pcs.len());
-            self.total_instr_set.insert(address, pcs);
+    pub fn set_codedata(&mut self, address: H160, mut code: Bytecode) {
+        self.setcode_data.insert(address, code);
+    }
+
+    pub fn clear_codedata(&mut self) {
+        self.setcode_data.clear();
+    }
+
+    pub fn set_code(&mut self, address: H160, mut code: Bytecode, state: &mut S) {
+        unsafe {
+            if self.middlewares_enabled {
+                match self.flashloan_middleware.clone() {
+                    Some(m) => {
+                        let mut middleware = m.deref().borrow_mut();
+                        middleware.on_insert(&mut code, address, self, state);
+                    }
+                    _ => {}
+                }
+                for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
+                {
+                    middleware
+                        .deref()
+                        .deref()
+                        .borrow_mut()
+                        .on_insert(&mut code, address, self, state);
+                }
+            }
         }
         assert!(self
             .code
@@ -342,60 +333,6 @@ where
                 Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>())
             )
             .is_none());
-    }
-
-    #[cfg(feature = "record_instruction_coverage")]
-    pub(crate) fn record_instruction_coverage(&mut self) {
-        let mut data = format!(
-            "coverage: {:?}",
-            self.total_instr
-                .keys()
-                .map(|k| (
-                    k,
-                    self.pc_coverage.get(k).unwrap_or(&Default::default()).len(),
-                    self.total_instr.get(k).unwrap()
-                ))
-                .collect::<Vec<_>>()
-        );
-
-        let mut not_covered: HashMap<H160, HashSet<usize>> = HashMap::new();
-        for (addr, covs) in &self.total_instr_set {
-            for cov in covs {
-                match self.pc_coverage.get_mut(addr) {
-                    Some(covs) => {
-                        if !covs.contains(cov) {
-                            not_covered
-                                .entry(*addr)
-                                .or_insert(HashSet::new())
-                                .insert(*cov);
-                        }
-                    }
-                    None => {
-                        not_covered
-                            .entry(*addr)
-                            .or_insert(HashSet::new())
-                            .insert(*cov);
-                    }
-                }
-            }
-        }
-
-        data.push_str("\n\n\nnot covered: ");
-        not_covered.iter().for_each(|(addr, pcs)| {
-            data.push_str(&format!(
-                "{:?}: {:?}\n\n",
-                addr,
-                pcs.into_iter().sorted().collect::<Vec<_>>()
-            ));
-        });
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .open("cov.txt")
-            .unwrap();
-        file.write_all(data.as_bytes()).unwrap();
     }
 
     pub fn find_static_call_read_slot(
@@ -450,20 +387,13 @@ pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
-    S: State + HasCaller<H160> + Debug + Clone + HasCorpus<I> + 'static,
+    S: State +HasRand + HasCaller<H160> + Debug + Clone + HasCorpus<I> +  'static,
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
     const INSPECT: bool = true;
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, _is_static: bool, state: &mut S) -> Return {
-        #[cfg(feature = "record_instruction_coverage")]
-        {
-            let address = interp.contract.address;
-            let pc = interp.program_counter().clone();
-            self.pc_coverage.entry(address).or_default().insert(pc);
-        }
-
         unsafe {
             if self.middlewares_enabled {
                 match self.flashloan_middleware.clone() {
@@ -473,6 +403,7 @@ where
                     }
                     _ => {}
                 }
+                self.clear_codedata();
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
@@ -480,6 +411,10 @@ where
                         .deref()
                         .borrow_mut()
                         .on_step(interp, self, state);
+                }
+
+                for (address, code) in &self.setcode_data.clone() {
+                    self.set_code(address.clone(), code.clone(), state);
                 }
             }
 
@@ -705,8 +640,6 @@ where
 
     fn log(&mut self, _address: H160, _topics: Vec<H256>, _data: Bytes) {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
-            #[cfg(feature = "record_instruction_coverage")]
-            self.record_instruction_coverage();
             if unsafe {PANIC_ON_BUG} {
                 panic!("target hit");
             }
@@ -735,22 +668,52 @@ where
 
     fn create<SPEC: Spec>(
         &mut self,
-        _inputs: &mut CreateInputs,
+        inputs: &mut CreateInputs,
+        state: &mut S,
     ) -> (Return, Option<H160>, Gas, Bytes) {
         unsafe {
-            // println!("create");
+            // todo: use nonce + hash instead
+            let r_addr = generate_random_address(state);
+            let mut interp = Interpreter::new::<LatestSpec>(
+                Contract::new_with_context::<LatestSpec>(
+                    Bytes::new(),
+                    Bytecode::new_raw(inputs.init_code.clone()),
+                    &CallContext {
+                        address: r_addr,
+                        caller: inputs.caller,
+                        code_address: r_addr,
+                        apparent_value: inputs.value,
+                        scheme: CallScheme::Call,
+                    },
+                ),
+                1e10 as u64,
+            );
+            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+            if ret == Return::Continue {
+                self.set_code(
+                    r_addr,
+                    Bytecode::new_raw(interp.return_value()),
+                    state
+                );
+                (
+                    Continue,
+                    Some(r_addr),
+                    Gas::new(0),
+                    interp.return_value(),
+                )
+            } else {
+                (
+                    ret,
+                    Some(r_addr),
+                    Gas::new(0),
+                    Bytes::new(),
+                )
+            }
         }
-        return (
-            Continue,
-            Some(H160::from_str("0x0000000000000000000000000000000000000000").unwrap()),
-            Gas::new(0),
-            Bytes::new(),
-        );
     }
 
     fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
         self.call_count += 1;
-        #[cfg(feature = "reexecution")]
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
@@ -765,12 +728,9 @@ where
                     hash.hash(&mut s);
                     let _hash = s.finish();
                     ABI_MAX_SIZE[(_hash as usize) % MAP_SIZE] = RET_SIZE;
-                    self.evmstate.leaked_func_hash = Some(_hash);
                 }
             };
         }
-
-        self.evmstate.leaked_func_hash = None;
 
         // middlewares
         let mut middleware_result: Option<(Return, Gas, Bytes)> = None;

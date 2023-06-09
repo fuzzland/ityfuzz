@@ -1,3 +1,4 @@
+/// Dummy oracle for testing
 use crate::evm::input::{EVMInput, EVMInputT};
 use std::collections::HashMap;
 

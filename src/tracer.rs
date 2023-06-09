@@ -1,3 +1,6 @@
+//! Tracer for representing VMInput and VMState with less memory footprint
+//! and can be serialized and converted to string.
+
 use libafl::corpus::Corpus;
 
 use libafl::prelude::HasCorpus;
@@ -12,6 +15,8 @@ use crate::state::HasInfantStateState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+/// Represent a basic transaction using less memory.
+/// It can be serialized and converted to string.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicTxn<Addr> {
     pub caller: Addr,
@@ -24,7 +29,6 @@ pub struct BasicTxn<Addr> {
     pub value: Option<U256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
-    #[cfg(feature = "reexecution")]
     pub direct_data: Vec<u8>,
     pub layer: usize,
     pub additional_info: Option<Vec<u8>>,
@@ -41,7 +45,6 @@ where
             .field("contract", &self.contract)
             .field("data", &self.data)
             .field("additional_info", &hex::encode(self.additional_info.as_ref().unwrap_or(&vec![])));
-        #[cfg(feature = "reexecution")]
         {
             ff = ff.field("direct_data", &hex::encode(self.direct_data.as_slice()));
         }
@@ -57,6 +60,8 @@ where
     }
 }
 
+/// Turn an input (VMInput + VMState) to a basic transaction
+/// Includes additional info from execution results
 pub fn build_basic_txn<Loc, Addr, VS, I, Out>(
     v: &I,
     res: &ExecutionResult<Loc, Addr, VS, Out>,
@@ -78,7 +83,6 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: res.new_state.state.get_flashloan(),
-        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: if res.additional_info.is_none() {
@@ -89,6 +93,7 @@ where
     }
 }
 
+/// [Deprecated]: Turn an input (VMInput + VMState) to a basic transaction
 pub fn build_basic_txn_from_input<Loc, Addr, VS, I>(v: &I) -> BasicTxn<Addr>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -106,35 +111,37 @@ where
         data_abi: v.get_data_abi(),
         #[cfg(feature = "full_trace")]
         flashloan: "".to_string(),
-        #[cfg(feature = "reexecution")]
         direct_data: v.get_direct_data(),
         layer: v.get_state().get_post_execution_len(),
         additional_info: None,
     }
 }
 
+/// Represent a trace of transactions with starting VMState ID (from_idx).
+/// If VMState ID is None, it means that the trace is from the initial state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TxnTrace<Loc, Addr> {
-    pub transactions: Vec<BasicTxn<Addr>>,
-    pub from_idx: Option<usize>,
-    pub is_initial: bool,
+    pub transactions: Vec<BasicTxn<Addr>>,  // Transactions
+    pub from_idx: Option<usize>,  // Starting VMState ID
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
 impl<Loc, Addr> TxnTrace<Loc, Addr> {
+    /// Create a new TxnTrace
     pub(crate) fn new() -> Self {
         Self {
             transactions: Vec::new(),
             from_idx: None,
-            is_initial: false,
             phantom: Default::default(),
         }
     }
 
+    /// Add a transaction to the trace
     pub fn add_txn(&mut self, txn: BasicTxn<Addr>) {
         self.transactions.push(txn);
     }
 
+    /// Convert the trace to a human-readable string
     pub fn to_string<VS, S>(&self, state: &mut S) -> String
     where
         S: HasInfantStateState<Loc, Addr, VS>,
@@ -142,11 +149,13 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
+        // If from_idx is None, it means that the trace is from the initial state
         if self.from_idx.is_none() {
             return String::from("Begin\n");
         }
         let current_idx = self.from_idx.unwrap();
         let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
+        // This happens when full_trace feature is not enabled, the corpus item may be discarded
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
         }
@@ -156,7 +165,10 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             return String::from("[REDACTED]\n");
         }
 
+        // Try to reconstruct transactions leading to the current VMState recursively
         let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
+
+        // Dump the current transaction
         for t in &self.transactions {
             for _i in 0..t.layer {
                 s.push_str(" == ");
@@ -167,18 +179,21 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
         s
     }
 
-    pub fn to_file_str_evm<VS, S>(&self, state: &mut S) -> String
+    /// Serialize the trace so that it can be replayed by using --replay-file option
+    pub fn to_file_str<VS, S>(&self, state: &mut S) -> String
         where
             S: HasInfantStateState<Loc, Addr, VS>,
             VS: VMStateT,
             Addr: Debug + Serialize + DeserializeOwned + Clone,
             Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
+        // If from_idx is None, it means that the trace is from the initial state
         if self.from_idx.is_none() {
             return String::from("");
         }
         let current_idx = self.from_idx.unwrap();
         let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
+        // This happens when full_trace feature is not enabled, the corpus item may be discarded
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
         }
@@ -188,9 +203,12 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             return String::from("[REDACTED]\n");
         }
 
-        let mut s = Self::to_file_str_evm(&testcase_input.as_ref().unwrap().trace.clone(), state);
+        // Try to reconstruct transactions leading to the current VMState recursively
+        let mut s = Self::to_file_str(&testcase_input.as_ref().unwrap().trace.clone(), state);
 
+        // Dump the current transaction
         for t in &self.transactions {
+            // get liquidation percentage (EVM Specific)
             let liq_perct = match t.data {
                 None => 0,
                 Some(ref data) => {
@@ -200,7 +218,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
             match t.data_abi {
                 None => {
                     if t.data.is_some() && t.data.as_ref().unwrap().contains("Borrow") {
-                        // borrow txn bytes
+                        // Borrow txn
                         s.push_str("borrow ");
                         s.push_str(format!("{:?} ", t.caller).as_str());
                         s.push_str(format!("{:?} ", t.contract).as_str());
@@ -209,8 +227,8 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                         s.push_str(format!("{} ", liq_perct).as_str());
                         // todo: this is warp_to
                         s.push_str(format!("{} ", 0).as_str());
-
                     } else if t.data.is_some() && t.data.as_ref().unwrap().contains("ABI") {
+                        // Transfer txn
                         s.push_str("abi ");
                         s.push_str(format!("{:?} ", t.caller).as_str());
                         s.push_str(format!("{:?} ", t.contract).as_str());
@@ -229,6 +247,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                     }
                 }
                 Some(ref abi) => {
+                    // Function calls with abi
                     s.push_str("abi ");
                     s.push_str(format!("{:?} ", t.caller).as_str());
                     s.push_str(format!("{:?} ", t.contract).as_str());
@@ -244,8 +263,6 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                     s.push_str(format!("{} ", t.data.as_ref().unwrap_or(&String::from("")).contains("Stepping with return")).as_str());
                 }
             }
-
-
             s.push_str("\n");
         }
         s

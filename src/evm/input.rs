@@ -22,56 +22,110 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
 
+
+/// EVM Input Types
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum EVMInputTy {
+    /// A normal transaction
     ABI,
+    /// A flashloan transaction
     Borrow,
+    /// [Depreciated] A liquidation transaction
     Liquidate,
 }
 
+/// EVM Input Trait
 pub trait EVMInputT {
+    /// Get the ABI encoded input
     fn to_bytes(&self) -> Vec<u8>;
+
+    /// Get revm environment (block, timestamp, etc.)
     fn get_vm_env(&self) -> &Env;
+
+    /// Get revm environment (block, timestamp, etc.) mutably
     fn get_vm_env_mut(&mut self) -> &mut Env;
+
+    /// Get the access pattern of the input, used by the mutator to determine what to mutate
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
+
+    /// Get the transaction value in wei
     fn get_txn_value(&self) -> Option<U256>;
+
+    /// Set the transaction value in wei
     fn set_txn_value(&mut self, v: U256);
-    // scaled with 10
+
+    /// Get input type
     #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy;
+
+    /// Get additional random bytes for mutator
     fn get_randomness(&self) -> Vec<u8>;
+
+    /// Set additional random bytes for mutator
     fn set_randomness(&mut self, v: Vec<u8>);
+
+    /// Get the percentage of the token amount in all callers' account to liquidate
     #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
+
+    /// Set the percentage of the token amount in all callers' account to liquidate
     #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
 
     fn get_repeat(&self) -> usize;
 }
 
+
+/// EVM Input
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EVMInput {
+    /// Input type
     #[cfg(feature = "flashloan_v2")]
     pub input_type: EVMInputTy,
 
+    /// Caller address
     pub caller: H160,
+
+    /// Contract address
     pub contract: H160,
+
+    /// Input data in ABI format
     pub data: Option<BoxedABI>,
+
+    /// Staged VM state
     pub sstate: StagedVMState<H160, H160, EVMState>,
+
+    /// Staged VM state index in the corpus
     pub sstate_idx: usize,
+
+    /// Transaction value in wei
     pub txn_value: Option<U256>,
+
+    /// Whether to resume execution from the last control leak
     pub step: bool,
+
+    /// Environment (block, timestamp, etc.)
     pub env: Env,
+
+    /// Access pattern
     pub access_pattern: Rc<RefCell<AccessPattern>>,
+
+    /// Percentage of the token amount in all callers' account to liquidate
     #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
-    #[cfg(any(test, feature = "reexecution"))]
+
+    /// If ABI is empty, use direct data, which is the raw input data
     pub direct_data: Bytes,
+
+    /// Additional random bytes for mutator
     pub randomness: Vec<u8>,
+
+    /// Execute the transaction multiple times
     pub repeat: usize,
 }
 
 impl HasLen for EVMInput {
+    /// Get the length of the ABI encoded input
     fn len(&self) -> usize {
         match self.data {
             Some(ref d) => d.get_bytes().len(),
@@ -150,6 +204,8 @@ impl EVMInputT for EVMInput {
     }
 }
 
+
+///
 macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
@@ -428,7 +484,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
 
     fn set_as_post_exec(&mut self, out_size: usize) {
         self.data = Some(BoxedABI::new(Box::new(AUnknown {
-            concrete_type: BoxedABI::new(Box::new(AEmpty {})),
+            concrete: BoxedABI::new(Box::new(AEmpty {})),
             size: out_size,
         })));
     }
@@ -508,7 +564,6 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         self.data.clone()
     }
 
-    #[cfg(any(test, feature = "reexecution"))]
     fn get_direct_data(&self) -> Vec<u8> {
         self.direct_data.to_vec()
     }

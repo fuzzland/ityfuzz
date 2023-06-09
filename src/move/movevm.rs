@@ -514,7 +514,7 @@ mod tests {
                 module,
                 None,
                 AccountAddress::new([0; 32]),
-                &mut FuzzState::new(),
+                &mut FuzzState::new(0),
             )
             .unwrap();
 
@@ -547,7 +547,7 @@ mod tests {
             _deps_amount: vec![],
         };
         let mut res= ExecutionResult::empty_result();
-        res = mv.execute(&input.clone(), &mut FuzzState::new());
+        res = mv.execute(&input.clone(), &mut FuzzState::new(0));
         return res;
     }
 

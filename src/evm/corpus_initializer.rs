@@ -1,3 +1,5 @@
+/// Utilities to initialize the corpus
+/// Add all potential calls with default args to the corpus
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
@@ -21,13 +23,15 @@ use primitive_types::{H160, U256};
 use revm::Bytecode;
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
 use std::rc::Rc;
 use std::time::Duration;
+use itertools::Itertools;
+use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -133,7 +137,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
                 self.executor
                     .host
-                    .set_code(contract.deployed_address, contract_code);
+                    .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
 
@@ -171,7 +175,6 @@ impl<'a> EVMCorpusInitializer<'a> {
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    #[cfg(any(test, feature = "reexecution"))]
                     direct_data: Default::default(),
                     #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
@@ -220,7 +223,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             self.state.add_caller(&caller);
             self.executor
                 .host
-                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])));
+                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
         }
     }
 
@@ -272,7 +275,6 @@ impl<'a> EVMCorpusInitializer<'a> {
             liquidation_percent: 0,
             #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
-            #[cfg(any(test, feature = "reexecution"))]
             direct_data: Default::default(),
             randomness: vec![],
             repeat: 1,

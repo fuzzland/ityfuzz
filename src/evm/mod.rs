@@ -6,7 +6,7 @@ pub mod contract_utils;
 pub mod corpus_initializer;
 pub mod host;
 pub mod input;
-pub mod middleware;
+pub mod middlewares;
 pub mod mutator;
 pub mod onchain;
 pub mod oracle;
@@ -16,3 +16,5 @@ pub mod producers;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
+pub mod srcmap;
+

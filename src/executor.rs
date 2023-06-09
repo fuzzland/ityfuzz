@@ -1,3 +1,4 @@
+/// Wrapper of smart contract VM, which implements LibAFL [`Executor`]
 use std::cell::RefCell;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -18,8 +19,9 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasExecutionResult;
 
-// TODO: in the future, we may need to add handlers?
-// handle timeout/crash of executing contract
+/// Wrapper of smart contract VM, which implements LibAFL [`Executor`]
+/// TODO: in the future, we may need to add handlers?
+/// handle timeout/crash of executing contract
 pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT>
 where
     I: VMInputT<VS, Loc, Addr>,
@@ -28,7 +30,9 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// The VM executor
     pub vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+    /// Observers (e.g., coverage)
     observers: OT,
     phantom: PhantomData<(I, S, Addr, Out)>,
 }
@@ -59,6 +63,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Create a new [`FuzzExecutor`]
     pub fn new(
         vm_executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
         observers: OT,
@@ -82,6 +87,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
 {
+    /// Run the VM to execute the input
     fn run_target(
         &mut self,
         _fuzzer: &mut Z,
@@ -107,10 +113,12 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
+    /// Get the observers
     fn observers(&self) -> &OT {
         &self.observers
     }
 
+    /// Get the observers (mutable)
     fn observers_mut(&mut self) -> &mut OT {
         &mut self.observers
     }

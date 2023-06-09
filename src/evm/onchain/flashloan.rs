@@ -4,8 +4,8 @@
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
 use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middleware::CallMiddlewareReturn::ReturnSuccess;
-use crate::evm::middleware::{Middleware, MiddlewareOp, MiddlewareType};
+use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
+use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use std::borrow::BorrowMut;
@@ -23,7 +23,7 @@ use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
 use libafl::state::HasMetadata;
 use primitive_types::{H160, U256, U512};
-use revm::Interpreter;
+use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 
 use std::cell::RefCell;
@@ -124,7 +124,6 @@ where
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                 #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: 0,
-                #[cfg(any(test, feature = "reexecution"))]
                 direct_data: Default::default(),
                 randomness: vec![0],
                 repeat: 1,
@@ -538,6 +537,10 @@ where
         }
     }
 
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+
+    }
+
     fn get_type(&self) -> MiddlewareType {
         return MiddlewareType::Flashloan;
     }
@@ -571,7 +574,6 @@ pub struct FlashloanData {
     pub earned: U512,
     pub prev_reserves: HashMap<H160, (U256, U256)>,
     pub unliquidated_tokens: HashMap<H160, U256>,
-    #[cfg(feature = "reexecution")]
     pub extra_info: String,
 }
 
@@ -585,7 +587,6 @@ impl FlashloanData {
             earned: Default::default(),
             prev_reserves: Default::default(),
             unliquidated_tokens: Default::default(),
-            #[cfg(feature = "reexecution")]
             extra_info: Default::default(),
         }
     }

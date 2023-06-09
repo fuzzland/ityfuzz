@@ -3,8 +3,8 @@ use primitive_types::{H160, U256};
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::input::{EVMInput, EVMInputT};
-use crate::evm::middleware::MiddlewareType::Concolic;
-use crate::evm::middleware::{add_corpus, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
+use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 
 use crate::evm::host::{FuzzHost, JMP_MAP};
 use crate::generic_vm::vm_executor::MAP_SIZE;
@@ -16,7 +16,7 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 
 use libafl::state::{HasCorpus, State};
 
-use revm::{Host, Interpreter};
+use revm::{Bytecode, Host, Interpreter};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
@@ -270,6 +270,28 @@ impl<'a> Solving<'a> {
     }
 }
 
+
+pub enum SymbolicTy<'a> {
+    BV(BV<'a>),
+    Bool(Bool<'a>),
+}
+
+impl<'a> SymbolicTy<'a> {
+    pub fn expect_bv(self) -> BV<'a> {
+        match self {
+            SymbolicTy::BV(bv) => bv,
+            _ => panic!("expected bv"),
+        }
+    }
+    
+    pub fn expect_bool(self) -> Bool<'a> {
+        match self {
+            SymbolicTy::Bool(b) => b,
+            _ => panic!("expected bool"),
+        }
+    }
+}
+
 impl<'a> Solving<'a> {
     pub fn slice_input(&self, start: u32, end: u32) -> BV<'a> {
         let start = start as usize;
@@ -281,66 +303,66 @@ impl<'a> Solving<'a> {
         slice
     }
 
-    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> Either<BV<'a>, Bool<'a>> {
+    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> SymbolicTy<'a> {
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
                 self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
-                    .expect_left("value was right")
+                    .expect_bv()
                     .$op(
                         &self
                             .generate_z3_bv($rhs.as_ref().unwrap(), ctx)
-                            .expect_left("value was right"),
+                            .expect_bv(),
                     )
             };
         }
         // println!("generate_z3_bv: {:?}", bv);
         match &bv.op {
-            ConcolicOp::U256(constant) => Either::Left(bv_from_u256!(constant, ctx)),
-            ConcolicOp::ADD => Either::Left(binop!(bv.lhs, bv.rhs, bvadd)),
-            ConcolicOp::DIV => Either::Left(binop!(bv.lhs, bv.rhs, bvudiv)),
-            ConcolicOp::MUL => Either::Left(binop!(bv.lhs, bv.rhs, bvmul)),
-            ConcolicOp::SUB => Either::Left(binop!(bv.lhs, bv.rhs, bvsub)),
-            ConcolicOp::SDIV => Either::Left(binop!(bv.lhs, bv.rhs, bvsdiv)),
-            ConcolicOp::SMOD => Either::Left(binop!(bv.lhs, bv.rhs, bvsmod)),
-            ConcolicOp::UREM => Either::Left(binop!(bv.lhs, bv.rhs, bvurem)),
-            ConcolicOp::SREM => Either::Left(binop!(bv.lhs, bv.rhs, bvsrem)),
-            ConcolicOp::AND => Either::Left(binop!(bv.lhs, bv.rhs, bvand)),
-            ConcolicOp::OR => Either::Left(binop!(bv.lhs, bv.rhs, bvor)),
-            ConcolicOp::XOR => Either::Left(binop!(bv.lhs, bv.rhs, bvxor)),
+            ConcolicOp::U256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
+            ConcolicOp::ADD => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvadd)),
+            ConcolicOp::DIV => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvudiv)),
+            ConcolicOp::MUL => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvmul)),
+            ConcolicOp::SUB => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvsub)),
+            ConcolicOp::SDIV => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvsdiv)),
+            ConcolicOp::SMOD => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvsmod)),
+            ConcolicOp::UREM => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvurem)),
+            ConcolicOp::SREM => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvsrem)),
+            ConcolicOp::AND => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvand)),
+            ConcolicOp::OR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvor)),
+            ConcolicOp::XOR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvxor)),
             ConcolicOp::NOT => {
                 let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
                 match lhs {
-                    Either::Left(lhs) => Either::Left(lhs.bvnot()),
-                    Either::Right(lhs) => Either::Right(lhs.not()),
+                    SymbolicTy::BV(lhs) => SymbolicTy::BV(lhs.bvnot()),
+                    SymbolicTy::Bool(lhs) => SymbolicTy::Bool(lhs.not()),
                 }
             }
-            ConcolicOp::SHL => Either::Left(binop!(bv.lhs, bv.rhs, bvshl)),
-            ConcolicOp::SHR => Either::Left(binop!(bv.lhs, bv.rhs, bvlshr)),
-            ConcolicOp::SAR => Either::Left(binop!(bv.lhs, bv.rhs, bvashr)),
+            ConcolicOp::SHL => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvshl)),
+            ConcolicOp::SHR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvlshr)),
+            ConcolicOp::SAR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvashr)),
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.0[0] as u32;
-                Either::Left(self.slice_input(idx, idx + 4))
+                SymbolicTy::BV(self.slice_input(idx, idx + 4))
             }
-            ConcolicOp::BALANCE => Either::Left(self.balance.clone()),
-            ConcolicOp::CALLVALUE => Either::Left(self.calldatavalue.clone()),
+            ConcolicOp::BALANCE => SymbolicTy::BV(self.balance.clone()),
+            ConcolicOp::CALLVALUE => SymbolicTy::BV(self.calldatavalue.clone()),
             ConcolicOp::FINEGRAINEDINPUT(start, end) => {
-                Either::Left(self.slice_input(*start, *end))
+                SymbolicTy::BV(self.slice_input(*start, *end))
             }
             ConcolicOp::LNOT => {
                 let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
                 match lhs {
-                    Either::Left(lhs) => Either::Left(lhs.not()),
-                    Either::Right(lhs) => Either::Right(lhs.not()),
+                    SymbolicTy::BV(lhs) => SymbolicTy::BV(lhs.not()),
+                    SymbolicTy::Bool(lhs) => SymbolicTy::Bool(lhs.not()),
                 }
             }
-            ConcolicOp::CONSTBYTE(b) => Either::Left(BV::from_u64(ctx, *b as u64, 8)),
-            ConcolicOp::SYMBYTE(s) => Either::Left(BV::new_const(ctx, s.clone(), 8)),
+            ConcolicOp::CONSTBYTE(b) => SymbolicTy::BV(BV::from_u64(ctx, *b as u64, 8)),
+            ConcolicOp::SYMBYTE(s) => SymbolicTy::BV(BV::new_const(ctx, s.clone(), 8)),
             ConcolicOp::EQ => {
                 let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
                 let rhs = self.generate_z3_bv(bv.rhs.as_ref().unwrap(), ctx);
                 match (lhs, rhs) {
-                    (Either::Left(lhs), Either::Left(rhs)) => Either::Right(lhs._eq(&rhs)),
-                    (Either::Right(lhs), Either::Right(rhs)) => Either::Right(lhs._eq(&rhs)),
+                    (SymbolicTy::BV(lhs), SymbolicTy::BV(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
+                    (SymbolicTy::Bool(lhs), SymbolicTy::Bool(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
                     _ => panic!("op {:?} not supported as operands", bv.op),
                 }
             }
@@ -355,34 +377,34 @@ impl<'a> Solving<'a> {
             // println!("Constraints: {:?}", cons);
             let bv = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
             solver.assert(&match cons.op {
-                ConcolicOp::GT => bv.expect_left("lhs was Bool").bvugt(
+                ConcolicOp::GT => bv.expect_bv().bvugt(
                     &self
                         .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
-                        .expect_left("rhs was Bool"),
+                        .expect_bv(),
                 ),
-                ConcolicOp::SGT => bv.expect_left("lhs was Bool").bvsgt(
+                ConcolicOp::SGT => bv.expect_bv().bvsgt(
                     &self
                         .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
-                        .expect_left("rhs was Bool"),
+                        .expect_bv(),
                 ),
-                ConcolicOp::EQ => bv.expect_left("lhs was Bool")._eq(
+                ConcolicOp::EQ => bv.expect_bv()._eq(
                     &self
                         .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
-                        .expect_left("rhs was Bool"),
+                        .expect_bv(),
                 ),
-                ConcolicOp::LT => bv.expect_left("lhs was Bool").bvult(
+                ConcolicOp::LT => bv.expect_bv().bvult(
                     &self
                         .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
-                        .expect_left("rhs was Bool"),
+                        .expect_bv(),
                 ),
-                ConcolicOp::SLT => bv.expect_left("lhs was Bool").bvslt(
+                ConcolicOp::SLT => bv.expect_bv().bvslt(
                     &self
                         .generate_z3_bv(&cons.rhs.as_ref().unwrap(), &context)
-                        .expect_left("rhs was Bool"),
+                        .expect_bv(),
                 ),
                 ConcolicOp::LNOT => match bv {
-                    Either::Left(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
-                    Either::Right(bv) => bv.not(),
+                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
+                    SymbolicTy::Bool(bv) => bv.not(),
                 },
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
             });
@@ -466,12 +488,12 @@ impl<'a> Solving<'a> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConcolicHost<I, VS> {
-    symbolic_stack: Vec<Option<Box<Expr>>>,
-    input_bytes: Vec<Box<Expr>>,
-    constraints: Vec<Box<Expr>>,
-    bytes: u32,
-    caller: H160,
-    phantom: PhantomData<(I, VS)>,
+    pub symbolic_stack: Vec<Option<Box<Expr>>>,
+    pub input_bytes: Vec<Box<Expr>>,
+    pub constraints: Vec<Box<Expr>>,
+    pub bytes: u32,
+    pub caller: H160,
+    pub phantom: PhantomData<(I, VS)>,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
@@ -579,7 +601,7 @@ where
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
-        println!("{:?}", interp.stack);
+        println!("concolic {:?}", interp.stack);
         println!("{:?}", self.symbolic_stack);
         let bv: Vec<Option<Box<Expr>>> = match *interp.instruction_pointer {
             // ADD
@@ -977,24 +999,29 @@ where
             self.symbolic_stack.push(v);
         }
 
-        let input = state
-            .corpus()
-            .get(state.get_current_input_idx())
-            .unwrap()
-            .borrow_mut()
-            .load_input()
-            .expect("Failed loading input")
-            .clone();
+        // let input = state
+        //     .corpus()
+        //     .get(state.get_current_input_idx())
+        //     .unwrap()
+        //     .borrow_mut()
+        //     .load_input()
+        //     .expect("Failed loading input")
+        //     .clone();
         for s in solutions {
-            let mut new_input = input.clone();
-            new_input
-                .get_data_abi_mut()
-                .as_mut()
-                .unwrap()
-                .set_bytes(str_to_bytes(&s));
-            let new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
-            add_corpus(host, state, &new_evm_input);
+            println!("Solution: {:?}", s);
+            // let mut new_input = input.clone();
+            // new_input
+            //     .get_data_abi_mut()
+            //     .as_mut()
+            //     .unwrap()
+            //     .set_bytes(str_to_bytes(&s));
+            // let new_evm_input = new_input.as_any().downcast_ref::<EVMInput>().unwrap();
+            // add_corpus(host, state, &new_evm_input);
         }
+    }
+
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+
     }
 
     fn get_type(&self) -> MiddlewareType {

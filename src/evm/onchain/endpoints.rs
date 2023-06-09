@@ -21,6 +21,7 @@ pub enum Chain {
     BSC,
     POLYGON,
     MUMBAI,
+    LOCAL,
 }
 
 pub trait PriceOracle: Debug {
@@ -36,6 +37,7 @@ impl Chain {
             "BSC" | "bsc" => Some(Self::BSC),
             "POLYGON" | "polygon" => Some(Self::POLYGON),
             "MUMBAI" | "mumbai" => Some(Self::MUMBAI),
+            "LOCAL" | "local" => Some(Self::LOCAL),
             _ => None,
         }
     }
@@ -46,6 +48,7 @@ impl Chain {
             Chain::BSC => 56,
             Chain::POLYGON => 137,
             Chain::MUMBAI => 80001,
+            Chain::LOCAL => 31337,
         }
     }
 
@@ -55,6 +58,7 @@ impl Chain {
             Chain::BSC => "bsc",
             Chain::POLYGON => "polygon",
             Chain::MUMBAI => "mumbai",
+            Chain::LOCAL => "local",
         }
         .to_string()
     }
@@ -62,9 +66,10 @@ impl Chain {
     pub fn get_chain_rpc(&self) -> String {
         match self {
             Chain::ETH => "https://eth.llamarpc.com",
-            Chain::BSC => "https://bsc-dataseed4.defibit.io/",
-            Chain::POLYGON => "https://polygon-rpc.com/",
+            Chain::BSC => "https://bsc.llamarpc.com",
+            Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
+            Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
     }
@@ -110,6 +115,7 @@ impl OnChainConfig {
                 Chain::BSC => "https://api.bscscan.com/api",
                 Chain::POLYGON => "https://api.polygonscan.com/api",
                 Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
+                Chain::LOCAL => "http://localhost:8080/abi/",
             }
             .to_string(),
             chain.to_lowercase(),
