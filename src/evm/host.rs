@@ -64,7 +64,6 @@ pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 
-
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
@@ -107,6 +106,8 @@ where
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
+    // set_code data
+    pub setcode_data: HashMap<H160, Bytecode>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -167,6 +168,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            setcode_data:self.setcode_data.clone(),
         }
     }
 }
@@ -212,6 +214,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
+            setcode_data:HashMap::new(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -293,6 +296,14 @@ where
                 self.hash_to_address.insert(hash, HashSet::from([address]));
             }
         }
+    }
+
+    pub fn set_codedata(&mut self, address: H160, mut code: Bytecode) {
+        self.setcode_data.insert(address, code);
+    }
+
+    pub fn clear_codedata(&mut self) {
+        self.setcode_data.clear();
     }
 
     pub fn set_code(&mut self, address: H160, mut code: Bytecode, state: &mut S) {
@@ -392,6 +403,7 @@ where
                     }
                     _ => {}
                 }
+                self.clear_codedata();
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
@@ -399,6 +411,10 @@ where
                         .deref()
                         .borrow_mut()
                         .on_step(interp, self, state);
+                }
+
+                for (address, code) in &self.setcode_data.clone() {
+                    self.set_code(address.clone(), code.clone(), state);
                 }
             }
 
