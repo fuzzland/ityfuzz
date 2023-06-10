@@ -49,6 +49,13 @@ impl MoveVMState {
     }
 
 
+    /// Add a new value of struct type to the state
+    ///
+    /// Checks if the value is already in the state, if it is, it will not be added
+    /// but the amount of the value will be increased.
+    ///
+    /// If value is not droppable, it will be added to the useful_value hashmap
+    /// If value is droppable, it will be added to the value_to_drop hashmap
     pub fn add_new_value(&mut self, value: Value, ty: &Type, is_droppable: bool) {
         macro_rules! add_new_v {
             ($loc: ident, $amt_loc: ident) => {
@@ -87,6 +94,11 @@ impl MoveVMState {
     }
 
 
+    /// Randomly sample a value from the state
+    ///
+    /// If the value is a reference, it will be added to the ref_in_use vector
+    ///
+    /// When a value is sampled, it will be removed from the state.
     pub fn sample_value<S>(&mut self, state: &mut S, ty: &Type, is_ref: bool) -> Value
     where S: HasRand {
         macro_rules! sample_value_inner {
@@ -194,9 +206,9 @@ impl Clone for MoveVMState {
             resources: self.resources.clone(),
             _gv_slot: self._gv_slot.clone(),
             value_to_drop: self.value_to_drop.clone(),
-            _value_to_drop_amt: Default::default(),
+            _value_to_drop_amt: self._value_to_drop_amt.clone(),
             useful_value: self.useful_value.clone(),
-            _useful_value_amt: Default::default(),
+            _useful_value_amt: self._useful_value_amt.clone(),
             ref_in_use: self.ref_in_use.clone(),
         }
     }

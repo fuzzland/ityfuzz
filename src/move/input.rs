@@ -520,6 +520,10 @@ impl MoveFunctionInput {
     //     }
     // }
 
+    /// Ensure the deps and deps_amount are satisfied with the current vm_state
+    ///
+    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
+    /// is greater than or equal to the corresponding amount in deps_amount.
     pub fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
         for (ty, amount) in self._deps.iter().zip(self._deps_amount.iter()) {
             let counts = match vm_state.value_to_drop.get(ty) {
@@ -854,7 +858,7 @@ mod tests {
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::ModuleId;
     use move_core_types::u256;
-    use move_vm_types::values::{Container, Value, ValueImpl};
+    use move_vm_types::values::{Container, Value, ValueImpl, values_impl};
     use crate::input::VMInputT;
     use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput};
     use crate::r#move::types::MoveFuzzState;
@@ -1006,7 +1010,7 @@ mod tests {
                         ],
                         ty_args: vec![],
                         caller: dummy_addr,
-                        vm_state: $sstate,
+                        vm_state: $sstate.clone(),
                         vm_state_idx: 0,
                         _deps: Default::default(),
                         _deps_amount: Default::default(),
@@ -1023,81 +1027,83 @@ mod tests {
 
     #[test]
     fn test_struct() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
 
-        {
-            let mut sstate = MoveStagedVMState::new_with_state(
-                MoveVMState::new()
-            );
-            let (mutation_result, init_v, mutated_v, _) = test_struct!(
-                ValueImpl::Container(
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(5),
+                        ValueImpl::U8(5),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
+            ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(0),
+                        ValueImpl::U8(0),
+                    ]))
+                )
+            ),
+            vec![Type::Struct(CachedStructIndex(1))],
+            sstate
+        );
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
+        println!("remaining useful_value {:?}", vm_state.state.useful_value);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
+        assert_eq!(mutation_result, MutationResult::Mutated);
+    }
+
+    #[test]
+    fn test_struct_ref() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(5),
+                        ValueImpl::U8(5),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
+            ValueImpl::ContainerRef(
+                values_impl::ContainerRef::Local(
                     Container::Struct(
                         Rc::new(RefCell::new(vec![
                             ValueImpl::U8(0),
                             ValueImpl::U8(0),
                         ]))
                     )
-                ),
-                vec![Type::Struct(CachedStructIndex(1))],
-                sstate
-            );
-            assert_eq!(mutation_result, MutationResult::Skipped);
-            assert!(init_v.equals(&mutated_v).expect("failed to compare"));
-        }
-
-        {
-            let mut sstate = MoveStagedVMState::new_with_state(
-                MoveVMState::new()
-            );
-            sstate.state.useful_value = HashMap::new();
-            sstate.state.useful_value.insert(
-                Type::Struct(CachedStructIndex(1)),
-                vec![
-                    Value(ValueImpl::Container(
-                        Container::Struct(
-                            Rc::new(RefCell::new(vec![
-                                ValueImpl::U8(5),
-                                ValueImpl::U8(5),
-                            ]))
-                        )
-                    )),
-                ]
-            );
-            sstate.state.value_to_drop = HashMap::new();
-            sstate.state.value_to_drop.insert(
-                Type::Struct(CachedStructIndex(1)),
-                vec![
-                    Value(ValueImpl::Container(
-                        Container::Struct(
-                            Rc::new(RefCell::new(vec![
-                                ValueImpl::U8(7),
-                                ValueImpl::U8(7),
-                            ]))
-                        )
-                    ))
-                ]
-            );
-
-            let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
-                ValueImpl::Container(
-                    Container::Struct(
-                        Rc::new(RefCell::new(vec![
-                            ValueImpl::U8(0),
-                            ValueImpl::U8(0),
-                        ]))
-                    )
-                ),
-                vec![Type::Struct(CachedStructIndex(1))],
-                sstate
-            );
-
-            println!("{:?}", init_v);
-            println!("{:?}", mutated_v);
-            println!("{:?}", vm_state.state.value_to_drop);
-
-            assert_eq!(mutation_result, MutationResult::Mutated);
-        }
-
-
+                )
+            ),
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))],
+            sstate
+        );
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
+        println!("remaining useful_value {:?}", vm_state.state.useful_value);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
+        assert!(vm_state.state.ref_in_use.len() > 0);
+        assert_eq!(mutation_result, MutationResult::Mutated);
     }
 
 
