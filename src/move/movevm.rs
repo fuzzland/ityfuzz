@@ -435,27 +435,11 @@ where
                 .iter()
         ) {
             let abilities = resolver.loader.abilities(t).expect("unknown type");
-            macro_rules! insert_if_not_exist {
-                ($loc: ident, $t: expr, $v: expr) => {
-                    match state.$loc.get_mut($t) {
-                        Some(arr) => {
-                            arr.push($v.clone());
-                        }
-                        None => {
-                            state.$loc.insert($t.clone(), vec![$v.clone()]);
-                        }
-                    }
-                };
-            }
-            if !abilities.has_drop() {
-                insert_if_not_exist!(value_to_drop, t, v);
-            } else {
-                insert_if_not_exist!(useful_value, t, v);
-                _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
-                    t.clone(),
-                    abilities,
-                )
-            }
+            state.add_new_value(v.clone(), t, abilities.has_drop());
+            _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
+                t.clone(),
+                abilities,
+            );
 
             out.vars.push((t.clone(), v.clone()));
             println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
@@ -537,9 +521,7 @@ mod tests {
                     resources: Default::default(),
                     _gv_slot: Default::default(),
                     value_to_drop: Default::default(),
-                    _value_to_drop_amt: Default::default(),
                     useful_value: Default::default(),
-                    _useful_value_amt: Default::default(),
                     ref_in_use: vec![],
                 },
                 stage: vec![],

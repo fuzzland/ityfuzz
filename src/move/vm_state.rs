@@ -22,15 +22,18 @@ use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
 use crate::r#move::input::StructAbilities;
 
+pub trait MoveVMStateT {
+    fn get_value_to_drop(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
+}
+
+
 #[derive(Debug)]
 pub struct MoveVMState {
     pub resources: HashMap<AccountAddress, HashMap<Type, Value>>,
     pub _gv_slot: HashMap<(AccountAddress, Type), GlobalValue>,
 
-    pub value_to_drop: HashMap<Type, Vec<Value>>,
-    pub _value_to_drop_amt: HashMap<Type, Vec<usize>>,
-    pub useful_value: HashMap<Type, Vec<Value>>,
-    pub _useful_value_amt: HashMap<Type, Vec<usize>>,
+    pub value_to_drop: HashMap<Type, Vec<(Value, usize)>>,
+    pub useful_value: HashMap<Type, Vec<(Value, usize)>>,
 
     pub ref_in_use: Vec<(Type, Value)>,
 }
@@ -41,9 +44,7 @@ impl MoveVMState {
             resources: HashMap::new(),
             _gv_slot: HashMap::new(),
             value_to_drop: Default::default(),
-            _value_to_drop_amt: Default::default(),
             useful_value: Default::default(),
-            _useful_value_amt: Default::default(),
             ref_in_use: vec![],
         }
     }
@@ -58,38 +59,35 @@ impl MoveVMState {
     /// If value is droppable, it will be added to the value_to_drop hashmap
     pub fn add_new_value(&mut self, value: Value, ty: &Type, is_droppable: bool) {
         macro_rules! add_new_v {
-            ($loc: ident, $amt_loc: ident) => {
+            ($loc: ident) => {
                 {
                     let it = match self.$loc.get_mut(ty) {
                         Some(it) => it,
                         None => {
                             self.$loc.insert(ty.clone(), vec![]);
-                            self.$amt_loc.insert(ty.clone(), vec![]);
                             self.$loc.get_mut(ty).unwrap()
                         }
                     };
-                    let mut offset: i64 = -1;
-                    for (off, v) in it.iter().enumerate() {
+                    let mut exists = false;
+                    for (v, amt) in it {
                         if (*v).equals(&value).unwrap() {
-                            offset = off as i64;
+                            exists = true;
+                            *amt += 1;
                             break;
                         }
                     }
 
-                    if offset > 0 {
-                        self.$amt_loc.get_mut(ty).unwrap()[offset as usize] += 1;
-                    } else {
-                        it.push(value.clone());
-                        self.$amt_loc.get_mut(ty).unwrap().push(1);
+                    if !exists {
+                        self.$loc.get_mut(ty).unwrap().push((value, 1));
                     }
                 }
             };
         }
 
         if is_droppable {
-            add_new_v!(value_to_drop, _value_to_drop_amt);
+            add_new_v!(value_to_drop);
         } else {
-            add_new_v!(useful_value, _useful_value_amt);
+            add_new_v!(useful_value);
         }
     }
 
@@ -102,7 +100,7 @@ impl MoveVMState {
     pub fn sample_value<S>(&mut self, state: &mut S, ty: &Type, is_ref: bool) -> Value
     where S: HasRand {
         macro_rules! sample_value_inner {
-            ($loc: ident, $amt_loc: ident, $struct_src: ident) => {
+            ($loc: ident, $struct_src: ident) => {
                 {
                     match self.$loc.get_mut(ty) {
                         None => None,
@@ -111,15 +109,14 @@ impl MoveVMState {
                                 None
                             } else {
                                 let offset = (state.rand_mut().next() as usize % it.len()) as usize;
-                                let val = it[offset].clone();
-                                let val_count = self.$amt_loc.get_mut(ty).unwrap();
+                                let (val, val_count) = it[offset].clone();
 
                                 // remove from vec
-                                if val_count[offset] > 0 {
-                                    val_count[offset] -= 1;
-                                    if val_count[offset] == 0 {
+                                if val_count > 0 {
+                                    if val_count == 1 {
                                         it.remove(offset);
-                                        val_count.remove(offset);
+                                    } else {
+                                        it[offset].1 -= 1;
                                     }
                                 } else {
                                     unreachable!("Value count is 0")
@@ -141,17 +138,17 @@ impl MoveVMState {
         let rand = state.rand_mut().next();
 
         let res = if rand % 2 == 0 {
-            sample_value_inner!(useful_value, _useful_value_amt, Useful)
+            sample_value_inner!(useful_value, Useful)
         } else {
-            sample_value_inner!(value_to_drop, _value_to_drop_amt, Drop)
+            sample_value_inner!(value_to_drop, Drop)
         };
 
         if res.is_none() {
             {
                 if rand % 2 == 0 {
-                    sample_value_inner!(value_to_drop, _value_to_drop_amt, Drop)
+                    sample_value_inner!(value_to_drop, Drop)
                 } else {
-                    sample_value_inner!(useful_value, _useful_value_amt, Useful)
+                    sample_value_inner!(useful_value, Useful)
                 }
             }.unwrap()
         } else {
@@ -181,24 +178,22 @@ impl MoveVMState {
 
         if struct_abilities.has_drop() {
             let it = self.value_to_drop.get_mut(ty).unwrap();
-            match it.iter().position(|x| x.equals(&value).unwrap()) {
+            match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
                 Some(offset) => {
-                    self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
+                    it[offset].1 += 1;
                 }
                 None => {
-                    it.push(value.clone());
-                    self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
+                    it.push((value.clone(), 1));
                 }
             }
         } else {
             let it = self.useful_value.get_mut(ty).unwrap();
-            match it.iter().position(|x| x.equals(&value).unwrap()) {
+            match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
                 Some(offset) => {
-                    self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
+                    it[offset].1 += 1;
                 }
                 None => {
-                    it.push(value.clone());
-                    self._useful_value_amt.get_mut(ty).unwrap().push(1);
+                    it.push((value.clone(), 1));
                 }
             }
         }
@@ -212,9 +207,7 @@ impl Clone for MoveVMState {
             resources: self.resources.clone(),
             _gv_slot: self._gv_slot.clone(),
             value_to_drop: self.value_to_drop.clone(),
-            _value_to_drop_amt: self._value_to_drop_amt.clone(),
             useful_value: self.useful_value.clone(),
-            _useful_value_amt: self._useful_value_amt.clone(),
             ref_in_use: self.ref_in_use.clone(),
         }
     }
@@ -356,9 +349,7 @@ impl Default for MoveVMState {
             resources: HashMap::new(),
             _gv_slot: HashMap::new(),
             value_to_drop: Default::default(),
-            _value_to_drop_amt: Default::default(),
             useful_value: Default::default(),
-            _useful_value_amt: Default::default(),
             ref_in_use: vec![],
         }
     }

@@ -36,6 +36,17 @@ pub trait MoveFunctionInputT {
     fn function_name(&self) -> &Identifier;
     fn args(&self) -> &Vec<CloneableValue>;
     fn ty_args(&self) -> &Vec<Type>;
+
+    /// === helper functions ===
+
+    /// Cache the struct dependencies of this function
+    fn cache_deps(&mut self);
+
+    /// Ensure the deps and deps_amount are satisfied with the current vm_state
+    ///
+    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
+    /// is greater than or equal to the corresponding amount in deps_amount.
+    fn ensure_deps(&self, vm_state: &MoveVMState) -> bool;
 }
 
 pub struct FunctionDefaultable {
@@ -181,6 +192,34 @@ impl MoveFunctionInputT for MoveFunctionInput {
     fn ty_args(&self) -> &Vec<Type> {
         &self.ty_args
     }
+
+    /// Record the deps and deps_amount of the current args
+    fn cache_deps(&mut self) {
+        for ty in self.function_info.get_function().parameter_types.clone() {
+            self._cache_deps(&ty);
+        }
+    }
+
+    /// Ensure the deps and deps_amount are satisfied with the current vm_state
+    ///
+    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
+    /// is greater than or equal to the corresponding amount in deps_amount.
+    fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
+        for (ty, amount) in &self._deps {
+            let counts = match vm_state.value_to_drop.get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            } + match vm_state.useful_value.get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            };
+            if counts < *amount {
+                return false;
+            }
+        }
+        true
+    }
+
 }
 
 impl Input for MoveFunctionInput {
@@ -357,33 +396,6 @@ impl MoveFunctionInput {
             }
             _ => {}
         }
-    }
-
-    /// Record the deps and deps_amount of the current args
-    pub fn cache_deps(&mut self) {
-        for ty in self.function_info.get_function().parameter_types.clone() {
-            self._cache_deps(&ty);
-        }
-    }
-
-    /// Ensure the deps and deps_amount are satisfied with the current vm_state
-    ///
-    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
-    /// is greater than or equal to the corresponding amount in deps_amount.
-    pub fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
-        for (ty, amount) in &self._deps {
-            let counts = match vm_state.value_to_drop.get(ty) {
-                Some(v) => v.len(),
-                None => 0
-            } + match vm_state.useful_value.get(ty) {
-                Some(v) => v.len(),
-                None => 0
-            };
-            if counts < *amount {
-                return false;
-            }
-        }
-        true
     }
 
     pub fn mutate_container<S>(
