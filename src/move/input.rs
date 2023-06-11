@@ -49,10 +49,6 @@ pub trait MoveFunctionInputT {
     fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
         where VS: MoveVMStateT;
 
-    /// Called after each time the function is called, we should return all values that are borrowed
-    /// as reference / mutable reference from the vm_state.
-    fn finished_call(&mut self);
-
     /// Slash all structs in the input, and sample from new vm_state
     ///
     /// This ensures all the structs in the input are valid!
@@ -232,6 +228,13 @@ impl MoveFunctionInputT for MoveFunctionInput {
         true
     }
 
+    /// Slash all structs in the input, and sample from new vm_state
+    ///
+    /// This ensures all the structs in the input are valid!
+    fn slash<VS>(&self, vm_state: &VS)
+        where VS: MoveVMStateT {
+
+    }
 }
 
 impl Input for MoveFunctionInput {

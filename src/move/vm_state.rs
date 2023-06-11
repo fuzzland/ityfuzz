@@ -25,6 +25,11 @@ use crate::r#move::input::StructAbilities;
 pub trait MoveVMStateT {
     fn get_value_to_drop(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
     fn get_useful_value(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
+
+    /// Called after each time the function is called, we should return all values that are borrowed
+    /// as reference / mutable reference from the vm_state.
+    fn finished_call<S>(&mut self, state: &mut S)
+        where S: HasMetadata;
 }
 
 
@@ -46,6 +51,18 @@ impl MoveVMStateT for MoveVMState {
 
     fn get_useful_value(&self) -> (&HashMap<Type, Vec<(Value, usize)>>) {
         &self.useful_value
+    }
+
+
+    /// Called after each time the function is called, we should return all values that are borrowed
+    /// as reference / mutable reference from the vm_state.
+    fn finished_call<S>(&mut self, state: &mut S)
+    where S: HasMetadata {
+        for (t, v) in self.ref_in_use {
+            // we'll clear the ref_in_use vector to save CPU time
+            self.restock(&t, v, false, state);
+        }
+        self.ref_in_use.clear();
     }
 }
 
