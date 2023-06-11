@@ -16,10 +16,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Index;
-use libafl::prelude::Rand;
+use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::HasRand;
 use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
+use crate::r#move::input::StructAbilities;
 
 #[derive(Debug)]
 pub struct MoveVMState {
@@ -162,37 +163,42 @@ impl MoveVMState {
     ///
     /// If the value is a reference, it will be removed from the ref_in_use vector.
     /// Used by mutator when trying to mutate a struct.
-    pub fn restock(&mut self, ty: &Type, value: Value, is_ref: bool) {
+    pub fn restock<S>(&mut self, ty: &Type, value: Value, is_ref: bool, _state: &mut S)
+    where S: HasMetadata {
         if is_ref {
             let offset = self.ref_in_use.iter().position(|(t, v)| v.equals(&value).unwrap()).unwrap();
             self.ref_in_use.remove(offset);
         }
-        // match value {
-        //     StructUsage::Useful(v) => {
-        //         let it = self.useful_value.get_mut(ty).unwrap();
-        //         match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
-        //             Some(offset) => {
-        //                 self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
-        //             }
-        //             None => {
-        //                 it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
-        //                 self._useful_value_amt.get_mut(ty).unwrap().push(1);
-        //             }
-        //         }
-        //     }
-        //     StructUsage::Drop(v) => {
-        //         let it = self.value_to_drop.get_mut(ty).unwrap();
-        //         match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
-        //             Some(offset) => {
-        //                 self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
-        //             }
-        //             None => {
-        //                 it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
-        //                 self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
-        //             }
-        //         }
-        //     }
-        // }
+        let struct_abilities = _state
+            .metadata()
+            .get::<StructAbilities>()
+            .unwrap()
+            .get_ability(ty)
+            .unwrap();
+
+        if struct_abilities.has_drop() {
+            let it = self.value_to_drop.get_mut(ty).unwrap();
+            match it.iter().position(|x| x.equals(&value).unwrap()) {
+                Some(offset) => {
+                    self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
+                }
+                None => {
+                    it.push(value.clone());
+                    self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
+                }
+            }
+        } else {
+            let it = self.useful_value.get_mut(ty).unwrap();
+            match it.iter().position(|x| x.equals(&value).unwrap()) {
+                Some(offset) => {
+                    self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
+                }
+                None => {
+                    it.push(value.clone());
+                    self._useful_value_amt.get_mut(ty).unwrap().push(1);
+                }
+            }
+        }
     }
 }
 
