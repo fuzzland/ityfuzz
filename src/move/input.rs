@@ -1,7 +1,7 @@
 use crate::evm::abi::BoxedABI;
 use crate::input::VMInputT;
 use crate::r#move::types::MoveStagedVMState;
-use crate::r#move::vm_state::MoveVMState;
+use crate::r#move::vm_state::{MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
 
 use libafl::inputs::Input;
@@ -46,7 +46,18 @@ pub trait MoveFunctionInputT {
     ///
     /// Check for each type in deps, if the number of values in value_to_drop and useful_value
     /// is greater than or equal to the corresponding amount in deps_amount.
-    fn ensure_deps(&self, vm_state: &MoveVMState) -> bool;
+    fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
+        where VS: MoveVMStateT;
+
+    /// Called after each time the function is called, we should return all values that are borrowed
+    /// as reference / mutable reference from the vm_state.
+    fn finished_call(&mut self);
+
+    /// Slash all structs in the input, and sample from new vm_state
+    ///
+    /// This ensures all the structs in the input are valid!
+    fn slash<VS>(&self, vm_state: &VS)
+        where VS: MoveVMStateT;
 }
 
 pub struct FunctionDefaultable {
@@ -204,12 +215,13 @@ impl MoveFunctionInputT for MoveFunctionInput {
     ///
     /// Check for each type in deps, if the number of values in value_to_drop and useful_value
     /// is greater than or equal to the corresponding amount in deps_amount.
-    fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
+    fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
+        where VS: MoveVMStateT {
         for (ty, amount) in &self._deps {
-            let counts = match vm_state.value_to_drop.get(ty) {
+            let counts = match vm_state.get_value_to_drop().get(ty) {
                 Some(v) => v.len(),
                 None => 0
-            } + match vm_state.useful_value.get(ty) {
+            } + match vm_state.get_useful_value().get(ty) {
                 Some(v) => v.len(),
                 None => 0
             };

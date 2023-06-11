@@ -24,6 +24,7 @@ use crate::r#move::input::StructAbilities;
 
 pub trait MoveVMStateT {
     fn get_value_to_drop(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
+    fn get_useful_value(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
 }
 
 
@@ -36,6 +37,16 @@ pub struct MoveVMState {
     pub useful_value: HashMap<Type, Vec<(Value, usize)>>,
 
     pub ref_in_use: Vec<(Type, Value)>,
+}
+
+impl MoveVMStateT for MoveVMState {
+    fn get_value_to_drop(&self) -> (&HashMap<Type, Vec<(Value, usize)>>) {
+        &self.value_to_drop
+    }
+
+    fn get_useful_value(&self) -> (&HashMap<Type, Vec<(Value, usize)>>) {
+        &self.useful_value
+    }
 }
 
 impl MoveVMState {
