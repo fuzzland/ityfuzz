@@ -547,8 +547,7 @@ mod tests {
                 trace: Default::default(),
             },
             vm_state_idx: 0,
-            _deps: vec![],
-            _deps_amount: vec![],
+            _deps: Default::default(),
         };
         let mut res= ExecutionResult::empty_result();
         res = mv.execute(&input.clone(), &mut FuzzState::new(0));

@@ -100,8 +100,7 @@ pub struct MoveFunctionInput {
     pub vm_state: MoveStagedVMState,
     pub vm_state_idx: usize,
 
-    pub _deps: Vec<Type>,
-    pub _deps_amount: Vec<usize>
+    pub _deps: HashMap<Type, usize>,
 }
 
 impl Debug for MoveFunctionInput {
@@ -337,152 +336,42 @@ macro_rules! mutate_by {
 pub const MOVE_MAX_VEC_SIZE: u64 = 10;
 
 impl MoveFunctionInput {
-    //
-    // pub fn slash_in_use(&self, vm_state: &mut MoveVMState) {
-    //     let mut useful_removal = HashMap::new();
-    //     let mut to_drop_removal = HashMap::new();
-    //     for i in self._in_use {
-    //         match i {
-    //             StructUsage::Useful(ty, idx) => {
-    //                 useful_removal.entry(ty).or_insert_with(Vec::new).push(idx);
-    //             }
-    //             StructUsage::Drop(ty, idx) => {
-    //                 to_drop_removal.entry(ty).or_insert_with(Vec::new).push(idx);
-    //             }
-    //         }
-    //     }
-    //     for (ty, mut idxs) in useful_removal {
-    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
-    //             vm_state.useful_value.get_mut(&ty).unwrap().remove(*idx);
-    //         }
-    //     }
-    //
-    //     for (ty, mut idxs) in to_drop_removal {
-    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
-    //             vm_state.value_to_drop.get_mut(&ty).unwrap().remove(*idx);
-    //         }
-    //     }
-    // }
-    // pub fn _sample_ty<S>(ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool) -> Option<(Value, StructUsage)>
-    // where S: HasRand{
-    //     macro_rules! remove_one {
-    //         ($item: ident, $wrapper: ident) => {
-    //             match vm_state.$item.get_mut(ty) {
-    //                 Some(v) => {
-    //                     let idx = state.rand_mut().below(v.len() as u64) as usize;
-    //                     if is_ref {
-    //                         let selected = v[idx as usize].clone();
-    //                         Some(selected, StructUsage::$wrapper(selected))
-    //                     } else {
-    //                         let selected = v.remove(idx as usize);
-    //                         Some(selected, StructUsage::$wrapper(selected))
-    //                     }
-    //                 }
-    //                 None => None
-    //             }
-    //         };
-    //     }
-    //
-    //     let rand = state.rand_mut().next();
-    //
-    //     let res = if rand % 2 == 0 {
-    //         remove_one!(useful_value, Useful)
-    //     } else {
-    //         remove_one!(value_to_drop, Drop)
-    //     };
-    //
-    //     if res.is_none() {
-    //         return {
-    //             if rand % 2 != 0 {
-    //                 remove_one!(useful_value, Useful)
-    //             } else {
-    //                 remove_one!(value_to_drop, Drop)
-    //             }
-    //         }
-    //     } else {
-    //         res
-    //     }
-    // }
+    fn _cache_deps(&mut self, ty: &Type) {
+        match ty {
+            Type::Struct(t) => {
+                match self._deps.get_mut(ty) {
+                    Some(v) => {
+                        *v += 1;
+                    }
+                    None => {
+                        self._deps.insert(ty.clone(), 1);
+                    }
+                }
+            }
+            Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
+            Type::Reference(t) => {
+                self._cache_deps(t.as_ref());
+            }
+            Type::MutableReference(t) => {
+                self._cache_deps(t.as_ref());
+            }
+            _ => {}
+        }
+    }
 
-    // only called by mutator when a new vm_state is selected
-    // pub fn _ensure_assigned<S>(
-    //     ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool
-    // ) -> Option<Value>
-    //     where S: HasRand {
-    //     match ty {
-    //         Type::Struct(_) => {
-    //             let (selected, usage) = Self::_sample_ty(ty, vm_state, state, is_ref).unwrap();
-    //             if is_ref { vm_state._in_use.push(usage); }
-    //             Some(selected)
-    //         }
-    //         Type::Vector(inner_ty) => {
-    //             match **inner_ty {
-    //                 Type::Vector(_) => {
-    //                     todo!("vector of vector")
-    //                 }
-    //                 // Vec<Struct> slash all items in vector
-    //                 Type::Struct(_) => {
-    //                     if let Value(ValueImpl::Container(Container::Vec(inner))) = v {
-    //                         (**inner).borrow_mut().clear()
-    //                     } else {
-    //                         unreachable!("vector should be container")
-    //                     }
-    //                 }
-    //                 Type::Reference(inner_ty) => {
-    //                     todo!("vector of reference")
-    //                 }
-    //                 Type::MutableReference(inner_ty) => {
-    //                     todo!("vector of mutable reference")
-    //                 }
-    //                 _ => false
-    //             }
-    //         }
-    //         Type::Reference(inner_ty) => {
-    //             let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
-    //                 Some(v) => v,
-    //                 None => return None
-    //             };
-    //             Value(ValueImpl::IndexedRef(
-    //                 IndexedRef {
-    //                     idx: 0,
-    //                     container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
-    //                 }
-    //             ))
-    //         }
-    //         // todo: ensure really mutated
-    //         Type::MutableReference(inner_ty) => {
-    //             let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
-    //                 Some(v) => v,
-    //                 None => return None
-    //             };
-    //
-    //             Value(ValueImpl::IndexedRef(
-    //                 IndexedRef {
-    //                     idx: 0,
-    //                     container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
-    //                 }
-    //             ))
-    //         }
-    //         _ => None
-    //     }
-    // }
-
-    // pub fn ensure_assigned<S>(&mut self,vm_state: &mut MoveVMState, state: &mut S)
-    //     where S: HasRand {
-    //     for p in &mut self.args {
-    //         match Self::_ensure_assigned(p.ty, vm_state, state, false) {
-    //             Some(v) => p.value = v,
-    //             None => {}
-    //         }
-    //     }
-    // }
+    /// Record the deps and deps_amount of the current args
+    pub fn cache_deps(&mut self) {
+        for ty in self.function_info.get_function().parameter_types.clone() {
+            self._cache_deps(&ty);
+        }
+    }
 
     /// Ensure the deps and deps_amount are satisfied with the current vm_state
     ///
     /// Check for each type in deps, if the number of values in value_to_drop and useful_value
     /// is greater than or equal to the corresponding amount in deps_amount.
     pub fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
-        for (ty, amount) in self._deps.iter().zip(self._deps_amount.iter()) {
+        for (ty, amount) in &self._deps {
             let counts = match vm_state.value_to_drop.get(ty) {
                 Some(v) => v.len(),
                 None => 0
@@ -860,7 +749,6 @@ mod tests {
                 vm_state: StagedVMState::new_uninitialized(),
                 vm_state_idx: 0,
                 _deps: Default::default(),
-                _deps_amount: Default::default(),
             };
             v.mutate::<MoveFuzzState>(&mut Default::default());
             println!("{:?}", v.args[0]);
@@ -951,7 +839,6 @@ mod tests {
                         vm_state: $sstate.clone(),
                         vm_state_idx: 0,
                         _deps: Default::default(),
-                        _deps_amount: Default::default(),
                     };
                     let res = v.mutate::<MoveFuzzState>(&mut state);
                     (v, res)
