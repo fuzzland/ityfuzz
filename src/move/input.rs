@@ -549,6 +549,13 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
+                vm_state.restock(
+                    ty,
+                    value.value,
+                    is_ref,
+                    _state
+                );
+
                 if let Value(ValueImpl::Container(Container::Struct(new_struct))) = vm_state.sample_value(
                     _state,
                     ty,
@@ -817,7 +824,7 @@ mod tests {
     use move_core_types::u256;
     use move_vm_types::values::{Container, Value, ValueImpl, values_impl};
     use crate::input::VMInputT;
-    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput};
+    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
     use crate::r#move::types::MoveFuzzState;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
@@ -828,6 +835,8 @@ mod tests {
     use crate::r#move::vm_state::MoveVMState;
     use std::collections::HashMap;
     use libafl::mutators::MutationResult;
+    use libafl::prelude::HasMetadata;
+    use move_binary_format::file_format::{Ability, AbilitySet};
     use crate::r#move::types::MoveStagedVMState;
 
     macro_rules! get_dummy_func {
@@ -951,9 +960,11 @@ mod tests {
     }
 
     macro_rules! test_struct {
-        ($init_v: expr, $tys: expr, $sstate: expr) => {
+        ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr) => {
             {
                 let dummy_addr = AccountAddress::from([0; 32]);
+                let mut state: MoveFuzzState = Default::default();
+                state.metadata_mut().insert($struct_abilities);
 
                 let (v, res) = {
                     let mut v = MoveFunctionInput {
@@ -972,7 +983,7 @@ mod tests {
                         _deps: Default::default(),
                         _deps_amount: Default::default(),
                     };
-                    let res = v.mutate::<MoveFuzzState>(&mut Default::default());
+                    let res = v.mutate::<MoveFuzzState>(&mut state);
                     (v, res)
                 };
                 println!("{:?}", v.args[0]);
@@ -1011,7 +1022,12 @@ mod tests {
                 )
             ),
             vec![Type::Struct(CachedStructIndex(1))],
-            sstate
+            sstate,
+            {
+                let mut abilities = StructAbilities::new();
+                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities
+            }
         );
         println!("initial value {:?}", init_v);
         println!("mutated value {:?}", mutated_v);
@@ -1039,6 +1055,21 @@ mod tests {
             &Type::Struct(CachedStructIndex(1)),
             false,
         );
+        sstate.state.ref_in_use.push(
+            (
+                Type::Struct(CachedStructIndex(1)),
+                Value(
+                    ValueImpl::Container(
+                        Container::Struct(
+                            Rc::new(RefCell::new(vec![
+                                ValueImpl::U8(0),
+                                ValueImpl::U8(0),
+                            ]))
+                        )
+                    )
+                )
+            )
+        );
 
         let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
             ValueImpl::ContainerRef(
@@ -1052,7 +1083,12 @@ mod tests {
                 )
             ),
             vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))],
-            sstate
+            sstate,
+            {
+                let mut abilities = StructAbilities::new();
+                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities
+            }
         );
         println!("initial value {:?}", init_v);
         println!("mutated value {:?}", mutated_v);

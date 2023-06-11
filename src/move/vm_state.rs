@@ -166,15 +166,18 @@ impl MoveVMState {
     pub fn restock<S>(&mut self, ty: &Type, value: Value, is_ref: bool, _state: &mut S)
     where S: HasMetadata {
         if is_ref {
-            let offset = self.ref_in_use.iter().position(|(t, v)| v.equals(&value).unwrap()).unwrap();
+            let offset = self.ref_in_use
+                .iter()
+                .position(|(t, v)| v.equals(&value).unwrap())
+                .expect("Cannot find value in ref_in_use, is this struct not a reference?");
             self.ref_in_use.remove(offset);
         }
         let struct_abilities = _state
             .metadata()
             .get::<StructAbilities>()
-            .unwrap()
+            .expect("StructAbilities not found")
             .get_ability(ty)
-            .unwrap();
+            .expect("StructAbilities of specific struct not inserted");
 
         if struct_abilities.has_drop() {
             let it = self.value_to_drop.get_mut(ty).unwrap();
