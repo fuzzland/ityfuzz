@@ -497,36 +497,6 @@ impl MoveFunctionInput {
         true
     }
 
-    pub fn mutate_mut_ref<S>(
-        _state: &mut S,
-        vec_container: &mut Container,
-        index: usize,
-        useful_value: &mut HashMap<Type, Vec<Value>>,
-        to_drop_value: &mut HashMap<Type, Vec<Value>>,
-        ty: &Type,
-    ) -> MutationResult
-        where
-            S: State
-            + HasRand
-            + HasMaxSize
-            + HasItyState<ModuleId, AccountAddress, MoveVMState>
-            + HasCaller<AccountAddress> + HasMetadata,
-    {
-
-        let mut value = CloneableValue::from(Value(
-            ValueImpl::Container(vec_container.clone())
-        ));
-        match vec_container {
-            Container::Vec(inner_vec) => {
-                let value = (**inner_vec).borrow_mut().get_mut(index).unwrap();
-
-            }
-            _ => unreachable!("wtf is this")
-        }
-        MutationResult::Mutated
-    }
-
-
     pub fn mutate_container<S>(
                                _state: &mut S,
                                container: &mut Container,
