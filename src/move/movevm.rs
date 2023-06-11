@@ -1,7 +1,7 @@
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
+use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT, StructAbilities};
 use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
@@ -26,6 +26,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use libafl::state::HasMetadata;
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::Bytecode;
 use move_core_types::u256;
@@ -259,6 +260,7 @@ impl<I, S>
     > for MoveVM<I, S>
 where
     I: VMInputT<MoveVMState, ModuleId, AccountAddress> + MoveFunctionInputT,
+    S: HasMetadata,
 {
     fn deploy(
         &mut self,
@@ -445,12 +447,14 @@ where
                     }
                 };
             }
-            if !abilities.has_copy() {
-                insert_if_not_exist!(useful_value, t, v);
-            }
-
             if !abilities.has_drop() {
                 insert_if_not_exist!(value_to_drop, t, v);
+            } else {
+                insert_if_not_exist!(useful_value, t, v);
+                _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
+                    t.clone(),
+                    abilities,
+                )
             }
 
             out.vars.push((t.clone(), v.clone()));

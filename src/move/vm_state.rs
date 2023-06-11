@@ -20,7 +20,6 @@ use libafl::prelude::Rand;
 use libafl::state::HasRand;
 use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
-use crate::r#move::input::StructUsage;
 
 #[derive(Debug)]
 pub struct MoveVMState {
@@ -32,7 +31,7 @@ pub struct MoveVMState {
     pub useful_value: HashMap<Type, Vec<Value>>,
     pub _useful_value_amt: HashMap<Type, Vec<usize>>,
 
-    pub ref_in_use: Vec<StructUsage>,
+    pub ref_in_use: Vec<(Type, Value)>,
 }
 
 impl MoveVMState {
@@ -127,11 +126,7 @@ impl MoveVMState {
 
                                 // add to ref_in_use
                                 if is_ref {
-                                    if let Value(ValueImpl::Container(Container::Struct(v))) = val.clone() {
-                                        self.ref_in_use.push(StructUsage::$struct_src(v));
-                                    } else {
-                                        unreachable!("Value is not a struct")
-                                    }
+                                    self.ref_in_use.push((ty.clone(), val.clone()));
                                 }
                                 Some(val)
                             }
@@ -163,39 +158,41 @@ impl MoveVMState {
         }
     }
 
-    pub fn restock(&mut self, ty: &Type, value: StructUsage, is_ref: bool) {
+    /// Restock a value to the state
+    ///
+    /// If the value is a reference, it will be removed from the ref_in_use vector.
+    /// Used by mutator when trying to mutate a struct.
+    pub fn restock(&mut self, ty: &Type, value: Value, is_ref: bool) {
         if is_ref {
-            let offset = self.ref_in_use.iter().position(|x| x.equals(&value)).unwrap();
+            let offset = self.ref_in_use.iter().position(|(t, v)| v.equals(&value).unwrap()).unwrap();
             self.ref_in_use.remove(offset);
         }
-        match value {
-            StructUsage::Useful(v) => {
-                let it = self.useful_value.get_mut(ty).unwrap();
-                match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
-                    Some(offset) => {
-                        self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
-                    }
-                    None => {
-                        it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
-                        self._useful_value_amt.get_mut(ty).unwrap().push(1);
-                    }
-                }
-            }
-            StructUsage::Drop(v) => {
-                let it = self.value_to_drop.get_mut(ty).unwrap();
-                match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
-                    Some(offset) => {
-                        self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
-                    }
-                    None => {
-                        it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
-                        self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
-                    }
-                }
-            }
-        }
-
-
+        // match value {
+        //     StructUsage::Useful(v) => {
+        //         let it = self.useful_value.get_mut(ty).unwrap();
+        //         match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
+        //             Some(offset) => {
+        //                 self._useful_value_amt.get_mut(ty).unwrap()[offset] += 1;
+        //             }
+        //             None => {
+        //                 it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
+        //                 self._useful_value_amt.get_mut(ty).unwrap().push(1);
+        //             }
+        //         }
+        //     }
+        //     StructUsage::Drop(v) => {
+        //         let it = self.value_to_drop.get_mut(ty).unwrap();
+        //         match it.iter().position(|x| x.equals(&Value(ValueImpl::Container(Container::Struct(v.clone())))).unwrap()) {
+        //             Some(offset) => {
+        //                 self._value_to_drop_amt.get_mut(ty).unwrap()[offset] += 1;
+        //             }
+        //             None => {
+        //                 it.push(Value(ValueImpl::Container(Container::Struct(v.clone()))));
+        //                 self._value_to_drop_amt.get_mut(ty).unwrap().push(1);
+        //             }
+        //         }
+        //     }
+        // }
     }
 }
 

@@ -25,6 +25,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use itertools::Itertools;
 use libafl::impl_serdeany;
+use move_binary_format::file_format::AbilitySet;
 use move_vm_runtime::loader::{Function, Module};
 use move_vm_types::loaded_data::runtime_types::Type;
 use crate::mutation_utils::byte_mutator;
@@ -62,72 +63,28 @@ impl FunctionDefaultable {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StructDependentInputsMetadata {
-    pub uninit_inputs: Vec<MoveFunctionInput>,
-    pub ref_count: HashMap<usize, usize>,
-    pub dependencies: HashMap<Type, Vec<usize>>,
+pub struct StructAbilities {
+    pub abilities: HashMap<Type, AbilitySet>
 }
 
-impl StructDependentInputsMetadata {
+impl StructAbilities {
     pub fn new() -> Self {
-        StructDependentInputsMetadata {
-            uninit_inputs: vec![],
-            ref_count: HashMap::new(),
-            dependencies: HashMap::new(),
+        StructAbilities {
+            abilities: HashMap::new()
         }
     }
 
-    pub fn add(&mut self, input: MoveFunctionInput, deps: Vec<Type>) {
-        let idx = self.uninit_inputs.len();
-        self.uninit_inputs.push(input);
-        self.ref_count.insert(idx, deps.len());
-        for dep in deps {
-            self.dependencies.entry(dep).or_insert_with(Vec::new).push(idx);
-        }
+    pub fn get_ability(&self, ty: &Type) -> Option<&AbilitySet> {
+        self.abilities.get(ty)
     }
 
-    pub fn found_ty(&mut self, ty: Type) -> Vec<MoveFunctionInput> {
-        let dep_inputs_idx = self.dependencies.remove(&ty);
-        if dep_inputs_idx.is_none() {
-            return vec![];
-        }
-        let mut freed_input = vec![];
-        for input_idx in dep_inputs_idx.unwrap() {
-            let ref_cnt = self.ref_count.get(&input_idx);
-            match ref_cnt {
-                None => continue,
-                Some(cnt) => {
-                    if *cnt > 1 {
-                        self.ref_count.insert(input_idx, cnt - 1);
-                    } else {
-                        freed_input.push(input_idx);
-                    }
-                }
-            }
-        }
-        freed_input.iter()
-            .sorted_by(|a, b| b.cmp(a)) // prevent index error
-            .map(|idx| self.uninit_inputs.remove(*idx)).collect()
+    pub fn set_ability(&mut self, ty: Type, ability: AbilitySet) {
+        self.abilities.insert(ty, ability);
     }
 }
 
-impl_serdeany!(StructDependentInputsMetadata);
+impl_serdeany!(StructAbilities);
 
-#[derive(Clone, Debug)]
-pub enum StructUsage {
-    Useful(Rc<RefCell<Vec<ValueImpl>>>),
-    Drop(Rc<RefCell<Vec<ValueImpl>>>),
-}
-
-impl StructUsage {
-    pub fn equals(&self, another: &Self) -> bool {
-        match (self, another) {
-            (StructUsage::Useful(v), StructUsage::Useful(v2)) => todo!(),
-            (StructUsage::Drop(v), StructUsage::Drop(v2)) => todo!(),
-            _ => false
-        }
-    }
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MoveFunctionInput {
