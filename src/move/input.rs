@@ -52,8 +52,8 @@ pub trait MoveFunctionInputT {
     /// Slash all structs in the input, and sample from new vm_state
     ///
     /// This ensures all the structs in the input are valid!
-    fn slash<VS>(&self, vm_state: &VS)
-        where VS: MoveVMStateT;
+    fn slash<VS, S>(&mut self, vm_state: &VS, state: &mut S)
+        where VS: MoveVMStateT, S: HasMetadata + HasRand;
 }
 
 pub struct FunctionDefaultable {
@@ -231,9 +231,49 @@ impl MoveFunctionInputT for MoveFunctionInput {
     /// Slash all structs in the input, and sample from new vm_state
     ///
     /// This ensures all the structs in the input are valid!
-    fn slash<VS>(&self, vm_state: &VS)
-        where VS: MoveVMStateT {
+    fn slash<VS, S>(&mut self, vm_state: &VS, state: &mut S)
+        where VS: MoveVMStateT,
+              S: HasMetadata + HasRand
+    {
+        for (arg, ty) in self.args.iter_mut()
+            .zip(self.function_info.get_function().parameter_types.iter()) {
+            match ty {
 
+                // If the final vector inner type is a struct, we need to slash it (clear all)
+                Type::Vector(inner_ty) => {
+                    let mut final_ty = (*inner_ty).clone();
+                    while let Type::Vector(inner_ty) = (*final_ty) {
+                        final_ty = inner_ty;
+                    }
+                    match *final_ty {
+                        Type::Struct(_) | Type::MutableReference(_) | Type::Reference(_) => {
+                            if let Value(ValueImpl::Container(Container::Vec(inner))) = &mut arg.value {
+                                (**inner).borrow_mut().clear()
+                            } else {
+                                unreachable!("vector should be container")
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // resample all the structs in the input
+                Type::Struct(_) => {
+                    let new_struct = self.vm_state.state.sample_value(state, ty, false);
+                    arg.value = new_struct;
+                }
+                Type::Reference(_) => {
+                    let new_struct = self.vm_state.state.sample_value(state, ty, true);
+                    arg.value = new_struct;
+                }
+                Type::MutableReference(_) => {
+                    let new_struct = self.vm_state.state.sample_value(state, ty, true);
+                    arg.value = new_struct;
+                }
+                Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
+                _ => {}
+            }
+
+        }
     }
 }
 
