@@ -835,12 +835,12 @@ mod tests {
     }
     #[test]
     fn test_integer() {
-        test_lb!(ValueImpl::U8(0));
-        test_lb!(ValueImpl::U16(0));
-        test_lb!(ValueImpl::U32(0));
-        test_lb!(ValueImpl::U64(0));
-        test_lb!(ValueImpl::U128(0));
-        test_lb!(ValueImpl::U256(u256::U256::zero()));
+        test_lb!(ValueImpl::U8(0), vec![Type::U8]);
+        test_lb!(ValueImpl::U16(0), vec![Type::U16]);
+        test_lb!(ValueImpl::U32(0), vec![Type::U32]);
+        test_lb!(ValueImpl::U64(0), vec![Type::U64]);
+        test_lb!(ValueImpl::U128(0), vec![Type::U128]);
+        test_lb!(ValueImpl::U256(u256::U256::zero()), vec![Type::U256]);
     }
 
     #[test]
