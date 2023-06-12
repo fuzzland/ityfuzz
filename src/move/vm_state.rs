@@ -58,7 +58,7 @@ impl MoveVMStateT for MoveVMState {
     /// as reference / mutable reference from the vm_state.
     fn finished_call<S>(&mut self, state: &mut S)
     where S: HasMetadata {
-        for (t, v) in self.ref_in_use {
+        for (t, v) in self.ref_in_use.clone() {
             // we'll clear the ref_in_use vector to save CPU time
             self.restock(&t, v, false, state);
         }
