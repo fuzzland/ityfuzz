@@ -22,7 +22,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use std::env;
-use std::io::Read;
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::oracles::bug::BugOracle;
 
