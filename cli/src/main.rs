@@ -22,9 +22,9 @@ use std::rc::Rc;
 use std::str::FromStr;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use std::env;
+use std::io::Read;
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::oracles::bug::BugOracle;
-
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -284,8 +284,24 @@ fn main() {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
                 }
-                let addresses: Vec<H160> = args
-                    .target
+                let mut args_target = args.target.clone();
+
+                if args.ierc20_oracle || args.flashloan {
+                    const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+                    const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
+                    if "bsc" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(BSC_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(BSC_ADDRESS);
+                        }
+                    }else if "eth" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(ETH_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(ETH_ADDRESS);
+                        }
+                    }
+                }
+                let addresses: Vec<H160> = args_target
                     .split(",")
                     .map(|s| H160::from_str(s).unwrap())
                     .collect();
