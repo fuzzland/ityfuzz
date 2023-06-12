@@ -52,8 +52,8 @@ pub trait MoveFunctionInputT {
     /// Slash all structs in the input, and sample from new vm_state
     ///
     /// This ensures all the structs in the input are valid!
-    fn slash<VS, S>(&mut self, vm_state: &VS, state: &mut S)
-        where VS: MoveVMStateT, S: HasMetadata + HasRand;
+    fn slash<S>(&mut self, state: &mut S)
+        where S: HasMetadata + HasRand;
 }
 
 pub struct FunctionDefaultable {
@@ -231,9 +231,8 @@ impl MoveFunctionInputT for MoveFunctionInput {
     /// Slash all structs in the input, and sample from new vm_state
     ///
     /// This ensures all the structs in the input are valid!
-    fn slash<VS, S>(&mut self, vm_state: &VS, state: &mut S)
-        where VS: MoveVMStateT,
-              S: HasMetadata + HasRand
+    fn slash<S>(&mut self, state: &mut S)
+        where S: HasMetadata + HasRand
     {
         for (arg, ty) in self.args.iter_mut()
             .zip(self.function_info.get_function().parameter_types.iter()) {
@@ -261,12 +260,8 @@ impl MoveFunctionInputT for MoveFunctionInput {
                     let new_struct = self.vm_state.state.sample_value(state, ty, false);
                     arg.value = new_struct;
                 }
-                Type::Reference(_) => {
-                    let new_struct = self.vm_state.state.sample_value(state, ty, true);
-                    arg.value = new_struct;
-                }
-                Type::MutableReference(_) => {
-                    let new_struct = self.vm_state.state.sample_value(state, ty, true);
+                Type::Reference(inner_ty) | Type::MutableReference(inner_ty) => {
+                    let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), true);
                     arg.value = new_struct;
                 }
                 Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
@@ -750,7 +745,7 @@ mod tests {
     use move_core_types::u256;
     use move_vm_types::values::{Container, Value, ValueImpl, values_impl};
     use crate::input::VMInputT;
-    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
+    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
     use crate::r#move::types::MoveFuzzState;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
@@ -799,24 +794,36 @@ mod tests {
         }
     }
 
+    macro_rules! dummy_input {
+        ($init_v: expr, $sstate: expr, $tys: expr) => {
+            {
+                let dummy_addr = AccountAddress::from([0; 32]);
+                MoveFunctionInput {
+                    module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
+                    function: Identifier::new("test").unwrap(),
+                    function_info: Arc::new(get_dummy_func!($tys)),
+                    args: vec![
+                        CloneableValue::from(Value(
+                            $init_v.clone()
+                        ))
+                    ],
+                    ty_args: vec![],
+                    caller: dummy_addr,
+                    vm_state: $sstate,
+                    vm_state_idx: 0,
+                    _deps: Default::default(),
+                }
+            }
+        };
+
+        ($init_v: expr, $tys: expr) => {
+            dummy_input!($init_v, StagedVMState::new_uninitialized(), $tys)
+        };
+    }
+
     macro_rules! test_lb {
         ($init_v: expr, $tys: expr) => {
-            let dummy_addr = AccountAddress::from([0; 32]);
-            let mut v = MoveFunctionInput {
-                module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
-                function: Identifier::new("test").unwrap(),
-                function_info: Arc::new(get_dummy_func!($tys)),
-                args: vec![
-                    CloneableValue::from(Value(
-                        $init_v.clone()
-                    ))
-                ],
-                ty_args: vec![],
-                caller: dummy_addr,
-                vm_state: StagedVMState::new_uninitialized(),
-                vm_state_idx: 0,
-                _deps: Default::default(),
-            };
+            let mut v = dummy_input!($init_v, $tys);
             v.mutate::<MoveFuzzState>(&mut Default::default());
             println!("{:?}", v.args[0]);
             let o = (v.args[0].value.equals(&Value($init_v)).expect("failed to compare"));
@@ -887,26 +894,11 @@ mod tests {
     macro_rules! test_struct {
         ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr) => {
             {
-                let dummy_addr = AccountAddress::from([0; 32]);
                 let mut state: MoveFuzzState = Default::default();
                 state.metadata_mut().insert($struct_abilities);
 
                 let (v, res) = {
-                    let mut v = MoveFunctionInput {
-                        module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
-                        function: Identifier::new("test").unwrap(),
-                        function_info: Arc::new(get_dummy_func!($tys)),
-                        args: vec![
-                            CloneableValue::from(Value(
-                                $init_v.clone()
-                            ))
-                        ],
-                        ty_args: vec![],
-                        caller: dummy_addr,
-                        vm_state: $sstate.clone(),
-                        vm_state_idx: 0,
-                        _deps: Default::default(),
-                    };
+                    let mut v = dummy_input!($init_v, $sstate, $tys);
                     let res = v.mutate::<MoveFuzzState>(&mut state);
                     (v, res)
                 };
@@ -1021,6 +1013,91 @@ mod tests {
         println!("ref in use {:?}", vm_state.state.ref_in_use);
         assert!(vm_state.state.ref_in_use.len() > 0);
         assert_eq!(mutation_result, MutationResult::Mutated);
+    }
+
+    #[test]
+    fn test_slash() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(123),
+                        ValueImpl::U8(123),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let mut inp = dummy_input!(
+            ValueImpl::ContainerRef(
+                values_impl::ContainerRef::Local(
+                    Container::Struct(
+                        Rc::new(RefCell::new(vec![
+                            ValueImpl::U8(0),
+                            ValueImpl::U8(0),
+                        ]))
+                    )
+                )
+            ),
+            sstate,
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))]
+        );
+        inp.slash(&mut MoveFuzzState::default());
+        println!("{:?}", inp.args[0].value);
+    }
+
+    #[test]
+    fn test_slash_vec() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(123),
+                        ValueImpl::U8(123),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let mut inp = dummy_input!(
+            ValueImpl::Container(
+                Container::Vec(
+                    Rc::new(RefCell::new(
+                        vec![ValueImpl::ContainerRef(
+                            values_impl::ContainerRef::Local(
+                                Container::Struct(
+                                    Rc::new(RefCell::new(vec![
+                                        ValueImpl::U8(0),
+                                        ValueImpl::U8(0),
+                                    ]))
+                                )
+                            )
+                        )]
+                    ))
+                )
+            ),
+            sstate,
+            vec![Type::Vector(Box::new(Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))))]
+        );
+        inp.slash(&mut MoveFuzzState::default());
+        assert!(
+            inp.args[0].value.equals(
+                &Value(
+                    ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(vec![]))))
+                )
+            ).expect("equals")
+
+        )
     }
 
 
