@@ -56,6 +56,12 @@ struct ContractInfo {
 pub fn evm_fuzzer(
     config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
 ) {
+    // create work dir if not exists
+    let path = Path::new(config.work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir(path).unwrap();
+    }
+
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
@@ -75,15 +81,8 @@ pub fn evm_fuzzer(
     let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));
-
+    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_concolic_enabled(config.concolic);
-
-    // create work dir if not exists
-    let path = Path::new(config.work_dir.as_str());
-    if !path.exists() {
-        std::fs::create_dir(path).unwrap();
-    }
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {

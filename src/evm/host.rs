@@ -108,6 +108,11 @@ where
     pub logs: HashSet<u64>,
     // set_code data
     pub setcode_data: HashMap<H160, Bytecode>,
+    // relations file handle
+    relations_file: std::fs::File,
+    // Filter duplicate relations
+    relations_hash: HashSet<u64>
+
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -169,6 +174,8 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
+            relations_file: self.relations_file.try_clone().unwrap(),
+            relations_hash: self.relations_hash.clone()
         }
     }
 }
@@ -190,7 +197,7 @@ where
     I: VMInputT<VS, H160, H160> + EVMInputT,
     VS: VMStateT,
 {
-    pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
+    pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>, workdir: String) -> Self {
         let ret = Self {
             evmstate: EVMState::new(),
             env: Env::default(),
@@ -215,6 +222,8 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:HashMap::new(),
+            relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
+            relations_hash: HashSet::new(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -362,6 +371,27 @@ where
         //     vec![]
         // }
     }
+    pub fn write_relations(&mut self, caller: H160, target: H160, funtion_hash: Bytes) {
+        if funtion_hash.len() < 0x4 {
+            return;
+        }
+        let cur_write_str = format!("{{caller:0x{} traget:0x{} function(0x{})}} -->\t", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
+        let mut hasher = DefaultHasher::new();
+        cur_write_str.hash(&mut hasher);
+        let cur_wirte_hash = hasher.finish();
+        if self.relations_hash.contains(&cur_wirte_hash) {
+            return;
+        }
+        self.relations_hash.insert(cur_wirte_hash);
+        self.relations_file
+            .write_all(cur_write_str.as_bytes())
+            .unwrap();
+        if self.relations_hash.len() % 2 == 0 {
+            self.relations_file
+                .write_all("\n".as_bytes())
+                .unwrap();
+        }
+    }
 }
 
 macro_rules! process_rw_key {
@@ -395,6 +425,13 @@ where
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, _is_static: bool, state: &mut S) -> Return {
         unsafe {
+
+            self.write_relations(
+                interp.contract.caller.clone(),
+                interp.contract.address.clone(),
+                interp.contract.input.clone(),
+            );
+
             if self.middlewares_enabled {
                 match self.flashloan_middleware.clone() {
                     Some(m) => {
