@@ -814,6 +814,7 @@ mod tests {
     use primitive_types::U256;
     use revm::Bytecode;
     use std::cell::RefCell;
+    use std::path::Path;
     use std::rc::Rc;
     use std::sync::Arc;
     use primitive_types::{H160};
@@ -821,6 +822,10 @@ mod tests {
     #[test]
     fn test_fuzz_executor() {
         let mut state: EVMFuzzState = FuzzState::new(0);
+        let path = Path::new("work_dir");
+        if !path.exists() {
+            std::fs::create_dir(path).unwrap();
+        }
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
             FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
             generate_random_address(&mut state),
