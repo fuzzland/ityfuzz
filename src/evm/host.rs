@@ -375,22 +375,35 @@ where
         if funtion_hash.len() < 0x4 {
             return;
         }
-        let cur_write_str = format!("{{caller:0x{} traget:0x{} function(0x{})}} -->\t", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
+        let cur_write_str = format!("{{caller:0x{} traget:0x{} function(0x{})}}", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
         let mut hasher = DefaultHasher::new();
         cur_write_str.hash(&mut hasher);
         let cur_wirte_hash = hasher.finish();
         if self.relations_hash.contains(&cur_wirte_hash) {
             return;
         }
+        if self.relations_hash.len() == 0{
+            let write_head = format!("[ityfuzz relations] caller, traget, function hash\n");
+            self.relations_file
+                .write_all(write_head.as_bytes())
+                .unwrap();
+        }else {
+            self.relations_file
+                .write_all(" -->\t".as_bytes())
+                .unwrap();
+
+            if self.relations_hash.len() % 2 == 0 {
+                self.relations_file
+                    .write_all("\n".as_bytes())
+                    .unwrap();
+            }
+        }
+
+
         self.relations_hash.insert(cur_wirte_hash);
         self.relations_file
             .write_all(cur_write_str.as_bytes())
             .unwrap();
-        if self.relations_hash.len() % 2 == 0 {
-            self.relations_file
-                .write_all("\n".as_bytes())
-                .unwrap();
-        }
     }
 }
 
@@ -425,13 +438,13 @@ where
     type DB = BenchmarkDB;
     fn step(&mut self, interp: &mut Interpreter, _is_static: bool, state: &mut S) -> Return {
         unsafe {
-
+/*
             self.write_relations(
                 interp.contract.caller.clone(),
                 interp.contract.address.clone(),
                 interp.contract.input.clone(),
             );
-
+*/
             if self.middlewares_enabled {
                 match self.flashloan_middleware.clone() {
                     Some(m) => {
@@ -754,6 +767,12 @@ where
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
+
+        self.write_relations(
+            input.transfer.target.clone(),
+            input.contract.clone(),
+            input.input.clone(),
+        );
 
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
