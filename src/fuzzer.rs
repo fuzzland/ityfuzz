@@ -82,8 +82,8 @@ where
     /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
-    // corpus path
-    corpus_path: String,
+    // work dir path
+    work_dir: String,
 }
 
 impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
@@ -107,7 +107,7 @@ where
         feedback: F,
         infant_feedback: IF,
         objective: OF,
-        corpus_path: String,
+        work_dir: String,
     ) -> Self {
         Self {
             scheduler,
@@ -115,7 +115,7 @@ where
             infant_feedback,
             infant_scheduler,
             objective,
-            corpus_path,
+            work_dir,
             minimizer_map: Default::default(),
             phantom: PhantomData,
         }
@@ -350,16 +350,17 @@ where
                     println!("==========================================");
 
                     // write to file
-                    let path = Path::new(self.corpus_path.as_str());
+                    let corpus_path = format!("{}/corpus", self.work_dir.as_str());
+                    let path = Path::new(corpus_path.as_str());
                     if !path.exists() {
                         std::fs::create_dir(path).unwrap();
                     }
                     let mut file =
-                        File::create(format!("{}/{}", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT })).unwrap();
+                        File::create(format!("{}/{}", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
                     file.write_all(data.as_bytes()).unwrap();
 
                     let mut replayable_file =
-                        File::create(format!("{}/{}_replayable", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT })).unwrap();
+                        File::create(format!("{}/{}_replayable", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
                     replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
                 }
             }

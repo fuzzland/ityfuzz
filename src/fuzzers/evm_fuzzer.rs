@@ -2,6 +2,7 @@ use bytes::Bytes;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -77,6 +78,12 @@ pub fn evm_fuzzer(
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));
 
     fuzz_host.set_concolic_enabled(config.concolic);
+
+    // create work dir if not exists
+    let path = Path::new(config.work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir(path).unwrap();
+    }
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
@@ -175,7 +182,7 @@ pub fn evm_fuzzer(
         feedback,
         infant_feedback,
         objective,
-        config.corpus_path,
+        config.work_dir,
     );
     match config.replay_file {
         None => {

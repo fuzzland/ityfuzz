@@ -128,8 +128,8 @@ struct Args {
     replay_file: Option<String>,
 
     // allow users to pass the path through CLI
-    #[arg(long, default_value = "corpus")]
-    corpus_path: String,
+    #[arg(long, default_value = "work_dir")]
+    work_dir: String,
 
     // random seed  
     #[arg(long, default_value = "1667840158231589000")]
@@ -332,7 +332,7 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        corpus_path:args.corpus_path,
+        work_dir:args.work_dir,
     };
 
     match config.fuzzer_type {
