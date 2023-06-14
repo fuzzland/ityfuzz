@@ -1,5 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+use primitive_types::H256;
 
 pub trait VMStateT: Clone + Debug + Default + Serialize + DeserializeOwned {
     fn get_hash(&self) -> u64;
@@ -10,4 +11,5 @@ pub trait VMStateT: Clone + Debug + Default + Serialize + DeserializeOwned {
     #[cfg(feature = "full_trace")]
     fn get_flashloan(&self) -> String;
     fn as_any(&self) -> &dyn std::any::Any;
+    fn get_typed_bug(&self) -> H256;
 }

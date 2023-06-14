@@ -17,4 +17,30 @@ contract main {
         bug();
         return 'Hello Contracts';
     }
+
+    function process_two(uint8[] calldata a) public returns (string memory){
+            require(a[0] != 9, "a[0] != 9");
+            require(a[1] != 9, "a[1] != 9");
+            require(a[2] != 9, "a[2] != 9");
+            require(a[3] == 9, "a[3] == 9");
+            require(a[4] == 9, "a[4] == 9");
+            require(a[5] == 9, "a[5] == 9");
+            require(a[6] == 9, "a[6] == 9");
+            require(a[7] == 9, "a[7] == 9");
+            typed_bug(0x1000278);
+            return 'Hello Contracts';
+        }
+
+    function process_three(uint8[] calldata a) public returns (string memory){
+            require(a[0] != 3, "a[0] != 3");
+            require(a[1] != 3, "a[1] != 3");
+            require(a[2] != 3, "a[2] != 3");
+            require(a[3] == 9, "a[3] == 9");
+            require(a[4] == 9, "a[4] == 9");
+            require(a[5] == 2, "a[5] == 2");
+            require(a[6] == 1, "a[6] == 1");
+            require(a[7] == 0, "a[7] == 0");
+            typed_bug(0x12345678);
+            return 'Hello Contracts';
+        }
 }

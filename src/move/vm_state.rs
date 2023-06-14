@@ -15,6 +15,7 @@ use move_vm_types::values::{GlobalValue, Value};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::collections::HashMap;
+use primitive_types::H256;
 
 #[derive(Debug)]
 pub struct MoveVMState {
@@ -167,6 +168,10 @@ impl VMStateT for MoveVMState {
     }
 
     fn as_any(&self) -> &dyn Any {
+        todo!()
+    }
+
+    fn get_typed_bug(&self) -> H256 {
         todo!()
     }
 }

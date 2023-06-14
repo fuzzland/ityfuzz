@@ -137,6 +137,9 @@ pub struct EVMState {
 
     /// Is bug() call in Solidity hit?
     pub bug_hit: bool,
+
+    /// bug type call in solidity type
+    pub typed_bug: H256,
 }
 
 impl Default for EVMState {
@@ -148,6 +151,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
+            typed_bug: H256::zero(),
         }
     }
 }
@@ -207,6 +211,9 @@ impl VMStateT for EVMState {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    fn get_typed_bug(&self) -> H256 {
+        self.typed_bug
+    }
 }
 
 impl EVMState {
@@ -217,6 +224,7 @@ impl EVMState {
             post_execution: vec![],
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
+            typed_bug: H256::zero(),
         }
     }
 
@@ -581,6 +589,10 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
+        if r.new_state.bug_hit {
+            r.new_state.typed_bug = self.host.typed_bug.clone();
+        }
+
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),

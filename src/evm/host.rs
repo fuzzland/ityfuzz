@@ -102,6 +102,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
+    pub typed_bug: H256,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -111,7 +112,9 @@ where
     // relations file handle
     relations_file: std::fs::File,
     // Filter duplicate relations
-    relations_hash: HashSet<u64>
+    relations_hash: HashSet<u64>,
+    /// Filter typed_bug
+    typed_bug_hash: HashSet<u64>,
 
 }
 
@@ -175,7 +178,9 @@ where
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
             relations_file: self.relations_file.try_clone().unwrap(),
-            relations_hash: self.relations_hash.clone()
+            relations_hash: self.relations_hash.clone(),
+            typed_bug: self.typed_bug.clone(),
+            typed_bug_hash: self.typed_bug_hash.clone(),
         }
     }
 }
@@ -224,6 +229,8 @@ where
             setcode_data:HashMap::new(),
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
+            typed_bug: Default::default(),
+            typed_bug_hash: HashSet::new(),
         };
         // ret.env.block.timestamp = U256::max_value();
         ret
@@ -694,6 +701,19 @@ where
                 panic!("target hit");
             }
             self.bug_hit = true;
+            self.typed_bug = H256::zero();
+        } else if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x78{
+            let mut hasher = DefaultHasher::new();
+            (*_topics.last().unwrap()).hash(&mut hasher);
+            let cur_wirte_hash = hasher.finish();
+            if !self.typed_bug_hash.contains(&cur_wirte_hash) {
+                self.bug_hit = true;
+                self.typed_bug = (*_topics.last().unwrap());
+                self.typed_bug_hash.insert(cur_wirte_hash);
+            }else {
+                self.bug_hit = false;
+            }
+
         }
         #[cfg(feature = "print_logs")]
         {

@@ -6,9 +6,9 @@ use crate::{
     state_input::StagedVMState,
 };
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 use std::path::Path;
@@ -38,6 +38,8 @@ use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use primitive_types::H256;
+use crate::evm::vm::EVMState;
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
@@ -82,7 +84,7 @@ where
     /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
-    // work dir path
+    /// work dir path
     work_dir: String,
 }
 
@@ -434,8 +436,9 @@ where
                 unsafe {
                     println!("Oracle: {}", ORACLE_OUTPUT);
                 }
-                println!(
-                    "Found a solution! trace: {}",
+                let typed_bug= state.get_execution_result().new_state.state.get_typed_bug();
+                let cur_report = format!(
+                    "Found a solution! typed_debug(0x{}) trace: {}\n", hex::encode(typed_bug),
                     state
                         .get_execution_result()
                         .new_state
@@ -443,7 +446,15 @@ where
                         .clone()
                         .to_string(state)
                 );
-                exit(0);
+                println!("{}", cur_report);
+                // typed_bug check: zeor is debug
+                if typed_bug == H256::zero() {
+                    //exit(0);  /// solidity:bug()
+                    return Ok((res, None));
+                }
+                let mut file = OpenOptions::new().append(true).create(true).open(format!("{}/vulnerabilities", self.work_dir.as_str())).unwrap();
+                file.write_all(cur_report.as_bytes()).unwrap();
+
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
 

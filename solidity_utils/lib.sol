@@ -8,3 +8,12 @@ function bug() {
         log1(p, 0x20, 0x133337)
     }
 }
+
+function typed_bug(uint256 x) {
+    bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
+    assembly {
+        let p := add(msize(), 0x20)
+        mstore(p, t2)
+        log1(p, 0x20, x)
+    }
+}
