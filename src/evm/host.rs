@@ -63,7 +63,7 @@ pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
 pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
-
+pub static mut PANIC_ON_TYPEDBUG: bool = false;
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
@@ -701,19 +701,25 @@ where
                 panic!("target hit");
             }
             self.bug_hit = true;
-            self.typed_bug = H256::zero();
         } else if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x78{
+            if unsafe {PANIC_ON_TYPEDBUG} {
+                panic!("target typed_bug hit");
+            }
             let mut hasher = DefaultHasher::new();
-            (*_topics.last().unwrap()).hash(&mut hasher);
+            let curtyped = (*_topics.last().unwrap()).0;
+            let mut curtyped2:[u8;32] = [0;32];
+            let mut index = 1;
+            while index < 32 {
+                curtyped2[index] = curtyped[index-1];
+                index = index + 1;
+            }
+            let curtypedbug = H256::from(curtyped2);
+            curtypedbug.hash(&mut hasher);
             let cur_wirte_hash = hasher.finish();
             if !self.typed_bug_hash.contains(&cur_wirte_hash) {
-                self.bug_hit = true;
-                self.typed_bug = (*_topics.last().unwrap());
+                self.typed_bug = curtypedbug;
                 self.typed_bug_hash.insert(cur_wirte_hash);
-            }else {
-                self.bug_hit = false;
             }
-
         }
         #[cfg(feature = "print_logs")]
         {

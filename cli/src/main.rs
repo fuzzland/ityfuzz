@@ -24,6 +24,8 @@ use ityfuzz::evm::producers::erc20::ERC20Producer;
 use std::env;
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::oracles::bug::BugOracle;
+use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
+use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -122,6 +124,13 @@ struct Args {
 
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
+
+    ///Enable oracle for detecting whether typed_bug() is called
+    #[arg(long, default_value = "true")]
+    typed_bug_oracle: bool,
+
+    #[arg(long, default_value = "false")]
+    panic_on_typedbug: bool,
 
     /// Replay?
     #[arg(long)]
@@ -258,6 +267,16 @@ fn main() {
         if args.panic_on_bug {
             unsafe {
                 PANIC_ON_BUG = true;
+            }
+        }
+    }
+
+    if args.typed_bug_oracle {
+        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
+
+        if args.panic_on_typedbug {
+            unsafe {
+                PANIC_ON_TYPEDBUG = true;
             }
         }
     }

@@ -336,6 +336,7 @@ where
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
+        self.host.typed_bug = H256::zero();
         self.host.call_count = 0;
         let mut repeats = input.get_repeat();
         // Initially, there is no state change
@@ -589,7 +590,7 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        if r.new_state.bug_hit {
+        if self.host.typed_bug.is_zero() == false {
             r.new_state.typed_bug = self.host.typed_bug.clone();
         }
 
@@ -762,6 +763,7 @@ where
                 .clone();
             self.host.bug_hit = false;
             self.host.call_count = 0;
+            self.host.typed_bug = H256::zero();
         }
 
         data.iter().map(

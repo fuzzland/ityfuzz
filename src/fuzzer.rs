@@ -433,12 +433,16 @@ where
                 report_vulnerability(
                     unsafe {ORACLE_OUTPUT.clone()},
                 );
+
+                let mut event_type = String::from("Solution");
                 unsafe {
                     println!("Oracle: {}", ORACLE_OUTPUT);
+                    event_type = ORACLE_OUTPUT.clone();
                 }
                 let typed_bug= state.get_execution_result().new_state.state.get_typed_bug();
+
                 let cur_report = format!(
-                    "Found a solution! typed_debug(0x{}) trace: {}\n", hex::encode(typed_bug),
+                    "Found a solution! {} trace: {}\n", event_type,
                     state
                         .get_execution_result()
                         .new_state
@@ -447,14 +451,15 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
-                // typed_bug check: zeor is debug
+                /*
+                /// check typed_bug  type?
                 if typed_bug == H256::zero() {
                     //exit(0);  /// solidity:bug()
                     return Ok((res, None));
-                }
+                }*/
                 let mut file = OpenOptions::new().append(true).create(true).open(format!("{}/vulnerabilities", self.work_dir.as_str())).unwrap();
                 file.write_all(cur_report.as_bytes()).unwrap();
-
+                return Ok((res, None));
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
 

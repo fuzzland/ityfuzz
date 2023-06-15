@@ -9,11 +9,12 @@ function bug() {
     }
 }
 
-function typed_bug(uint256 x) {
+function typed_bug(uint256 typed) {
+    typed = typed * 0x100 + 0x78;
     bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
     assembly {
         let p := add(msize(), 0x20)
         mstore(p, t2)
-        log1(p, 0x20, x)
+        log1(p, 0x20, typed)
     }
 }
