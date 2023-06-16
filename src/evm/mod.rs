@@ -14,8 +14,7 @@ pub mod oracle;
 pub mod oracles;
 pub mod presets;
 pub mod producers;
+pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod srcmap;
-

@@ -1,11 +1,16 @@
+use crate::cache::{Cache, FileSystemCache};
 use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
 use primitive_types::{H160, U256};
 use reqwest::header::HeaderMap;
+use retry::OperationResult;
+use retry::{delay::Fixed, retry_with_index};
 use revm::{Bytecode, LatestSpec};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -152,6 +157,7 @@ pub struct OnChainConfig {
     storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
     storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
     uniswap_path_cache: HashMap<H160, TokenContext>,
+    rpc_cache: FileSystemCache,
 }
 
 impl OnChainConfig {
@@ -203,27 +209,114 @@ impl OnChainConfig {
             storage_all_cache: Default::default(),
             storage_dump_cache: Default::default(),
             uniswap_path_cache: Default::default(),
+            rpc_cache: FileSystemCache::new("./cache"),
+        }
+    }
+
+    fn get(&self, url: String) -> Option<String> {
+        let mut hasher = DefaultHasher::new();
+        let key = format!("post_{}", url.as_str());
+        key.hash(&mut hasher);
+        let hash = hasher.finish().to_string();
+        match self.rpc_cache.load(hash.as_str()) {
+            Ok(t) => {
+                return Some(t);
+            }
+            Err(_) => {}
+        }
+        match retry_with_index(Fixed::from_millis(100), |current_try| {
+            if current_try > 3 {
+                return OperationResult::Err("did not succeed within 3 tries".to_string());
+            }
+            match self
+                .client
+                .get(url.to_string())
+                .headers(get_header())
+                .send()
+            {
+                Ok(resp) => {
+                    let text = resp.text();
+                    match text {
+                        Ok(t) => {
+                            return OperationResult::Ok(t);
+                        }
+                        Err(e) => {
+                            println!("{:?}", e);
+                            return OperationResult::Retry("failed to parse response".to_string());
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                    return OperationResult::Retry("failed to send request".to_string());
+                }
+            }
+        }) {
+            Ok(t) => {
+                self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                Some(t)
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                None
+            }
+        }
+    }
+
+    fn post(&self, url: String, data: String) -> Option<String> {
+        let mut hasher = DefaultHasher::new();
+        let key = format!("post_{}_{}", url.as_str(), data.as_str());
+        key.hash(&mut hasher);
+        let hash = hasher.finish().to_string();
+        match self.rpc_cache.load(hash.as_str()) {
+            Ok(t) => {
+                return Some(t);
+            }
+            Err(_) => {}
+        }
+        match retry_with_index(Fixed::from_millis(100), |current_try| {
+            if current_try > 3 {
+                return OperationResult::Err("did not succeed within 3 tries".to_string());
+            }
+            match self
+                .client
+                .post(url.to_string())
+                .header("Content-Type", "application/json")
+                .headers(get_header())
+                .body(data.to_string())
+                .send()
+            {
+                Ok(resp) => {
+                    let text = resp.text();
+                    match text {
+                        Ok(t) => {
+                            return OperationResult::Ok(t);
+                        }
+                        Err(e) => {
+                            println!("{:?}", e);
+                            return OperationResult::Retry("failed to parse response".to_string());
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                    return OperationResult::Retry("failed to send request".to_string());
+                }
+            }
+        }) {
+            Ok(t) => {
+                self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                Some(t)
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                None
+            }
         }
     }
 
     pub fn add_etherscan_api_key(&mut self, key: String) {
         self.etherscan_api_key.push(key);
-    }
-
-    pub fn get_with_retry(&self, endpoint: String) -> reqwest::blocking::Response {
-        let mut retry = 0;
-        loop {
-            let resp = self.client.get(&endpoint).send();
-            if let Ok(resp) = resp {
-                if resp.status().is_success() {
-                    return resp;
-                }
-            }
-            retry += 1;
-            if retry > 3 {
-                panic!("get {} failed for {} retries", endpoint, retry);
-            }
-        }
     }
 
     pub fn fetch_storage_all(&mut self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
@@ -339,29 +432,6 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_holders(&self, token_address: H160) -> Option<Vec<H160>> {
-        panic!("remote fetch for holders is not supported");
-        let endpoint = format!("{}/holders/{}/{:?}", "", self.chain_name, token_address);
-        return match self.client.get(endpoint).send() {
-            Ok(res) => {
-                let data = res.text().unwrap().trim().to_string();
-                if data == "[]" {
-                    None
-                } else {
-                    // hacky way to parse an array of addresses
-                    Some(
-                        data[1..data.len() - 1]
-                            .split(",")
-                            .map(|x| x.trim_start_matches('"').trim_end_matches('"'))
-                            .map(|x| H160::from_str(x).unwrap())
-                            .collect(),
-                    )
-                }
-            }
-            Err(_) => None,
-        };
-    }
-
     pub fn fetch_abi_uncached(&self, address: H160) -> Option<String> {
         let endpoint = format!(
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
@@ -375,37 +445,28 @@ impl OnChainConfig {
             }
         );
         println!("fetching abi from {}", endpoint);
-        match self.client.get(endpoint.clone()).send() {
-            Ok(resp) => {
-                let resp = resp.text();
-                match resp {
-                    Ok(resp) => {
-                        let json = serde_json::from_str::<Value>(&resp);
-                        match json {
-                            Ok(json) => {
-                                let result_parsed = json["result"].as_str();
-                                match result_parsed {
-                                    Some(result) => {
-                                        if result == "Contract source code not verified" {
-                                            None
-                                        } else {
-                                            Some(result.to_string())
-                                        }
-                                    }
-                                    _ => None,
+        match self.get(endpoint.clone()) {
+            Some(resp) => {
+                let json = serde_json::from_str::<Value>(&resp);
+                match json {
+                    Ok(json) => {
+                        let result_parsed = json["result"].as_str();
+                        match result_parsed {
+                            Some(result) => {
+                                if result == "Contract source code not verified" {
+                                    None
+                                } else {
+                                    Some(result.to_string())
                                 }
                             }
-                            Err(_) => None,
+                            _ => None,
                         }
                     }
-                    Err(e) => {
-                        println!("{:?}", e);
-                        None
-                    }
+                    Err(_) => None,
                 }
             }
-            Err(e) => {
-                println!("Error: {}", e);
+            None => {
+                println!("failed to fetch abi from {}", endpoint);
                 return None;
             }
         }
@@ -425,22 +486,14 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, self.chain_id
         );
-        match self
-            .client
-            .post(self.endpoint_url.clone())
-            .header("Content-Type", "application/json")
-            .body(data)
-            .send()
-        {
-            Ok(resp) => {
-                // println!("{:?}", resp.text());
-                let resp = resp.text();
-                match resp {
-                    Ok(resp) => {
-                        // println!("{:?}", resp);
-                        let json: Value =
-                            serde_json::from_str(&resp).expect("failed to parse API result");
-                        return Some(json["result"].clone());
+
+        match self.post(self.endpoint_url.clone(), data) {
+            Some(resp) => {
+                let json: Result<Value, _> = serde_json::from_str(&resp);
+
+                match json {
+                    Ok(json) => {
+                        return json.get("result").cloned();
                     }
                     Err(e) => {
                         println!("{:?}", e);
@@ -448,8 +501,9 @@ impl OnChainConfig {
                     }
                 }
             }
-            Err(e) => {
-                println!("Error: {}", e);
+
+            None => {
+                println!("failed to fetch from {}", self.endpoint_url);
                 return None;
             }
         }
@@ -641,17 +695,8 @@ impl OnChainConfig {
                     "query": format!("{{ p0: pairs(block:{{number:{}}},first:10,where :{{token0 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} p1: pairs(block:{{number:{}}},first:10, where :{{token1 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} }}", block_int, token.to_lowercase(), block_int, token.to_lowercase())
                 }).to_string();
 
-                let headers = get_header();
-
-                let res: GetPairResponse = self
-                    .client
-                    .post(url.to_string())
-                    .headers(headers)
-                    .body(body)
-                    .send()
-                    .unwrap()
-                    .json()
-                    .unwrap();
+                let r = self.post(url.to_string(), body).unwrap();
+                let res: GetPairResponse = serde_json::from_str(&r).unwrap();
 
                 for pair in res.data.p0.iter().chain(res.data.p1.iter()) {
                     next_tokens.push(PairData {
@@ -695,16 +740,9 @@ impl OnChainConfig {
                 let body = json!({
                     "query": format!("{{ p0: pairs(block:{{number:{}}},first:10,where :{{token0 : \"{}\", token1: \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} p1: pairs(block:{{number:{}}},first:10, where :{{token1 : \"{}\", token0: \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} }}", block_int, token.to_lowercase(), self.get_weth(network), block_int, token.to_lowercase(), self.get_weth(network))
                 }).to_string();
-                let headers = get_header();
-                let res: GetPairResponse = self
-                    .client
-                    .post(i.to_string())
-                    .headers(headers)
-                    .body(body)
-                    .send()
-                    .unwrap()
-                    .json()
-                    .unwrap();
+
+                let r = self.post(i.to_string(), body).unwrap();
+                let res: GetPairResponse = serde_json::from_str(&r).unwrap();
 
                 for pair in res.data.p0.iter().chain(res.data.p1.iter()) {
                     next_tokens.push(PairData {
