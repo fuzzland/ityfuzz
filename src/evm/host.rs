@@ -382,7 +382,7 @@ where
         if funtion_hash.len() < 0x4 {
             return;
         }
-        let cur_write_str = format!("{{caller:0x{} traget:0x{} function(0x{})}}", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
+        let cur_write_str = format!("{{caller:0x{} --> traget:0x{} function(0x{})}}\n", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
         let mut hasher = DefaultHasher::new();
         cur_write_str.hash(&mut hasher);
         let cur_wirte_hash = hasher.finish();
@@ -394,18 +394,7 @@ where
             self.relations_file
                 .write_all(write_head.as_bytes())
                 .unwrap();
-        }else {
-            self.relations_file
-                .write_all(" -->\t".as_bytes())
-                .unwrap();
-
-            if self.relations_hash.len() % 2 == 0 {
-                self.relations_file
-                    .write_all("\n".as_bytes())
-                    .unwrap();
-            }
         }
-
 
         self.relations_hash.insert(cur_wirte_hash);
         self.relations_file
@@ -795,7 +784,7 @@ where
         }
 
         self.write_relations(
-            input.transfer.target.clone(),
+            input.transfer.source.clone(),
             input.contract.clone(),
             input.input.clone(),
         );
