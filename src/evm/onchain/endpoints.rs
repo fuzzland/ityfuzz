@@ -84,7 +84,7 @@ impl Chain {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PairData {
     src: String,
     in_: i32,
@@ -509,6 +509,34 @@ impl OnChainConfig {
         }
     }
 
+    fn _request_with_id(&self, method: String, params: String, id: u8) -> Option<Value> {
+        let data = format!(
+            "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
+            method, params, id
+        );
+
+        match self.post(self.endpoint_url.clone(), data) {
+            Some(resp) => {
+                let json: Result<Value, _> = serde_json::from_str(&resp);
+
+                match json {
+                    Ok(json) => {
+                        return json.get("result").cloned();
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        return None;
+                    }
+                }
+            }
+
+            None => {
+                println!("failed to fetch from {}", self.endpoint_url);
+                return None;
+            }
+        }
+    }
+
     pub fn get_contract_code(&mut self, address: H160, force_cache: bool) -> Bytecode {
         if self.code_cache.contains_key(&address) {
             return self.code_cache[&address].clone();
@@ -788,7 +816,8 @@ impl OnChainConfig {
             let resp = self._request("eth_blockNumber".to_string(), params);
             match resp {
                 Some(resp) => {
-                    let data = resp.as_u64().unwrap();
+                    let r = &resp.as_str().unwrap().trim_start_matches("0x");
+                    let data = u64::from_str_radix(r, 16).unwrap();
                     data
                 }
                 None => 0,
@@ -842,9 +871,10 @@ impl OnChainConfig {
         let result = {
             let params = json!([{
             "to": pair,
-            "data": "0x0902f1ac"
+            "data": "0x0902f1ac",
+            "id": 1
         }, block]);
-            let resp = self._request("eth_call".to_string(), params.to_string());
+            let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
                 None => "".to_string(),
@@ -1146,6 +1176,62 @@ mod tests {
         let v =
             config.fetch_abi(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
+    }
+
+    #[test]
+    fn test_get_pegged_next_hop() {
+        let config = OnChainConfig::new(BSC, 22055611);
+        let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+        let v = config.get_pegged_next_hop(token, "bsc", "1508ABB");
+        assert!(v.src == "pegged_weth");
+        assert!(v.token == token);
+    }
+
+    #[test]
+    fn test_get_all_hops() {
+        let config = OnChainConfig::new(BSC, 22055611);
+        let mut known: HashSet<String> = HashSet::new();
+        let v = config.get_all_hops(
+            "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "bsc",
+            "1508ABB",
+            0,
+            &mut known,
+        );
+        assert!(v.len() > 0);
+    }
+
+    #[test]
+    fn test_get_pair_pegged() {
+        let config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair_pegged(
+            "0xcff086ead392ccb39c49ecda8c974ad5238452ac",
+            "bsc",
+            "1508ABB",
+        );
+        assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_get_pair() {
+        let config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair(
+            "0xcff086ead392ccb39c49ecda8c974ad5238452ac",
+            "bsc",
+            "1508ABB",
+        );
+        assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_fetch_uniswap_path() {
+        let config = OnChainConfig::new(BSC, 22055611);
+        let v = config.fetch_uniswap_path(
+            H160::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+        );
+        assert!(v.swaps.len() > 0);
+        assert!(!v.weth_address.is_zero());
+        assert!(!v.address.is_zero());
     }
 
     // #[test]
