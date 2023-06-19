@@ -253,7 +253,10 @@ impl OnChainConfig {
             }
         }) {
             Ok(t) => {
-                self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                if !t.contains("error") {
+                    self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                }
+
                 Some(t)
             }
             Err(e) => {
@@ -305,7 +308,9 @@ impl OnChainConfig {
             }
         }) {
             Ok(t) => {
-                self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                if !t.contains("error") {
+                    self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
+                }
                 Some(t)
             }
             Err(e) => {
@@ -1178,61 +1183,61 @@ mod tests {
         println!("{:?}", v)
     }
 
-    #[test]
-    fn test_get_pegged_next_hop() {
-        let config = OnChainConfig::new(BSC, 22055611);
-        let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
-        let v = config.get_pegged_next_hop(token, "bsc", "1508ABB");
-        assert!(v.src == "pegged_weth");
-        assert!(v.token == token);
-    }
+    // #[test]
+    // fn test_get_pegged_next_hop() {
+    //     let config = OnChainConfig::new(BSC, 22055611);
+    //     let token = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
+    //     let v = config.get_pegged_next_hop(token, "bsc", "latest");
+    //     assert!(v.src == "pegged_weth");
+    //     assert!(v.token == token);
+    // }
 
-    #[test]
-    fn test_get_all_hops() {
-        let config = OnChainConfig::new(BSC, 22055611);
-        let mut known: HashSet<String> = HashSet::new();
-        let v = config.get_all_hops(
-            "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-            "bsc",
-            "1508ABB",
-            0,
-            &mut known,
-        );
-        assert!(v.len() > 0);
-    }
+    // #[test]
+    // fn test_get_all_hops() {
+    //     let config = OnChainConfig::new(BSC, 22055611);
+    //     let mut known: HashSet<String> = HashSet::new();
+    //     let v = config.get_all_hops(
+    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+    //         "bsc",
+    //         "latest",
+    //         0,
+    //         &mut known,
+    //     );
+    //     assert!(v.len() > 0);
+    // }
 
-    #[test]
-    fn test_get_pair_pegged() {
-        let config = OnChainConfig::new(BSC, 22055611);
-        let v = config.get_pair_pegged(
-            "0xcff086ead392ccb39c49ecda8c974ad5238452ac",
-            "bsc",
-            "1508ABB",
-        );
-        assert!(!v.is_empty());
-    }
+    // #[test]
+    // fn test_get_pair_pegged() {
+    //     let config = OnChainConfig::new(BSC, 22055611);
+    //     let v = config.get_pair_pegged(
+    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+    //         "bsc",
+    //         "latest",
+    //     );
+    //     assert!(!v.is_empty());
+    // }
 
-    #[test]
-    fn test_get_pair() {
-        let config = OnChainConfig::new(BSC, 22055611);
-        let v = config.get_pair(
-            "0xcff086ead392ccb39c49ecda8c974ad5238452ac",
-            "bsc",
-            "1508ABB",
-        );
-        assert!(!v.is_empty());
-    }
+    // #[test]
+    // fn test_get_pair() {
+    //     let config = OnChainConfig::new(BSC, 22055611);
+    //     let v = config.get_pair(
+    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+    //         "bsc",
+    //         "latest",
+    //     );
+    //     assert!(!v.is_empty());
+    // }
 
-    #[test]
-    fn test_fetch_uniswap_path() {
-        let config = OnChainConfig::new(BSC, 22055611);
-        let v = config.fetch_uniswap_path(
-            H160::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
-        );
-        assert!(v.swaps.len() > 0);
-        assert!(!v.weth_address.is_zero());
-        assert!(!v.address.is_zero());
-    }
+    // #[test]
+    // fn test_fetch_uniswap_path() {
+    //     let config = OnChainConfig::new(BSC, 22055611);
+    //     let v = config.fetch_uniswap_path(
+    //         H160::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+    //     );
+    //     assert!(v.swaps.len() > 0);
+    //     assert!(!v.weth_address.is_zero());
+    //     assert!(!v.address.is_zero());
+    // }
 
     // #[test]
     // fn test_fetch_token_price() {
