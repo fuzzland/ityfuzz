@@ -865,10 +865,10 @@ mod tests {
     #[test]
     fn test_reserve_parser() {
         let (r0, r1) = reserve_parser(&EVMU256::from_str_radix(
-            "0x63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
+            "63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
             16
         ).unwrap());
-        assert_eq!(r0, EVMU256::from_str_radix("0x000000004b702d24750df9f77b84", 16).unwrap());
-        assert_eq!(r1, EVMU256::from_str_radix("0x00000016e7f19fdf1ede2902b6ae", 16).unwrap());
+        assert_eq!(r0, EVMU256::from_str_radix("000000004b702d24750df9f77b84", 16).unwrap());
+        assert_eq!(r1, EVMU256::from_str_radix("00000016e7f19fdf1ede2902b6ae", 16).unwrap());
     }
 }

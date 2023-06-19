@@ -390,7 +390,7 @@ where
         let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
-            r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
@@ -400,7 +400,7 @@ where
             }
         }
         if r != InstructionResult::Revert {
-            r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         }
 
         // Build the result
@@ -484,7 +484,7 @@ where
                 .clone();
         }
         let mut interp = Interpreter::new(call, 1e10 as u64, false);
-        let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+        let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         unsafe {
             IS_FAST_CALL = false;
         }
@@ -636,7 +636,7 @@ where
         let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, &mut dummy_state);
+        let r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
@@ -766,7 +766,7 @@ where
                     &ctx,
                 );
                 let mut interp = Interpreter::new(call, 1e10 as u64, false);
-                let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+                let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
                 if ret == InstructionResult::Revert {
                     vec![]
                 } else {

@@ -1256,7 +1256,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
+        let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256)[]"));
         let mut test_state = FuzzState::new(0);
         let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(

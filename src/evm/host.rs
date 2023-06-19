@@ -690,7 +690,7 @@ where
                 1e10 as u64,
                 false
             );
-            let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+            let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             if ret == InstructionResult::Continue {
                 self.set_code(
                     r_addr,
@@ -845,7 +845,7 @@ where
                     false
                 );
 
-                let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+                let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
                 ret_back_ctx!();
                 return (ret, Gas::new(0), interp.return_value());
             }
@@ -862,7 +862,7 @@ where
                 1e10 as u64,
                 false
             );
-            let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+            let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             ret_back_ctx!();
             return (ret, Gas::new(0), interp.return_value());
         }
