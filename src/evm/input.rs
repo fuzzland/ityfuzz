@@ -1,7 +1,7 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::EVMStagedVMState;
+use crate::evm::types::{EVMAddress, EVMStagedVMState, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
@@ -11,7 +11,7 @@ use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
-use primitive_types::{H160, U256, U512};
+use primitive_types::U512;
 use revm::Env;
 
 use serde::{Deserialize, Deserializer, Serialize};
@@ -49,10 +49,10 @@ pub trait EVMInputT {
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
 
     /// Get the transaction value in wei
-    fn get_txn_value(&self) -> Option<U256>;
+    fn get_txn_value(&self) -> Option<EVMU256>;
 
     /// Set the transaction value in wei
-    fn set_txn_value(&mut self, v: U256);
+    fn set_txn_value(&mut self, v: EVMU256);
 
     /// Get input type
     #[cfg(feature = "flashloan_v2")]
@@ -84,22 +84,22 @@ pub struct EVMInput {
     pub input_type: EVMInputTy,
 
     /// Caller address
-    pub caller: H160,
+    pub caller: EVMAddress,
 
     /// Contract address
-    pub contract: H160,
+    pub contract: EVMAddress,
 
     /// Input data in ABI format
     pub data: Option<BoxedABI>,
 
     /// Staged VM state
-    pub sstate: StagedVMState<H160, H160, EVMState>,
+    pub sstate: StagedVMState<EVMAddress, EVMAddress, EVMState>,
 
     /// Staged VM state index in the corpus
     pub sstate_idx: usize,
 
     /// Transaction value in wei
-    pub txn_value: Option<U256>,
+    pub txn_value: Option<EVMU256>,
 
     /// Whether to resume execution from the last control leak
     pub step: bool,
@@ -168,11 +168,11 @@ impl EVMInputT for EVMInput {
         &self.access_pattern
     }
 
-    fn get_txn_value(&self) -> Option<U256> {
+    fn get_txn_value(&self) -> Option<EVMU256> {
         self.txn_value
     }
 
-    fn set_txn_value(&mut self, v: U256) {
+    fn set_txn_value(&mut self, v: EVMU256) {
         self.txn_value = Some(v);
     }
 
@@ -210,7 +210,7 @@ macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
         where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+            S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
         {
             let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
                 Some(s.clone())
@@ -225,7 +225,7 @@ macro_rules! impl_env_mutator_u256 {
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item = U256::from_big_endian(&input_vec.as_slice());
+            input.get_vm_env_mut().$loc.$item = EVMU256::from_big_endian(&input_vec.as_slice());
             res
         }
     };
@@ -235,7 +235,7 @@ macro_rules! impl_env_mutator_h160 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
         where
-            S: State + HasCaller<H160> + HasRand,
+            S: State + HasCaller<EVMAddress> + HasRand,
         {
             let addr = state_.get_rand_caller();
             if addr == input.get_caller() {
@@ -248,7 +248,7 @@ macro_rules! impl_env_mutator_h160 {
     };
 }
 
-// Wrapper for U256 so that it represents a mutable Input in LibAFL
+// Wrapper for EVMU256 so that it represents a mutable Input in LibAFL
 #[derive(Serialize)]
 struct MutatorInput<'a> {
     #[serde(skip_serializing)]
@@ -310,7 +310,7 @@ impl EVMInput {
 
     pub fn prevrandao<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -319,7 +319,7 @@ impl EVMInput {
 
     pub fn gas_price<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -328,7 +328,7 @@ impl EVMInput {
 
     pub fn balance<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -337,7 +337,7 @@ impl EVMInput {
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
@@ -350,7 +350,7 @@ impl EVMInput {
 
     pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
             Some(s.clone())
@@ -360,7 +360,7 @@ impl EVMInput {
         let mut input_by = [0; 32];
         input
             .get_txn_value()
-            .unwrap_or(U256::zero())
+            .unwrap_or(EVMU256::zero())
             .to_big_endian(&mut input_by);
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
@@ -372,13 +372,13 @@ impl EVMInput {
         for i in 0..16 {
             input_vec[i] = 0;
         }
-        input.set_txn_value(U256::from_big_endian(&input_vec.as_slice()));
+        input.set_txn_value(EVMU256::from_big_endian(&input_vec.as_slice()));
         res
     }
 
     pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let ap = self.get_access_pattern().deref().borrow().clone();
         let mut mutators = vec![];
@@ -421,14 +421,14 @@ impl EVMInput {
     }
 }
 
-impl VMInputT<EVMState, H160, H160> for EVMInput {
+impl VMInputT<EVMState, EVMAddress, EVMAddress> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<H160, H160, EVMState>
-            + HasCaller<H160>
+            + HasItyState<EVMAddress, EVMAddress, EVMState>
+            + HasCaller<EVMAddress>
             + HasMetadata,
     {
         if state.rand_mut().next() % 100 > 87 || self.data.is_none() {
@@ -445,19 +445,19 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         }
     }
 
-    fn get_caller_mut(&mut self) -> &mut H160 {
+    fn get_caller_mut(&mut self) -> &mut EVMAddress {
         &mut self.caller
     }
 
-    fn get_caller(&self) -> H160 {
+    fn get_caller(&self) -> EVMAddress {
         self.caller.clone()
     }
 
-    fn set_caller(&mut self, caller: H160) {
+    fn set_caller(&mut self, caller: EVMAddress) {
         self.caller = caller;
     }
 
-    fn get_contract(&self) -> H160 {
+    fn get_contract(&self) -> EVMAddress {
         self.contract.clone()
     }
 
@@ -574,7 +574,7 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_txn_value_temp(&self) -> Option<U256> {
+    fn get_txn_value_temp(&self) -> Option<EVMU256> {
         self.txn_value
     }
 }

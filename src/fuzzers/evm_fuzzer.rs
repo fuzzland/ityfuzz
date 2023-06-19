@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
-    executor::FuzzExecutor, fuzzer::ItyFuzzer, rand_utils::fixed_address,
+    executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::ShMemProvider;
@@ -37,7 +37,7 @@ use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
+use crate::evm::types::{EVMFuzzMutator, EVMFuzzState, fixed_address};
 use primitive_types::{H160, U256};
 use revm::{BlockEnv, Bytecode};
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;

@@ -6,7 +6,6 @@ use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 
 use permutator::CartesianProductIterator;
-use primitive_types::{H160, U256};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -15,6 +14,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use crate::evm::types::{EVMAddress, EVMU256};
 
 pub enum UniswapVer {
     V1,
@@ -51,25 +51,25 @@ impl UniswapProvider {
 #[derive(Clone, Debug, Default)]
 pub struct UniswapInfo {
     pub pool_fee: usize,
-    pub router: H160,
-    pub factory: H160,
+    pub router: EVMAddress,
+    pub factory: EVMAddress,
     pub init_code_hash: Vec<u8>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SwapResult {
-    pub amount: U256,
-    pub new_reserve_in: U256,
-    pub new_reserve_out: U256,
+    pub amount: EVMU256,
+    pub new_reserve_in: EVMU256,
+    pub new_reserve_out: EVMU256,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct PairContext {
-    pub pair_address: H160,
-    pub next_hop: H160,
+    pub pair_address: EVMAddress,
+    pub next_hop: EVMAddress,
     pub side: u8,
     pub uniswap_info: Arc<UniswapInfo>,
-    pub initial_reserves: (U256, U256),
+    pub initial_reserves: (EVMU256, EVMU256),
 }
 
 impl PairContext {
@@ -93,8 +93,8 @@ impl PairContext {
     //         direct_data: Default::default()
     //     });
     //
-    //     self.reserve0 = U256::from_big_endian(&res.output[0..32]);
-    //     self.reserve1 = U256::from_big_endian(&res.output[32..64]);
+    //     self.reserve0 = EVMU256::from_big_endian(&res.output[0..32]);
+    //     self.reserve1 = EVMU256::from_big_endian(&res.output[32..64]);
     // }
     //
     // pub fn update_reserve_post<I, S>(
@@ -117,14 +117,14 @@ impl PairContext {
     //         direct_data: Default::default()
     //     });
     //
-    //     self.reserve0 = U256::from_big_endian(&res.output[0..32]);
-    //     self.reserve1 = U256::from_big_endian(&res.output[32..64]);
+    //     self.reserve0 = EVMU256::from_big_endian(&res.output[0..32]);
+    //     self.reserve1 = EVMU256::from_big_endian(&res.output[32..64]);
     // }
 
-    pub fn get_amount_out(&self, amount_in: U256, reserve0: U256, reserve1: U256) -> SwapResult {
+    pub fn get_amount_out(&self, amount_in: EVMU256, reserve0: EVMU256, reserve1: EVMU256) -> SwapResult {
         self.uniswap_info.calculate_amounts_out(
-            if amount_in > U256::from(u128::MAX) {
-                U256::from(u128::MAX)
+            if amount_in > EVMU256::from(u128::MAX) {
+                EVMU256::from(u128::MAX)
             } else {
                 amount_in
             },
@@ -133,10 +133,10 @@ impl PairContext {
         )
     }
 
-    pub fn get_amount_in(&self, amount_out: U256, reserve0: U256, reserve1: U256) -> SwapResult {
+    pub fn get_amount_in(&self, amount_out: EVMU256, reserve0: EVMU256, reserve1: EVMU256) -> SwapResult {
         self.uniswap_info.calculate_amounts_in(
-            if amount_out > U256::from(u128::MAX) {
-                U256::from(u128::MAX)
+            if amount_out > EVMU256::from(u128::MAX) {
+                EVMU256::from(u128::MAX)
             } else {
                 amount_out
             },
@@ -149,7 +149,7 @@ impl PairContext {
 #[derive(Clone, Debug, Default)]
 pub struct PathContext {
     pub route: Vec<Rc<RefCell<PairContext>>>,
-    pub final_pegged_ratio: U256,
+    pub final_pegged_ratio: EVMU256,
     pub final_pegged_pair: Rc<RefCell<Option<PairContext>>>,
 }
 
@@ -157,16 +157,16 @@ pub struct PathContext {
 pub struct TokenContext {
     pub swaps: Vec<PathContext>,
     pub is_weth: bool,
-    pub weth_address: H160,
-    pub address: H160,
+    pub weth_address: EVMAddress,
+    pub address: EVMAddress,
 }
 
 impl PathContext {
     pub fn get_amount_out(
         &self,
-        amount_in: U256,
-        reserve_data: &mut HashMap<H160, (U256, U256)>,
-    ) -> U256 {
+        amount_in: EVMU256,
+        reserve_data: &mut HashMap<EVMAddress, (EVMU256, EVMU256)>,
+    ) -> EVMU256 {
         let mut amount_in = amount_in;
 
         // address => (new reserve0, new reserve1)
@@ -200,8 +200,8 @@ impl PathContext {
     pub fn get_amount_in(
         &self,
         percentage: usize,
-        reserve_data: &HashMap<H160, (U256, U256)>,
-    ) -> U256 {
+        reserve_data: &HashMap<EVMAddress, (EVMU256, EVMU256)>,
+    ) -> EVMU256 {
         let initial_pair = self.route.first().unwrap().deref().borrow();
         let initial_reserve = match reserve_data.get(&initial_pair.pair_address) {
             None => initial_pair.initial_reserves,
@@ -244,16 +244,16 @@ impl PathContext {
     }
 }
 
-static mut WETH_MAX: U256 = U256::zero();
+static mut WETH_MAX: EVMU256 = EVMU256::zero();
 
 pub fn generate_uniswap_router_call(
     token: &TokenContext,
     path_idx: usize,
-    amount_in: U256,
-    to: H160,
-) -> Option<(BoxedABI, U256, H160)> {
+    amount_in: EVMU256,
+    to: EVMAddress,
+) -> Option<(BoxedABI, EVMU256, EVMAddress)> {
     unsafe {
-        WETH_MAX = U256::from(10).pow(U256::from(24));
+        WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
     }
     // function swapExactETHForTokensSupportingFeeOnTransferTokens(
     //     uint amountOutMin,
@@ -264,7 +264,7 @@ pub fn generate_uniswap_router_call(
     if token.is_weth {
         let mut abi = BoxedABI::new(Box::new(AEmpty {}));
         abi.function = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit
-                                                 // U256::from(perct) * unsafe {WETH_MAX}
+                                                 // EVMU256::from(perct) * unsafe {WETH_MAX}
         Some((abi, amount_in, token.weth_address))
     } else {
         if token.swaps.len() == 0 {
@@ -272,7 +272,7 @@ pub fn generate_uniswap_router_call(
         }
         let path_ctx = &token.swaps[path_idx % token.swaps.len()];
         // let amount_in = path_ctx.get_amount_in(perct, reserve);
-        let mut path: Vec<H160> = path_ctx
+        let mut path: Vec<EVMAddress> = path_ctx
             .route
             .iter()
             .rev()
@@ -337,12 +337,12 @@ pub fn generate_uniswap_router_call(
 }
 
 pub fn liquidate_all_token(
-    tokens: Vec<(&TokenContext, U256)>,
-    initial_reserve_data: HashMap<H160, (U256, U256)>,
-) -> (U256, HashMap<H160, (U256, U256)>) {
-    let mut swap_combos: Vec<Vec<(PathContext, U256)>> = Vec::new();
+    tokens: Vec<(&TokenContext, EVMU256)>,
+    initial_reserve_data: HashMap<EVMAddress, (EVMU256, EVMU256)>,
+) -> (EVMU256, HashMap<EVMAddress, (EVMU256, EVMU256)>) {
+    let mut swap_combos: Vec<Vec<(PathContext, EVMU256)>> = Vec::new();
     for (token, amt) in tokens {
-        let swaps: Vec<(PathContext, U256)> =
+        let swaps: Vec<(PathContext, EVMU256)> =
             token.swaps.iter().map(|swap| (swap.clone(), amt)).collect();
         if swaps.len() > 0 {
             swap_combos.push(swaps);
@@ -350,7 +350,7 @@ pub fn liquidate_all_token(
     }
 
     if swap_combos.len() == 0 {
-        return (U256::zero(), initial_reserve_data);
+        return (EVMU256::zero(), initial_reserve_data);
     }
 
     let mut possible_amount_out = vec![];
@@ -359,20 +359,20 @@ pub fn liquidate_all_token(
         swap_combos
             .iter()
             .map(|x| x.as_slice())
-            .collect::<Vec<&[(PathContext, U256)]>>()
+            .collect::<Vec<&[(PathContext, EVMU256)]>>()
             .as_slice(),
     )
     .into_iter()
     .for_each(|swaps| {
         let mut reserve_data = initial_reserve_data.clone();
-        let mut total_amount_out = U256::zero();
+        let mut total_amount_out = EVMU256::zero();
         for (path, amt) in &swaps {
             total_amount_out += path.get_amount_out(amt.clone(), &mut reserve_data);
         }
         possible_amount_out.push((total_amount_out, reserve_data));
     });
 
-    let mut best_quote = U256::zero();
+    let mut best_quote = EVMU256::zero();
     let mut best_reserve_data = None;
     for (amount_out, reserve_data) in possible_amount_out {
         if amount_out > best_quote {
@@ -391,8 +391,8 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
     match (provider, chain) {
         (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
             pool_fee: 25,
-            router: H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            factory: H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
             init_code_hash: hex::decode(
                 "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
             )
@@ -400,8 +400,8 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
         },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
             pool_fee: 3,
-            router: H160::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
-            factory: H160::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
+            router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
+            factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
             init_code_hash: hex::decode(
                 "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
             )
@@ -418,16 +418,16 @@ impl UniswapInfo {
     // todo: add support for Uniswap V3
     pub fn calculate_amounts_out(
         &self,
-        amount_in: U256,
-        reserve_in: U256,
-        reserve_out: U256,
+        amount_in: EVMU256,
+        reserve_in: EVMU256,
+        reserve_out: EVMU256,
     ) -> SwapResult {
-        let amount_in_with_fee = amount_in * U256::from(10000 - self.pool_fee);
+        let amount_in_with_fee = amount_in * EVMU256::from(10000 - self.pool_fee);
         let numerator = amount_in_with_fee * reserve_out;
-        let denominator = reserve_in * U256::from(10000) + amount_in_with_fee;
-        if denominator == U256::zero() {
+        let denominator = reserve_in * EVMU256::from(10000) + amount_in_with_fee;
+        if denominator == EVMU256::zero() {
             return SwapResult {
-                amount: U256::zero(),
+                amount: EVMU256::zero(),
                 new_reserve_in: reserve_in,
                 new_reserve_out: reserve_out,
             };
@@ -442,30 +442,30 @@ impl UniswapInfo {
 
     pub fn calculate_amounts_in(
         &self,
-        amount_out: U256,
-        reserve_in: U256,
-        reserve_out: U256,
+        amount_out: EVMU256,
+        reserve_in: EVMU256,
+        reserve_out: EVMU256,
     ) -> SwapResult {
         println!("calculate_amounts_in amount_out: {}", amount_out);
         println!("calculate_amounts_in reserve_in: {}", reserve_in);
         println!("calculate_amounts_in reserve_out: {}", reserve_out);
 
         let adjusted_amount_out = if amount_out > reserve_out {
-            reserve_out - U256::one()
+            reserve_out - EVMU256::one()
         } else {
             amount_out
         };
 
-        let numerator = reserve_in * adjusted_amount_out * U256::from(10000);
-        let denominator = (reserve_out - adjusted_amount_out) * U256::from(10000 - self.pool_fee);
-        if denominator == U256::zero() {
+        let numerator = reserve_in * adjusted_amount_out * EVMU256::from(10000);
+        let denominator = (reserve_out - adjusted_amount_out) * EVMU256::from(10000 - self.pool_fee);
+        if denominator == EVMU256::zero() {
             return SwapResult {
-                amount: U256::zero(),
+                amount: EVMU256::zero(),
                 new_reserve_in: reserve_in,
                 new_reserve_out: reserve_out,
             };
         }
-        let amount_in = (numerator / denominator) + U256::one();
+        let amount_in = (numerator / denominator) + EVMU256::one();
         println!("calculate_amounts_in amount_in: {}", amount_in);
         SwapResult {
             amount: amount_in,
@@ -483,7 +483,7 @@ impl UniswapInfo {
     }
 
     // calculate CREATE2 address for a pair without making any external calls
-    pub fn get_pair_address(&self, token_a: H160, token_b: H160) -> H160 {
+    pub fn get_pair_address(&self, token_a: EVMAddress, token_b: EVMAddress) -> EVMAddress {
         let mut tokens = vec![token_a, token_b];
         tokens.sort();
         let mut data = [0u8; 40];
@@ -496,15 +496,15 @@ impl UniswapInfo {
         data[21..53].copy_from_slice(&keccak_token);
         data[53..85].copy_from_slice(&self.init_code_hash);
         let keccak = Self::keccak(data.to_vec());
-        return H160::from_slice(&keccak[12..]);
+        return EVMAddress::from_slice(&keccak[12..]);
     }
 }
 
-pub fn reserve_parser(reserve_slot: &U256) -> (U256, U256) {
+pub fn reserve_parser(reserve_slot: &EVMU256) -> (EVMU256, EVMU256) {
     let mut reserve_bytes = [0u8; 32];
     reserve_slot.to_big_endian(&mut reserve_bytes);
-    let reserve_0 = U256::from_big_endian(&reserve_bytes[4..18]);
-    let reserve_1 = U256::from_big_endian(&reserve_bytes[18..32]);
+    let reserve_0 = EVMU256::from_big_endian(&reserve_bytes[4..18]);
+    let reserve_1 = EVMU256::from_big_endian(&reserve_bytes[18..32]);
     (reserve_0, reserve_1)
 }
 
@@ -512,19 +512,17 @@ pub fn reserve_parser(reserve_slot: &U256) -> (U256, U256) {
 mod tests {
     use super::*;
     use crate::evm::onchain::endpoints::Chain;
-    use crate::rand_utils::generate_random_address;
-    use primitive_types::H160;
     use std::str::FromStr;
 
     #[test]
     fn test_get_pair_address() {
         let uniswap_info = get_uniswap_info(&UniswapProvider::UniswapV2, &Chain::ETH);
-        let token_a = H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap();
-        let token_b = H160::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap();
+        let token_a = EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap();
+        let token_b = EVMAddress::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap();
         let pair_address = uniswap_info.get_pair_address(token_a, token_b);
         assert_eq!(
             pair_address,
-            H160::from_str("0xae461ca67b15dc8dc81ce7615e0320da1a9ab8d5").unwrap()
+            EVMAddress::from_str("0xae461ca67b15dc8dc81ce7615e0320da1a9ab8d5").unwrap()
         );
     }
 
@@ -539,12 +537,12 @@ mod tests {
         // 1000 * 9975 * 10000000000 / (10 * 10000 + 1000 * 9975) = 9900744416.87345
         let mut reserve_data = HashMap::new();
         reserve_data.insert(
-            H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
-            (U256::from(10), U256::from(10000000000 as u64)),
+            EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+            (EVMU256::from(10), EVMU256::from(10000000000 as u64)),
         );
         let path = PathContext {
             route: vec![wrap!(PairContext {
-                pair_address: H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
                 side: 0,
                 uniswap_info: Arc::new(get_uniswap_info(
                     &UniswapProvider::PancakeSwap,
@@ -554,14 +552,14 @@ mod tests {
                 next_hop: Default::default(),
             })],
             // 0.1 * 10^5 eth / token
-            final_pegged_ratio: U256::from(1),
+            final_pegged_ratio: EVMU256::from(1),
             final_pegged_pair: Rc::new(RefCell::new(None)),
         };
-        let res_out = path.get_amount_out(U256::from(1), &mut reserve_data.clone());
+        let res_out = path.get_amount_out(EVMU256::from(1), &mut reserve_data.clone());
         let res_in = path.get_amount_in(100, &mut reserve_data);
 
-        assert_eq!(res_out, U256::from(907024323 as u64));
-        assert_eq!(res_in, U256::from(1113895851 as u64));
+        assert_eq!(res_out, EVMU256::from(907024323 as u64));
+        assert_eq!(res_in, EVMU256::from(1113895851 as u64));
     }
 
     #[test]
@@ -571,17 +569,17 @@ mod tests {
 
         let mut reserve_data = HashMap::new();
         reserve_data.insert(
-            H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
-            (U256::from(1000), U256::from(10000000000 as u64)),
+            EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+            (EVMU256::from(1000), EVMU256::from(10000000000 as u64)),
         );
         reserve_data.insert(
-            H160::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap(),
-            (U256::from(10000000), U256::from(4000000000 as u64)),
+            EVMAddress::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap(),
+            (EVMU256::from(10000000), EVMU256::from(4000000000 as u64)),
         );
         let path = PathContext {
             route: vec![
                 wrap!(PairContext {
-                    pair_address: H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F")
+                    pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F")
                         .unwrap(),
                     side: 0,
                     uniswap_info: Arc::new(get_uniswap_info(
@@ -592,7 +590,7 @@ mod tests {
                     next_hop: Default::default(),
                 }),
                 wrap!(PairContext {
-                    pair_address: H160::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+                    pair_address: EVMAddress::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
                         .unwrap(),
                     side: 1,
                     uniswap_info: Arc::new(get_uniswap_info(
@@ -603,14 +601,14 @@ mod tests {
                     next_hop: Default::default(),
                 }),
             ],
-            final_pegged_ratio: U256::from(1),
+            final_pegged_ratio: EVMU256::from(1),
             final_pegged_pair: Rc::new(RefCell::new(None)),
         };
         let res_in = path.get_amount_in(1, &mut reserve_data.clone());
-        let res_out = path.get_amount_out(U256::from(1), &mut reserve_data);
+        let res_out = path.get_amount_out(EVMU256::from(1), &mut reserve_data);
 
-        assert_eq!(res_in, U256::from(25214 as u64));
-        assert_eq!(res_out, U256::from(24788 as u64));
+        assert_eq!(res_in, EVMU256::from(25214 as u64));
+        assert_eq!(res_out, EVMU256::from(24788 as u64));
     }
 
     #[test]
@@ -618,12 +616,12 @@ mod tests {
         // 1000 * 9975 * 0 / (10 * 10000 + 1000 * 9975) = 0
         let mut delta = HashMap::new();
         delta.insert(
-            H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
-            (U256::from(10), U256::from(0 as u64)),
+            EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+            (EVMU256::from(10), EVMU256::from(0 as u64)),
         );
         let path = PathContext {
             route: vec![wrap!(PairContext {
-                pair_address: H160::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
                 side: 0,
                 uniswap_info: Arc::new(get_uniswap_info(
                     &UniswapProvider::PancakeSwap,
@@ -632,13 +630,13 @@ mod tests {
                 initial_reserves: (Default::default(), Default::default()),
                 next_hop: Default::default(),
             })],
-            final_pegged_ratio: U256::from(1),
+            final_pegged_ratio: EVMU256::from(1),
             final_pegged_pair: Rc::new(RefCell::new(None)),
         };
-        let res_out = path.get_amount_out(U256::from(1000), &mut delta);
+        let res_out = path.get_amount_out(EVMU256::from(1000), &mut delta);
         let res_in = path.get_amount_in(1000, &mut delta);
-        assert_eq!(res_out, U256::from(0 as u64));
-        assert_eq!(res_in, U256::from(0 as u64));
+        assert_eq!(res_out, EVMU256::from(0 as u64));
+        assert_eq!(res_in, EVMU256::from(0 as u64));
     }
 
     #[test]
@@ -648,19 +646,19 @@ mod tests {
 
         let mut reserve_data = HashMap::new();
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000000").unwrap(),
-            (U256::from(25), U256::from(50 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+            (EVMU256::from(25), EVMU256::from(50 as u64)),
         );
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000001").unwrap(),
-            (U256::from(10), U256::from(10 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000001").unwrap(),
+            (EVMU256::from(10), EVMU256::from(10 as u64)),
         );
 
         let t0 = TokenContext {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000000")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -670,12 +668,12 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(20),
+                    final_pegged_ratio: EVMU256::from(20),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000001")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000001")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -685,7 +683,7 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
             ],
@@ -693,9 +691,9 @@ mod tests {
             weth_address: Default::default(),
             address: Default::default(),
         };
-        let (amt, reserve) = liquidate_all_token(vec![(&t0, U256::from(1000))], reserve_data);
+        let (amt, reserve) = liquidate_all_token(vec![(&t0, EVMU256::from(1000))], reserve_data);
 
-        assert_eq!(amt, U256::from(48 * 20 as u64));
+        assert_eq!(amt, EVMU256::from(48 * 20 as u64));
     }
 
     #[test]
@@ -705,23 +703,23 @@ mod tests {
 
         let mut reserve_data = HashMap::new();
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000000").unwrap(),
-            (U256::from(25), U256::from(50 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+            (EVMU256::from(25), EVMU256::from(50 as u64)),
         );
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000002").unwrap(),
-            (U256::from(10), U256::from(10 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000002").unwrap(),
+            (EVMU256::from(10), EVMU256::from(10 as u64)),
         );
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000003").unwrap(),
-            (U256::from(10), U256::from(10 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000003").unwrap(),
+            (EVMU256::from(10), EVMU256::from(10 as u64)),
         );
 
         let t0 = TokenContext {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000000")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -731,12 +729,12 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000003")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000003")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -746,7 +744,7 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
             ],
@@ -759,7 +757,7 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000000")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -769,12 +767,12 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000002")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000002")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -784,7 +782,7 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
             ],
@@ -794,11 +792,11 @@ mod tests {
         };
 
         let (amt, reserve) = liquidate_all_token(
-            vec![(&t0, U256::from(1000)), (&t1, U256::from(10000))],
+            vec![(&t0, EVMU256::from(1000)), (&t1, EVMU256::from(10000))],
             reserve_data,
         );
 
-        assert_eq!(amt, U256::from(58 as u64));
+        assert_eq!(amt, EVMU256::from(58 as u64));
     }
 
     #[test]
@@ -807,12 +805,12 @@ mod tests {
 
         let mut reserve_data = HashMap::new();
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000000").unwrap(),
-            (U256::from(25), U256::from(50 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+            (EVMU256::from(25), EVMU256::from(50 as u64)),
         );
         reserve_data.insert(
-            H160::from_str("0x0000000000000000000000000000000000000002").unwrap(),
-            (U256::from(10), U256::from(10 as u64)),
+            EVMAddress::from_str("0x0000000000000000000000000000000000000002").unwrap(),
+            (EVMU256::from(10), EVMU256::from(10 as u64)),
         );
 
         let t0 = TokenContext {
@@ -826,7 +824,7 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000000")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -836,12 +834,12 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: H160::from_str("0x0000000000000000000000000000000000000002")
+                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000002")
                             .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
@@ -851,7 +849,7 @@ mod tests {
                         initial_reserves: (Default::default(), Default::default()),
                         next_hop: Default::default(),
                     })],
-                    final_pegged_ratio: U256::from(1),
+                    final_pegged_ratio: EVMU256::from(1),
                     final_pegged_pair: Rc::new(RefCell::new(None)),
                 },
             ],
@@ -860,18 +858,18 @@ mod tests {
             address: Default::default(),
         };
         let (amt, _) = liquidate_all_token(
-            vec![(&t0, U256::from(1000)), (&t1, U256::from(10000))],
+            vec![(&t0, EVMU256::from(1000)), (&t1, EVMU256::from(10000))],
             reserve_data,
         );
-        assert_eq!(amt, U256::from(49 as u64));
+        assert_eq!(amt, EVMU256::from(49 as u64));
     }
 
     #[test]
     fn test_reserve_parser() {
-        let (r0, r1) = reserve_parser(&U256::from(
+        let (r0, r1) = reserve_parser(&EVMU256::from(
             "0x63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
         ));
-        assert_eq!(r0, U256::from("0x000000004b702d24750df9f77b84"));
-        assert_eq!(r1, U256::from("0x00000016e7f19fdf1ede2902b6ae"));
+        assert_eq!(r0, EVMU256::from("0x000000004b702d24750df9f77b84"));
+        assert_eq!(r1, EVMU256::from("0x00000016e7f19fdf1ede2902b6ae"));
     }
 }

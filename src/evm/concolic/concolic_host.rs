@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use primitive_types::{H160, U256};
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::input::{EVMInput, EVMInputT};
@@ -26,12 +25,13 @@ use std::ops::{Add, Mul, Not, Sub};
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::evm::types::{EVMAddress, EVMU256};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
-    U256(U256),
+    EVMU256(EVMU256),
     ADD,
     DIV,
     MUL,
@@ -48,7 +48,7 @@ enum ConcolicOp {
     SHR,
     SAR,
     INPUT,
-    SLICEDINPUT(U256),
+    SLICEDINPUT(EVMU256),
     BALANCE,
     CALLVALUE,
     // Represent a symbolic BV with width u32
@@ -75,7 +75,7 @@ pub struct Expr {
     lhs: Option<Box<Expr>>,
     rhs: Option<Box<Expr>>,
     // concrete should be used in constant folding
-    // concrete: Option<U256>,
+    // concrete: Option<EVMU256>,
     op: ConcolicOp,
 }
 
@@ -108,7 +108,7 @@ macro_rules! bv_from_u256 {
 }
 
 impl Expr {
-    pub fn new_sliced_input(idx: U256) -> Box<Expr> {
+    pub fn new_sliced_input(idx: EVMU256) -> Box<Expr> {
         Box::new(Expr {
             lhs: None,
             rhs: None,
@@ -317,7 +317,7 @@ impl<'a> Solving<'a> {
         }
         // println!("generate_z3_bv: {:?}", bv);
         match &bv.op {
-            ConcolicOp::U256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
+            ConcolicOp::EVMU256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
             ConcolicOp::ADD => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvadd)),
             ConcolicOp::DIV => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvudiv)),
             ConcolicOp::MUL => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvmul)),
@@ -403,7 +403,7 @@ impl<'a> Solving<'a> {
                         .expect_bv(),
                 ),
                 ConcolicOp::LNOT => match bv {
-                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
+                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(EVMU256::from(0), &context)),
                     SymbolicTy::Bool(bv) => bv.not(),
                 },
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
@@ -492,12 +492,12 @@ pub struct ConcolicHost<I, VS> {
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
     pub bytes: u32,
-    pub caller: H160,
+    pub caller: EVMAddress,
     pub phantom: PhantomData<(I, VS)>,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(bytes: u32, vm_input: BoxedABI, caller: H160) -> Self {
+    pub fn new(bytes: u32, vm_input: BoxedABI, caller: EVMAddress) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             input_bytes: Self::construct_input_from_abi(vm_input),
@@ -548,12 +548,12 @@ fn str_to_bytes(s: &str) -> Vec<u8> {
 
 impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
@@ -581,7 +581,7 @@ where
                         Box::new(Expr {
                             lhs: None,
                             rhs: None,
-                            op: ConcolicOp::U256(u256),
+                            op: ConcolicOp::EVMU256(u256),
                         })
                     }
                 }
@@ -678,7 +678,7 @@ where
                 vec![Some(Box::new(Expr {
                     lhs: None,
                     rhs: None,
-                    op: ConcolicOp::U256(res),
+                    op: ConcolicOp::EVMU256(res),
                 }))]
             }
             // SIGNEXTEND - FIXME: need to check
@@ -728,7 +728,7 @@ where
                 let res = Some(stack_bv!(0).eq(Box::new(Expr {
                     lhs: None,
                     rhs: None,
-                    op: ConcolicOp::U256(U256::from(0)),
+                    op: ConcolicOp::EVMU256(EVMU256::from(0)),
                 })));
                 self.symbolic_stack.pop();
                 vec![res]
@@ -1020,7 +1020,7 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
 

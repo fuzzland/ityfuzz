@@ -9,7 +9,7 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
-use primitive_types::{H160, U256, U512};
+use primitive_types::U512;
 use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 
 use std::time::Duration;
+use crate::evm::types::{EVMAddress, EVMU256};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
@@ -42,12 +43,12 @@ pub enum CallMiddlewareReturn {
 
 #[derive(Clone, Debug)]
 pub enum MiddlewareOp {
-    UpdateSlot(MiddlewareType, H160, U256, U256),
-    UpdateCode(MiddlewareType, H160, Bytecode),
-    AddCorpus(MiddlewareType, String, H160),
-    AddCaller(MiddlewareType, H160),
-    AddAddress(MiddlewareType, H160),
-    AddBlacklist(MiddlewareType, H160),
+    UpdateSlot(MiddlewareType, EVMAddress, EVMU256, EVMU256),
+    UpdateCode(MiddlewareType, EVMAddress, Bytecode),
+    AddCorpus(MiddlewareType, String, EVMAddress),
+    AddCaller(MiddlewareType, EVMAddress),
+    AddAddress(MiddlewareType, EVMAddress),
+    AddBlacklist(MiddlewareType, EVMAddress),
     Owed(MiddlewareType, U512),
     Earned(MiddlewareType, U512),
     MakeSubsequentCallSuccess(Bytes),
@@ -55,12 +56,12 @@ pub enum MiddlewareOp {
 
 pub fn add_corpus<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, input: &EVMInput)
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + Clone
         + Debug
         + 'static,
@@ -76,8 +77,8 @@ where
 
 pub trait Middleware<VS, I, S>: Debug
 where
-    S: State + HasCaller<H160> + Clone + Debug,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Clone + Debug,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     unsafe fn on_step(
@@ -89,7 +90,7 @@ where
 
     unsafe fn on_insert(&mut self,
                         bytecode: &mut Bytecode,
-                        address: H160,
+                        address: EVMAddress,
                         host: &mut FuzzHost<VS, I, S>,
                         state: &mut S);
     fn get_type(&self) -> MiddlewareType;

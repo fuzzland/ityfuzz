@@ -15,7 +15,6 @@ use crate::handle_contract_insertion;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
-use crate::types::convert_u256_to_h160;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 use libafl::corpus::Corpus;
@@ -35,6 +34,7 @@ use crate::evm::onchain::flashloan::register_borrow_txn;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use crate::evm::types::convert_u256_to_h160;
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<H160>> = None;
 

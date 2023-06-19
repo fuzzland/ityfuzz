@@ -13,11 +13,11 @@ use crate::{
 use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use libafl::prelude::HasRand;
-use primitive_types::{H160, U256};
 
 use revm::{CallContext, CallScheme, Contract, Host, Interpreter, LatestSpec};
 
 use std::{fmt::Debug, marker::PhantomData};
+use crate::evm::types::{EVMAddress, EVMU256};
 
 #[derive(Clone, Debug)]
 pub struct SymbolicMemory {}
@@ -38,28 +38,28 @@ where
 #[derive(Debug, Clone)]
 pub struct ConcolicEVMExecutor<I, S, VS>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     pub host: FuzzHost<VS, I, S>,
-    pub concolic_exe_host: ConcolicExeHost<H160, H160, VS>,
-    deployer: H160,
-    contract_addr: H160,
+    pub concolic_exe_host: ConcolicExeHost<EVMAddress, EVMAddress, VS>,
+    deployer: EVMAddress,
+    contract_addr: EVMAddress,
     phandom: PhantomData<(I, S, VS)>,
 }
 
 impl<I, S, VS> ConcolicEVMExecutor<I, S, VS>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     pub fn new(
         mut host: FuzzHost<VS, I, S>,
-        deployer: H160,
-        contract_addr: H160,
-        transactions: TxnTrace<H160, H160>,
+        deployer: EVMAddress,
+        contract_addr: EVMAddress,
+        transactions: TxnTrace<EVMAddress, EVMAddress>,
     ) -> Self {
         host.evmstate = EVMState::new();
         Self {
@@ -81,13 +81,13 @@ where
 
 impl<VS, I, S> ConcolicEVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     S: State
         + HasRand
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCurrentInputIdx
         + Default
         + Clone
@@ -103,7 +103,7 @@ where
         }
     }
 
-    pub fn execute_one_txn(&mut self, input: BasicTxn<H160>, state: &mut S) {
+    pub fn execute_one_txn(&mut self, input: BasicTxn<EVMAddress>, state: &mut S) {
         let contract = input.contract;
         let caller = input.caller;
         let value = input.value;
@@ -112,7 +112,7 @@ where
                 address: contract,
                 caller,
                 code_address: contract,
-                apparent_value: value.unwrap_or(U256::zero()),
+                apparent_value: value.unwrap_or(EVMU256::zero()),
                 scheme: CallScheme::Call,
             },
             Bytes::from(

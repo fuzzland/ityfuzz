@@ -2,12 +2,11 @@ use crate::evm::input::EVMInput;
 use crate::evm::oracle::dummy_precondition;
 use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::evm::producers::pair::PairProducer;
-use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx, Producer};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use primitive_types::{H160, U256};
 use revm::Bytecode;
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -24,7 +23,7 @@ impl BugOracle {
 
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
     for BugOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
@@ -35,11 +34,11 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         &self,
         ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,

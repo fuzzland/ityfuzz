@@ -13,7 +13,7 @@ use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use primitive_types::H160;
+use crate::evm::types::EVMAddress;
 
 pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
     let mut i = 0;
@@ -34,9 +34,9 @@ pub fn instructions_pc(bytecode: &Bytecode) -> HashSet<usize> {
 
 #[derive(Clone, Debug)]
 pub struct InstructionCoverage {
-    pub pc_coverage: HashMap<H160, HashSet<usize>>,
-    pub total_instr: HashMap<H160, usize>,
-    pub total_instr_set: HashMap<H160, HashSet<usize>>,
+    pub pc_coverage: HashMap<EVMAddress, HashSet<usize>>,
+    pub total_instr: HashMap<EVMAddress, usize>,
+    pub total_instr_set: HashMap<EVMAddress, HashSet<usize>>,
 }
 
 
@@ -73,7 +73,7 @@ impl InstructionCoverage {
 
         println!("\n\n{}", data);
 
-        let mut not_covered: HashMap<H160, HashSet<usize>> = HashMap::new();
+        let mut not_covered: HashMap<EVMAddress, HashSet<usize>> = HashMap::new();
         for (addr, covs) in &self.total_instr_set {
             for cov in covs {
                 match self.pc_coverage.get_mut(addr) {
@@ -117,12 +117,12 @@ impl InstructionCoverage {
 
 impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
     where
-        I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
         VS: VMStateT,
         S: State
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
@@ -139,7 +139,7 @@ impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
         self.pc_coverage.entry(address).or_default().insert(pc);
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
         let pcs = instructions_pc(&bytecode.clone());
         self.total_instr.insert(address, pcs.len());
         self.total_instr_set.insert(address, pcs);

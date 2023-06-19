@@ -2,10 +2,9 @@
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
+use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, fixed_address, generate_random_address};
 use std::fs::File;
 
-use primitive_types::H160;
 use std::io::Read;
 use std::path::Path;
 use itertools::Itertools;
@@ -15,7 +14,6 @@ extern crate crypto;
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
 use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
-use crate::rand_utils::{fixed_address, generate_random_address};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
@@ -40,7 +38,7 @@ pub struct ContractInfo {
     pub code: Vec<u8>,
     pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
-    pub deployed_address: H160,
+    pub deployed_address: EVMAddress,
     pub source_map: Option<HashMap<usize, SourceMapLocation>>,
 }
 
@@ -259,7 +257,7 @@ impl ContractLoader {
     }
 
 
-    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<H160>) -> Self {
+    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         for addr in address {
             let abi = onchain.fetch_abi(addr);
@@ -351,7 +349,7 @@ mod tests {
     //
     //     let loader = ContractLoader::from_address(
     //         &onchain,
-    //         vec![H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
+    //         vec![EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
     //     );
     //     println!(
     //         "{:?}",
