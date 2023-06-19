@@ -7,7 +7,7 @@ use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
 use primitive_types::U512;
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;

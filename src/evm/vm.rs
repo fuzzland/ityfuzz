@@ -20,7 +20,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::input::VMInputT;
-use crate::evm::types::float_scale_to_u512;
+use crate::evm::types::{EVMU512, float_scale_to_u512};
 use crate::state_input::StagedVMState;
 use crate::tracer::build_basic_txn_from_input;
 use bytes::Bytes;
@@ -33,11 +33,9 @@ use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm::Return::{Continue, Revert};
-use revm::{
-    Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host,
-    Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
-};
+use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_primitives::{Bytecode, LatestSpec};
+
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::concolic::concolic_exe_host::ConcolicEVMExecutor;
@@ -269,7 +267,7 @@ pub struct IntermediateExecutionResult {
     /// Program counter after execution
     pub pc: usize,
     /// Return value after execution
-    pub ret: Return,
+    pub ret: InstructionResult,
     /// Stack after execution
     pub stack: Vec<EVMU256>,
     /// Memory after execution
@@ -355,13 +353,13 @@ where
             unsafe {
                 // setup the pc, memory, and stack as the post execution context
                 let new_pc = post_exec_ctx.pc;
-                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+                let call = Contract::new_with_context_analyzed(
                     post_exec_ctx.call_data.clone(),
                     bytecode,
                     call_ctx,
                 );
                 let new_ip = call.bytecode.as_ptr().add(new_pc);
-                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
                 for v in post_exec_ctx.stack.clone() {
                     interp.stack.push(v);
                 }
@@ -384,25 +382,25 @@ where
             // if there is no post execution context, then we create the interpreter from the
             // beginning
             let call =
-                Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
-            Interpreter::new::<LatestSpec>(call, 1e10 as u64)
+                Contract::new_with_context_analyzed(data, bytecode, call_ctx);
+            Interpreter::new(call, 1e10 as u64, false)
         };
 
         // Execute the contract for `repeats` times or until revert
-        let mut r = Return::Stop;
+        let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
-            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+            r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
-            if r == Revert {
+            if r == InstructionResult::Revert {
                 interp.return_range = 0..0;
                 break;
             }
         }
-        if r != Revert {
-            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        if r != InstructionResult::Revert {
+            r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         }
 
         // Build the result
@@ -437,7 +435,7 @@ where
         #[cfg(not(feature = "flashloan_v2"))]
         {
             result.new_state.flashloan_data.owed +=
-                U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
+                EVMU512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
         }
 
         // remove all concolic hosts
@@ -464,7 +462,7 @@ where
             IS_FAST_CALL = true;
         }
         // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
-        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+        let call = Contract::new_with_context_analyzed(
             data,
             self.host
                 .code
@@ -485,8 +483,8 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        let mut interp = Interpreter::new(call, 1e10 as u64, false);
+        let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         unsafe {
             IS_FAST_CALL = false;
         }
@@ -521,7 +519,7 @@ where
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
-        let value = input.get_txn_value().unwrap_or(EVMU256::zero());
+        let value = input.get_txn_value().unwrap_or(EVMU256::ZERO);
         let contract_address = input.get_contract();
 
         // Execute the transaction
@@ -529,7 +527,7 @@ where
             let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
             self.host.origin = post_exec.caller;
             // we need push the output of CALL instruction
-            post_exec.stack.push(EVMU256::one());
+            post_exec.stack.push(EVMU256::from(1));
             // post_exec.pc += 1;
             self.execute_from_pc(
                 &post_exec.get_call_ctx(),
@@ -584,7 +582,7 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
+                reverted: r.ret != InstructionResult::Return && r.ret != InstructionResult::Stop && r.ret != ControlLeak,
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -625,7 +623,7 @@ where
         deployed_address: EVMAddress,
         state: &mut S,
     ) -> Option<EVMAddress> {
-        let deployer = Contract::new::<LatestSpec>(
+        let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
@@ -635,19 +633,19 @@ where
         let middleware_status = self.host.middlewares_enabled;
         // disable middleware for deployment
         self.host.middlewares_enabled = false;
-        let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
+        let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, &mut dummy_state);
+        let r = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
         }
-        if r != Return::Return {
+        if r != InstructionResult::Return {
             println!("deploy failed: {:?}", r);
             return None;
         }
-        assert_eq!(r, Return::Return);
+        assert_eq!(r, InstructionResult::Return);
         println!("contract = {:?}", hex::encode(interp.return_value()));
         let contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
@@ -762,14 +760,14 @@ where
                     scheme: CallScheme::StaticCall,
                 };
                 let code = self.host.code.get(&address).expect("no code").clone();
-                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+                let call = Contract::new_with_context_analyzed(
                     by.clone(),
                     code.clone(),
                     &ctx,
                 );
-                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-                let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
-                if ret == Return::Revert {
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+                if ret == InstructionResult::Revert {
                     vec![]
                 } else {
                     interp.return_value().to_vec()
@@ -810,7 +808,7 @@ mod tests {
     use crate::state_input::StagedVMState;
     use bytes::Bytes;
     use libafl::prelude::{tuple_list, StdScheduler};
-    use revm::Bytecode;
+    use revm_primitives::Bytecode;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
@@ -853,7 +851,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(EVMU256::zero()),
+            txn_value: Some(EVMU256::ZERO),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -893,7 +891,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(EVMU256::zero()),
+            txn_value: Some(EVMU256::ZERO),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),

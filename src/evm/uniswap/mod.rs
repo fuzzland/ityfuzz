@@ -214,8 +214,7 @@ impl PathContext {
             } else {
                 initial_reserve.1
             }
-        } * percentage
-            / 1000;
+        } * EVMU256::from(percentage) / EVMU256::from(1000);
         println!("amount_out: {}", amount_out);
 
         // address => (new reserve0, new reserve1)
@@ -244,7 +243,7 @@ impl PathContext {
     }
 }
 
-static mut WETH_MAX: EVMU256 = EVMU256::zero();
+static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 
 pub fn generate_uniswap_router_call(
     token: &TokenContext,
@@ -350,7 +349,7 @@ pub fn liquidate_all_token(
     }
 
     if swap_combos.len() == 0 {
-        return (EVMU256::zero(), initial_reserve_data);
+        return (EVMU256::ZERO, initial_reserve_data);
     }
 
     let mut possible_amount_out = vec![];
@@ -365,14 +364,14 @@ pub fn liquidate_all_token(
     .into_iter()
     .for_each(|swaps| {
         let mut reserve_data = initial_reserve_data.clone();
-        let mut total_amount_out = EVMU256::zero();
+        let mut total_amount_out = EVMU256::ZERO;
         for (path, amt) in &swaps {
             total_amount_out += path.get_amount_out(amt.clone(), &mut reserve_data);
         }
         possible_amount_out.push((total_amount_out, reserve_data));
     });
 
-    let mut best_quote = EVMU256::zero();
+    let mut best_quote = EVMU256::ZERO;
     let mut best_reserve_data = None;
     for (amount_out, reserve_data) in possible_amount_out {
         if amount_out > best_quote {
@@ -425,9 +424,9 @@ impl UniswapInfo {
         let amount_in_with_fee = amount_in * EVMU256::from(10000 - self.pool_fee);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = reserve_in * EVMU256::from(10000) + amount_in_with_fee;
-        if denominator == EVMU256::zero() {
+        if denominator == EVMU256::ZERO {
             return SwapResult {
-                amount: EVMU256::zero(),
+                amount: EVMU256::ZERO,
                 new_reserve_in: reserve_in,
                 new_reserve_out: reserve_out,
             };
@@ -451,21 +450,21 @@ impl UniswapInfo {
         println!("calculate_amounts_in reserve_out: {}", reserve_out);
 
         let adjusted_amount_out = if amount_out > reserve_out {
-            reserve_out - EVMU256::one()
+            reserve_out - EVMU256::from(1)
         } else {
             amount_out
         };
 
         let numerator = reserve_in * adjusted_amount_out * EVMU256::from(10000);
         let denominator = (reserve_out - adjusted_amount_out) * EVMU256::from(10000 - self.pool_fee);
-        if denominator == EVMU256::zero() {
+        if denominator == EVMU256::ZERO {
             return SwapResult {
-                amount: EVMU256::zero(),
+                amount: EVMU256::ZERO,
                 new_reserve_in: reserve_in,
                 new_reserve_out: reserve_out,
             };
         }
-        let amount_in = (numerator / denominator) + EVMU256::one();
+        let amount_in = (numerator / denominator) + EVMU256::from(1);
         println!("calculate_amounts_in amount_in: {}", amount_in);
         SwapResult {
             amount: amount_in,
@@ -501,10 +500,9 @@ impl UniswapInfo {
 }
 
 pub fn reserve_parser(reserve_slot: &EVMU256) -> (EVMU256, EVMU256) {
-    let mut reserve_bytes = [0u8; 32];
-    reserve_slot.to_big_endian(&mut reserve_bytes);
-    let reserve_0 = EVMU256::from_big_endian(&reserve_bytes[4..18]);
-    let reserve_1 = EVMU256::from_big_endian(&reserve_bytes[18..32]);
+    let mut reserve_bytes: [u8; 32] = reserve_slot.to_be_bytes();
+    let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
+    let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
     (reserve_0, reserve_1)
 }
 
@@ -866,10 +864,11 @@ mod tests {
 
     #[test]
     fn test_reserve_parser() {
-        let (r0, r1) = reserve_parser(&EVMU256::from(
+        let (r0, r1) = reserve_parser(&EVMU256::from_str_radix(
             "0x63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
-        ));
-        assert_eq!(r0, EVMU256::from("0x000000004b702d24750df9f77b84"));
-        assert_eq!(r1, EVMU256::from("0x00000016e7f19fdf1ede2902b6ae"));
+            16
+        ).unwrap());
+        assert_eq!(r0, EVMU256::from_str_radix("0x000000004b702d24750df9f77b84", 16).unwrap());
+        assert_eq!(r1, EVMU256::from_str_radix("0x00000016e7f19fdf1ede2902b6ae", 16).unwrap());
     }
 }

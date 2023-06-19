@@ -10,12 +10,12 @@ use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasMetadata;
 use libafl::Error;
-use revm::Interpreter;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::evm::input::EVMInputTy::Borrow;
 use std::fmt::Debug;
+use revm_interpreter::Interpreter;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress};
 
 use crate::state::HasItyState;

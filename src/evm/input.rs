@@ -1,7 +1,7 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMStagedVMState, EVMU256};
+use crate::evm::types::{EVMAddress, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
@@ -12,8 +12,7 @@ use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
 use primitive_types::U512;
-use revm::Env;
-
+use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use bytes::Bytes;
@@ -217,15 +216,14 @@ macro_rules! impl_env_mutator_u256 {
             } else {
                 None
             };
-            let mut input_by = [0; 32];
-            input.get_vm_env().$loc.$item.to_big_endian(&mut input_by);
+            let mut input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
             let mut input_vec = input_by.to_vec();
             let mut wrapper = MutatorInput::new(&mut input_vec);
             let res = byte_mutator(state_, &mut wrapper, vm_slots);
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item = EVMU256::from_big_endian(&input_vec.as_slice());
+            input.get_vm_env_mut().$loc.$item = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
             res
         }
     };
@@ -357,11 +355,10 @@ impl EVMInput {
         } else {
             None
         };
-        let mut input_by = [0; 32];
-        input
+        let mut input_by: [u8; 32] = input
             .get_txn_value()
-            .unwrap_or(EVMU256::zero())
-            .to_big_endian(&mut input_by);
+            .unwrap_or(EVMU256::ZERO)
+            .to_be_bytes();
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
         let res = byte_mutator(state_, &mut wrapper, vm_slots);
@@ -372,7 +369,7 @@ impl EVMInput {
         for i in 0..16 {
             input_vec[i] = 0;
         }
-        input.set_txn_value(EVMU256::from_big_endian(&input_vec.as_slice()));
+        input.set_txn_value(EVMU256::try_from_be_slice(input_vec.as_slice()).unwrap());
         res
     }
 
@@ -547,14 +544,14 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress> for EVMInput {
         let owed_amount =
             self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
-        if owed_amount == U512::zero() {
+        if owed_amount == EVMU512::ZERO {
             return f64::MAX;
         }
 
         // hacky convert from U512 -> f64
         let mut res = 0.0;
         for idx in 0..8 {
-            res += owed_amount.0[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
+            res += owed_amount.as_limbs()[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
         }
         res
     }

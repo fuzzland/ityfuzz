@@ -18,7 +18,7 @@ use libafl::corpus::{Corpus, Testcase};
 
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -169,7 +169,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: Some(EVMU256::one()),
+                    txn_value: Some(EVMU256::from(1)),
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -262,7 +262,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
             txn_value: if abi.is_payable {
-                Some(EVMU256::zero())
+                Some(EVMU256::ZERO)
             } else {
                 None
             },

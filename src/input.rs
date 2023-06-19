@@ -16,6 +16,7 @@ use crate::state::{HasCaller, HasItyState};
 use primitive_types::U256;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use crate::evm::types::EVMU256;
 
 /// A trait for VM inputs that are sent to any smart contract VM
 pub trait VMInputT<VS, Loc, Addr>:
@@ -89,7 +90,7 @@ where
 
     /// Get the value of the transaction
     #[cfg(feature = "evm")]
-    fn get_txn_value_temp(&self) -> Option<U256>;
+    fn get_txn_value_temp(&self) -> Option<EVMU256>;
 
     /// Used for EVM debug / replaying, get the encoded input
     fn get_direct_data(&self) -> Vec<u8>;

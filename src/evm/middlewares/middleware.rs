@@ -10,13 +10,14 @@ use libafl::inputs::Input;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::U512;
-use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 
 use std::clone::Clone;
 use std::fmt::Debug;
 
 use std::time::Duration;
+use revm_interpreter::Interpreter;
+use revm_primitives::Bytecode;
 use crate::evm::types::{EVMAddress, EVMU256};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

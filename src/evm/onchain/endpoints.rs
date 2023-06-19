@@ -6,7 +6,6 @@ use bytes::Bytes;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
-use revm::{Bytecode, LatestSpec};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -20,6 +19,9 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::bitvec::macros::internal::funty::Integral;
+use revm_primitives::{Bytecode, LatestSpec};
 use crate::evm::types::{EVMAddress, EVMU256};
 
 const MAX_HOPS: u32 = 5; // Assuming the value of MAX_HOPS
@@ -572,7 +574,7 @@ impl OnChainConfig {
             return Bytecode::new();
         }
         let code = hex::decode(code).unwrap();
-        let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+        let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
         self.code_cache.insert(address, bytes.clone());
         return bytes;
     }
@@ -582,7 +584,7 @@ impl OnChainConfig {
             return self.slot_cache[&(address, slot)];
         }
         if force_cache {
-            return EVMU256::zero();
+            return EVMU256::ZERO;
         }
 
         let resp_string = {
@@ -604,10 +606,10 @@ impl OnChainConfig {
         let slot_suffix = resp_string.trim_start_matches("0x");
 
         if slot_suffix.len() == 0 {
-            self.slot_cache.insert((address, slot), EVMU256::zero());
-            return EVMU256::zero();
+            self.slot_cache.insert((address, slot), EVMU256::ZERO);
+            return EVMU256::ZERO;
         }
-        let slot_value = EVMU256::from_big_endian(&hex::decode(slot_suffix).unwrap());
+        let slot_value = EVMU256::try_from_be_slice(&hex::decode(slot_suffix).unwrap()).unwrap();
         self.slot_cache.insert((address, slot), slot_value);
         return slot_value;
     }
@@ -644,12 +646,12 @@ impl OnChainConfig {
                                     &Chain::from_str(&self.chain_name).unwrap(),
                                 )),
                                 initial_reserves: (
-                                    EVMU256::from_big_endian(
+                                    EVMU256::try_from_be_slice(
                                         &hex::decode(pair.initial_reserves_0.to_string()).unwrap(),
-                                    ),
-                                    EVMU256::from_big_endian(
+                                    ).unwrap(),
+                                    EVMU256::try_from_be_slice(
                                         &hex::decode(pair.initial_reserves_1.to_string()).unwrap(),
-                                    ),
+                                    ).unwrap(),
                                 ),
                             })));
                         }
@@ -669,14 +671,14 @@ impl OnChainConfig {
                                         &Chain::from_str(&self.chain_name).unwrap(),
                                     )),
                                     initial_reserves: (
-                                        EVMU256::from_big_endian(
+                                        EVMU256::try_from_be_slice(
                                             &hex::decode(pair.initial_reserves_0.to_string())
                                                 .unwrap(),
-                                        ),
-                                        EVMU256::from_big_endian(
+                                        ).unwrap(),
+                                        EVMU256::try_from_be_slice(
                                             &hex::decode(pair.initial_reserves_1.to_string())
                                                 .unwrap(),
-                                        ),
+                                        ).unwrap(),
                                     ),
                                 })));
                         }

@@ -31,7 +31,9 @@ print_logs = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "with-serde"] }
+revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "serde"] }
+revm-primitives = { path = "./externals/revm/crates/primitives", features = ["serde"] }
+revm-interpreter = { path = "./externals/revm/crates/interpreter", features = ["serde"] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.8.2"

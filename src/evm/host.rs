@@ -9,11 +9,9 @@ use libafl::prelude::{HasCorpus, Scheduler, HasRand};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
-use revm::Return::{Continue, Revert};
-use revm::{
-    Bytecode, BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env,
-    Gas, Host, Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
-};
+use revm_interpreter::InstructionResult::{Continue, Return, Revert};
+
+
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -27,7 +25,11 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::evm::types::{EVMAddress, EVMU256, generate_random_address};
+use hex::FromHex;
+use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -46,7 +48,7 @@ pub static mut READ_MAP: [bool; MAP_SIZE] = [false; MAP_SIZE];
 pub static mut WRITE_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 // cmp
-pub static mut CMP_MAP: [EVMU256; MAP_SIZE] = [EVMU256::max_value(); MAP_SIZE];
+pub static mut CMP_MAP: [EVMU256; MAP_SIZE] = [EVMU256::MAX; MAP_SIZE];
 
 pub static mut ABI_MAX_SIZE: [usize; MAP_SIZE] = [0; MAP_SIZE];
 pub static mut STATE_CHANGE: bool = false;
@@ -174,7 +176,7 @@ where
 
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
-pub(crate) const ControlLeak: Return = Return::FatalExternalError;
+pub(crate) const ControlLeak: InstructionResult = InstructionResult::FatalExternalError;
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = true;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
@@ -329,7 +331,7 @@ where
             .code
             .insert(
                 address,
-                Arc::new(code.to_analysed::<LatestSpec>().lock::<LatestSpec>())
+                Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap())
             )
             .is_none());
     }
@@ -369,16 +371,16 @@ macro_rules! process_rw_key {
             // $key >>= 4;
             $key %= EVMU256::from(RW_SKIPPER_AMT);
             $key += EVMU256::from(RW_SKIPPER_PERCT_IDX);
-            $key.as_usize() % MAP_SIZE
+            as_u64($key) as usize % MAP_SIZE
         } else {
-            $key.as_usize() % MAP_SIZE
+            as_u64($key) as usize % MAP_SIZE
         }
     };
 }
 
 macro_rules! u256_to_u8 {
     ($key:ident) => {
-        (($key >> 4) % 254).as_u64() as u8
+        (as_u64($key >> 4) % 254) as u8
     };
 }
 
@@ -390,9 +392,7 @@ where
     I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
-    const INSPECT: bool = true;
-    type DB = BenchmarkDB;
-    fn step(&mut self, interp: &mut Interpreter, _is_static: bool, state: &mut S) -> Return {
+    fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         unsafe {
             if self.middlewares_enabled {
                 match self.flashloan_middleware.clone() {
@@ -429,10 +429,10 @@ where
                 0x57 => {
                     // JUMPI counter cond
                     let br = fast_peek!(1);
-                    let jump_dest = if br.is_zero() {
+                    let jump_dest = if is_zero(br) {
                         1
                     } else {
-                        fast_peek!(0).as_u64()
+                        as_u64(fast_peek!(0))
                     };
                     let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
@@ -486,13 +486,13 @@ where
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 >= v2 {
-                        if v1 - v2 != EVMU256::zero() {
+                        if v1 - v2 != EVMU256::ZERO {
                             v1 - v2
                         } else {
                             EVMU256::from(1)
                         }
                     } else {
-                        EVMU256::zero()
+                        EVMU256::ZERO
                     };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
@@ -506,13 +506,13 @@ where
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 <= v2 {
-                        if v2 - v1 != EVMU256::zero() {
+                        if v2 - v1 != EVMU256::ZERO {
                             v2 - v1
                         } else {
                             EVMU256::from(1)
                         }
                     } else {
-                        EVMU256::zero()
+                        EVMU256::ZERO
                     };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
@@ -526,9 +526,9 @@ where
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 < v2 {
-                        (v2 - v1) % (EVMU256::max_value() - 1) + 1
+                        (v2 - v1) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
                     } else {
-                        (v1 - v2) % (EVMU256::max_value() - 1) + 1
+                        (v1 - v2) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
                     };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
@@ -543,9 +543,9 @@ where
                         _ => unreachable!(),
                     };
                     unsafe {
-                        RET_OFFSET = fast_peek!(offset_of_ret_size - 1).as_usize();
+                        RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1)) as usize;
                         // println!("RET_OFFSET: {}", RET_OFFSET);
-                        RET_SIZE = fast_peek!(offset_of_ret_size).as_usize();
+                        RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as usize;
                     }
                     self._pc = interp.program_counter();
                 }
@@ -560,7 +560,7 @@ where
         return Continue;
     }
 
-    fn step_end(&mut self, _interp: &mut Interpreter, _is_static: bool, _ret: Return) -> Return {
+    fn step_end(&mut self, _interp: &mut Interpreter, _ret: InstructionResult, _: &mut S) -> InstructionResult {
         return Continue;
     }
 
@@ -575,9 +575,9 @@ where
         ))
     }
 
-    fn block_hash(&mut self, _number: EVMU256) -> Option<H256> {
+    fn block_hash(&mut self, _number: EVMU256) -> Option<B256> {
         Some(
-            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
+            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
         )
     }
@@ -585,20 +585,22 @@ where
     fn balance(&mut self, _address: EVMAddress) -> Option<(EVMU256, bool)> {
         // println!("balance");
 
-        Some((EVMU256::max_value(), true))
+        Some((EVMU256::MAX, true))
     }
 
     fn code(&mut self, address: EVMAddress) -> Option<(Arc<BytecodeLocked>, bool)> {
         // println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
-            None => Some((Arc::new(Bytecode::new().lock::<LatestSpec>()), true)),
+            None => Some((Arc::new(
+                BytecodeLocked::default()
+            ), true)),
         }
     }
 
-    fn code_hash(&mut self, _address: EVMAddress) -> Option<(H256, bool)> {
+    fn code_hash(&mut self, _address: EVMAddress) -> Option<(B256, bool)> {
         Some((
-            H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
+            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap(),
             true,
         ))
@@ -637,7 +639,7 @@ where
         Some((EVMU256::from(0), EVMU256::from(0), EVMU256::from(0), true))
     }
 
-    fn log(&mut self, _address: EVMAddress, _topics: Vec<H256>, _data: Bytes) {
+    fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
             if unsafe {PANIC_ON_BUG} {
                 panic!("target hit");
@@ -665,16 +667,16 @@ where
         return Some(SelfDestructResult::default());
     }
 
-    fn create<SPEC: Spec>(
+    fn create(
         &mut self,
         inputs: &mut CreateInputs,
         state: &mut S,
-    ) -> (Return, Option<EVMAddress>, Gas, Bytes) {
+    ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
         unsafe {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
-            let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context::<LatestSpec>(
+            let mut interp = Interpreter::new(
+                Contract::new_with_context(
                     Bytes::new(),
                     Bytecode::new_raw(inputs.init_code.clone()),
                     &CallContext {
@@ -686,9 +688,10 @@ where
                     },
                 ),
                 1e10 as u64,
+                false
             );
-            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
-            if ret == Return::Continue {
+            let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+            if ret == InstructionResult::Continue {
                 self.set_code(
                     r_addr,
                     Bytecode::new_raw(interp.return_value()),
@@ -711,7 +714,7 @@ where
         }
     }
 
-    fn call<SPEC: Spec>(&mut self, input: &mut CallInputs, state: &mut S) -> (Return, Gas, Bytes) {
+    fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
         self.call_count += 1;
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
@@ -732,7 +735,7 @@ where
         }
 
         // middlewares
-        let mut middleware_result: Option<(Return, Gas, Bytes)> = None;
+        let mut middleware_result: Option<(InstructionResult, Gas, Bytes)> = None;
         for action in &self.middlewares_latent_call_actions {
             match action {
                 CallMiddlewareReturn::Continue => {}
@@ -832,16 +835,17 @@ where
                 if loc.len() != 1 {
                     panic!("more than one contract found for the same hash");
                 }
-                let mut interp = Interpreter::new::<LatestSpec>(
-                    Contract::new_with_context_not_cloned::<LatestSpec>(
+                let mut interp = Interpreter::new(
+                    Contract::new_with_context_analyzed(
                         input_bytes,
                         self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
                         &input.context,
                     ),
                     1e10 as u64,
+                    false
                 );
 
-                let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+                let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
                 ret_back_ctx!();
                 return (ret, Gas::new(0), interp.return_value());
             }
@@ -849,15 +853,16 @@ where
 
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
-            let mut interp = Interpreter::new::<LatestSpec>(
-                Contract::new_with_context_not_cloned::<LatestSpec>(
+            let mut interp = Interpreter::new(
+                Contract::new_with_context_analyzed(
                     input_bytes.clone(),
                     code.clone(),
                     &input.context,
                 ),
                 1e10 as u64,
+                false
             );
-            let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(self, state);
+            let ret = interp.run::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             ret_back_ctx!();
             return (ret, Gas::new(0), interp.return_value());
         }

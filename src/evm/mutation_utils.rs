@@ -132,8 +132,7 @@ where
         }
         let new_val = mutate_with_vm_slot(self.vm_slots, state);
 
-        let mut data = vec![0u8; 32];
-        new_val.to_big_endian(&mut data);
+        let mut data: [u8; 32] = new_val.to_be_bytes();
 
         input.bytes_mut().copy_from_slice(&data[(32 - input_len)..]);
         Ok(MutationResult::Mutated)

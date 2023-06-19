@@ -15,7 +15,9 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 
 use libafl::state::{HasCorpus, State};
 
-use revm::{Bytecode, Host, Interpreter};
+use revm_interpreter::{Interpreter, Host};
+use revm_primitives::Bytecode;
+
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
@@ -25,7 +27,7 @@ use std::ops::{Add, Mul, Not, Sub};
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::evm::types::{EVMAddress, EVMU256};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -98,7 +100,7 @@ macro_rules! box_bv {
 
 macro_rules! bv_from_u256 {
     ($val:expr, $ctx:expr) => {{
-        let u64x4 = $val.0;
+        let u64x4 = $val.as_limbs();
         let bv = BV::from_u64(&$ctx, u64x4[0], 64);
         let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
         let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[2], 64));
@@ -340,7 +342,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::SHR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvlshr)),
             ConcolicOp::SAR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvashr)),
             ConcolicOp::SLICEDINPUT(idx) => {
-                let idx = idx.0[0] as u32;
+                let idx = idx.as_limbs()[0] as u32;
                 SymbolicTy::BV(self.slice_input(idx, idx + 4))
             }
             ConcolicOp::BALANCE => SymbolicTy::BV(self.balance.clone()),
@@ -403,7 +405,7 @@ impl<'a> Solving<'a> {
                         .expect_bv(),
                 ),
                 ConcolicOp::LNOT => match bv {
-                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(EVMU256::from(0), &context)),
+                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(EVMU256::ZERO, &context)),
                     SymbolicTy::Bool(bv) => bv.not(),
                 },
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
@@ -924,15 +926,13 @@ where
                 // println!("{:?}", interp.stack);
                 // println!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
-                let jump_dest_concolic = if fast_peek!(1)
-                    .expect("[Concolic] JUMPI stack error at 1")
-                    .is_zero()
+                let jump_dest_concolic = if is_zero(fast_peek!(1)
+                    .expect("[Concolic] JUMPI stack error at 1"))
                 {
                     1
                 } else {
-                    fast_peek!(0)
-                        .expect("[Concolic] JUMPI stack error at 0")
-                        .as_u64()
+                    as_u64(fast_peek!(0)
+                        .expect("[Concolic] JUMPI stack error at 0"))
                 };
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
                 if JMP_MAP[idx] == 0 {

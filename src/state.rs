@@ -26,6 +26,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
+use crate::evm::types::EVMAddress;
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -92,7 +93,7 @@ where
 /// contract addresses that have the function
 pub trait HasHashToAddress {
     /// Get the mapping between function hash with the address
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>;
 }
 
 /// Trait providing functions for getting the current execution result
@@ -170,7 +171,7 @@ where
     pub max_size: usize,
 
     /// Mapping between function hash with the contract addresses that have the function, required for implementing [`HasHashToAddress`] trait
-    pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
+    pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -307,7 +308,7 @@ where
     Out: Default,
 {
     /// Get the hash to address map
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<EVMAddress>> {
         &self.hash_to_address
     }
 }

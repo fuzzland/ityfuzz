@@ -4,7 +4,7 @@ use crate::evm::vm::EVMState;
 use crate::oracle::{OracleCtx, Producer};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 use std::collections::HashMap;
 
 pub struct ERC20Producer {

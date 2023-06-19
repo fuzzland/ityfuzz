@@ -4,7 +4,7 @@ use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 pub struct FunctionHarnessOracle {
     pub address: EVMAddress,

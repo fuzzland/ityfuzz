@@ -12,7 +12,7 @@ use crate::state::HasExecutionResult;
 use bytes::Bytes;
 
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 pub struct NoOracle {}
 

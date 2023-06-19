@@ -22,7 +22,6 @@ use libafl::prelude::{HasCorpus, HasMetadata, Input};
 
 use libafl::state::State;
 
-use revm::{Bytecode, Interpreter};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -33,6 +32,8 @@ use crate::evm::onchain::flashloan::register_borrow_txn;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use revm_interpreter::Interpreter;
+use revm_primitives::Bytecode;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
@@ -132,8 +133,7 @@ where
 pub fn keccak_hex(data: EVMU256) -> String {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let mut input = [0u8; 32];
-    data.to_big_endian(&mut input);
+    let mut input: [u8; 32] = data.to_be_bytes();
     hasher.input(input.as_ref());
     hasher.result(&mut output);
     hex::encode(&output).to_string()
@@ -199,7 +199,7 @@ where
                             }
                         }
                         match self.$stor.get(&address) {
-                            Some(v) => v.get(&$key).unwrap_or(&EVMU256::zero()).clone(),
+                            Some(v) => v.get(&$key).unwrap_or(&EVMU256::ZERO).clone(),
                             None => self.endpoint.get_contract_slot(
                                 address,
                                 slot_idx,
@@ -357,7 +357,7 @@ where
                             sstate: StagedVMState::new_uninitialized(),
                             sstate_idx: 0,
                             txn_value: if abi.is_payable {
-                                Some(EVMU256::zero())
+                                Some(EVMU256::ZERO)
                             } else {
                                 None
                             },

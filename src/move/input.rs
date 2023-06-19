@@ -18,6 +18,7 @@ use primitive_types::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
 use std::fmt::Debug;
+use crate::evm::types::EVMU256;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -179,7 +180,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_txn_value_temp(&self) -> Option<U256> {
+    fn get_txn_value_temp(&self) -> Option<EVMU256> {
         unreachable!("MoveVM does not have an ABI")
     }
 

@@ -14,9 +14,10 @@ use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use libafl::prelude::HasRand;
 
-use revm::{CallContext, CallScheme, Contract, Host, Interpreter, LatestSpec};
+use revm_interpreter::{CallContext, CallScheme, Contract, Host, Interpreter};
 
 use std::{fmt::Debug, marker::PhantomData};
+use revm_primitives::{LatestSpec, SpecId};
 use crate::evm::types::{EVMAddress, EVMU256};
 
 #[derive(Clone, Debug)]
@@ -112,7 +113,7 @@ where
                 address: contract,
                 caller,
                 code_address: contract,
-                apparent_value: value.unwrap_or(EVMU256::zero()),
+                apparent_value: value.unwrap_or(EVMU256::ZERO),
                 scheme: CallScheme::Call,
             },
             Bytes::from(
@@ -142,14 +143,14 @@ where
 
         let mut interp = {
             let call =
-                Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
-            Interpreter::new::<LatestSpec>(call, 1e10 as u64)
+                Contract::new_with_context_analyzed(data, bytecode, call_ctx);
+            Interpreter::new(call, 1e10 as u64, false)
         };
         unsafe {
             STATE_CHANGE = false;
         }
 
-        let _r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        // let _r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
 
         // remove all concolic hosts
         self.host.remove_all_middlewares();
