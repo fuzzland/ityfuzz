@@ -706,8 +706,8 @@ where
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: res.ret != Return::Return
-                                    && res.ret != Return::Stop
+                                reverted: res.ret != InstructionResult::Return
+                                    && res.ret != InstructionResult::Stop
                                     && res.ret != ControlLeak,
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)

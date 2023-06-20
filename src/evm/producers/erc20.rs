@@ -73,8 +73,8 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
                     let token = *token;
                     let pre_balance = &pre_balance_res[idx];
                     let post_balance = &post_balance_res[idx];
-                    let prev_balance = EVMU256::try_from(pre_balance.as_slice()).unwrap_or(EVMU256::zero());
-                    let new_balance = EVMU256::try_from(post_balance.as_slice()).unwrap_or(EVMU256::zero());
+                    let prev_balance = EVMU256::try_from_be_slice(pre_balance.as_slice()).unwrap_or(EVMU256::ZERO);
+                    let new_balance = EVMU256::try_from_be_slice(post_balance.as_slice()).unwrap_or(EVMU256::ZERO);
 
                     self.balances.insert((*caller, token), (prev_balance, new_balance));
                     idx += 1;

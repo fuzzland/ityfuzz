@@ -58,8 +58,8 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
                 reserves.iter()
             ).for_each(
                 |(output, pair_address)| {
-                    let reserve0 = EVMU256::from_big_endian(&output[0..32]);
-                    let reserve1 = EVMU256::from_big_endian(&output[32..64]);
+                    let reserve0 = EVMU256::try_from_be_slice(&output[0..32]).unwrap();
+                    let reserve1 = EVMU256::try_from_be_slice(&output[32..64]).unwrap();
                     self.reserves.insert(*pair_address, (reserve0, reserve1));
                 }
             );

@@ -483,7 +483,7 @@ where
             let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
             let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
             if size >= EVMU256::from(4) {
-                let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
+                let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
                 macro_rules! handle_transfer {
                     ($dst: ident, $amount: ident) => {
                         // if $amount > EVMU256::ZERO && $dst == interp.contract.caller {
@@ -508,13 +508,13 @@ where
                     // transfer
                     [0xa9, 0x05, 0x9c, 0xbb] => {
                         let dst = EVMAddress::from_slice(&data[16..36]);
-                        let amount = EVMU256::from_big_endian(&data[36..68]);
+                        let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
                         handle_transfer!(dst, amount);
                     }
                     // transferFrom
                     [0x23, 0xb8, 0x72, 0xdd] => {
                         let dst = EVMAddress::from_slice(&data[48..68]);
-                        let amount = EVMU256::from_big_endian(&data[68..100]);
+                        let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
                         handle_transfer!(dst, amount);
                     }
                     _ => {}

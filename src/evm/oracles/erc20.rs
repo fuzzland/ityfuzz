@@ -1,12 +1,11 @@
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::producers::pair::PairProducer;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use crate::evm::vm::EVMState;
 use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use primitive_types::U512;
 use revm_primitives::Bytecode;
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -168,10 +167,10 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
         if liquidation_earned > liquidation_owed {
             exec_res.new_state.state.flashloan_data.earned +=
-                U512::from(liquidation_earned - liquidation_owed);
+                EVMU512::from(liquidation_earned - liquidation_owed);
         } else {
             exec_res.new_state.state.flashloan_data.owed +=
-                U512::from(liquidation_owed - liquidation_earned);
+                EVMU512::from(liquidation_owed - liquidation_earned);
         }
 
         exec_res
@@ -193,7 +192,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;
             // we scaled by 1e24, so divide by 1e24 to get ETH
-            let net_eth = net / U512::from(10_000_000_000_000_000_000_000_00u128);
+            let net_eth = net / EVMU512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
 
 
