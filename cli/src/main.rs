@@ -2,29 +2,26 @@ use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
+use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
+use ityfuzz::evm::oracles::bug::BugOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
+use ityfuzz::evm::producers::erc20::ERC20Producer;
 use ityfuzz::evm::producers::pair::PairProducer;
-use ityfuzz::evm::types::EVMFuzzState;
+use ityfuzz::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use ityfuzz::evm::vm::EVMState;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::state::FuzzState;
-use primitive_types::{H160, U256};
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use ityfuzz::evm::producers::erc20::ERC20Producer;
-use std::env;
-use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::oracles::bug::BugOracle;
-
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -132,10 +129,9 @@ struct Args {
     #[arg(long, default_value = "corpus")]
     corpus_path: String,
 
-    // random seed  
+    // random seed
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
-
 }
 
 enum TargetType {
@@ -146,10 +142,7 @@ enum TargetType {
 fn main() {
     init_sentry();
     let args = Args::parse();
-    ityfuzz::telemetry::report_campaign(
-        args.onchain,
-        args.target.clone()
-    );
+    ityfuzz::telemetry::report_campaign(args.onchain, args.target.clone());
     let target_type: TargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => Glob,
@@ -167,22 +160,12 @@ fn main() {
         }
     };
 
-    let is_local_proxy = args.onchain_local_proxy_addr.is_some();
-
     let mut onchain = if args.onchain {
         match args.chain_type {
             Some(chain_str) => {
                 let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
                 let block_number = args.onchain_block_number.unwrap();
-                if is_local_proxy {
-                    Some(OnChainConfig::new_local_proxy(
-                        chain,
-                        block_number,
-                        args.onchain_local_proxy_addr.unwrap(),
-                    ))
-                } else {
-                    Some(OnChainConfig::new(chain, block_number))
-                }
+                Some(OnChainConfig::new(chain, block_number))
             }
             None => Some(OnChainConfig::new_raw(
                 args.onchain_url
@@ -194,12 +177,6 @@ fn main() {
                     .expect("You need to either specify chain type or block explorer url"),
                 args.onchain_chain_name
                     .expect("You need to either specify chain type or chain name"),
-                is_local_proxy,
-                if is_local_proxy {
-                    args.onchain_local_proxy_addr.unwrap()
-                } else {
-                    "".to_string()
-                },
             )),
         }
     } else {
@@ -219,26 +196,23 @@ fn main() {
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
     let mut flashloan_oracle = Rc::new(RefCell::new({
-        IERC20OracleFlashloan::new(
-            pair_producer.clone(),
-            erc20_producer.clone(),
-        )
+        IERC20OracleFlashloan::new(pair_producer.clone(), erc20_producer.clone())
     }));
 
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);
     // let mut function_oracle =
-    //     FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
+    //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<
-        Rc<RefCell<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
+        Rc<RefCell<dyn Oracle<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>>>,
     > = vec![];
 
     let mut producers: Vec<
         Rc<
             RefCell<
-                dyn Producer<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
+                dyn Producer<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>,
             >,
         >,
     > = vec![];
@@ -277,17 +251,31 @@ fn main() {
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: match target_type {
-            Glob => {
-                ContractLoader::from_glob(args.target.as_str(), &mut state).contracts
-            }
+            Glob => ContractLoader::from_glob(args.target.as_str(), &mut state).contracts,
             Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
                 }
-                let addresses: Vec<H160> = args
-                    .target
+                let mut args_target = args.target.clone();
+
+                if args.ierc20_oracle || args.flashloan {
+                    const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+                    const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
+                    if "bsc" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(BSC_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(BSC_ADDRESS);
+                        }
+                    } else if "eth" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(ETH_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(ETH_ADDRESS);
+                        }
+                    }
+                }
+                let addresses: Vec<EVMAddress> = args_target
                     .split(",")
-                    .map(|s| H160::from_str(s).unwrap())
+                    .map(|s| EVMAddress::from_str(s).unwrap())
                     .collect();
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
@@ -317,7 +305,7 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        corpus_path:args.corpus_path,
+        corpus_path: args.corpus_path,
     };
 
     match config.fuzzer_type {

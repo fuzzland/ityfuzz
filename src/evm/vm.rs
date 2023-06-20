@@ -20,7 +20,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::input::VMInputT;
-
+use crate::evm::types::{EVMU512, float_scale_to_u512};
 use crate::state_input::StagedVMState;
 use crate::tracer::build_basic_txn_from_input;
 use bytes::Bytes;
@@ -29,15 +29,13 @@ use libafl::prelude::{HasMetadata, HasRand};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 
-use primitive_types::{H160, H256, U256, U512};
+use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm::Return::{Continue, Revert};
-use revm::{
-    Bytecode, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Env, Gas, Host,
-    Interpreter, LatestSpec, Return, SelfDestructResult, Spec,
-};
+use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_primitives::{Bytecode, LatestSpec};
+
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::concolic::concolic_exe_host::ConcolicEVMExecutor;
@@ -53,9 +51,9 @@ use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use crate::types::float_scale_to_u512;
 use serde::{Deserialize, Serialize};
 use serde_traitobject::Any;
+use crate::evm::types::{EVMAddress, EVMU256};
 
 /// Get the token context from the flashloan middleware,
 /// which contains uniswap pairs of that token
@@ -84,7 +82,7 @@ macro_rules! get_token_ctx {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostExecutionCtx {
     /// Stack snapshot of VM
-    pub stack: Vec<U256>,
+    pub stack: Vec<EVMU256>,
     /// Memory snapshot of VM
     pub memory: Vec<u8>,
 
@@ -99,10 +97,10 @@ pub struct PostExecutionCtx {
     pub call_data: Bytes,
 
     /// Call context of the current call
-    pub address: H160,
-    pub caller: H160,
-    pub code_address: H160,
-    pub apparent_value: U256,
+    pub address: EVMAddress,
+    pub caller: EVMAddress,
+    pub code_address: EVMAddress,
+    pub apparent_value: EVMU256,
 }
 
 impl PostExecutionCtx {
@@ -120,8 +118,8 @@ impl PostExecutionCtx {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EVMState {
-    /// State of the EVM, which is mapping of U256 slot to U256 value for each contract
-    pub state: HashMap<H160, HashMap<U256, U256>>,
+    /// State of the EVM, which is mapping of EVMU256 slot to EVMU256 value for each contract
+    pub state: HashMap<EVMAddress, HashMap<EVMU256, EVMU256>>,
 
     /// Post execution context
     /// If control leak happens, we add the post execution context to the VM state,
@@ -221,17 +219,17 @@ impl EVMState {
     }
 
     /// Get all storage slots of a specific contract
-    pub fn get(&self, address: &H160) -> Option<&HashMap<U256, U256>> {
+    pub fn get(&self, address: &EVMAddress) -> Option<&HashMap<EVMU256, EVMU256>> {
         self.state.get(address)
     }
 
     /// Get all storage slots of a specific contract (mutable)
-    pub fn get_mut(&mut self, address: &H160) -> Option<&mut HashMap<U256, U256>> {
+    pub fn get_mut(&mut self, address: &EVMAddress) -> Option<&mut HashMap<EVMU256, EVMU256>> {
         self.state.get_mut(address)
     }
 
     /// Insert all storage slots of a specific contract
-    pub fn insert(&mut self, address: H160, storage: HashMap<U256, U256>) {
+    pub fn insert(&mut self, address: EVMAddress, storage: HashMap<EVMU256, EVMU256>) {
         self.state.insert(address, storage);
     }
 }
@@ -246,14 +244,14 @@ pub static mut IS_FAST_CALL: bool = false;
 #[derive(Debug, Clone)]
 pub struct EVMExecutor<I, S, VS>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
     pub host: FuzzHost<VS, I, S>,
     /// [Depreciated] Deployer address
-    deployer: H160,
+    deployer: EVMAddress,
     phandom: PhantomData<(I, S, VS)>,
 }
 
@@ -269,22 +267,22 @@ pub struct IntermediateExecutionResult {
     /// Program counter after execution
     pub pc: usize,
     /// Return value after execution
-    pub ret: Return,
+    pub ret: InstructionResult,
     /// Stack after execution
-    pub stack: Vec<U256>,
+    pub stack: Vec<EVMU256>,
     /// Memory after execution
     pub memory: Vec<u8>,
 }
 
 impl<VS, I, S> EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     S: State
         + HasRand
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCurrentInputIdx
         + Default
         + Clone
@@ -293,7 +291,7 @@ where
     VS: Default + VMStateT + 'static,
 {
     /// Create a new EVM executor given a host and deployer address
-    pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: H160) -> Self {
+    pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
         Self {
             host: fuzz_host,
             deployer,
@@ -355,13 +353,13 @@ where
             unsafe {
                 // setup the pc, memory, and stack as the post execution context
                 let new_pc = post_exec_ctx.pc;
-                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+                let call = Contract::new_with_context_analyzed(
                     post_exec_ctx.call_data.clone(),
                     bytecode,
                     call_ctx,
                 );
                 let new_ip = call.bytecode.as_ptr().add(new_pc);
-                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
                 for v in post_exec_ctx.stack.clone() {
                     interp.stack.push(v);
                 }
@@ -384,25 +382,25 @@ where
             // if there is no post execution context, then we create the interpreter from the
             // beginning
             let call =
-                Contract::new_with_context_not_cloned::<LatestSpec>(data, bytecode, call_ctx);
-            Interpreter::new::<LatestSpec>(call, 1e10 as u64)
+                Contract::new_with_context_analyzed(data, bytecode, call_ctx);
+            Interpreter::new(call, 1e10 as u64, false)
         };
 
         // Execute the contract for `repeats` times or until revert
-        let mut r = Return::Stop;
+        let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
-            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
-            if r == Revert {
+            if r == InstructionResult::Revert {
                 interp.return_range = 0..0;
                 break;
             }
         }
-        if r != Revert {
-            r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        if r != InstructionResult::Revert {
+            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         }
 
         // Build the result
@@ -437,7 +435,7 @@ where
         #[cfg(not(feature = "flashloan_v2"))]
         {
             result.new_state.flashloan_data.owed +=
-                U512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
+                EVMU512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
         }
 
         // remove all concolic hosts
@@ -453,18 +451,18 @@ where
     /// Conduct a fast call that does not change the state
     fn fast_call(
         &mut self,
-        address: H160,
+        address: EVMAddress,
         data: Bytes,
         vm_state: &VS,
         state: &mut S,
-        value: U256,
-        from: H160,
+        value: EVMU256,
+        from: EVMAddress,
     ) -> IntermediateExecutionResult {
         unsafe {
             IS_FAST_CALL = true;
         }
         // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
-        let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+        let call = Contract::new_with_context_analyzed(
             data,
             self.host
                 .code
@@ -485,8 +483,8 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-        let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
+        let mut interp = Interpreter::new(call, 1e10 as u64, false);
+        let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         unsafe {
             IS_FAST_CALL = false;
         }
@@ -505,7 +503,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-    ) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
+    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
         // Get necessary info from input
         let mut vm_state = unsafe {
             input
@@ -521,7 +519,7 @@ where
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
-        let value = input.get_txn_value().unwrap_or(U256::zero());
+        let value = input.get_txn_value().unwrap_or(EVMU256::ZERO);
         let contract_address = input.get_contract();
 
         // Execute the transaction
@@ -529,7 +527,7 @@ where
             let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
             self.host.origin = post_exec.caller;
             // we need push the output of CALL instruction
-            post_exec.stack.push(U256::one());
+            post_exec.stack.push(EVMU256::from(1));
             // post_exec.pc += 1;
             self.execute_from_pc(
                 &post_exec.get_call_ctx(),
@@ -584,7 +582,7 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != Return::Return && r.ret != Return::Stop && r.ret != ControlLeak,
+                reverted: r.ret != InstructionResult::Return && r.ret != InstructionResult::Stop && r.ret != ControlLeak,
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -600,16 +598,16 @@ where
     }
 }
 
-impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, H160, H160, U256, Vec<u8>, I, S>
+impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S>
     for EVMExecutor<I, S, VS>
 where
-    I: VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     S: State
         + HasRand
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCurrentInputIdx
         + Default
         + Clone
@@ -622,32 +620,32 @@ where
         &mut self,
         code: Bytecode,
         constructor_args: Option<Bytes>,
-        deployed_address: H160,
+        deployed_address: EVMAddress,
         state: &mut S,
-    ) -> Option<H160> {
-        let deployer = Contract::new::<LatestSpec>(
+    ) -> Option<EVMAddress> {
+        let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
             self.deployer,
-            U256::from(0),
+            EVMU256::from(0),
         );
         let middleware_status = self.host.middlewares_enabled;
         // disable middleware for deployment
         self.host.middlewares_enabled = false;
-        let mut interp = Interpreter::new::<LatestSpec>(deployer, 1e10 as u64);
+        let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, &mut dummy_state);
+        let r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
         }
-        if r != Return::Return {
+        if r != InstructionResult::Return {
             println!("deploy failed: {:?}", r);
             return None;
         }
-        assert_eq!(r, Return::Return);
+        assert_eq!(r, InstructionResult::Return);
         println!("contract = {:?}", hex::encode(interp.return_value()));
         let contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
@@ -657,13 +655,13 @@ where
 
     /// Execute an input (transaction)
     #[cfg(not(feature = "flashloan_v2"))]
-    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
+    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
         self.execute_abi(input, state)
     }
 
     /// Execute an input (can be transaction or borrow)
     #[cfg(feature = "flashloan_v2")]
-    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<H160, H160, VS, Vec<u8>> {
+    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
         match input.get_input_type() {
             // buy (borrow because we have infinite ETH) tokens with ETH using uniswap
             EVMInputTy::Borrow => {
@@ -708,8 +706,8 @@ where
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: res.ret != Return::Return
-                                    && res.ret != Return::Stop
+                                reverted: res.ret != InstructionResult::Return
+                                    && res.ret != InstructionResult::Stop
                                     && res.ret != ControlLeak,
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
@@ -739,7 +737,7 @@ where
     /// Execute a static call
     fn fast_static_call(
         &mut self,
-        data: &Vec<(H160, Bytes)>,
+        data: &Vec<(EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
     ) -> Vec<Vec<u8>> {
@@ -762,14 +760,14 @@ where
                     scheme: CallScheme::StaticCall,
                 };
                 let code = self.host.code.get(&address).expect("no code").clone();
-                let call = Contract::new_with_context_not_cloned::<LatestSpec>(
+                let call = Contract::new_with_context_analyzed(
                     by.clone(),
                     code.clone(),
                     &ctx,
                 );
-                let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
-                let ret = interp.run::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.host, state);
-                if ret == Return::Revert {
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+                if ret == InstructionResult::Revert {
                     vec![]
                 } else {
                     interp.return_value().to_vec()
@@ -790,7 +788,7 @@ where
         unsafe { &mut WRITE_MAP }
     }
 
-    fn get_cmp(&self) -> &'static mut [U256; MAP_SIZE] {
+    fn get_cmp(&self) -> &'static mut [EVMU256; MAP_SIZE] {
         unsafe { &mut CMP_MAP }
     }
 
@@ -803,20 +801,17 @@ mod tests {
     use crate::evm::host::{FuzzHost, JMP_MAP};
     use crate::evm::input::{EVMInput, EVMInputTy};
     use crate::evm::mutator::AccessPattern;
-    use crate::evm::types::EVMFuzzState;
+    use crate::evm::types::{EVMFuzzState, EVMU256, generate_random_address};
     use crate::evm::vm::{EVMExecutor, EVMState};
     use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
-    use crate::rand_utils::generate_random_address;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
     use bytes::Bytes;
     use libafl::prelude::{tuple_list, StdScheduler};
-    use primitive_types::U256;
-    use revm::Bytecode;
+    use revm_primitives::Bytecode;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
-    use primitive_types::{H160};
 
     #[test]
     fn test_fuzz_executor() {
@@ -856,7 +851,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(U256::zero()),
+            txn_value: Some(EVMU256::ZERO),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -896,7 +891,7 @@ mod tests {
             data: None,
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: Some(U256::zero()),
+            txn_value: Some(EVMU256::ZERO),
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),

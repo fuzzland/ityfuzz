@@ -27,6 +27,7 @@ use itertools::Itertools;
 use libafl::impl_serdeany;
 use move_vm_runtime::loader::{Function, Module};
 use move_vm_types::loaded_data::runtime_types::Type;
+use crate::evm::types::EVMU256;
 use crate::mutation_utils::byte_mutator;
 use crate::r#move::movevm::MoveVM;
 
@@ -838,7 +839,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_txn_value_temp(&self) -> Option<U256> {
+    fn get_txn_value_temp(&self) -> Option<EVMU256> {
         unreachable!("MoveVM does not have an ABI")
     }
 

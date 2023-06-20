@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
-    executor::FuzzExecutor, fuzzer::ItyFuzzer, rand_utils::fixed_address,
+    executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
 use libafl::prelude::ShMemProvider;
@@ -37,9 +37,10 @@ use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
 use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMFuzzMutator, EVMFuzzState};
+use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
 use primitive_types::{H160, U256};
-use revm::{BlockEnv, Bytecode};
+use revm_primitives::{BlockEnv, Bytecode, Env};
+use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 
 struct ABIConfig {
@@ -53,7 +54,7 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
+    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
 ) {
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
 
@@ -206,10 +207,10 @@ pub fn evm_fuzzer(
 
                     let inp = match splitter[0] {
                         "abi" => {
-                            let caller = H160::from_str(splitter[1]).unwrap();
-                            let contract = H160::from_str(splitter[2]).unwrap();
+                            let caller = EVMAddress::from_str(splitter[1]).unwrap();
+                            let contract = EVMAddress::from_str(splitter[2]).unwrap();
                             let input = hex::decode(splitter[3]).unwrap();
-                            let value = U256::from_str_radix(splitter[4], 10).unwrap();
+                            let value = EVMU256::from_str_radix(splitter[4], 10).unwrap();
                             let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                             let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
                             let repeat = splitter[7].parse::<usize>().unwrap_or(0);
@@ -223,18 +224,18 @@ pub fn evm_fuzzer(
                                 data: None,
                                 sstate: vm_state.clone(),
                                 sstate_idx: 0,
-                                txn_value: if value == U256::zero() {
+                                txn_value: if value == EVMU256::ZERO {
                                     None
                                 } else {
                                     Some(value)
                                 },
                                 step: is_step,
-                                env: revm::Env {
+                                env: Env {
                                     cfg: Default::default(),
                                     block: BlockEnv {
-                                        number: U256::from(warp_to),
+                                        number: EVMU256::from(warp_to),
                                         coinbase: Default::default(),
-                                        timestamp: U256::from(warp_to * 1000),
+                                        timestamp: EVMU256::from(warp_to * 1000),
                                         difficulty: Default::default(),
                                         prevrandao: None,
                                         basefee: Default::default(),
@@ -258,10 +259,10 @@ pub fn evm_fuzzer(
                             }
                         }
                         "borrow" => {
-                            let caller = H160::from_str(splitter[1]).unwrap();
-                            let contract = H160::from_str(splitter[2]).unwrap();
+                            let caller = EVMAddress::from_str(splitter[1]).unwrap();
+                            let contract = EVMAddress::from_str(splitter[2]).unwrap();
                             let randomness = hex::decode(splitter[3]).unwrap();
-                            let value = U256::from_str(splitter[4]).unwrap();
+                            let value = EVMU256::from_str(splitter[4]).unwrap();
                             let _liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
                             let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
                             EVMInput {
@@ -270,18 +271,18 @@ pub fn evm_fuzzer(
                                 data: None,
                                 sstate: vm_state.clone(),
                                 sstate_idx: 0,
-                                txn_value: if value == U256::zero() {
+                                txn_value: if value == EVMU256::ZERO {
                                     None
                                 } else {
                                     Some(value)
                                 },
                                 step: false,
-                                env: revm::Env {
+                                env: Env {
                                     cfg: Default::default(),
                                     block: BlockEnv {
-                                        number: U256::from(warp_to),
+                                        number: EVMU256::from(warp_to),
                                         coinbase: Default::default(),
-                                        timestamp: U256::from(warp_to * 1000),
+                                        timestamp: EVMU256::from(warp_to * 1000),
                                         difficulty: Default::default(),
                                         prevrandao: None,
                                         basefee: Default::default(),

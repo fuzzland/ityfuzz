@@ -11,7 +11,6 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMetadata, Mutator, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
-use primitive_types::{H160, U256};
 use rand::random;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -19,6 +18,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
+use crate::evm::types::{EVMAddress, EVMU256};
 
 use super::concolic::concolic_host::Expr;
 
@@ -226,7 +226,7 @@ impl BoxedABI {
 /// Randomly sample an args with any type with size `size`
 fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
 where
-    S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<H160>,
+    S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<EVMAddress>,
     VS: VMStateT + Default,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
@@ -291,7 +291,7 @@ impl BoxedABI {
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
-            + HasCaller<H160>
+            + HasCaller<EVMAddress>
             + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
@@ -306,14 +306,14 @@ impl BoxedABI {
     pub fn mutate_with_vm_slots<Loc, Addr, VS, S>(
         &mut self,
         state: &mut S,
-        vm_slots: Option<HashMap<U256, U256>>,
+        vm_slots: Option<HashMap<EVMU256, EVMU256>>,
     ) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
             + HasItyState<Loc, Addr, VS>
-            + HasCaller<H160>
+            + HasCaller<EVMAddress>
             + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
@@ -1138,7 +1138,7 @@ mod tests {
     fn test_int() {
         let mut abi = get_abi_type_boxed(&String::from("int8"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1150,7 +1150,7 @@ mod tests {
     fn test_int256() {
         let mut abi = get_abi_type_boxed(&String::from("int256"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1162,7 +1162,7 @@ mod tests {
     fn test_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("string"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1174,7 +1174,7 @@ mod tests {
     fn test_tuple_static() {
         let mut abi = get_abi_type_boxed(&String::from("(uint256,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1186,7 +1186,7 @@ mod tests {
     fn test_tuple_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("(string)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1198,7 +1198,7 @@ mod tests {
     fn test_tuple_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("(string,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1210,7 +1210,7 @@ mod tests {
     fn test_array_static() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1222,7 +1222,7 @@ mod tests {
     fn test_array_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("bytes[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1234,7 +1234,7 @@ mod tests {
     fn test_array_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2][3]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1246,7 +1246,7 @@ mod tests {
     fn test_array_dyn() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[][]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1256,9 +1256,9 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
+        let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256)[]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<H160, H160, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,

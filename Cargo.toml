@@ -31,7 +31,9 @@ print_logs = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "with-serde"] }
+revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "serde"] }
+revm-primitives = { path = "./externals/revm/crates/primitives", features = ["no_gas_measuring", "serde"] }
+revm-interpreter = { path = "./externals/revm/crates/interpreter", features = ["no_gas_measuring", "serde"] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.8.2"
@@ -59,4 +61,4 @@ move-core-types = { path = "./externals/move/language/move-core/types", features
 move-stdlib = { path = "./externals/move/language/move-stdlib" }
 move-vm-runtime = { path = "./externals/move/language/move-vm/runtime", features = ["lazy_natives"] }
 move-vm-types = { path = "./externals/move/language/move-vm/types" }
-
+retry = "2.0.0"

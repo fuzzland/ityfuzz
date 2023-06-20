@@ -362,9 +362,10 @@ where
     SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
         + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
     VS: Default + VMStateT,
-    SlotTy: PartialOrd + Copy + From<u128>,
+    SlotTy: PartialOrd + Copy + TryFrom<u128>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    <SlotTy as TryFrom<u128>>::Error: std::fmt::Debug
 {
     /// Create a new CmpFeedback.
     pub(crate) fn new(
@@ -373,7 +374,7 @@ where
         vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     ) -> Self {
         Self {
-            min_map: [SlotTy::from(u128::MAX); MAP_SIZE],
+            min_map: [SlotTy::try_from(u128::MAX).expect(""); MAP_SIZE],
             current_map,
             known_states: Default::default(),
             scheduler,
