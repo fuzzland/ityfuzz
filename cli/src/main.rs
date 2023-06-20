@@ -12,12 +12,11 @@ use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use ityfuzz::evm::producers::pair::PairProducer;
-use ityfuzz::evm::types::EVMFuzzState;
+use ityfuzz::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use ityfuzz::evm::vm::EVMState;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::state::FuzzState;
-use primitive_types::{H160, U256};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
@@ -204,16 +203,16 @@ fn main() {
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);
     // let mut function_oracle =
-    //     FunctionHarnessOracle::new_no_condition(H160::zero(), Vec::from(harness_hash));
+    //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<
-        Rc<RefCell<dyn Oracle<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>>>,
+        Rc<RefCell<dyn Oracle<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>>>,
     > = vec![];
 
     let mut producers: Vec<
         Rc<
             RefCell<
-                dyn Producer<EVMState, H160, _, _, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>,
+                dyn Producer<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>,
             >,
         >,
     > = vec![];
@@ -274,9 +273,9 @@ fn main() {
                         }
                     }
                 }
-                let addresses: Vec<H160> = args_target
+                let addresses: Vec<EVMAddress> = args_target
                     .split(",")
-                    .map(|s| H160::from_str(s).unwrap())
+                    .map(|s| EVMAddress::from_str(s).unwrap())
                     .collect();
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),

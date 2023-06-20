@@ -1,13 +1,13 @@
 use crate::evm::input::{EVMInput, EVMInputT};
 use crate::evm::producers::pair::PairProducer;
-use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use crate::evm::vm::EVMState;
 use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use primitive_types::{H160, U256, U512};
-use revm::Bytecode;
+use primitive_types::U512;
+use revm_primitives::Bytecode;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,9 +18,9 @@ use crate::evm::producers::erc20::ERC20Producer;
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
     #[cfg(feature = "flashloan_v2")]
-    pub known_tokens: HashMap<H160, TokenContext>,
+    pub known_tokens: HashMap<EVMAddress, TokenContext>,
     #[cfg(feature = "flashloan_v2")]
-    pub known_pair_reserve_slot: HashMap<H160, U256>,
+    pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
     #[cfg(feature = "flashloan_v2")]
     pub pair_producer: Rc<RefCell<PairProducer>>,
     #[cfg(feature = "flashloan_v2")]
@@ -47,19 +47,19 @@ impl IERC20OracleFlashloan {
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn register_token(&mut self, token: H160, token_ctx: TokenContext) {
+    pub fn register_token(&mut self, token: EVMAddress, token_ctx: TokenContext) {
         self.known_tokens.insert(token, token_ctx);
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn register_pair_reserve_slot(&mut self, pair: H160, slot: U256) {
+    pub fn register_pair_reserve_slot(&mut self, pair: EVMAddress, slot: EVMU256) {
         self.known_pair_reserve_slot.insert(pair, slot);
     }
 }
 
 pub static mut ORACLE_OUTPUT: String = String::new();
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
     for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
@@ -119,15 +119,15 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                 liquidations_owed.push((token_info, prev_balance - new_balance));
             } else if prev_balance < new_balance {
                 let to_liquidate = (new_balance - prev_balance)
-                    * U256::from(ctx.input.get_liquidation_percent())
-                    / U256::from(10);
+                    * EVMU256::from(ctx.input.get_liquidation_percent())
+                    / EVMU256::from(10);
 
                 let unliquidated = new_balance - prev_balance - to_liquidate;
-                if to_liquidate > U256::from(0) {
+                if to_liquidate > EVMU256::from(0) {
                     liquidations_earned.push((token_info, to_liquidate));
                 }
                 // insert if not exists or increase if exists
-                if unliquidated > U256::from(0) {
+                if unliquidated > EVMU256::from(0) {
                     let entry = ctx
                         .fuzz_state
                         .get_execution_result_mut()
@@ -136,7 +136,7 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
                         .flashloan_data
                         .unliquidated_tokens
                         .entry(*token)
-                        .or_insert(U256::from(0));
+                        .or_insert(EVMU256::from(0));
                     *entry += unliquidated;
                 }
             }
@@ -148,8 +148,8 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
 
         unliquidated_tokens.iter().for_each(|(token, amount)| {
             let token_info = self.known_tokens.get(token).expect("Token not found");
-            let liq = *amount * U256::from(ctx.input.get_liquidation_percent()) / U256::from(10);
-            if liq != U256::from(0) {
+            let liq = *amount * EVMU256::from(ctx.input.get_liquidation_percent()) / EVMU256::from(10);
+            if liq != EVMU256::from(0) {
                 liquidations_earned.push((token_info, liq));
                 exec_res
                     .new_state

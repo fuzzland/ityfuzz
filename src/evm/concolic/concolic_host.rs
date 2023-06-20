@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use primitive_types::{H160, U256};
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::input::{EVMInput, EVMInputT};
@@ -16,7 +15,9 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 
 use libafl::state::{HasCorpus, State};
 
-use revm::{Bytecode, Host, Interpreter};
+use revm_interpreter::{Interpreter, Host};
+use revm_primitives::Bytecode;
+
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
@@ -26,12 +27,13 @@ use std::ops::{Add, Mul, Not, Sub};
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ConcolicOp {
-    U256(U256),
+    EVMU256(EVMU256),
     ADD,
     DIV,
     MUL,
@@ -48,7 +50,7 @@ enum ConcolicOp {
     SHR,
     SAR,
     INPUT,
-    SLICEDINPUT(U256),
+    SLICEDINPUT(EVMU256),
     BALANCE,
     CALLVALUE,
     // Represent a symbolic BV with width u32
@@ -75,7 +77,7 @@ pub struct Expr {
     lhs: Option<Box<Expr>>,
     rhs: Option<Box<Expr>>,
     // concrete should be used in constant folding
-    // concrete: Option<U256>,
+    // concrete: Option<EVMU256>,
     op: ConcolicOp,
 }
 
@@ -98,7 +100,7 @@ macro_rules! box_bv {
 
 macro_rules! bv_from_u256 {
     ($val:expr, $ctx:expr) => {{
-        let u64x4 = $val.0;
+        let u64x4 = $val.as_limbs();
         let bv = BV::from_u64(&$ctx, u64x4[0], 64);
         let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
         let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[2], 64));
@@ -108,7 +110,7 @@ macro_rules! bv_from_u256 {
 }
 
 impl Expr {
-    pub fn new_sliced_input(idx: U256) -> Box<Expr> {
+    pub fn new_sliced_input(idx: EVMU256) -> Box<Expr> {
         Box::new(Expr {
             lhs: None,
             rhs: None,
@@ -317,7 +319,7 @@ impl<'a> Solving<'a> {
         }
         // println!("generate_z3_bv: {:?}", bv);
         match &bv.op {
-            ConcolicOp::U256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
+            ConcolicOp::EVMU256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
             ConcolicOp::ADD => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvadd)),
             ConcolicOp::DIV => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvudiv)),
             ConcolicOp::MUL => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvmul)),
@@ -340,7 +342,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::SHR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvlshr)),
             ConcolicOp::SAR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvashr)),
             ConcolicOp::SLICEDINPUT(idx) => {
-                let idx = idx.0[0] as u32;
+                let idx = idx.as_limbs()[0] as u32;
                 SymbolicTy::BV(self.slice_input(idx, idx + 4))
             }
             ConcolicOp::BALANCE => SymbolicTy::BV(self.balance.clone()),
@@ -403,7 +405,7 @@ impl<'a> Solving<'a> {
                         .expect_bv(),
                 ),
                 ConcolicOp::LNOT => match bv {
-                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(U256::from(0), &context)),
+                    SymbolicTy::BV(bv) => bv._eq(&bv_from_u256!(EVMU256::ZERO, &context)),
                     SymbolicTy::Bool(bv) => bv.not(),
                 },
                 _ => panic!("{:?} not implemented for constraint solving", cons.op),
@@ -492,12 +494,12 @@ pub struct ConcolicHost<I, VS> {
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
     pub bytes: u32,
-    pub caller: H160,
+    pub caller: EVMAddress,
     pub phantom: PhantomData<(I, VS)>,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(bytes: u32, vm_input: BoxedABI, caller: H160) -> Self {
+    pub fn new(bytes: u32, vm_input: BoxedABI, caller: EVMAddress) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             input_bytes: Self::construct_input_from_abi(vm_input),
@@ -548,12 +550,12 @@ fn str_to_bytes(s: &str) -> Vec<u8> {
 
 impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
@@ -581,7 +583,7 @@ where
                         Box::new(Expr {
                             lhs: None,
                             rhs: None,
-                            op: ConcolicOp::U256(u256),
+                            op: ConcolicOp::EVMU256(u256),
                         })
                     }
                 }
@@ -678,7 +680,7 @@ where
                 vec![Some(Box::new(Expr {
                     lhs: None,
                     rhs: None,
-                    op: ConcolicOp::U256(res),
+                    op: ConcolicOp::EVMU256(res),
                 }))]
             }
             // SIGNEXTEND - FIXME: need to check
@@ -728,7 +730,7 @@ where
                 let res = Some(stack_bv!(0).eq(Box::new(Expr {
                     lhs: None,
                     rhs: None,
-                    op: ConcolicOp::U256(U256::from(0)),
+                    op: ConcolicOp::EVMU256(EVMU256::from(0)),
                 })));
                 self.symbolic_stack.pop();
                 vec![res]
@@ -924,15 +926,13 @@ where
                 // println!("{:?}", interp.stack);
                 // println!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
-                let jump_dest_concolic = if fast_peek!(1)
-                    .expect("[Concolic] JUMPI stack error at 1")
-                    .is_zero()
+                let jump_dest_concolic = if is_zero(fast_peek!(1)
+                    .expect("[Concolic] JUMPI stack error at 1"))
                 {
                     1
                 } else {
-                    fast_peek!(0)
-                        .expect("[Concolic] JUMPI stack error at 0")
-                        .as_u64()
+                    as_u64(fast_peek!(0)
+                        .expect("[Concolic] JUMPI stack error at 0"))
                 };
                 let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
                 if JMP_MAP[idx] == 0 {
@@ -1020,7 +1020,7 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
 

@@ -11,10 +11,10 @@ use libafl::prelude::{
 };
 use libafl::state::{HasMaxSize, HasRand, State};
 use libafl::{impl_serdeany, Error};
-use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
+use crate::evm::types::EVMU256;
 
 /// Constants in the contracts
 ///
@@ -83,7 +83,7 @@ where
 /// Similar to [`ConstantHintedMutator`], we discover that sometimes directly setting the bytes to
 /// the values in the VM state allow us to increase test coverage.
 pub struct VMStateHintedMutator<'a> {
-    pub vm_slots: &'a HashMap<U256, U256>,
+    pub vm_slots: &'a HashMap<EVMU256, EVMU256>,
 }
 
 impl Named for VMStateHintedMutator<'_> {
@@ -93,16 +93,16 @@ impl Named for VMStateHintedMutator<'_> {
 }
 
 impl<'a> VMStateHintedMutator<'a> {
-    pub fn new(vm_slots: &'a HashMap<U256, U256>) -> Self {
+    pub fn new(vm_slots: &'a HashMap<EVMU256, EVMU256>) -> Self {
         Self { vm_slots }
     }
 }
 
 /// Mutate the input to a value in the VM state
 pub fn mutate_with_vm_slot<S: State + HasRand>(
-    vm_slots: &HashMap<U256, U256>,
+    vm_slots: &HashMap<EVMU256, EVMU256>,
     state: &mut S,
-) -> U256 {
+) -> EVMU256 {
     // sample a key from the vm_state.state
     let idx = state.rand_mut().below(vm_slots.len() as u64) as usize;
     let key = vm_slots.keys().nth(idx).unwrap();
@@ -132,8 +132,7 @@ where
         }
         let new_val = mutate_with_vm_slot(self.vm_slots, state);
 
-        let mut data = vec![0u8; 32];
-        new_val.to_big_endian(&mut data);
+        let mut data: [u8; 32] = new_val.to_be_bytes();
 
         input.bytes_mut().copy_from_slice(&data[(32 - input_len)..]);
         Ok(MutationResult::Mutated)
@@ -146,7 +145,7 @@ where
 pub fn byte_mutator<I, S>(
     state: &mut S,
     input: &mut I,
-    vm_slots: Option<HashMap<U256, U256>>,
+    vm_slots: Option<HashMap<EVMU256, EVMU256>>,
 ) -> MutationResult
 where
     S: State + HasRand + HasMetadata,
@@ -187,7 +186,7 @@ where
 pub fn byte_mutator_with_expansion<I, S>(
     state: &mut S,
     input: &mut I,
-    vm_slots: Option<HashMap<U256, U256>>,
+    vm_slots: Option<HashMap<EVMU256, EVMU256>>,
 ) -> MutationResult
 where
     S: State + HasRand + HasMaxSize,

@@ -7,11 +7,10 @@ use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
-use crate::evm::types::{EVMFuzzState, EVMInfantStateState, EVMStagedVMState};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256, fixed_address};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
-use crate::rand_utils::fixed_address;
 use crate::state::HasCaller;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -19,8 +18,7 @@ use libafl::corpus::{Corpus, Testcase};
 
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
-use primitive_types::{H160, U256};
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -171,7 +169,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
-                    txn_value: Some(U256::one()),
+                    txn_value: Some(EVMU256::from(1)),
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -231,7 +229,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         &mut self,
         abi: &ABIConfig,
         scheduler: &dyn Scheduler<EVMInput, EVMFuzzState>,
-        deployed_address: H160,
+        deployed_address: EVMAddress,
     ) {
         if abi.is_constructor {
             return;
@@ -264,7 +262,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
             txn_value: if abi.is_payable {
-                Some(U256::zero())
+                Some(EVMU256::ZERO)
             } else {
                 None
             },

@@ -3,11 +3,9 @@ use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
-use primitive_types::{H160, U256};
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
-use revm::{Bytecode, LatestSpec};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -21,6 +19,10 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::bitvec::macros::internal::funty::Integral;
+use revm_primitives::{Bytecode, LatestSpec};
+use crate::evm::types::{EVMAddress, EVMU256};
 
 const MAX_HOPS: u32 = 5; // Assuming the value of MAX_HOPS
 
@@ -36,7 +38,7 @@ pub enum Chain {
 pub trait PriceOracle: Debug {
     // ret0: price = int(original_price x 10^5)
     // ret1: decimals of the token
-    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)>;
+    fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)>;
 }
 
 impl Chain {
@@ -138,8 +140,8 @@ pub struct OnChainConfig {
     pub endpoint_url: String,
     // pub cache_len: usize,
     //
-    // code_cache: HashMap<H160, Bytecode>,
-    // slot_cache: HashMap<(H160, U256), U256>,
+    // code_cache: HashMap<EVMAddress, Bytecode>,
+    // slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
     pub block_number: String,
@@ -150,13 +152,13 @@ pub struct OnChainConfig {
 
     pub chain_name: String,
 
-    slot_cache: HashMap<(H160, U256), U256>,
-    code_cache: HashMap<H160, Bytecode>,
-    price_cache: HashMap<H160, Option<(u32, u32)>>,
-    abi_cache: HashMap<H160, Option<String>>,
-    storage_all_cache: HashMap<H160, Option<Arc<HashMap<String, U256>>>>,
-    storage_dump_cache: HashMap<H160, Option<Arc<HashMap<U256, U256>>>>,
-    uniswap_path_cache: HashMap<H160, TokenContext>,
+    slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
+    code_cache: HashMap<EVMAddress, Bytecode>,
+    price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
+    abi_cache: HashMap<EVMAddress, Option<String>>,
+    storage_all_cache: HashMap<EVMAddress, Option<Arc<HashMap<String, EVMU256>>>>,
+    storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
+    uniswap_path_cache: HashMap<EVMAddress, TokenContext>,
     rpc_cache: FileSystemCache,
 }
 
@@ -324,7 +326,7 @@ impl OnChainConfig {
         self.etherscan_api_key.push(key);
     }
 
-    pub fn fetch_storage_all(&mut self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
+    pub fn fetch_storage_all(&mut self, address: EVMAddress) -> Option<Arc<HashMap<String, EVMU256>>> {
         if let Some(storage) = self.storage_all_cache.get(&address) {
             return storage.clone();
         } else {
@@ -334,7 +336,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_storage_all_uncached(&self, address: H160) -> Option<Arc<HashMap<String, U256>>> {
+    pub fn fetch_storage_all_uncached(&self, address: EVMAddress) -> Option<Arc<HashMap<String, EVMU256>>> {
         assert_eq!(
             self.block_number, "latest",
             "fetch_full_storage only works with latest block"
@@ -356,7 +358,7 @@ impl OnChainConfig {
                 {
                     map.insert(
                         k.trim_start_matches("0x").to_string(),
-                        U256::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap(),
+                        EVMU256::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap(),
                     );
                 }
                 Some(Arc::new(map))
@@ -387,7 +389,7 @@ impl OnChainConfig {
         return self.block_hash.as_ref().unwrap();
     }
 
-    pub fn fetch_storage_dump(&mut self, address: H160) -> Option<Arc<HashMap<U256, U256>>> {
+    pub fn fetch_storage_dump(&mut self, address: EVMAddress) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         if let Some(storage) = self.storage_dump_cache.get(&address) {
             return storage.clone();
         } else {
@@ -399,8 +401,8 @@ impl OnChainConfig {
 
     pub fn fetch_storage_dump_uncached(
         &mut self,
-        address: H160,
-    ) -> Option<Arc<HashMap<U256, U256>>> {
+        address: EVMAddress,
+    ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         let resp = {
             let blk_hash = self.fetch_blk_hash();
             let mut params = String::from("[");
@@ -427,8 +429,8 @@ impl OnChainConfig {
                     let value = v["value"].as_str().expect("fail to find value");
 
                     map.insert(
-                        U256::from_str_radix(key.trim_start_matches("0x"), 16).unwrap(),
-                        U256::from_str_radix(value.trim_start_matches("0x"), 16).unwrap(),
+                        EVMU256::from_str_radix(key.trim_start_matches("0x"), 16).unwrap(),
+                        EVMU256::from_str_radix(value.trim_start_matches("0x"), 16).unwrap(),
                     );
                 }
                 Some(Arc::new(map))
@@ -437,7 +439,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_abi_uncached(&self, address: H160) -> Option<String> {
+    pub fn fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
         let endpoint = format!(
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
@@ -477,7 +479,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_abi(&mut self, address: H160) -> Option<String> {
+    pub fn fetch_abi(&mut self, address: EVMAddress) -> Option<String> {
         if self.abi_cache.contains_key(&address) {
             return self.abi_cache.get(&address).unwrap().clone();
         }
@@ -542,7 +544,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn get_contract_code(&mut self, address: H160, force_cache: bool) -> Bytecode {
+    pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
         if self.code_cache.contains_key(&address) {
             return self.code_cache[&address].clone();
         }
@@ -572,17 +574,17 @@ impl OnChainConfig {
             return Bytecode::new();
         }
         let code = hex::decode(code).unwrap();
-        let bytes = Bytecode::new_raw(Bytes::from(code)).to_analysed::<LatestSpec>();
+        let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
         self.code_cache.insert(address, bytes.clone());
         return bytes;
     }
 
-    pub fn get_contract_slot(&mut self, address: H160, slot: U256, force_cache: bool) -> U256 {
+    pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
         if self.slot_cache.contains_key(&(address, slot)) {
             return self.slot_cache[&(address, slot)];
         }
         if force_cache {
-            return U256::zero();
+            return EVMU256::ZERO;
         }
 
         let resp_string = {
@@ -604,20 +606,20 @@ impl OnChainConfig {
         let slot_suffix = resp_string.trim_start_matches("0x");
 
         if slot_suffix.len() == 0 {
-            self.slot_cache.insert((address, slot), U256::zero());
-            return U256::zero();
+            self.slot_cache.insert((address, slot), EVMU256::ZERO);
+            return EVMU256::ZERO;
         }
-        let slot_value = U256::from_big_endian(&hex::decode(slot_suffix).unwrap());
+        let slot_value = EVMU256::try_from_be_slice(&hex::decode(slot_suffix).unwrap()).unwrap();
         self.slot_cache.insert((address, slot), slot_value);
         return slot_value;
     }
 
-    pub fn fetch_uniswap_path(&self, token_address: H160) -> TokenContext {
+    pub fn fetch_uniswap_path(&self, token_address: EVMAddress) -> TokenContext {
         let token = format!("{:?}", token_address);
         let info: Info = self.find_path_subgraph(&self.chain_name, &token, &self.block_number);
 
         let basic_info = info.basic_info;
-        let weth = H160::from_str(&basic_info.weth).expect("failed to parse weth");
+        let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
         let is_weth = basic_info.is_weth;
 
         let routes = info.routes;
@@ -631,12 +633,12 @@ impl OnChainConfig {
                         "v2" => {
                             // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse decimals0");
                             // let decimals1 = pair["decimals1"].as_u64().expect("failed to parse decimals1");
-                            // let next = H160::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
+                            // let next = EVMAddress::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
 
                             path_parsed.route.push(Rc::new(RefCell::new(PairContext {
-                                pair_address: H160::from_str(pair.pair.as_str())
+                                pair_address: EVMAddress::from_str(pair.pair.as_str())
                                     .expect("failed to parse pair"),
-                                next_hop: H160::from_str(pair.next.as_str())
+                                next_hop: EVMAddress::from_str(pair.next.as_str())
                                     .expect("failed to parse pair"),
                                 side: pair.in_ as u8,
                                 uniswap_info: Arc::new(get_uniswap_info(
@@ -644,23 +646,23 @@ impl OnChainConfig {
                                     &Chain::from_str(&self.chain_name).unwrap(),
                                 )),
                                 initial_reserves: (
-                                    U256::from_big_endian(
+                                    EVMU256::try_from_be_slice(
                                         &hex::decode(pair.initial_reserves_0.to_string()).unwrap(),
-                                    ),
-                                    U256::from_big_endian(
+                                    ).unwrap(),
+                                    EVMU256::try_from_be_slice(
                                         &hex::decode(pair.initial_reserves_1.to_string()).unwrap(),
-                                    ),
+                                    ).unwrap(),
                                 ),
                             })));
                         }
                         "pegged" => {
                             // always live at final
-                            path_parsed.final_pegged_ratio = U256::from(pair.rate);
+                            path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
                             path_parsed.final_pegged_pair =
                                 Rc::new(RefCell::new(Some(PairContext {
-                                    pair_address: H160::from_str(pair.pair.as_str())
+                                    pair_address: EVMAddress::from_str(pair.pair.as_str())
                                         .expect("failed to parse pair"),
-                                    next_hop: H160::from_str(pair.next.as_str())
+                                    next_hop: EVMAddress::from_str(pair.next.as_str())
                                         .expect("failed to parse pair"),
                                     side: pair.in_ as u8,
                                     uniswap_info: Arc::new(get_uniswap_info(
@@ -669,19 +671,19 @@ impl OnChainConfig {
                                         &Chain::from_str(&self.chain_name).unwrap(),
                                     )),
                                     initial_reserves: (
-                                        U256::from_big_endian(
+                                        EVMU256::try_from_be_slice(
                                             &hex::decode(pair.initial_reserves_0.to_string())
                                                 .unwrap(),
-                                        ),
-                                        U256::from_big_endian(
+                                        ).unwrap(),
+                                        EVMU256::try_from_be_slice(
                                             &hex::decode(pair.initial_reserves_1.to_string())
                                                 .unwrap(),
-                                        ),
+                                        ).unwrap(),
                                     ),
                                 })));
                         }
                         "pegged_weth" => {
-                            path_parsed.final_pegged_ratio = U256::from(pair.rate);
+                            path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
                             path_parsed.final_pegged_pair = Rc::new(RefCell::new(None));
                         }
                         _ => unimplemented!("unknown swap path source"),
@@ -699,7 +701,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_uniswap_path_cached(&mut self, token: H160) -> &TokenContext {
+    pub fn fetch_uniswap_path_cached(&mut self, token: EVMAddress) -> &TokenContext {
         if self.uniswap_path_cache.contains_key(&token) {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
@@ -1055,13 +1057,13 @@ impl OnChainConfig {
 }
 
 impl OnChainConfig {
-    fn fetch_token_price_uncached(&self, token_address: H160) -> Option<(u32, u32)> {
+    fn fetch_token_price_uncached(&self, token_address: EVMAddress) -> Option<(u32, u32)> {
         panic!("not implemented");
     }
 }
 
 impl PriceOracle for OnChainConfig {
-    fn fetch_token_price(&mut self, token_address: H160) -> Option<(u32, u32)> {
+    fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)> {
         if self.price_cache.contains_key(&token_address) {
             return self.price_cache.get(&token_address).unwrap().clone();
         }
@@ -1158,7 +1160,7 @@ mod tests {
     fn test_get_contract_code() {
         let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_code(
-            H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             false,
         );
         println!("{:?}", v)
@@ -1168,8 +1170,8 @@ mod tests {
     fn test_get_contract_slot() {
         let mut config = OnChainConfig::new(BSC, 0);
         let v = config.get_contract_slot(
-            H160::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
-            U256::from(3),
+            EVMAddress::from_str("0xb486857fac4254a7ffb3b1955ee0c0a2b2ca75ab").unwrap(),
+            EVMU256::from(3),
             false,
         );
         println!("{:?}", v)
@@ -1179,7 +1181,7 @@ mod tests {
     fn test_fetch_abi() {
         let mut config = OnChainConfig::new(BSC, 0);
         let v =
-            config.fetch_abi(H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
+            config.fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
     }
 
@@ -1232,7 +1234,7 @@ mod tests {
     // fn test_fetch_uniswap_path() {
     //     let config = OnChainConfig::new(BSC, 22055611);
     //     let v = config.fetch_uniswap_path(
-    //         H160::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+    //         EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
     //     );
     //     assert!(v.swaps.len() > 0);
     //     assert!(!v.weth_address.is_zero());
@@ -1246,7 +1248,7 @@ mod tests {
     //         "ocJtTEZWOJZjYOMAQjRmWcHpvUdieMLJDAtUjycFNTdSxgFGofNJhdiRX0Kk1h1O".to_string(),
     //     );
     //     let v = config.fetch_token_price(
-    //         H160::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
+    //         EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
     //     );
     //     println!("{:?}", v)
     // }
@@ -1255,7 +1257,7 @@ mod tests {
     // fn test_fetch_storage_all() {
     //     let mut config = OnChainConfig::new(BSC, 0);
     //     let v = config.fetch_storage_all(
-    //         H160::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
+    //         EVMAddress::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
     //     );
     //     println!("{:?}", v)
     // }
@@ -1265,15 +1267,15 @@ mod tests {
     //     let mut config = OnChainConfig::new(ETH, 0);
     //     let v = config
     //         .fetch_storage_dump(
-    //             H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+    //             EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
     //         )
     //         .unwrap();
 
-    //     let v0 = v.get(&U256::from(0)).unwrap().clone();
+    //     let v0 = v.get(&EVMU256::from(0)).unwrap().clone();
 
     //     let slot_v = config.get_contract_slot(
-    //         H160::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-    //         U256::from(0),
+    //         EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
+    //         EVMU256::from(0),
     //         false,
     //     );
 

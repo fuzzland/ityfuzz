@@ -1,16 +1,15 @@
 use crate::evm::input::EVMInput;
-use crate::evm::types::EVMFuzzState;
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{OracleCtx, Producer};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use primitive_types::{H160, U256};
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 use std::collections::HashMap;
 
 pub struct ERC20Producer {
     // (caller, token) -> (pre_balance, post_balance)
-    pub balances: HashMap<(H160, H160), (U256, U256)>,
+    pub balances: HashMap<(EVMAddress, EVMAddress), (EVMU256, EVMU256)>,
     pub balance_of: Vec<u8>,
 }
 
@@ -23,18 +22,18 @@ impl ERC20Producer {
     }
 }
 
-impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
     for ERC20Producer
 {
     fn produce(
         &mut self,
         ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
@@ -61,9 +60,9 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                         |token| {
                             (*token, call_data.clone())
                         }
-                    ).collect::<Vec<(H160, Bytes)>>()
+                    ).collect::<Vec<(EVMAddress, Bytes)>>()
                 }
-            ).flatten().collect::<Vec<(H160, Bytes)>>();
+            ).flatten().collect::<Vec<(EVMAddress, Bytes)>>();
             let post_balance_res = ctx.call_post_batch(&query_balance_batch);
             let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
 
@@ -74,8 +73,8 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                     let token = *token;
                     let pre_balance = &pre_balance_res[idx];
                     let post_balance = &post_balance_res[idx];
-                    let prev_balance = U256::try_from(pre_balance.as_slice()).unwrap_or(U256::zero());
-                    let new_balance = U256::try_from(post_balance.as_slice()).unwrap_or(U256::zero());
+                    let prev_balance = EVMU256::try_from(pre_balance.as_slice()).unwrap_or(EVMU256::zero());
+                    let new_balance = EVMU256::try_from(post_balance.as_slice()).unwrap_or(EVMU256::zero());
 
                     self.balances.insert((*caller, token), (prev_balance, new_balance));
                     idx += 1;
@@ -88,11 +87,11 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
         &mut self,
         ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
