@@ -1,7 +1,7 @@
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT};
+use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT, StructAbilities};
 use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
@@ -26,6 +26,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use libafl::state::HasMetadata;
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::Bytecode;
 use move_core_types::u256;
@@ -259,6 +260,7 @@ impl<I, S>
     > for MoveVM<I, S>
 where
     I: VMInputT<MoveVMState, ModuleId, AccountAddress> + MoveFunctionInputT,
+    S: HasMetadata,
 {
     fn deploy(
         &mut self,
@@ -433,25 +435,11 @@ where
                 .iter()
         ) {
             let abilities = resolver.loader.abilities(t).expect("unknown type");
-            macro_rules! insert_if_not_exist {
-                ($loc: ident, $t: expr, $v: expr) => {
-                    match state.$loc.get_mut($t) {
-                        Some(arr) => {
-                            arr.push($v.clone());
-                        }
-                        None => {
-                            state.$loc.insert($t.clone(), vec![$v.clone()]);
-                        }
-                    }
-                };
-            }
-            if !abilities.has_copy() {
-                insert_if_not_exist!(useful_value, t, v);
-            }
-
-            if !abilities.has_drop() {
-                insert_if_not_exist!(value_to_drop, t, v);
-            }
+            state.add_new_value(v.clone(), t, abilities.has_drop());
+            _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
+                t.clone(),
+                abilities,
+            );
 
             out.vars.push((t.clone(), v.clone()));
             println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
@@ -533,9 +521,7 @@ mod tests {
                     resources: Default::default(),
                     _gv_slot: Default::default(),
                     value_to_drop: Default::default(),
-                    _value_to_drop_amt: Default::default(),
                     useful_value: Default::default(),
-                    _useful_value_amt: Default::default(),
                     ref_in_use: vec![],
                 },
                 stage: vec![],
@@ -543,8 +529,7 @@ mod tests {
                 trace: Default::default(),
             },
             vm_state_idx: 0,
-            _deps: vec![],
-            _deps_amount: vec![],
+            _deps: Default::default(),
         };
         let mut res= ExecutionResult::empty_result();
         res = mv.execute(&input.clone(), &mut FuzzState::new(0));

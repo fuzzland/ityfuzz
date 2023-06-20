@@ -18,7 +18,7 @@ use move_vm_types::values;
 use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::input::VMInputT;
-use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructDependentInputsMetadata};
+use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
 use crate::r#move::movevm;
 use crate::r#move::types::{MoveInfantStateState, MoveFuzzState, MoveStagedVMState};
 use crate::r#move::vm_state::MoveVMState;
@@ -48,7 +48,7 @@ impl MoveCorpusInitializer
         self.state.add_caller(&AccountAddress::random());
 
         // add metadata
-        self.state.metadata_mut().insert(StructDependentInputsMetadata::new());
+        self.state.metadata_mut().insert(StructAbilities::new());
 
         // setup infant scheduler & corpus
         self.default_state = StagedVMState::new_with_state(

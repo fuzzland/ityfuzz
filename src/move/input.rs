@@ -1,7 +1,7 @@
 use crate::evm::abi::BoxedABI;
 use crate::input::VMInputT;
 use crate::r#move::types::MoveStagedVMState;
-use crate::r#move::vm_state::MoveVMState;
+use crate::r#move::vm_state::{MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
 
 use libafl::inputs::Input;
@@ -25,6 +25,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use itertools::Itertools;
 use libafl::impl_serdeany;
+use move_binary_format::file_format::AbilitySet;
 use move_vm_runtime::loader::{Function, Module};
 use move_vm_types::loaded_data::runtime_types::Type;
 use crate::evm::types::EVMU256;
@@ -36,6 +37,24 @@ pub trait MoveFunctionInputT {
     fn function_name(&self) -> &Identifier;
     fn args(&self) -> &Vec<CloneableValue>;
     fn ty_args(&self) -> &Vec<Type>;
+
+    /// === helper functions ===
+
+    /// Cache the struct dependencies of this function
+    fn cache_deps(&mut self);
+
+    /// Ensure the deps and deps_amount are satisfied with the current vm_state
+    ///
+    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
+    /// is greater than or equal to the corresponding amount in deps_amount.
+    fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
+        where VS: MoveVMStateT;
+
+    /// Slash all structs in the input, and sample from new vm_state
+    ///
+    /// This ensures all the structs in the input are valid!
+    fn slash<S>(&mut self, state: &mut S)
+        where S: HasMetadata + HasRand;
 }
 
 pub struct FunctionDefaultable {
@@ -63,72 +82,28 @@ impl FunctionDefaultable {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StructDependentInputsMetadata {
-    pub uninit_inputs: Vec<MoveFunctionInput>,
-    pub ref_count: HashMap<usize, usize>,
-    pub dependencies: HashMap<Type, Vec<usize>>,
+pub struct StructAbilities {
+    pub abilities: HashMap<Type, AbilitySet>
 }
 
-impl StructDependentInputsMetadata {
+impl StructAbilities {
     pub fn new() -> Self {
-        StructDependentInputsMetadata {
-            uninit_inputs: vec![],
-            ref_count: HashMap::new(),
-            dependencies: HashMap::new(),
+        StructAbilities {
+            abilities: HashMap::new()
         }
     }
 
-    pub fn add(&mut self, input: MoveFunctionInput, deps: Vec<Type>) {
-        let idx = self.uninit_inputs.len();
-        self.uninit_inputs.push(input);
-        self.ref_count.insert(idx, deps.len());
-        for dep in deps {
-            self.dependencies.entry(dep).or_insert_with(Vec::new).push(idx);
-        }
+    pub fn get_ability(&self, ty: &Type) -> Option<&AbilitySet> {
+        self.abilities.get(ty)
     }
 
-    pub fn found_ty(&mut self, ty: Type) -> Vec<MoveFunctionInput> {
-        let dep_inputs_idx = self.dependencies.remove(&ty);
-        if dep_inputs_idx.is_none() {
-            return vec![];
-        }
-        let mut freed_input = vec![];
-        for input_idx in dep_inputs_idx.unwrap() {
-            let ref_cnt = self.ref_count.get(&input_idx);
-            match ref_cnt {
-                None => continue,
-                Some(cnt) => {
-                    if *cnt > 1 {
-                        self.ref_count.insert(input_idx, cnt - 1);
-                    } else {
-                        freed_input.push(input_idx);
-                    }
-                }
-            }
-        }
-        freed_input.iter()
-            .sorted_by(|a, b| b.cmp(a)) // prevent index error
-            .map(|idx| self.uninit_inputs.remove(*idx)).collect()
+    pub fn set_ability(&mut self, ty: Type, ability: AbilitySet) {
+        self.abilities.insert(ty, ability);
     }
 }
 
-impl_serdeany!(StructDependentInputsMetadata);
+impl_serdeany!(StructAbilities);
 
-#[derive(Clone, Debug)]
-pub enum StructUsage {
-    Useful(Rc<RefCell<Vec<ValueImpl>>>),
-    Drop(Rc<RefCell<Vec<ValueImpl>>>),
-}
-
-impl StructUsage {
-    pub fn equals(&self, another: &Self) -> bool {
-        match (self, another) {
-            (StructUsage::Useful(v), StructUsage::Useful(v2)) => todo!(),
-            (StructUsage::Drop(v), StructUsage::Drop(v2)) => todo!(),
-            _ => false
-        }
-    }
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MoveFunctionInput {
@@ -144,8 +119,7 @@ pub struct MoveFunctionInput {
     pub vm_state: MoveStagedVMState,
     pub vm_state_idx: usize,
 
-    pub _deps: Vec<Type>,
-    pub _deps_amount: Vec<usize>
+    pub _deps: HashMap<Type, usize>,
 }
 
 impl Debug for MoveFunctionInput {
@@ -225,6 +199,77 @@ impl MoveFunctionInputT for MoveFunctionInput {
 
     fn ty_args(&self) -> &Vec<Type> {
         &self.ty_args
+    }
+
+    /// Record the deps and deps_amount of the current args
+    fn cache_deps(&mut self) {
+        for ty in self.function_info.get_function().parameter_types.clone() {
+            self._cache_deps(&ty);
+        }
+    }
+
+    /// Ensure the deps and deps_amount are satisfied with the current vm_state
+    ///
+    /// Check for each type in deps, if the number of values in value_to_drop and useful_value
+    /// is greater than or equal to the corresponding amount in deps_amount.
+    fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
+        where VS: MoveVMStateT {
+        for (ty, amount) in &self._deps {
+            let counts = match vm_state.get_value_to_drop().get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            } + match vm_state.get_useful_value().get(ty) {
+                Some(v) => v.len(),
+                None => 0
+            };
+            if counts < *amount {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Slash all structs in the input, and sample from new vm_state
+    ///
+    /// This ensures all the structs in the input are valid!
+    fn slash<S>(&mut self, state: &mut S)
+        where S: HasMetadata + HasRand
+    {
+        for (arg, ty) in self.args.iter_mut()
+            .zip(self.function_info.get_function().parameter_types.iter()) {
+            match ty {
+
+                // If the final vector inner type is a struct, we need to slash it (clear all)
+                Type::Vector(inner_ty) => {
+                    let mut final_ty = (*inner_ty).clone();
+                    while let Type::Vector(inner_ty) = (*final_ty) {
+                        final_ty = inner_ty;
+                    }
+                    match *final_ty {
+                        Type::Struct(_) | Type::MutableReference(_) | Type::Reference(_) => {
+                            if let Value(ValueImpl::Container(Container::Vec(inner))) = &mut arg.value {
+                                (**inner).borrow_mut().clear()
+                            } else {
+                                unreachable!("vector should be container")
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // resample all the structs in the input
+                Type::Struct(_) => {
+                    let new_struct = self.vm_state.state.sample_value(state, ty, false);
+                    arg.value = new_struct;
+                }
+                Type::Reference(inner_ty) | Type::MutableReference(inner_ty) => {
+                    let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), true);
+                    arg.value = new_struct;
+                }
+                Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
+                _ => {}
+            }
+
+        }
     }
 }
 
@@ -381,191 +426,28 @@ macro_rules! mutate_by {
 pub const MOVE_MAX_VEC_SIZE: u64 = 10;
 
 impl MoveFunctionInput {
-    //
-    // pub fn slash_in_use(&self, vm_state: &mut MoveVMState) {
-    //     let mut useful_removal = HashMap::new();
-    //     let mut to_drop_removal = HashMap::new();
-    //     for i in self._in_use {
-    //         match i {
-    //             StructUsage::Useful(ty, idx) => {
-    //                 useful_removal.entry(ty).or_insert_with(Vec::new).push(idx);
-    //             }
-    //             StructUsage::Drop(ty, idx) => {
-    //                 to_drop_removal.entry(ty).or_insert_with(Vec::new).push(idx);
-    //             }
-    //         }
-    //     }
-    //     for (ty, mut idxs) in useful_removal {
-    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
-    //             vm_state.useful_value.get_mut(&ty).unwrap().remove(*idx);
-    //         }
-    //     }
-    //
-    //     for (ty, mut idxs) in to_drop_removal {
-    //         for idx in idxs.sort_by(|a, b| b.cmp(a)) {
-    //             vm_state.value_to_drop.get_mut(&ty).unwrap().remove(*idx);
-    //         }
-    //     }
-    // }
-    // pub fn _sample_ty<S>(ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool) -> Option<(Value, StructUsage)>
-    // where S: HasRand{
-    //     macro_rules! remove_one {
-    //         ($item: ident, $wrapper: ident) => {
-    //             match vm_state.$item.get_mut(ty) {
-    //                 Some(v) => {
-    //                     let idx = state.rand_mut().below(v.len() as u64) as usize;
-    //                     if is_ref {
-    //                         let selected = v[idx as usize].clone();
-    //                         Some(selected, StructUsage::$wrapper(selected))
-    //                     } else {
-    //                         let selected = v.remove(idx as usize);
-    //                         Some(selected, StructUsage::$wrapper(selected))
-    //                     }
-    //                 }
-    //                 None => None
-    //             }
-    //         };
-    //     }
-    //
-    //     let rand = state.rand_mut().next();
-    //
-    //     let res = if rand % 2 == 0 {
-    //         remove_one!(useful_value, Useful)
-    //     } else {
-    //         remove_one!(value_to_drop, Drop)
-    //     };
-    //
-    //     if res.is_none() {
-    //         return {
-    //             if rand % 2 != 0 {
-    //                 remove_one!(useful_value, Useful)
-    //             } else {
-    //                 remove_one!(value_to_drop, Drop)
-    //             }
-    //         }
-    //     } else {
-    //         res
-    //     }
-    // }
-
-    // only called by mutator when a new vm_state is selected
-    // pub fn _ensure_assigned<S>(
-    //     ty: &Type, vm_state: &mut MoveVMState, state: &mut S, is_ref: bool
-    // ) -> Option<Value>
-    //     where S: HasRand {
-    //     match ty {
-    //         Type::Struct(_) => {
-    //             let (selected, usage) = Self::_sample_ty(ty, vm_state, state, is_ref).unwrap();
-    //             if is_ref { vm_state._in_use.push(usage); }
-    //             Some(selected)
-    //         }
-    //         Type::Vector(inner_ty) => {
-    //             match **inner_ty {
-    //                 Type::Vector(_) => {
-    //                     todo!("vector of vector")
-    //                 }
-    //                 // Vec<Struct> slash all items in vector
-    //                 Type::Struct(_) => {
-    //                     if let Value(ValueImpl::Container(Container::Vec(inner))) = v {
-    //                         (**inner).borrow_mut().clear()
-    //                     } else {
-    //                         unreachable!("vector should be container")
-    //                     }
-    //                 }
-    //                 Type::Reference(inner_ty) => {
-    //                     todo!("vector of reference")
-    //                 }
-    //                 Type::MutableReference(inner_ty) => {
-    //                     todo!("vector of mutable reference")
-    //                 }
-    //                 _ => false
-    //             }
-    //         }
-    //         Type::Reference(inner_ty) => {
-    //             let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
-    //                 Some(v) => v,
-    //                 None => return None
-    //             };
-    //             Value(ValueImpl::IndexedRef(
-    //                 IndexedRef {
-    //                     idx: 0,
-    //                     container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
-    //                 }
-    //             ))
-    //         }
-    //         // todo: ensure really mutated
-    //         Type::MutableReference(inner_ty) => {
-    //             let Value(v) = match Self::_ensure_assigned(inner_ty, vm_state, state, true) {
-    //                 Some(v) => v,
-    //                 None => return None
-    //             };
-    //
-    //             Value(ValueImpl::IndexedRef(
-    //                 IndexedRef {
-    //                     idx: 0,
-    //                     container_ref: ContainerRef::Local(Container::Vec(Rc::new(RefCell::new(vec![v]))))
-    //                 }
-    //             ))
-    //         }
-    //         _ => None
-    //     }
-    // }
-
-    // pub fn ensure_assigned<S>(&mut self,vm_state: &mut MoveVMState, state: &mut S)
-    //     where S: HasRand {
-    //     for p in &mut self.args {
-    //         match Self::_ensure_assigned(p.ty, vm_state, state, false) {
-    //             Some(v) => p.value = v,
-    //             None => {}
-    //         }
-    //     }
-    // }
-
-    pub fn ensure_deps(&self, vm_state: &MoveVMState) -> bool {
-        for (ty, amount) in self._deps.iter().zip(self._deps_amount.iter()) {
-            let counts = match vm_state.value_to_drop.get(ty) {
-                Some(v) => v.len(),
-                None => 0
-            } + match vm_state.useful_value.get(ty) {
-                Some(v) => v.len(),
-                None => 0
-            };
-            if counts < *amount {
-                return false;
+    fn _cache_deps(&mut self, ty: &Type) {
+        match ty {
+            Type::Struct(t) => {
+                match self._deps.get_mut(ty) {
+                    Some(v) => {
+                        *v += 1;
+                    }
+                    None => {
+                        self._deps.insert(ty.clone(), 1);
+                    }
+                }
             }
-        }
-        true
-    }
-
-    pub fn mutate_mut_ref<S>(
-        _state: &mut S,
-        vec_container: &mut Container,
-        index: usize,
-        useful_value: &mut HashMap<Type, Vec<Value>>,
-        to_drop_value: &mut HashMap<Type, Vec<Value>>,
-        ty: &Type,
-    ) -> MutationResult
-        where
-            S: State
-            + HasRand
-            + HasMaxSize
-            + HasItyState<ModuleId, AccountAddress, MoveVMState>
-            + HasCaller<AccountAddress> + HasMetadata,
-    {
-
-        let mut value = CloneableValue::from(Value(
-            ValueImpl::Container(vec_container.clone())
-        ));
-        match vec_container {
-            Container::Vec(inner_vec) => {
-                let value = (**inner_vec).borrow_mut().get_mut(index).unwrap();
-
+            Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
+            Type::Reference(t) => {
+                self._cache_deps(t.as_ref());
             }
-            _ => unreachable!("wtf is this")
+            Type::MutableReference(t) => {
+                self._cache_deps(t.as_ref());
+            }
+            _ => {}
         }
-        MutationResult::Mutated
     }
-
 
     pub fn mutate_container<S>(
                                _state: &mut S,
@@ -589,6 +471,13 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
+                vm_state.restock(
+                    ty,
+                    value.value,
+                    is_ref,
+                    _state
+                );
+
                 if let Value(ValueImpl::Container(Container::Struct(new_struct))) = vm_state.sample_value(
                     _state,
                     ty,
@@ -855,9 +744,9 @@ mod tests {
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::ModuleId;
     use move_core_types::u256;
-    use move_vm_types::values::{Container, Value, ValueImpl};
+    use move_vm_types::values::{Container, Value, ValueImpl, values_impl};
     use crate::input::VMInputT;
-    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput};
+    use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
     use crate::r#move::types::MoveFuzzState;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
@@ -868,6 +757,8 @@ mod tests {
     use crate::r#move::vm_state::MoveVMState;
     use std::collections::HashMap;
     use libafl::mutators::MutationResult;
+    use libafl::prelude::HasMetadata;
+    use move_binary_format::file_format::{Ability, AbilitySet};
     use crate::r#move::types::MoveStagedVMState;
 
     macro_rules! get_dummy_func {
@@ -904,25 +795,36 @@ mod tests {
         }
     }
 
+    macro_rules! dummy_input {
+        ($init_v: expr, $sstate: expr, $tys: expr) => {
+            {
+                let dummy_addr = AccountAddress::from([0; 32]);
+                MoveFunctionInput {
+                    module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
+                    function: Identifier::new("test").unwrap(),
+                    function_info: Arc::new(get_dummy_func!($tys)),
+                    args: vec![
+                        CloneableValue::from(Value(
+                            $init_v.clone()
+                        ))
+                    ],
+                    ty_args: vec![],
+                    caller: dummy_addr,
+                    vm_state: $sstate,
+                    vm_state_idx: 0,
+                    _deps: Default::default(),
+                }
+            }
+        };
+
+        ($init_v: expr, $tys: expr) => {
+            dummy_input!($init_v, StagedVMState::new_uninitialized(), $tys)
+        };
+    }
+
     macro_rules! test_lb {
         ($init_v: expr, $tys: expr) => {
-            let dummy_addr = AccountAddress::from([0; 32]);
-            let mut v = MoveFunctionInput {
-                module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
-                function: Identifier::new("test").unwrap(),
-                function_info: Arc::new(get_dummy_func!($tys)),
-                args: vec![
-                    CloneableValue::from(Value(
-                        $init_v.clone()
-                    ))
-                ],
-                ty_args: vec![],
-                caller: dummy_addr,
-                vm_state: StagedVMState::new_uninitialized(),
-                vm_state_idx: 0,
-                _deps: Default::default(),
-                _deps_amount: Default::default(),
-            };
+            let mut v = dummy_input!($init_v, $tys);
             v.mutate::<MoveFuzzState>(&mut Default::default());
             println!("{:?}", v.args[0]);
             let o = (v.args[0].value.equals(&Value($init_v)).expect("failed to compare"));
@@ -934,12 +836,12 @@ mod tests {
     }
     #[test]
     fn test_integer() {
-        test_lb!(ValueImpl::U8(0));
-        test_lb!(ValueImpl::U16(0));
-        test_lb!(ValueImpl::U32(0));
-        test_lb!(ValueImpl::U64(0));
-        test_lb!(ValueImpl::U128(0));
-        test_lb!(ValueImpl::U256(u256::U256::zero()));
+        test_lb!(ValueImpl::U8(0), vec![Type::U8]);
+        test_lb!(ValueImpl::U16(0), vec![Type::U16]);
+        test_lb!(ValueImpl::U32(0), vec![Type::U32]);
+        test_lb!(ValueImpl::U64(0), vec![Type::U64]);
+        test_lb!(ValueImpl::U128(0), vec![Type::U128]);
+        test_lb!(ValueImpl::U256(u256::U256::zero()), vec![Type::U256]);
     }
 
     #[test]
@@ -991,28 +893,14 @@ mod tests {
     }
 
     macro_rules! test_struct {
-        ($init_v: expr, $tys: expr, $sstate: expr) => {
+        ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr) => {
             {
-                let dummy_addr = AccountAddress::from([0; 32]);
+                let mut state: MoveFuzzState = Default::default();
+                state.metadata_mut().insert($struct_abilities);
 
                 let (v, res) = {
-                    let mut v = MoveFunctionInput {
-                        module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
-                        function: Identifier::new("test").unwrap(),
-                        function_info: Arc::new(get_dummy_func!($tys)),
-                        args: vec![
-                            CloneableValue::from(Value(
-                                $init_v.clone()
-                            ))
-                        ],
-                        ty_args: vec![],
-                        caller: dummy_addr,
-                        vm_state: $sstate,
-                        vm_state_idx: 0,
-                        _deps: Default::default(),
-                        _deps_amount: Default::default(),
-                    };
-                    let res = v.mutate::<MoveFuzzState>(&mut Default::default());
+                    let mut v = dummy_input!($init_v, $sstate, $tys);
+                    let res = v.mutate::<MoveFuzzState>(&mut state);
                     (v, res)
                 };
                 println!("{:?}", v.args[0]);
@@ -1024,81 +912,193 @@ mod tests {
 
     #[test]
     fn test_struct() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
 
-        {
-            let mut sstate = MoveStagedVMState::new_with_state(
-                MoveVMState::new()
-            );
-            let (mutation_result, init_v, mutated_v, _) = test_struct!(
-                ValueImpl::Container(
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(5),
+                        ValueImpl::U8(5),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
+            ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(0),
+                        ValueImpl::U8(0),
+                    ]))
+                )
+            ),
+            vec![Type::Struct(CachedStructIndex(1))],
+            sstate,
+            {
+                let mut abilities = StructAbilities::new();
+                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities
+            }
+        );
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
+        println!("remaining useful_value {:?}", vm_state.state.useful_value);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
+        assert_eq!(mutation_result, MutationResult::Mutated);
+    }
+
+    #[test]
+    fn test_struct_ref() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(5),
+                        ValueImpl::U8(5),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+        sstate.state.ref_in_use.push(
+            (
+                Type::Struct(CachedStructIndex(1)),
+                Value(
+                    ValueImpl::Container(
+                        Container::Struct(
+                            Rc::new(RefCell::new(vec![
+                                ValueImpl::U8(0),
+                                ValueImpl::U8(0),
+                            ]))
+                        )
+                    )
+                )
+            )
+        );
+
+        let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
+            ValueImpl::ContainerRef(
+                values_impl::ContainerRef::Local(
                     Container::Struct(
                         Rc::new(RefCell::new(vec![
                             ValueImpl::U8(0),
                             ValueImpl::U8(0),
                         ]))
                     )
-                ),
-                vec![Type::Struct(CachedStructIndex(1))],
-                sstate
-            );
-            assert_eq!(mutation_result, MutationResult::Skipped);
-            assert!(init_v.equals(&mutated_v).expect("failed to compare"));
-        }
+                )
+            ),
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))],
+            sstate,
+            {
+                let mut abilities = StructAbilities::new();
+                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities
+            }
+        );
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
+        println!("remaining useful_value {:?}", vm_state.state.useful_value);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
+        assert!(vm_state.state.ref_in_use.len() > 0);
+        assert_eq!(mutation_result, MutationResult::Mutated);
+    }
 
-        {
-            let mut sstate = MoveStagedVMState::new_with_state(
-                MoveVMState::new()
-            );
-            sstate.state.useful_value = HashMap::new();
-            sstate.state.useful_value.insert(
-                Type::Struct(CachedStructIndex(1)),
-                vec![
-                    Value(ValueImpl::Container(
-                        Container::Struct(
-                            Rc::new(RefCell::new(vec![
-                                ValueImpl::U8(5),
-                                ValueImpl::U8(5),
-                            ]))
-                        )
-                    )),
-                ]
-            );
-            sstate.state.value_to_drop = HashMap::new();
-            sstate.state.value_to_drop.insert(
-                Type::Struct(CachedStructIndex(1)),
-                vec![
-                    Value(ValueImpl::Container(
-                        Container::Struct(
-                            Rc::new(RefCell::new(vec![
-                                ValueImpl::U8(7),
-                                ValueImpl::U8(7),
-                            ]))
-                        )
+    #[test]
+    fn test_slash() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(123),
+                        ValueImpl::U8(123),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let mut inp = dummy_input!(
+            ValueImpl::ContainerRef(
+                values_impl::ContainerRef::Local(
+                    Container::Struct(
+                        Rc::new(RefCell::new(vec![
+                            ValueImpl::U8(0),
+                            ValueImpl::U8(0),
+                        ]))
+                    )
+                )
+            ),
+            sstate,
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))]
+        );
+        inp.slash(&mut MoveFuzzState::default());
+        println!("{:?}", inp.args[0].value);
+    }
+
+    #[test]
+    fn test_slash_vec() {
+        let mut sstate = MoveStagedVMState::new_with_state(
+            MoveVMState::new()
+        );
+        sstate.state.add_new_value(
+            Value(ValueImpl::Container(
+                Container::Struct(
+                    Rc::new(RefCell::new(vec![
+                        ValueImpl::U8(123),
+                        ValueImpl::U8(123),
+                    ]))
+                )
+            )),
+            &Type::Struct(CachedStructIndex(1)),
+            false,
+        );
+
+        let mut inp = dummy_input!(
+            ValueImpl::Container(
+                Container::Vec(
+                    Rc::new(RefCell::new(
+                        vec![ValueImpl::ContainerRef(
+                            values_impl::ContainerRef::Local(
+                                Container::Struct(
+                                    Rc::new(RefCell::new(vec![
+                                        ValueImpl::U8(0),
+                                        ValueImpl::U8(0),
+                                    ]))
+                                )
+                            )
+                        )]
                     ))
-                ]
-            );
+                )
+            ),
+            sstate,
+            vec![Type::Vector(Box::new(Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))))]
+        );
+        inp.slash(&mut MoveFuzzState::default());
+        assert!(
+            inp.args[0].value.equals(
+                &Value(
+                    ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(vec![]))))
+                )
+            ).expect("equals")
 
-            let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
-                ValueImpl::Container(
-                    Container::Struct(
-                        Rc::new(RefCell::new(vec![
-                            ValueImpl::U8(0),
-                            ValueImpl::U8(0),
-                        ]))
-                    )
-                ),
-                vec![Type::Struct(CachedStructIndex(1))],
-                sstate
-            );
-
-            println!("{:?}", init_v);
-            println!("{:?}", mutated_v);
-            println!("{:?}", vm_state.state.value_to_drop);
-
-            assert_eq!(mutation_result, MutationResult::Mutated);
-        }
-
-
+        )
     }
 
 

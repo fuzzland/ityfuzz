@@ -8,6 +8,7 @@ use serde::Serialize;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::r#move::input::MoveFunctionInputT;
+use crate::r#move::vm_state::MoveVMStateT;
 use crate::state::{HasCaller, HasItyState, InfantStateState};
 use crate::state_input::StagedVMState;
 
@@ -42,7 +43,7 @@ impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for MoveFuzzMutator<'a, VS, Loc,
         I: VMInputT<VS, Loc, Addr> + Input + MoveFunctionInputT,
         S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
         SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
-        VS: Default + VMStateT,
+        VS: Default + VMStateT + MoveVMStateT,
         Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
         Loc: Serialize + DeserializeOwned + Debug + Clone,
 {
@@ -72,6 +73,14 @@ impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for MoveFuzzMutator<'a, VS, Loc,
                     // we need power schedule here for infant states
                     let old_idx = input.get_state_idx();
                     let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
+
+                    if !input.ensure_deps(&new_state.state) {
+                        return MutationResult::Skipped;
+                    }
+
+                    // slash all structs in input right now and replace with those inside new state
+                    todo!("");
+
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
