@@ -436,6 +436,11 @@ where
         ) {
             let abilities = resolver.loader.abilities(t).expect("unknown type");
             state.add_new_value(v.clone(), t, abilities.has_drop());
+
+            if !_state.has_metadata::<StructAbilities>() {
+                _state.metadata_mut().insert(StructAbilities::new());
+            }
+
             _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
                 t.clone(),
                 abilities,
