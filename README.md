@@ -127,14 +127,14 @@ to make it have no function argument. ItyFuzz assumes constructors have no argum
 
 ### Fuzz a Project (Online)
 
-(Optional) Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result. 
+Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result. 
 ```bash
 sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
 cd ./cli/
 cargo build --release
 ```
 
-(Optional, Must do if `flashloan_v2` enabled) To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built. 
+To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built. 
 To run the proxy:
 ```bash
 pip3 install -r proxy/requirements.txt
