@@ -134,9 +134,13 @@ struct Args {
     #[arg(long)]
     replay_file: Option<String>,
 
-    // allow users to pass the path through CLI
+    /// Path of work dir, saves corpus, logs, and other stuffs
     #[arg(long, default_value = "work_dir")]
     work_dir: String,
+
+    /// Write contract relationship to files
+    #[arg(long, default_value = "false")]
+    write_relationship: bool,
 
     // random seed
     #[arg(long, default_value = "1667840158231589000")]
@@ -324,7 +328,8 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        work_dir:args.work_dir,
+        work_dir: args.work_dir,
+        write_relationship: args.write_relationship,
     };
 
     match config.fuzzer_type {

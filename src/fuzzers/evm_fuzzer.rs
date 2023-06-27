@@ -21,7 +21,7 @@ use libafl::{
 };
 use glob::glob;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
@@ -107,6 +107,12 @@ pub fn evm_fuzzer(
             None
         }
     };
+
+    if config.write_relationship {
+        unsafe {
+            WRITE_RELATIONSHIPS = true;
+        }
+    }
 
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan

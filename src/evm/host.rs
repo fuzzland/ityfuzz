@@ -68,6 +68,10 @@ pub static mut PANIC_ON_TYPEDBUG: bool = false;
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
+/// Shall we dump the contract calls
+pub static mut WRITE_RELATIONSHIPS: bool = false;
+
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
@@ -778,11 +782,13 @@ where
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
-        self.write_relations(
-            input.transfer.source.clone(),
-            input.contract.clone(),
-            input.input.clone(),
-        );
+        if unsafe { WRITE_RELATIONSHIPS } {
+            self.write_relations(
+                input.transfer.source.clone(),
+                input.contract.clone(),
+                input.input.clone(),
+            );
+        }
 
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
