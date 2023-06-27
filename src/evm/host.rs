@@ -692,7 +692,7 @@ where
             if unsafe {PANIC_ON_TYPEDBUG} {
                 panic!("target typed_bug hit");
             }
-            let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[24..32]);
+            let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[23..31]);
             if !self.known_typed_bugs.contains(&current_type) {
                 self.current_typed_bug.push(current_type);
                 self.known_typed_bugs.insert(current_type);

@@ -370,7 +370,7 @@ where
             }
         }
 
-        match res {
+        let final_res = match res {
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
                 self.objective.discard_metadata(state, &input)?;
@@ -436,13 +436,10 @@ where
                     unsafe {ORACLE_OUTPUT.clone()},
                 );
 
-                let mut event_type = String::from("Solution");
-                unsafe {
-                    println!("Oracle: {}", ORACLE_OUTPUT);
-                    event_type = ORACLE_OUTPUT.clone();
-                }
+                println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
-                    "Found a solution! {} trace: {}\n", event_type,
+                    "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
+                    unsafe { ORACLE_OUTPUT.clone() },
                     state
                         .get_execution_result()
                         .new_state
@@ -452,12 +449,17 @@ where
                 );
                 println!("{}", cur_report);
 
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(format!("{}/vulnerabilities", self.work_dir.as_str()))
+                    .unwrap();
+                file.write_all(cur_report.as_bytes()).unwrap();
+
                 if !unsafe { RUN_FOREVER } {
                     exit(0);
                 }
 
-                let mut file = OpenOptions::new().append(true).create(true).open(format!("{}/vulnerabilities", self.work_dir.as_str())).unwrap();
-                file.write_all(cur_report.as_bytes()).unwrap();
                 return Ok((res, None));
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
@@ -478,7 +480,11 @@ where
 
                 Ok((res, None))
             }
+        };
+        unsafe {
+            ORACLE_OUTPUT = String::new();
         }
+        final_res
     }
 
     /// never called!
