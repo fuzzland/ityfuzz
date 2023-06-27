@@ -21,20 +21,6 @@ impl TypedBugOracle {
     pub fn new() -> Self {
         Self {}
     }
-
-    fn HToStrHex(&self, list: H256) -> String {
-        // get list bytes
-        let tmp = list.to_fixed_bytes();
-        let mut index = 0;
-        for i in tmp.iter() {
-            if *i != 0 {
-                break;
-            }
-            index += 1;
-        }
-        format!("0x{}", hex::encode(tmp[index..].to_vec()))
-    }
-
 }
 
 
@@ -61,17 +47,16 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         >,
         stage: u64,
     ) -> bool {
-        let is_hit = ctx.post_state.typed_bug.is_zero() == false;
-        if is_hit {
+        if ctx.post_state.typed_bug.is_some() {
             unsafe {
-                let typed_bug_hash = self.HToStrHex(ctx.post_state.typed_bug);
                 ORACLE_OUTPUT = format!(
                     "[typed_bug] typed_bug({}) hit at contract {:?}",
-                    typed_bug_hash,
+                    ctx.post_state.typed_bug.unwrap(),
                     ctx.input.contract
                 )
             }
+            return true;
         }
-        return is_hit;
+        return false;
     }
 }

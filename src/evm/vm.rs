@@ -137,7 +137,7 @@ pub struct EVMState {
     pub bug_hit: bool,
 
     /// bug type call in solidity type
-    pub typed_bug: H256,
+    pub typed_bug: Option<u64>,
 }
 
 impl Default for EVMState {
@@ -149,7 +149,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            typed_bug: H256::zero(),
+            typed_bug: None,
         }
     }
 }
@@ -209,9 +209,6 @@ impl VMStateT for EVMState {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn get_typed_bug(&self) -> H256 {
-        self.typed_bug
-    }
 }
 
 impl EVMState {
@@ -222,7 +219,7 @@ impl EVMState {
             post_execution: vec![],
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            typed_bug: H256::zero(),
+            typed_bug: None,
         }
     }
 
@@ -334,7 +331,7 @@ where
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
-        self.host.typed_bug = H256::zero();
+        self.host.current_typed_bug = None;
         self.host.call_count = 0;
         let mut repeats = input.get_repeat();
         // Initially, there is no state change
@@ -588,9 +585,7 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        if self.host.typed_bug.is_zero() == false {
-            r.new_state.typed_bug = self.host.typed_bug.clone();
-        }
+        r.new_state.typed_bug = self.host.current_typed_bug;
 
         unsafe {
             ExecutionResult {
@@ -761,7 +756,7 @@ where
                 .clone();
             self.host.bug_hit = false;
             self.host.call_count = 0;
-            self.host.typed_bug = H256::zero();
+            self.host.current_typed_bug = None;
         }
 
         data.iter().map(

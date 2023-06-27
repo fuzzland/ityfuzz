@@ -29,7 +29,7 @@ use hex::FromHex;
 use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
+use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -107,7 +107,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub typed_bug: H256,
+    pub current_typed_bug: Option<u64>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -118,8 +118,8 @@ where
     relations_file: std::fs::File,
     // Filter duplicate relations
     relations_hash: HashSet<u64>,
-    /// Filter typed_bug
-    typed_bug_hash: HashSet<u64>,
+    /// Known typed bugs, used for filtering in duplicate bugs
+    known_typed_bugs: HashSet<u64>,
 
 }
 
@@ -184,8 +184,8 @@ where
             setcode_data:self.setcode_data.clone(),
             relations_file: self.relations_file.try_clone().unwrap(),
             relations_hash: self.relations_hash.clone(),
-            typed_bug: self.typed_bug.clone(),
-            typed_bug_hash: self.typed_bug_hash.clone(),
+            current_typed_bug: self.current_typed_bug.clone(),
+            known_typed_bugs: self.known_typed_bugs.clone(),
         }
     }
 }
@@ -234,8 +234,8 @@ where
             setcode_data:HashMap::new(),
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
-            typed_bug: Default::default(),
-            typed_bug_hash: HashSet::new(),
+            current_typed_bug: Default::default(),
+            known_typed_bugs: HashSet::new(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -692,20 +692,10 @@ where
             if unsafe {PANIC_ON_TYPEDBUG} {
                 panic!("target typed_bug hit");
             }
-            let mut hasher = DefaultHasher::new();
-            let curtyped = (*_topics.last().unwrap()).0;
-            let mut curtyped2:[u8;32] = [0;32];
-            let mut index = 1;
-            while index < 32 {
-                curtyped2[index] = curtyped[index-1];
-                index = index + 1;
-            }
-            let curtypedbug = H256::from(curtyped2);
-            curtypedbug.hash(&mut hasher);
-            let cur_wirte_hash = hasher.finish();
-            if !self.typed_bug_hash.contains(&cur_wirte_hash) {
-                self.typed_bug = curtypedbug;
-                self.typed_bug_hash.insert(cur_wirte_hash);
+            let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[24..32]);
+            if !self.known_typed_bugs.contains(&current_type) {
+                self.current_typed_bug = Some(current_type);
+                self.known_typed_bugs.insert(current_type);
             }
         }
         #[cfg(feature = "print_logs")]

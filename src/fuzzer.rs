@@ -439,8 +439,6 @@ where
                     println!("Oracle: {}", ORACLE_OUTPUT);
                     event_type = ORACLE_OUTPUT.clone();
                 }
-                let typed_bug= state.get_execution_result().new_state.state.get_typed_bug();
-
                 let cur_report = format!(
                     "Found a solution! {} trace: {}\n", event_type,
                     state

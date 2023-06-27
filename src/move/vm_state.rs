@@ -170,10 +170,6 @@ impl VMStateT for MoveVMState {
     fn as_any(&self) -> &dyn Any {
         todo!()
     }
-
-    fn get_typed_bug(&self) -> H256 {
-        todo!()
-    }
 }
 
 impl Default for MoveVMState {
