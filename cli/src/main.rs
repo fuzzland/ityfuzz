@@ -142,6 +142,10 @@ struct Args {
     #[arg(long, default_value = "false")]
     write_relationship: bool,
 
+    /// Do not quit when a bug is found, continue find new bugs
+    #[arg(long, default_value = "false")]
+    run_forever: bool,
+
     // random seed
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
@@ -330,6 +334,7 @@ fn main() {
         flashloan_oracle,
         work_dir: args.work_dir,
         write_relationship: args.write_relationship,
+        run_forever: args.run_forever,
     };
 
     match config.fuzzer_type {

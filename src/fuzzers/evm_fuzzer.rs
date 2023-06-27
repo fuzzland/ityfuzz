@@ -43,6 +43,7 @@ use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::fuzzer::RUN_FOREVER;
 
 struct ABIConfig {
     abi: String,
@@ -111,6 +112,12 @@ pub fn evm_fuzzer(
     if config.write_relationship {
         unsafe {
             WRITE_RELATIONSHIPS = true;
+        }
+    }
+
+    if config.run_forever {
+        unsafe {
+            RUN_FOREVER = true;
         }
     }
 

@@ -178,7 +178,6 @@ where
                 return Ok(false);
             }
         }
-
         // execute oracles and update stages if needed
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {
@@ -191,11 +190,12 @@ where
                 .deref()
                 .borrow()
                 .oracle(&mut oracle_ctx, original_stage) {
-                {
-                    let metadata = oracle_ctx.fuzz_state.metadata_mut().get_mut::<BugMetadata>().unwrap();
-                    metadata.current_bugs.push(bug_idx);
-                    metadata.known_bugs.insert(bug_idx);
+                let metadata = oracle_ctx.fuzz_state.metadata_mut().get_mut::<BugMetadata>().unwrap();
+                if metadata.known_bugs.contains(&bug_idx) {
+                    continue;
                 }
+                metadata.known_bugs.insert(bug_idx);
+                metadata.current_bugs.push(bug_idx);
                 is_any_bug_hit = true;
             }
         }

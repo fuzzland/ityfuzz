@@ -43,6 +43,8 @@ use crate::evm::vm::EVMState;
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
+pub static mut RUN_FOREVER: bool = false;
+
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
 ///
@@ -449,6 +451,10 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
+
+                if !unsafe { RUN_FOREVER } {
+                    exit(0);
+                }
 
                 let mut file = OpenOptions::new().append(true).create(true).open(format!("{}/vulnerabilities", self.work_dir.as_str())).unwrap();
                 file.write_all(cur_report.as_bytes()).unwrap();

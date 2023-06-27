@@ -55,4 +55,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     pub work_dir: String,
     pub write_relationship: bool,
+    pub run_forever: bool,
 }
