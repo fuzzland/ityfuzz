@@ -8,6 +8,7 @@ use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracles::bug::BugOracle;
+use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
@@ -120,6 +121,9 @@ struct Args {
 
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
+
+    #[arg(long, default_value = "true")]
+    selfdestruct_oracle: bool,
 
     /// Replay?
     #[arg(long)]
@@ -236,6 +240,9 @@ fn main() {
             }
         }
     }
+    if args.selfdestruct_oracle {
+        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
+    }
 
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
@@ -306,6 +313,7 @@ fn main() {
         replay_file: args.replay_file,
         flashloan_oracle,
         corpus_path: args.corpus_path,
+        selfdestruct_oracle:args.selfdestruct_oracle,
     };
 
     match config.fuzzer_type {

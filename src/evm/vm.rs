@@ -135,6 +135,8 @@ pub struct EVMState {
 
     /// Is bug() call in Solidity hit?
     pub bug_hit: bool,
+    /// selftdestruct() call in Solidity hit?
+    pub selfdestruct_hit: bool,
 }
 
 impl Default for EVMState {
@@ -146,6 +148,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
+            selfdestruct_hit: false,
         }
     }
 }
@@ -215,6 +218,7 @@ impl EVMState {
             post_execution: vec![],
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
+            selfdestruct_hit: false,
         }
     }
 
@@ -326,6 +330,7 @@ where
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
+        self.host.selfdestruct_hit = false;
         self.host.call_count = 0;
         let mut repeats = input.get_repeat();
         // Initially, there is no state change
@@ -579,10 +584,11 @@ where
         }
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
+        r.new_state.selfdestruct_hit = vm_state.selfdestruct_hit || self.host.selfdestruct_hit;
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != InstructionResult::Return && r.ret != InstructionResult::Stop && r.ret != ControlLeak,
+                reverted: r.ret != InstructionResult::Return && r.ret != InstructionResult::Stop && r.ret != ControlLeak && r.ret != InstructionResult::SelfDestruct,
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -646,7 +652,7 @@ where
             return None;
         }
         assert_eq!(r, InstructionResult::Return);
-        println!("contract = {:?}", hex::encode(interp.return_value()));
+        println!("deployer = 0x{} contract = {:?}", hex::encode(self.deployer),hex::encode(interp.return_value()));
         let contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
         self.host.set_code(deployed_address, contract_code, state);
@@ -747,6 +753,7 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
             self.host.bug_hit = false;
+            self.host.selfdestruct_hit = false;
             self.host.call_count = 0;
         }
 

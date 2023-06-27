@@ -109,6 +109,8 @@ where
     pub logs: HashSet<u64>,
     // set_code data
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
+    // selftdestruct
+    pub selfdestruct_hit:bool,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -170,6 +172,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
+            selfdestruct_hit:self.selfdestruct_hit,
         }
     }
 }
@@ -216,6 +219,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:HashMap::new(),
+            selfdestruct_hit:false,
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret

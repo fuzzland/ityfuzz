@@ -54,4 +54,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub replay_file: Option<String>,
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     pub corpus_path: String,
+    pub selfdestruct_oracle: bool,
 }
