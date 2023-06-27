@@ -6,16 +6,16 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::HasCaller;
 use libafl::state::State;
-use primitive_types::H160;
 use std::fmt::Debug;
 use std::ops::Deref;
+use crate::evm::types::EVMAddress;
 
 pub struct PairPreset;
 
 impl<I, S, VS> Preset<I, S, VS> for PairPreset
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     fn presets(
@@ -29,7 +29,7 @@ where
             [0xbc, 0x25, 0xcf, 0x77] => {
                 let mut new_input = input.clone();
                 let pair = input.get_contract();
-                // convert H160 to [u8; 32]
+                // convert EVMAddress to [u8; 32]
                 let mut addr = [0u8; 32];
                 addr[12..32].copy_from_slice(pair.0.as_slice());
                 new_input.repeat = 37;

@@ -10,17 +10,16 @@ use libafl::prelude::{HasMaxSize, HasRand, Mutator, Rand, State};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasMetadata;
 use libafl::Error;
-use primitive_types::H160;
-use revm::Interpreter;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::evm::input::EVMInputTy::Borrow;
 use std::fmt::Debug;
+use revm_interpreter::Interpreter;
+use crate::evm::types::{convert_u256_to_h160, EVMAddress};
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
-use crate::types::convert_u256_to_h160;
 
 /// [`AccessPattern`] records the access pattern of the input during execution. This helps
 /// to determine what is needed to be fuzzed. For instance, we don't need to mutate caller
@@ -31,7 +30,7 @@ use crate::types::convert_u256_to_h160;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccessPattern {
     pub caller: bool,       // or origin
-    pub balance: Vec<H160>, // balance queried for accounts
+    pub balance: Vec<EVMAddress>, // balance queried for accounts
     pub call_value: bool,
     pub gas_price: bool,
     pub number: bool,

@@ -6,7 +6,6 @@ use crate::state_input::StagedVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
-use libafl::prelude::RandomSeed;
 use libafl::prelude::{
     current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
     StdRand,
@@ -27,6 +26,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
+use crate::evm::types::EVMAddress;
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -78,7 +78,6 @@ pub trait HasCurrentInputIdx {
     fn set_current_input_idx(&mut self, idx: usize);
 }
 
-
 /// Trait providing functions for getting [`InfantStateState`]
 pub trait HasInfantStateState<Loc, Addr, VS>
 where
@@ -90,14 +89,12 @@ where
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS>;
 }
 
-
 /// [Deprecated] Trait providing functions for mapping between function hash with the
 /// contract addresses that have the function
 pub trait HasHashToAddress {
     /// Get the mapping between function hash with the address
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>>;
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>;
 }
-
 
 /// Trait providing functions for getting the current execution result
 pub trait HasExecutionResult<Loc, Addr, VS, Out>
@@ -114,7 +111,6 @@ where
     /// Set the current execution result
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out>);
 }
-
 
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
 /// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference
@@ -175,7 +171,7 @@ where
     pub max_size: usize,
 
     /// Mapping between function hash with the contract addresses that have the function, required for implementing [`HasHashToAddress`] trait
-    pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<H160>>,
+    pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -312,7 +308,7 @@ where
     Out: Default,
 {
     /// Get the hash to address map
-    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<H160>> {
+    fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<EVMAddress>> {
         &self.hash_to_address
     }
 }

@@ -2,7 +2,7 @@
 use crate::evm::mutation_utils::ConstantPoolMetadata;
 use libafl::state::{HasMetadata, State};
 
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 use std::collections::HashSet;
 
 /// Find all constants in the bytecode by observing PUSH instructions.
@@ -96,7 +96,7 @@ where
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use revm::Bytecode;
+    use revm_primitives::Bytecode;
 
     #[test]
     fn test_find_constants() {

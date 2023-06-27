@@ -14,6 +14,7 @@ use crate::input::VMInputT;
 use crate::state::HasInfantStateState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use crate::evm::types::EVMU256;
 
 /// Represent a basic transaction using less memory.
 /// It can be serialized and converted to string.
@@ -26,7 +27,7 @@ pub struct BasicTxn<Addr> {
     #[serde(skip_serializing)]
     pub data_abi: Option<BoxedABI>,
     #[cfg(feature = "evm")]
-    pub value: Option<U256>,
+    pub value: Option<EVMU256>,
     #[cfg(feature = "full_trace")]
     pub flashloan: String,
     pub direct_data: Vec<u8>,
@@ -223,7 +224,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                         s.push_str(format!("{:?} ", t.caller).as_str());
                         s.push_str(format!("{:?} ", t.contract).as_str());
                         s.push_str(format!("{} ", hex::encode(t.additional_info.as_ref().unwrap())).as_str());
-                        s.push_str(format!("{} ", t.value.unwrap_or(U256::zero())).as_str());
+                        s.push_str(format!("{} ", t.value.unwrap_or(EVMU256::ZERO)).as_str());
                         s.push_str(format!("{} ", liq_perct).as_str());
                         // todo: this is warp_to
                         s.push_str(format!("{} ", 0).as_str());
@@ -233,7 +234,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                         s.push_str(format!("{:?} ", t.caller).as_str());
                         s.push_str(format!("{:?} ", t.contract).as_str());
                         s.push_str("00 ");
-                        s.push_str(format!("{} ", t.value.unwrap_or(U256::zero())).as_str());
+                        s.push_str(format!("{} ", t.value.unwrap_or(EVMU256::ZERO)).as_str());
                         s.push_str(format!("{} ", liq_perct).as_str());
                         // todo: this is warp_to
                         s.push_str(format!("{} ", 0).as_str());
@@ -252,7 +253,7 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                     s.push_str(format!("{:?} ", t.caller).as_str());
                     s.push_str(format!("{:?} ", t.contract).as_str());
                     s.push_str(format!("{} ", hex::encode(abi.get_bytes())).as_str());
-                    s.push_str(format!("{} ", t.value.unwrap_or(U256::zero())).as_str());
+                    s.push_str(format!("{} ", t.value.unwrap_or(EVMU256::ZERO)).as_str());
                     s.push_str(format!("{} ", liq_perct).as_str());
                     // todo: this is warp_to
                     s.push_str(format!("{} ", 0).as_str());

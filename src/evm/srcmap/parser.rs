@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use serde_json;
 use revm;
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 #[derive(Debug,Clone)]
 pub struct SourceMapLocation {

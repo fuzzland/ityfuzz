@@ -9,21 +9,18 @@ use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareTy
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use std::borrow::BorrowMut;
-
+use revm_interpreter::Interpreter;
 use crate::evm::host::FuzzHost;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::oracle::Oracle;
 use crate::state::{HasCaller, HasItyState};
-use crate::types::{convert_u256_to_h160, float_scale_to_u512};
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::impl_serdeany;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
 use libafl::state::HasMetadata;
-use primitive_types::{H160, U256, U512};
-use revm::{Bytecode, Interpreter};
 use serde::{Deserialize, Serialize};
 
 use std::cell::RefCell;
@@ -40,42 +37,46 @@ use crate::get_token_ctx;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Duration;
+use revm_primitives::Bytecode;
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, EVMU512};
+use crate::evm::types::convert_u256_to_h160;
+use crate::evm::types::float_scale_to_u512;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
     () => {
-        U512::from(1_000_000)
+        EVMU512::from(1_000_000)
     };
 }
 pub struct Flashloan<VS, I, S>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     phantom: PhantomData<(VS, I, S)>,
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
     #[cfg(feature = "flashloan_v2")]
-    known_addresses: HashSet<H160>,
+    known_addresses: HashSet<EVMAddress>,
     #[cfg(feature = "flashloan_v2")]
     endpoint: OnChainConfig,
     #[cfg(feature = "flashloan_v2")]
-    erc20_address: HashSet<H160>,
+    erc20_address: HashSet<EVMAddress>,
     #[cfg(feature = "flashloan_v2")]
-    pair_address: HashSet<H160>,
+    pair_address: HashSet<EVMAddress>,
     #[cfg(feature = "flashloan_v2")]
     pub onchain_middlware: Rc<RefCell<OnChain<VS, I, S>>>,
     #[cfg(feature = "flashloan_v2")]
-    pub unbound_tracker: HashMap<usize, HashSet<H160>>, // pc -> [address called]
+    pub unbound_tracker: HashMap<usize, HashSet<EVMAddress>>, // pc -> [address called]
     #[cfg(feature = "flashloan_v2")]
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
 }
 
 impl<VS, I, S> Debug for Flashloan<VS, I, S>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -90,19 +91,19 @@ where
 pub struct DummyPriceOracle;
 
 impl PriceOracle for DummyPriceOracle {
-    fn fetch_token_price(&mut self, _token_address: H160) -> Option<(u32, u32)> {
+    fn fetch_token_price(&mut self, _token_address: EVMAddress) -> Option<(u32, u32)> {
         return Some((10000, 18));
     }
 }
 
-pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, token: H160)
+pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, token: EVMAddress)
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + Clone
         + Debug
         + 'static,
@@ -118,7 +119,7 @@ where
                 data: None,
                 sstate: Default::default(),
                 sstate_idx: 0,
-                txn_value: Some(U256::from_str("10000000000000000000").unwrap()),
+                txn_value: Some(EVMU256::from_str("10000000000000000000").unwrap()),
                 step: false,
                 env: Default::default(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -143,8 +144,8 @@ where
 
 impl<VS, I, S> Flashloan<VS, I, S>
 where
-    S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -178,17 +179,17 @@ where
         }
     }
 
-    fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: U256) -> U512 {
+    fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: EVMU256) -> EVMU512 {
         let amount = if decimals > 18 {
-            U512::from(amount) / U512::from(10u64.pow(decimals - 18))
+            EVMU512::from(amount) / EVMU512::from(10u64.pow(decimals - 18))
         } else {
-            U512::from(amount) * U512::from(10u64.pow(18 - decimals))
+            EVMU512::from(amount) * EVMU512::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return amount * U512::from(eth_price);
+        return amount * EVMU512::from(eth_price);
     }
 
-    fn calculate_usd_value_from_addr(&mut self, addr: H160, amount: U256) -> Option<U512> {
+    fn calculate_usd_value_from_addr(&mut self, addr: EVMAddress, amount: EVMU256) -> Option<EVMU512> {
         match self.oracle.fetch_token_price(addr) {
             Some(price) => Some(Self::calculate_usd_value(price, amount)),
             _ => None,
@@ -198,7 +199,7 @@ where
     #[cfg(feature = "flashloan_v2")]
     pub fn on_contract_insertion(
         &mut self,
-        addr: &H160,
+        addr: &EVMAddress,
         abi: &Vec<ABIConfig>,
         state: &mut S,
     ) -> (bool, bool) {
@@ -255,7 +256,7 @@ where
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_pair_insertion(&mut self, host: &FuzzHost<VS, I, S>, state: &mut S, pair: H160) {
+    pub fn on_pair_insertion(&mut self, host: &FuzzHost<VS, I, S>, state: &mut S, pair: EVMAddress) {
         let slots = host.find_static_call_read_slot(
             pair,
             Bytes::from(vec![0x09, 0x02, 0xf1, 0xac]), // getReserves
@@ -275,14 +276,14 @@ where
 #[cfg(feature = "flashloan_v2")]
 impl<VS, I, S> Flashloan<VS, I, S>
 where
-    S: State + HasCaller<H160> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     pub fn analyze_call(&self, input: &I, flashloan_data: &mut FlashloanData) {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
-            flashloan_data.owed += U512::from(input.get_txn_value().unwrap()) * scale!();
+            flashloan_data.owed += EVMU512::from(input.get_txn_value().unwrap()) * scale!();
         }
         let addr = input.get_contract();
         // dont care if the call target is not erc20
@@ -300,8 +301,8 @@ where
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 where
-    S: State + HasCaller<H160> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -335,22 +336,22 @@ where
 
         let value_transfer = match *interp.instruction_pointer {
             0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
-            _ => U256::zero(),
+            _ => EVMU256::ZERO,
         };
 
         // todo: fix for delegatecall
-        let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
+        let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
-        if value_transfer > U256::zero() && call_target == interp.contract.caller {
-            earned!(U512::from(value_transfer) * float_scale_to_u512(1.0, 5))
+        if value_transfer > EVMU256::ZERO && call_target == interp.contract.caller {
+            earned!(EVMU512::from(value_transfer) * float_scale_to_u512(1.0, 5))
         }
 
         let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
         let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-        if size < U256::from(4) {
+        if size < EVMU256::from(4) {
             return;
         }
-        let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
+        let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
         // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
         macro_rules! make_transfer_call_success {
@@ -397,8 +398,8 @@ where
             }
             // transfer
             [0xa9, 0x05, 0x9c, 0xbb] => {
-                let dst = H160::from_slice(&data[16..36]);
-                let amount = U256::from_big_endian(&data[36..68]);
+                let dst = EVMAddress::from_slice(&data[16..36]);
+                let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
                 // println!(
                 //     "transfer from {:?} to {:?} amount {:?}",
                 //     interp.contract.address, dst, amount
@@ -418,9 +419,9 @@ where
             }
             // transferFrom
             [0x23, 0xb8, 0x72, 0xdd] => {
-                let src = H160::from_slice(&data[16..36]);
-                let dst = H160::from_slice(&data[48..68]);
-                let amount = U256::from_big_endian(&data[68..100]);
+                let src = EVMAddress::from_slice(&data[16..36]);
+                let dst = EVMAddress::from_slice(&data[48..68]);
+                let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
                 let _make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
                     [vec![0x0; 31], vec![0x1]].concat(),
                 ));
@@ -448,7 +449,7 @@ where
     #[cfg(feature = "flashloan_v2")]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, s: &mut S)
     where
-        S: HasCaller<H160>,
+        S: HasCaller<EVMAddress>,
     {
         let offset_of_arg_offset = match *interp.instruction_pointer {
             // detect whether it mutates token balance
@@ -457,7 +458,7 @@ where
             0x55 => {
                 // detect whether it mutates pair reserve
                 let key = interp.stack.peek(0).unwrap();
-                if key == U256::from(8) && self.pair_address.contains(&interp.contract.address) {
+                if key == EVMU256::from(8) && self.pair_address.contains(&interp.contract.address) {
                     host.evmstate
                         .flashloan_data
                         .oracle_recheck_reserve
@@ -472,20 +473,20 @@ where
 
         let value_transfer = match *interp.instruction_pointer {
             0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
-            _ => U256::zero(),
+            _ => EVMU256::ZERO,
         };
 
         // if a program counter can transfer any token, with value > 0 & dst = caller
         // then we give maximum rewards to trigger the bug
         {
-            let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
+            let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
             let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
             let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-            if size >= U256::from(4) {
-                let data = interp.memory.get_slice(offset.as_usize(), size.as_usize());
+            if size >= EVMU256::from(4) {
+                let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
                 macro_rules! handle_transfer {
                     ($dst: ident, $amount: ident) => {
-                        // if $amount > U256::zero() && $dst == interp.contract.caller {
+                        // if $amount > EVMU256::ZERO && $dst == interp.contract.caller {
                         //     let pc = interp.program_counter();
                         //
                         //     match self.unbound_tracker.get_mut(&pc) {
@@ -495,7 +496,7 @@ where
                         //         }
                         //         Some(set) => {
                         //             if set.len() > UNBOUND_TRANSFER_AMT {
-                        //                 host.evmstate.flashloan_data.earned = U512::max_value();
+                        //                 host.evmstate.flashloan_data.earned = EVMU512::max_value();
                         //             }
                         //             set.insert(call_target);
                         //         }
@@ -506,14 +507,14 @@ where
                 match data[0..4] {
                     // transfer
                     [0xa9, 0x05, 0x9c, 0xbb] => {
-                        let dst = H160::from_slice(&data[16..36]);
-                        let amount = U256::from_big_endian(&data[36..68]);
+                        let dst = EVMAddress::from_slice(&data[16..36]);
+                        let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
                         handle_transfer!(dst, amount);
                     }
                     // transferFrom
                     [0x23, 0xb8, 0x72, 0xdd] => {
-                        let dst = H160::from_slice(&data[48..68]);
-                        let amount = U256::from_big_endian(&data[68..100]);
+                        let dst = EVMAddress::from_slice(&data[48..68]);
+                        let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
                         handle_transfer!(dst, amount);
                     }
                     _ => {}
@@ -522,13 +523,13 @@ where
         }
 
         // todo: fix for delegatecall
-        let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
+        let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
-        if value_transfer > U256::zero() && call_target == interp.contract.caller {
-            host.evmstate.flashloan_data.earned += U512::from(value_transfer) * scale!();
+        if value_transfer > EVMU256::ZERO && call_target == interp.contract.caller {
+            host.evmstate.flashloan_data.earned += EVMU512::from(value_transfer) * scale!();
         }
 
-        let call_target: H160 = convert_u256_to_h160(interp.stack.peek(1).unwrap());
+        let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
         if self.erc20_address.contains(&call_target) {
             host.evmstate
                 .flashloan_data
@@ -537,7 +538,7 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
 
@@ -549,15 +550,15 @@ where
 #[cfg(not(feature = "flashloan_v2"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
-    pub owed: U512,
-    pub earned: U512,
+    pub owed: EVMU512,
+    pub earned: EVMU512,
 }
 #[cfg(not(feature = "flashloan_v2"))]
 impl FlashloanData {
     pub fn new() -> Self {
         Self {
-            owed: U512::from(0),
-            earned: U512::from(0),
+            owed: EVMU512::from(0),
+            earned: EVMU512::from(0),
         }
     }
 }
@@ -568,12 +569,12 @@ impl_serdeany!(FlashloanData);
 #[cfg(feature = "flashloan_v2")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlashloanData {
-    pub oracle_recheck_reserve: HashSet<H160>,
-    pub oracle_recheck_balance: HashSet<H160>,
-    pub owed: U512,
-    pub earned: U512,
-    pub prev_reserves: HashMap<H160, (U256, U256)>,
-    pub unliquidated_tokens: HashMap<H160, U256>,
+    pub oracle_recheck_reserve: HashSet<EVMAddress>,
+    pub oracle_recheck_balance: HashSet<EVMAddress>,
+    pub owed: EVMU512,
+    pub earned: EVMU512,
+    pub prev_reserves: HashMap<EVMAddress, (EVMU256, EVMU256)>,
+    pub unliquidated_tokens: HashMap<EVMAddress, EVMU256>,
     pub extra_info: String,
 }
 
