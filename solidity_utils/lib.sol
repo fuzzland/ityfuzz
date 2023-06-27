@@ -9,7 +9,7 @@ function bug() {
     }
 }
 
-function typed_bug(uint256 typed) {
+function typed_bug(uint64 typed) {
     typed = typed * 0x100 + 0x78;
     bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
     assembly {
