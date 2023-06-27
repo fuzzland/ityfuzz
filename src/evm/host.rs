@@ -107,7 +107,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub current_typed_bug: Option<u64>,
+    pub current_typed_bug: Vec<u64>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -694,7 +694,7 @@ where
             }
             let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[24..32]);
             if !self.known_typed_bugs.contains(&current_type) {
-                self.current_typed_bug = Some(current_type);
+                self.current_typed_bug.push(current_type);
                 self.known_typed_bugs.insert(current_type);
             }
         }

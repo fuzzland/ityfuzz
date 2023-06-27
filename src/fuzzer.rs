@@ -449,12 +449,7 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
-                /*
-                /// check typed_bug  type?
-                if typed_bug == H256::zero() {
-                    //exit(0);  /// solidity:bug()
-                    return Ok((res, None));
-                }*/
+
                 let mut file = OpenOptions::new().append(true).create(true).open(format!("{}/vulnerabilities", self.work_dir.as_str())).unwrap();
                 file.write_all(cur_report.as_bytes()).unwrap();
                 return Ok((res, None));

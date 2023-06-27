@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::evm::oracles::BUG_BUG_IDX;
 
 pub struct BugOracle;
 
@@ -44,16 +45,18 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             EVMFuzzState,
         >,
         stage: u64,
-    ) -> bool {
+    ) -> Vec<u64> {
         let is_hit = ctx.post_state.bug_hit;
         if is_hit {
             unsafe {
-                ORACLE_OUTPUT = format!(
-                    "[bug] bug() hit at contract {:?}",
+                ORACLE_OUTPUT += format!(
+                    "[bug] bug() hit at contract {:?}\n",
                     ctx.input.contract
-                )
+                ).as_str()
             }
+            vec![BUG_BUG_IDX]
+        } else {
+            vec![]
         }
-        return is_hit;
     }
 }

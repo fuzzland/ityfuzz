@@ -4,7 +4,7 @@
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::oracle::{Oracle, OracleCtx, Producer};
+use crate::oracle::{BugMetadata, Oracle, OracleCtx, Producer};
 use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
 use crate::state_input::StagedVMState;
@@ -135,6 +135,14 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        {
+            if !state.has_metadata::<BugMetadata>() {
+                state.metadata_mut().insert(BugMetadata::default());
+            }
+
+            state.metadata_mut().get_mut::<BugMetadata>().unwrap().current_bugs.clear();
+
+        }
 
         // set up oracle context
         let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
@@ -154,6 +162,23 @@ where
             producer.deref().borrow_mut().produce(&mut oracle_ctx);
         });
 
+
+        let mut is_any_bug_hit = false;
+
+        // ensure the execution is finished
+        {
+            let has_post_exec = oracle_ctx.fuzz_state
+                .get_execution_result()
+                .new_state
+                .state
+                .has_post_execution();
+
+            if has_post_exec {
+                before_exit!();
+                return Ok(false);
+            }
+        }
+
         // execute oracles and update stages if needed
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {
@@ -161,29 +186,21 @@ where
             } else {
                 input.get_staged_state().stage[idx]
             };
-            if self.oracle[idx]
+
+            for bug_idx in self.oracle[idx]
                 .deref()
                 .borrow()
-                .oracle(&mut oracle_ctx, original_stage)
-            {
-                // ensure the execution is finished
-                before_exit!();
-
-                let res = if state
-                    .get_execution_result()
-                    .new_state
-                    .state
-                    .has_post_execution()
+                .oracle(&mut oracle_ctx, original_stage) {
                 {
-                    false
-                } else { true };
-                return Ok(res);
+                    let metadata = oracle_ctx.fuzz_state.metadata_mut().get_mut::<BugMetadata>().unwrap();
+                    metadata.current_bugs.push(bug_idx);
+                    metadata.known_bugs.insert(bug_idx);
+                }
+                is_any_bug_hit = true;
             }
         }
-
-
         before_exit!();
-        Ok(false)
+        Ok(is_any_bug_hit)
     }
 
     // dummy method
