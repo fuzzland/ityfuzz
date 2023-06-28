@@ -137,6 +137,8 @@ pub struct EVMState {
     pub bug_hit: bool,
     /// selftdestruct() call in Solidity hit?
     pub selfdestruct_hit: bool,
+    /// bug type call in solidity type
+    pub typed_bug: Vec<u64>,
 }
 
 impl Default for EVMState {
@@ -149,6 +151,7 @@ impl Default for EVMState {
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
             selfdestruct_hit: false,
+            typed_bug: vec![],
         }
     }
 }
@@ -219,6 +222,7 @@ impl EVMState {
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
             selfdestruct_hit: false,
+            typed_bug: vec![],
         }
     }
 
@@ -331,6 +335,7 @@ where
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.bug_hit = false;
         self.host.selfdestruct_hit = false;
+        self.host.current_typed_bug = vec![];
         self.host.call_count = 0;
         let mut repeats = input.get_repeat();
         // Initially, there is no state change
@@ -585,6 +590,8 @@ where
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
         r.new_state.selfdestruct_hit = vm_state.selfdestruct_hit || self.host.selfdestruct_hit;
+        r.new_state.typed_bug = [vm_state.typed_bug, self.host.current_typed_bug.clone()].concat();
+
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
@@ -755,6 +762,7 @@ where
             self.host.bug_hit = false;
             self.host.selfdestruct_hit = false;
             self.host.call_count = 0;
+            self.host.current_typed_bug = vec![];
         }
 
         data.iter().map(
@@ -817,14 +825,19 @@ mod tests {
     use libafl::prelude::{tuple_list, StdScheduler};
     use revm_primitives::Bytecode;
     use std::cell::RefCell;
+    use std::path::Path;
     use std::rc::Rc;
     use std::sync::Arc;
 
     #[test]
     fn test_fuzz_executor() {
         let mut state: EVMFuzzState = FuzzState::new(0);
+        let path = Path::new("work_dir");
+        if !path.exists() {
+            std::fs::create_dir(path).unwrap();
+        }
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
-            FuzzHost::new(Arc::new(StdScheduler::new())),
+            FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
             generate_random_address(&mut state),
         );
         let mut observers = tuple_list!();

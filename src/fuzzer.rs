@@ -6,9 +6,9 @@ use crate::{
     state_input::StagedVMState,
 };
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 use std::path::Path;
@@ -38,9 +38,13 @@ use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use primitive_types::H256;
+use crate::evm::vm::EVMState;
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
+pub static mut RUN_FOREVER: bool = false;
+
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
 ///
@@ -82,8 +86,8 @@ where
     /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
-    // corpus path
-    corpus_path: String,
+    /// work dir path
+    work_dir: String,
 }
 
 impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
@@ -107,7 +111,7 @@ where
         feedback: F,
         infant_feedback: IF,
         objective: OF,
-        corpus_path: String,
+        work_dir: String,
     ) -> Self {
         Self {
             scheduler,
@@ -115,7 +119,7 @@ where
             infant_feedback,
             infant_scheduler,
             objective,
-            corpus_path,
+            work_dir,
             minimizer_map: Default::default(),
             phantom: PhantomData,
         }
@@ -350,22 +354,23 @@ where
                     println!("==========================================");
 
                     // write to file
-                    let path = Path::new(self.corpus_path.as_str());
+                    let corpus_path = format!("{}/corpus", self.work_dir.as_str());
+                    let path = Path::new(corpus_path.as_str());
                     if !path.exists() {
                         std::fs::create_dir(path).unwrap();
                     }
                     let mut file =
-                        File::create(format!("{}/{}", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT })).unwrap();
+                        File::create(format!("{}/{}", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
                     file.write_all(data.as_bytes()).unwrap();
 
                     let mut replayable_file =
-                        File::create(format!("{}/{}_replayable", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT })).unwrap();
+                        File::create(format!("{}/{}_replayable", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
                     replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
                 }
             }
         }
 
-        match res {
+        let final_res = match res {
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
                 self.objective.discard_metadata(state, &input)?;
@@ -430,11 +435,11 @@ where
                 report_vulnerability(
                     unsafe {ORACLE_OUTPUT.clone()},
                 );
-                unsafe {
-                    println!("Oracle: {}", ORACLE_OUTPUT);
-                }
-                println!(
-                    "Found a solution! trace: {}",
+
+                println!("\n\n\n😊😊 Found violations! \n\n");
+                let cur_report = format!(
+                    "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
+                    unsafe { ORACLE_OUTPUT.clone() },
                     state
                         .get_execution_result()
                         .new_state
@@ -442,7 +447,20 @@ where
                         .clone()
                         .to_string(state)
                 );
-                exit(0);
+                println!("{}", cur_report);
+
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(format!("{}/vulnerabilities", self.work_dir.as_str()))
+                    .unwrap();
+                file.write_all(cur_report.as_bytes()).unwrap();
+
+                if !unsafe { RUN_FOREVER } {
+                    exit(0);
+                }
+
+                return Ok((res, None));
                 // Not interesting
                 self.feedback.discard_metadata(state, &input)?;
 
@@ -462,7 +480,11 @@ where
 
                 Ok((res, None))
             }
+        };
+        unsafe {
+            ORACLE_OUTPUT = String::new();
         }
+        final_res
     }
 
     /// never called!
