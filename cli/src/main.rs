@@ -2,7 +2,6 @@ use crate::TargetType::{Address, Glob};
 use clap::Parser;
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
-use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
@@ -19,9 +18,12 @@ use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::state::FuzzState;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::env;
+use ityfuzz::evm::host::PANIC_ON_BUG;
+use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
+use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -121,13 +123,28 @@ struct Args {
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
+    ///Enable oracle for detecting whether typed_bug() is called
+    #[arg(long, default_value = "true")]
+    typed_bug_oracle: bool,
+
+    #[arg(long, default_value = "false")]
+    panic_on_typedbug: bool,
+
     /// Replay?
     #[arg(long)]
     replay_file: Option<String>,
 
-    // allow users to pass the path through CLI
-    #[arg(long, default_value = "corpus")]
-    corpus_path: String,
+    /// Path of work dir, saves corpus, logs, and other stuffs
+    #[arg(long, default_value = "work_dir")]
+    work_dir: String,
+
+    /// Write contract relationship to files
+    #[arg(long, default_value = "false")]
+    write_relationship: bool,
+
+    /// Do not quit when a bug is found, continue find new bugs
+    #[arg(long, default_value = "false")]
+    run_forever: bool,
 
     // random seed
     #[arg(long, default_value = "1667840158231589000")]
@@ -237,6 +254,16 @@ fn main() {
         }
     }
 
+    if args.typed_bug_oracle {
+        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
+
+        if args.panic_on_typedbug {
+            unsafe {
+                PANIC_ON_TYPEDBUG = true;
+            }
+        }
+    }
+
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
     }
@@ -305,7 +332,9 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        corpus_path: args.corpus_path,
+        work_dir: args.work_dir,
+        write_relationship: args.write_relationship,
+        run_forever: args.run_forever,
     };
 
     match config.fuzzer_type {

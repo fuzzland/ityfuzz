@@ -83,7 +83,12 @@ pub fn as_u64(v: EVMU256) -> u64 {
     v.as_limbs()[0]
 }
 
-
+/// Convert big endian bytes to u64
+pub fn bytes_to_u64(v: &[u8]) -> u64 {
+    let mut data: [u8; 8] = [0; 8];
+    data.copy_from_slice(v);
+    u64::from_be_bytes(data)
+}
 
 mod tests {
     use crate::evm::types::{as_u64, EVMU256};
