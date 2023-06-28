@@ -13,11 +13,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use crate::evm::oracles::BUG_BUG_IDX;
+use crate::evm::oracles::SELFDESTRUCT_BUG_IDX;
 
-pub struct BugOracle;
+pub struct SelfdestructOracle;
 
-impl BugOracle {
+impl SelfdestructOracle {
     pub fn new() -> Self {
         Self {}
     }
@@ -25,7 +25,7 @@ impl BugOracle {
 }
 
 impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
-    for BugOracle
+for SelfdestructOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -46,16 +46,17 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         >,
         stage: u64,
     ) -> Vec<u64> {
-        let is_hit = ctx.post_state.bug_hit;
+        let is_hit = ctx.post_state.selfdestruct_hit;
         if is_hit {
             unsafe {
-                ORACLE_OUTPUT += format!(
-                    "[bug] bug() hit at contract {:?}\n",
+                ORACLE_OUTPUT = format!(
+                    "[selfdestruct] selfdestruct() hit at contract {:?}",
                     ctx.input.contract
-                ).as_str()
+                )
             }
-            vec![BUG_BUG_IDX]
-        } else {
+            vec![SELFDESTRUCT_BUG_IDX]
+        }
+        else {
             vec![]
         }
     }

@@ -55,8 +55,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             EVMFuzzState,
         >,
         stage: u64,
-    ) -> bool {
-        if stage == 99 {
+    ) -> Vec<u64> {
             let _harness_txn = Bytes::from(self.harness_func.clone());
             // let res = ctx
             //     .call_post(
@@ -70,9 +69,6 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             //     )
             //     .output;
             // !res.iter().map(|x| *x == 0).all(|x| x)
-            false
-        } else {
-            false
-        }
+            unimplemented!()
     }
 }

@@ -29,7 +29,7 @@ use hex::FromHex;
 use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
+use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -64,9 +64,13 @@ pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
 pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
-
+pub static mut PANIC_ON_TYPEDBUG: bool = false;
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
+
+/// Shall we dump the contract calls
+pub static mut WRITE_RELATIONSHIPS: bool = false;
+
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -103,12 +107,21 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
+    pub current_typed_bug: Vec<u64>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
     pub logs: HashSet<u64>,
     // set_code data
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
+    // selftdestruct
+    pub selfdestruct_hit:bool,
+    // relations file handle
+    relations_file: std::fs::File,
+    // Filter duplicate relations
+    relations_hash: HashSet<u64>,
+    /// Known typed bugs, used for filtering in duplicate bugs
+    known_typed_bugs: HashSet<u64>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -170,6 +183,11 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
+            selfdestruct_hit:self.selfdestruct_hit,
+            relations_file: self.relations_file.try_clone().unwrap(),
+            relations_hash: self.relations_hash.clone(),
+            current_typed_bug: self.current_typed_bug.clone(),
+            known_typed_bugs: self.known_typed_bugs.clone(),
         }
     }
 }
@@ -191,7 +209,7 @@ where
     I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
-    pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>) -> Self {
+    pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>, workdir: String) -> Self {
         let ret = Self {
             evmstate: EVMState::new(),
             env: Env::default(),
@@ -216,6 +234,11 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:HashMap::new(),
+            selfdestruct_hit:false,
+            relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
+            relations_hash: HashSet::new(),
+            current_typed_bug: Default::default(),
+            known_typed_bugs: HashSet::new(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -362,6 +385,29 @@ where
         // } else {
         //     vec![]
         // }
+    }
+    pub fn write_relations(&mut self, caller: EVMAddress, target: EVMAddress, funtion_hash: Bytes) {
+        if funtion_hash.len() < 0x4 {
+            return;
+        }
+        let cur_write_str = format!("{{caller:0x{} --> traget:0x{} function(0x{})}}\n", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
+        let mut hasher = DefaultHasher::new();
+        cur_write_str.hash(&mut hasher);
+        let cur_wirte_hash = hasher.finish();
+        if self.relations_hash.contains(&cur_wirte_hash) {
+            return;
+        }
+        if self.relations_hash.len() == 0{
+            let write_head = format!("[ityfuzz relations] caller, traget, function hash\n");
+            self.relations_file
+                .write_all(write_head.as_bytes())
+                .unwrap();
+        }
+
+        self.relations_hash.insert(cur_wirte_hash);
+        self.relations_file
+            .write_all(cur_write_str.as_bytes())
+            .unwrap();
     }
 }
 
@@ -645,6 +691,15 @@ where
                 panic!("target hit");
             }
             self.bug_hit = true;
+        } else if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x78{
+            if unsafe {PANIC_ON_TYPEDBUG} {
+                panic!("target typed_bug hit");
+            }
+            let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[23..31]);
+            if !self.known_typed_bugs.contains(&current_type) {
+                self.current_typed_bug.push(current_type);
+                self.known_typed_bugs.insert(current_type);
+            }
         }
         #[cfg(feature = "print_logs")]
         {
@@ -718,6 +773,14 @@ where
         self.call_count += 1;
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
+        if unsafe { WRITE_RELATIONSHIPS } {
+            self.write_relations(
+                input.transfer.source.clone(),
+                input.contract.clone(),
+                input.input.clone(),
+            );
         }
 
         let mut hash = input.input.to_vec();

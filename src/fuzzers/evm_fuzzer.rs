@@ -2,6 +2,7 @@ use bytes::Bytes;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -20,7 +21,7 @@ use libafl::{
 };
 use glob::glob;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
@@ -36,12 +37,14 @@ use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
+use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::fuzzer::RUN_FOREVER;
 
 struct ABIConfig {
     abi: String,
@@ -56,6 +59,12 @@ struct ContractInfo {
 pub fn evm_fuzzer(
     config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
 ) {
+    // create work dir if not exists
+    let path = Path::new(config.work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir(path).unwrap();
+    }
+
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
@@ -75,9 +84,17 @@ pub fn evm_fuzzer(
     let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()));
-
+    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_concolic_enabled(config.concolic);
+
+    if config.selfdestruct_oracle {
+        //Selfdestruct middlewares
+        let mid = Rc::new(RefCell::new(
+            Selfdestruct::<EVMState, EVMInput, EVMFuzzState>::new(),
+        ));
+        fuzz_host.add_middlewares(mid.clone());
+        // Selfdestruct end
+    }
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
@@ -101,6 +118,18 @@ pub fn evm_fuzzer(
             None
         }
     };
+
+    if config.write_relationship {
+        unsafe {
+            WRITE_RELATIONSHIPS = true;
+        }
+    }
+
+    if config.run_forever {
+        unsafe {
+            RUN_FOREVER = true;
+        }
+    }
 
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan
@@ -176,7 +205,7 @@ pub fn evm_fuzzer(
         feedback,
         infant_feedback,
         objective,
-        config.corpus_path,
+        config.work_dir,
     );
     match config.replay_file {
         None => {

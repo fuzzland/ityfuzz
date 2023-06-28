@@ -8,12 +8,14 @@ use crate::state::HasExecutionResult;
 use libafl::prelude::{HasCorpus, HasMetadata, SerdeAnyMap};
 use libafl::state::State;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
+use libafl::impl_serdeany;
 
 /// The context passed to the oracle
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
@@ -119,10 +121,21 @@ where
     ) -> u64;
 
     /// Oracle function, called everytime after non-reverted execution
-    /// Returns true if the oracle is violated
+    /// Returns Some(bug_idx) if the oracle is violated
     fn oracle(
         &self,
         ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>,
         stage: u64,
-    ) -> bool;
+    ) -> Vec<u64>;
 }
+
+
+
+#[derive(Clone,Debug,Serialize,Deserialize, Default)]
+pub struct BugMetadata {
+    pub known_bugs: HashSet<u64>,
+    pub current_bugs: Vec<u64>
+}
+
+impl_serdeany!(BugMetadata);
+
