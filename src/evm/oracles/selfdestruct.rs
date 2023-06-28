@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::evm::oracles::SELFDESTRUCT_BUG_IDX;
 
 pub struct SelfdestructOracle;
 
@@ -44,7 +45,7 @@ for SelfdestructOracle
             EVMFuzzState,
         >,
         stage: u64,
-    ) -> bool {
+    ) -> Vec<u64> {
         let is_hit = ctx.post_state.selfdestruct_hit;
         if is_hit {
             unsafe {
@@ -53,7 +54,10 @@ for SelfdestructOracle
                     ctx.input.contract
                 )
             }
+            vec![SELFDESTRUCT_BUG_IDX]
         }
-        return is_hit;
+        else {
+            vec![]
+        }
     }
 }
