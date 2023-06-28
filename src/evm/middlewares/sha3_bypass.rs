@@ -28,7 +28,14 @@ pub struct Sha3Bypass {
 
 
 impl Sha3Bypass {
-    
+    pub fn new() -> Self {
+        Self {
+            dirty_memory: vec![],
+            dirty_storage: HashMap::new(),
+            dirty_stack: vec![],
+            tainted_jumpi: HashSet::new()
+        }
+    }
 }
 
 
@@ -80,14 +87,27 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             };
         }
 
-        macro_rules! setup_mem {
-            () => {
-                stack_pop_n!(3);
-                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
-                let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
-                self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
+        macro_rules! ensure_size {
+            ($t: expr, $size: expr) => {
+                if $t.len() < $size {
+                    $t.resize($size, false);
+                }
             };
         }
+
+        macro_rules! setup_mem {
+            () => {
+                {
+                    stack_pop_n!(3);
+                    let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                    let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
+                    ensure_size!(self.dirty_memory, mem_offset + len);
+                    self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
+                }
+            };
+        }
+
+
 
         match *interp.instruction_pointer {
             0x01..=0x7 => { pop_push!(2, 1) },
@@ -133,21 +153,25 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             0x51 => {
                 self.dirty_stack.pop();
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                ensure_size!(self.dirty_memory, mem_offset + 32);
                 let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32].iter().any(|x| *x);
                 self.dirty_stack.push(is_dirty);
             }
             // MSTORE
             0x52 => {
-                stack_pop_n!(2);
+                stack_pop_n!(1);
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
-                let len = as_u64(interp.stack.peek(1).expect("stack is empty")) as usize;
-                self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
+                let is_dirty = self.dirty_stack.pop().expect("stack is empty");
+                ensure_size!(self.dirty_memory, mem_offset + 256);
+                self.dirty_memory[mem_offset..mem_offset + 256].copy_from_slice(vec![is_dirty; 256].as_slice());
             }
             // MSTORE8
             0x53 => {
-                stack_pop_n!(2);
+                stack_pop_n!(1);
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
-                self.dirty_memory[mem_offset + 32] = false;
+                let is_dirty = self.dirty_stack.pop().expect("stack is empty");
+                ensure_size!(self.dirty_memory, mem_offset + 32);
+                self.dirty_memory[mem_offset..mem_offset + 32].copy_from_slice(vec![is_dirty; 32].as_slice());
             }
             // SLOAD
             0x54 => {
@@ -158,10 +182,10 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             }
             // SSTORE
             0x55 => {
-                stack_pop_n!(1);
+                self.dirty_stack.pop();
                 let is_dirty = self.dirty_stack.pop().expect("stack is empty");
                 let key = interp.stack.peek(0).expect("stack is empty");
-                self.dirty_storage.insert(*key, is_dirty);
+                self.dirty_storage.insert(key, is_dirty);
             }
             // JUMP
             0x56 => {
@@ -190,7 +214,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             }
             // SWAP
             0x90..=0x9f => {
-                let _n = (*interp.instruction_pointer) - 0x90 + 1;
+                let _n = (*interp.instruction_pointer) - 0x90 + 2;
                 let _l = self.dirty_stack.len();
                 let tmp = self.dirty_stack[_l - _n as usize];
                 self.dirty_stack[_l - _n as usize] = self.dirty_stack[_l - 1];
@@ -243,10 +267,204 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
 
 
 mod tests {
+    use std::cell::RefCell;
+    use std::path::Path;
+    use std::rc::Rc;
+    use std::sync::Arc;
+    use bytes::Bytes;
+    use libafl::schedulers::StdScheduler;
+    use revm_interpreter::analysis::to_analysed;
+    use revm_interpreter::BytecodeLocked;
+    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP};
+    use crate::evm::input::{EVMInput, EVMInputTy};
+    use crate::evm::mutator::AccessPattern;
+    use crate::evm::types::{EVMFuzzState, generate_random_address};
+    use crate::evm::vm::{EVMExecutor, EVMState};
+    use crate::generic_vm::vm_executor::GenericVM;
+    use crate::state::FuzzState;
+    use crate::state_input::StagedVMState;
     use super::*;
 
-    #[test]
-    fn test_hash() {
+    fn execute(bys: Bytes, code: Bytes) -> Vec<usize> {
+        let mut state: EVMFuzzState = FuzzState::new(0);
+        let path = Path::new("work_dir");
+        if !path.exists() {
+            std::fs::create_dir(path).unwrap();
+        }
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
+            FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
+            generate_random_address(&mut state),
+        );
+
+        let target_addr = generate_random_address(&mut state);
+        evm_executor.host.code.insert(
+            target_addr.clone(),
+            Arc::new(BytecodeLocked::try_from(
+                to_analysed(Bytecode::new_raw(code))
+            ).unwrap()),
+        );
+
+        let sha3 = Rc::new(RefCell::new(Sha3Bypass::new()));
+        evm_executor.host.add_middlewares(sha3.clone());
+
+        let input = EVMInput {
+            caller: generate_random_address(&mut state),
+            contract: target_addr,
+            data: None,
+            sstate: StagedVMState::new_uninitialized(),
+            sstate_idx: 0,
+            txn_value: Some(EVMU256::ZERO),
+            step: false,
+            env: Default::default(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: 0,
+            direct_data: bys,
+            #[cfg(feature = "flashloan_v2")]
+            input_type: EVMInputTy::ABI,
+            randomness: vec![],
+            repeat: 1,
+        };
+
+        let res = evm_executor.execute(&input, &mut state);
+        assert!(!res.reverted);
+        return sha3.borrow().tainted_jumpi.iter().cloned().collect_vec();
     }
 
+    #[test]
+    fn test_hash_none() {
+        let bys = vec![
+            PUSH1, 0x2,
+            PUSH0,
+            ADD, // stack = [2]
+            PUSH1, 0x7, // stack = [2, 7]
+            JUMPI,
+            JUMPDEST,
+            STOP
+        ];
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(bys)
+        );
+        assert_eq!(taints.len(), 0);
+    }
+
+    #[test]
+    fn test_hash_simple() {
+        let bys = vec![
+            PUSH0,
+            PUSH1, 0x42,
+            MSTORE,
+            PUSH0,
+            PUSH1, 0x1,
+            SHA3,
+            PUSH1, 0x2,
+            EQ,
+            PUSH1, 0xe,
+            JUMPI,
+            JUMPDEST,
+            STOP
+        ];
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(bys)
+        );
+        assert_eq!(taints.len(), 1);
+        assert_eq!(taints[0], 0xd);
+    }
+
+
+    #[test]
+    fn test_hash_simple_none() {
+        let bys = vec![
+            PUSH0,
+            PUSH1, 0x42,
+            MSTORE,
+            PUSH0,
+            PUSH1, 0x1,
+            SHA3,
+            PUSH1, 0x2,
+            EQ,
+            PUSH0,
+            PUSH1, 0xf,
+            JUMPI,
+            JUMPDEST,
+            STOP
+        ];
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(bys)
+        );
+        assert_eq!(taints.len(), 0);
+    }
+
+    #[test]
+    fn test_hash_complex_1() {
+        // contract Test {
+        //     mapping (uint256=>bytes32) a;
+        //
+        //     fallback(bytes calldata x) external payable returns (bytes memory) {
+        //         a[1] = keccak256(x);
+        //
+        //         if (a[1] == hex"cccc") {
+        //             return "cccc";
+        //         } else {
+        //             return "dddd";
+        //         }
+        //     }
+        // }
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(hex::decode("608060405260003660608282604051610019929190610132565b604051809103902060008060018152602001908152602001600020819055507fcccc0000000000000000000000000000000000000000000000000000000000006000806001815260200190815260200160002054036100af576040518060400160405280600481526020017f636363630000000000000000000000000000000000000000000000000000000081525090506100e8565b6040518060400160405280600481526020017f646464640000000000000000000000000000000000000000000000000000000081525090505b915050805190602001f35b600081905092915050565b82818337600083830152505050565b600061011983856100f3565b93506101268385846100fe565b82840190509392505050565b600061013f82848661010d565b9150819050939250505056fea26469706673582212200b9b2e1716d1b88774664613e1e244bbf62489a4aded40c5a9118d1f302068e364736f6c63430008130033").unwrap())
+        );
+        assert_eq!(taints.len(), 1);
+        println!("{:?}", taints);
+    }
+
+    #[test]
+    fn test_hash_complex_2() {
+        // contract Test {
+        //     mapping (uint256=>bytes32) a;
+        //
+        //     fallback(bytes calldata x) external payable returns (bytes memory) {
+        //         a[1] = keccak256(x);
+        //         a[1] = hex"cccc";
+        //
+        //         if (a[1] == hex"cccc") {
+        //             return "cccc";
+        //         } else {
+        //             return "dddd";
+        //         }
+        //     }
+        // }
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(hex::decode("60806040526000366060828260405161001992919061016a565b604051809103902060008060018152602001908152602001600020819055507fcccc00000000000000000000000000000000000000000000000000000000000060008060018152602001908152602001600020819055507fcccc0000000000000000000000000000000000000000000000000000000000006000806001815260200190815260200160002054036100e7576040518060400160405280600481526020017f63636363000000000000000000000000000000000000000000000000000000008152509050610120565b6040518060400160405280600481526020017f646464640000000000000000000000000000000000000000000000000000000081525090505b915050805190602001f35b600081905092915050565b82818337600083830152505050565b6000610151838561012b565b935061015e838584610136565b82840190509392505050565b6000610177828486610145565b9150819050939250505056fea2646970667358221220be5565ccdf8b6a6e6c8b6d9113d6643155245741374ccd9bac3a434cff27515f64736f6c63430008130033").unwrap())
+        );
+        assert_eq!(taints.len(), 0);
+    }
+
+    #[test]
+    fn test_hash_complex_3() {
+        // contract Test {
+        //     mapping (uint256=>bytes32) a;
+        //
+        //     fallback(bytes calldata x) external payable returns (bytes memory) {
+        //         a[1] = keccak256(x);
+        //         a[2] = a[1] ^ hex"aaaa";
+        //
+        //         if (uint(a[2]) + 123 > 1) {
+        //             return "cccc";
+        //         } else {
+        //             return "dddd";
+        //         }
+        //     }
+        // }
+        let taints = execute(
+            Bytes::new(),
+            Bytes::from(hex::decode("608060405260003660608282604051610019929190610170565b604051809103902060008060018152602001908152602001600020819055507faaaa00000000000000000000000000000000000000000000000000000000000060008060018152602001908152602001600020541860008060028152602001908152602001600020819055506001607b600080600281526020019081526020016000205460001c6100aa91906101c2565b11156100ed576040518060400160405280600481526020017f63636363000000000000000000000000000000000000000000000000000000008152509050610126565b6040518060400160405280600481526020017f646464640000000000000000000000000000000000000000000000000000000081525090505b915050805190602001f35b600081905092915050565b82818337600083830152505050565b60006101578385610131565b935061016483858461013c565b82840190509392505050565b600061017d82848661014b565b91508190509392505050565b6000819050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b60006101cd82610189565b91506101d883610189565b92508282019050808211156101f0576101ef610193565b5b9291505056fea26469706673582212204d99e1e8876b38e211054a692fb1e98d19a40c8ef970e16a43602abed56a693164736f6c63430008130033").unwrap())
+        );
+        println!("{:?}", taints);
+        assert_eq!(taints.len(), 2);
+    }
 }
