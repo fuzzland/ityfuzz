@@ -14,7 +14,7 @@ use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use crate::evm::types::{EVMAddress, EVMU256};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256};
 
 
 #[derive(Clone, Debug)]
@@ -80,6 +80,15 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             };
         }
 
+        macro_rules! setup_mem {
+            () => {
+                stack_pop_n!(3);
+                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
+                self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
+            };
+        }
+
         match *interp.instruction_pointer {
             0x01..=0x7 => { pop_push!(2, 1) },
             0x08..=0x0a => { pop_push!(3, 1) },
@@ -101,31 +110,19 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             // CALLDATASIZE
             0x36 => push_false!(),
             // CALLDATACOPY
-            0x37 => {
-                stack_pop_n!(3);
-                todo!("write to symbolic memory")
-            }
+            0x37 => setup_mem!(),
             // CODESIZE
             0x38 => push_false!(),
             // CODECOPY
-            0x39 => {
-                stack_pop_n!(3);
-                todo!("write to symbolic memory")
-            }
+            0x39 => setup_mem!(),
             // GASPRICE
             0x3a => push_false!(),
             // EXTCODECOPY
-            0x3c => {
-                stack_pop_n!(3);
-                todo!("write to symbolic memory")
-            }
+            0x3c => setup_mem!(),
             // RETURNDATASIZE
             0x3d => push_false!(),
             // RETURNDATACOPY
-            0x3e => {
-                stack_pop_n!(3);
-                todo!("write to symbolic memory")
-            }
+            0x3e => setup_mem!(),
             // COINBASE
             0x41..=0x48 => push_false!(),
             // POP
@@ -134,23 +131,37 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
             }
             // MLOAD
             0x51 => {
-                todo!("read from symbolic memory")
+                self.dirty_stack.pop();
+                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32].iter().any(|x| *x);
+                self.dirty_stack.push(is_dirty);
             }
             // MSTORE
             0x52 => {
-                todo!("write to symbolic memory")
+                stack_pop_n!(2);
+                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                let len = as_u64(interp.stack.peek(1).expect("stack is empty")) as usize;
+                self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
             }
             // MSTORE8
             0x53 => {
-                todo!("write to symbolic memory")
+                stack_pop_n!(2);
+                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                self.dirty_memory[mem_offset + 32] = false;
             }
             // SLOAD
             0x54 => {
-                todo!("read from symbolic storage")
+                self.dirty_stack.pop();
+                let key = interp.stack.peek(0).expect("stack is empty");
+                let is_dirty = self.dirty_storage.get(&key).unwrap_or(&false);
+                self.dirty_stack.push(*is_dirty);
             }
             // SSTORE
             0x55 => {
-                todo!("write to symbolic storage")
+                stack_pop_n!(1);
+                let is_dirty = self.dirty_stack.pop().expect("stack is empty");
+                let key = interp.stack.peek(0).expect("stack is empty");
+                self.dirty_storage.insert(*key, is_dirty);
             }
             // JUMP
             0x56 => {
@@ -200,8 +211,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
                 pop_push!(7, 1);
             }
             0xf3 => {
-                self.dirty_stack.pop();
-                self.dirty_stack.pop();
+                stack_pop_n!(2);
             }
             0xf4 => {
                 pop_push!(6, 1);
