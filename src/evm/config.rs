@@ -53,6 +53,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> {
     pub price_oracle: Box<dyn PriceOracle>,
     pub replay_file: Option<String>,
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+    pub selfdestruct_oracle: bool,
     pub work_dir: String,
     pub write_relationship: bool,
     pub run_forever: bool,

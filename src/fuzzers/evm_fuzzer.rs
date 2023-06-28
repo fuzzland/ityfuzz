@@ -37,6 +37,7 @@ use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
+use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
 use primitive_types::{H160, U256};
@@ -85,6 +86,15 @@ pub fn evm_fuzzer(
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_concolic_enabled(config.concolic);
+
+    if config.selfdestruct_oracle {
+        //Selfdestruct middlewares
+        let mid = Rc::new(RefCell::new(
+            Selfdestruct::<EVMState, EVMInput, EVMFuzzState>::new(),
+        ));
+        fuzz_host.add_middlewares(mid.clone());
+        // Selfdestruct end
+    }
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {

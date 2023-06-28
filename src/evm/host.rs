@@ -114,13 +114,14 @@ where
     pub logs: HashSet<u64>,
     // set_code data
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
+    // selftdestruct
+    pub selfdestruct_hit:bool,
     // relations file handle
     relations_file: std::fs::File,
     // Filter duplicate relations
     relations_hash: HashSet<u64>,
     /// Known typed bugs, used for filtering in duplicate bugs
     known_typed_bugs: HashSet<u64>,
-
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -182,6 +183,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
+            selfdestruct_hit:self.selfdestruct_hit,
             relations_file: self.relations_file.try_clone().unwrap(),
             relations_hash: self.relations_hash.clone(),
             current_typed_bug: self.current_typed_bug.clone(),
@@ -232,6 +234,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:HashMap::new(),
+            selfdestruct_hit:false,
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
             current_typed_bug: Default::default(),

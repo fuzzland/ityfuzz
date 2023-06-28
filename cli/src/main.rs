@@ -7,6 +7,7 @@ use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracles::bug::BugOracle;
+use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
@@ -123,6 +124,9 @@ struct Args {
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
+    #[arg(long, default_value = "true")]
+    selfdestruct_oracle: bool,
+  
     ///Enable oracle for detecting whether typed_bug() is called
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
@@ -253,6 +257,9 @@ fn main() {
             }
         }
     }
+    if args.selfdestruct_oracle {
+        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
+    }
 
     if args.typed_bug_oracle {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
@@ -332,6 +339,7 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
+        selfdestruct_oracle:args.selfdestruct_oracle,
         work_dir: args.work_dir,
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,

@@ -25,6 +25,7 @@ pub enum MiddlewareType {
     OnChain,
     Concolic,
     Flashloan,
+    Selfdestruct,
     InstructionCoverage
 }
 
