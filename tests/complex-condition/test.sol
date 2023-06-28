@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import "../../solidity_utils/lib.sol";
 
 contract main {
-    address owner;
     // solution: a = 1
     function process(uint8[] calldata a) public returns (string memory){
         require(a[0] != 0, "a[0] != 1");
@@ -17,22 +16,5 @@ contract main {
         require(a[7] == 8, "a[7] != 8");
         bug();
         return 'Hello Contracts';
-    }
-
-    function destruct() external {
-        selfdestruct(payable(msg.sender));
-    }
-
-    constructor() {
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not owner");
-        _;
-    }
-
-    function admin_destruct() onlyOwner external {
-        selfdestruct(payable(msg.sender));
     }
 }
