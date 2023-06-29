@@ -150,9 +150,13 @@ struct Args {
     #[arg(long, default_value = "false")]
     run_forever: bool,
 
-    // random seed
+    /// random seed
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
+
+    /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
+    #[arg(long, default_value = "false")]
+    sha3_bypass: bool,
 }
 
 enum TargetType {
@@ -343,6 +347,7 @@ fn main() {
         work_dir: args.work_dir,
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
+        sha3_bypass: args.sha3_bypass,
     };
 
     match config.fuzzer_type {

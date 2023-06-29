@@ -26,7 +26,9 @@ pub enum MiddlewareType {
     Concolic,
     Flashloan,
     Selfdestruct,
-    InstructionCoverage
+    InstructionCoverage,
+    Sha3Bypass,
+    Sha3TaintAnalysis
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

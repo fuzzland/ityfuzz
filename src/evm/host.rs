@@ -122,6 +122,8 @@ where
     relations_hash: HashSet<u64>,
     /// Known typed bugs, used for filtering in duplicate bugs
     known_typed_bugs: HashSet<u64>,
+    /// Randomness from inputs
+    pub randomness: Vec<u8>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -188,6 +190,7 @@ where
             relations_hash: self.relations_hash.clone(),
             current_typed_bug: self.current_typed_bug.clone(),
             known_typed_bugs: self.known_typed_bugs.clone(),
+            randomness: vec![],
         }
     }
 }
@@ -239,6 +242,7 @@ where
             relations_hash: HashSet::new(),
             current_typed_bug: Default::default(),
             known_typed_bugs: HashSet::new(),
+            randomness: vec![],
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -256,6 +260,14 @@ where
             .deref()
             .borrow_mut()
             .insert(ty, middlewares);
+    }
+
+    pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
+        let ty = middlewares.deref().borrow().get_type();
+        self.middlewares
+            .deref()
+            .borrow_mut()
+            .remove(&ty);
     }
 
     pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<VS, I, S>) {

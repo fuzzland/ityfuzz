@@ -178,7 +178,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     liquidation_percent: 0,
                     #[cfg(feature = "flashloan_v2")]
                     input_type: EVMInputTy::ABI,
-                    randomness: vec![],
+                    randomness: vec![0],
                     repeat: 1,
                 };
                 add_input_to_corpus!(self.state, self.scheduler, input);
@@ -274,7 +274,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             direct_data: Default::default(),
-            randomness: vec![],
+            randomness: vec![0],
             repeat: 1,
         };
         add_input_to_corpus!(self.state, scheduler, input.clone());

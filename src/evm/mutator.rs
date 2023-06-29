@@ -226,6 +226,11 @@ where
                         MutationResult::Skipped
                     }
                 }
+                11 => {
+                    let rand_u8 = state.rand_mut().below(255) as u8;
+                    input.set_randomness(vec![rand_u8; 1]);
+                    MutationResult::Mutated
+                }
                 _ => input.mutate(state),
             }
         };
