@@ -1,12 +1,15 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug};
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
 use revm_interpreter::Interpreter;
+use revm_interpreter::opcode::JUMPI;
 use revm_primitives::Bytecode;
 use crate::evm::host::FuzzHost;
 use crate::evm::input::EVMInputT;
@@ -18,7 +21,7 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256};
 
 
 #[derive(Clone, Debug)]
-pub struct Sha3Bypass {
+pub struct Sha3TaintAnalysis {
     pub dirty_memory: Vec<bool>,
     pub dirty_storage: HashMap<EVMU256, bool>,
     pub dirty_stack: Vec<bool>,
@@ -27,7 +30,7 @@ pub struct Sha3Bypass {
 }
 
 
-impl Sha3Bypass {
+impl Sha3TaintAnalysis {
     pub fn new() -> Self {
         Self {
             dirty_memory: vec![],
@@ -39,7 +42,7 @@ impl Sha3Bypass {
 }
 
 
-impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
+impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
     where
         I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
         VS: VMStateT,
@@ -261,6 +264,44 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
     }
 
     fn get_type(&self) -> MiddlewareType {
+        MiddlewareType::Sha3TaintAnalysis
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Sha3Bypass {
+    pub sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
+}
+
+
+impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
+    where
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        VS: VMStateT,
+        S: State
+        + HasCaller<EVMAddress>
+        + HasCorpus<I>
+        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasMetadata
+        + HasCurrentInputIdx
+        + Debug
+        + Clone,
+{
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+        if *interp.instruction_pointer == JUMPI {
+            let jumpi = interp.program_counter();
+            if self.sha3_taints.borrow().tainted_jumpi.contains(&jumpi) {
+                let stack_len = interp.stack.len();
+                interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+            }
+        }
+    }
+
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    }
+
+    fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3Bypass
     }
 }
@@ -304,7 +345,7 @@ mod tests {
             ).unwrap()),
         );
 
-        let sha3 = Rc::new(RefCell::new(Sha3Bypass::new()));
+        let sha3 = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
         evm_executor.host.add_middlewares(sha3.clone());
 
         let input = EVMInput {

@@ -44,7 +44,7 @@ use crate::evm::host::{
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{EVMInputT, EVMInputTy};
-use crate::evm::middlewares::middleware::MiddlewareType;
+use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::uniswap::generate_uniswap_router_call;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
@@ -337,6 +337,7 @@ where
         self.host.selfdestruct_hit = false;
         self.host.current_typed_bug = vec![];
         self.host.call_count = 0;
+        self.host.randomness = input.get_randomness();
         let mut repeats = input.get_repeat();
         // Initially, there is no state change
         unsafe {
@@ -609,6 +610,13 @@ where
             }
         }
     }
+
+    pub fn reexecute_with_middleware(&mut self, input: &I, state: &mut S, middleware: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
+        self.host.add_middlewares(middleware.clone());
+        self.execute(input, state);
+        self.host.remove_middlewares(middleware);
+
+    }
 }
 
 impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S>
@@ -763,6 +771,7 @@ where
             self.host.selfdestruct_hit = false;
             self.host.call_count = 0;
             self.host.current_typed_bug = vec![];
+            self.host.randomness = vec![9];
         }
 
         data.iter().map(
