@@ -153,6 +153,11 @@ pub fn evm_fuzzer(
             ));
         }
     }
+    let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
+
+    if config.sha3_bypass {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
+    }
 
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);
@@ -181,7 +186,6 @@ pub fn evm_fuzzer(
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
 
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
-    let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
     feedback
         .init_state(state)
         .expect("Failed to init state");
@@ -256,6 +260,7 @@ pub fn evm_fuzzer(
                             let repeat = splitter[7].parse::<usize>().unwrap_or(0);
                             let reentrancy_call_limits = splitter[8].parse::<u32>().unwrap_or(u32::MAX);
                             let is_step = splitter[9].parse::<bool>().unwrap_or(false);
+                            let randomness = hex::decode(splitter[10]).unwrap_or(vec![0]);
 
                             unsafe {CALL_UNTIL = reentrancy_call_limits;}
                             EVMInput {
@@ -294,7 +299,7 @@ pub fn evm_fuzzer(
                                 } else {
                                     Bytes::from(input.clone())
                                 },
-                                randomness: vec![],
+                                randomness,
                                 repeat,
                             }
                         }

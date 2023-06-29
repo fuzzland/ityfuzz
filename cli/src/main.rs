@@ -155,6 +155,7 @@ struct Args {
     seed: u64,
 
     /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
+    #[arg(long, default_value = "false")]
     sha3_bypass: bool,
 }
 

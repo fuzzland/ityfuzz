@@ -274,6 +274,14 @@ pub struct Sha3Bypass {
     pub sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
 }
 
+impl Sha3Bypass {
+    pub fn new(sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>) -> Self {
+        Self {
+            sha3_taints,
+        }
+    }
+}
+
 
 impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
     where
