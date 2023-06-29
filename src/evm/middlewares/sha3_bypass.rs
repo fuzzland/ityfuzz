@@ -338,7 +338,7 @@ mod tests {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let path = Path::new("work_dir");
         if !path.exists() {
-            std::fs::create_dir(path).unwrap();
+            std::fs::create_dir(path);
         }
         let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
             FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
