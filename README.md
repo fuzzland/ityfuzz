@@ -131,9 +131,6 @@ Caveats:
 - Keep in mind that ItyFuzz is fuzzing on a clean blockchain,
   so you should ensure all related contracts (e.g., ERC20 token, Uniswap, etc.) are deployed to the blockchain before fuzzing.
 
-- You also need to overwrite all `constructor(...)` in the smart contract to
-  to make it have no function argument. ItyFuzz assumes constructors have no argument.
-
 ### Fuzz a Project (Online)
 
 Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result.
