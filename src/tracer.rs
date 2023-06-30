@@ -216,6 +216,8 @@ impl<Loc, Addr> TxnTrace<Loc, Addr> {
                     data.split("liq percent: ").take(2).last().unwrap_or("0").parse::<u64>().unwrap_or(0)
                 }
             };
+
+            // todo: support dumping randomness
             match t.data_abi {
                 None => {
                     if t.data.is_some() && t.data.as_ref().unwrap().contains("Borrow") {

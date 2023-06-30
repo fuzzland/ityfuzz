@@ -370,7 +370,7 @@ where
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
                             direct_data: Default::default(),
-                            randomness: vec![],
+                            randomness: vec![0],
                             repeat: 1,
                         };
                         add_corpus(host, state, &input);

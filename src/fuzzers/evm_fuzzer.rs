@@ -43,8 +43,10 @@ use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
+use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
+use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::fuzzer::RUN_FOREVER;
 
 struct ABIConfig {
@@ -72,19 +74,12 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
+    let mut scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
-    let jmp_observer = StdMapObserver::new("jmp_labels", jmps);
-    let mut feedback = MaxMapFeedback::new(&jmp_observer);
-    let calibration = CalibrationStage::new(&feedback);
+    let jmp_observer = StdMapObserver::new("jmp", jmps);
 
-    let mut scheduler = QueueScheduler::new();
-
-    let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
-
-    let std_stage = StdMutationalStage::new(mutator);
-    let mut stages = tuple_list!(calibration, std_stage);
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_concolic_enabled(config.concolic);
@@ -160,6 +155,11 @@ pub fn evm_fuzzer(
             ));
         }
     }
+    let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
+
+    if config.sha3_bypass {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
+    }
 
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
         EVMExecutor::new(fuzz_host, deployer);
@@ -188,24 +188,39 @@ pub fn evm_fuzzer(
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
 
+    let mut feedback = MaxMapFeedback::new(&jmp_observer);
+    feedback
+        .init_state(state)
+        .expect("Failed to init state");
+    let calibration = CalibrationStage::new(&feedback);
+    let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
+
+    let std_stage = StdMutationalStage::new(mutator);
+    let mut stages = tuple_list!(calibration, std_stage);
+
+
+
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
-    feedback
-        .init_state(state)
-        .expect("Failed to init state");
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
     let mut oracles = config.oracle;
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
+    let wrapped_feedback = Sha3WrappedFeedback::new(
+        feedback,
+        sha3_taint,
+        evm_executor_ref.clone(),
+        config.sha3_bypass
+    );
 
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
         &infant_scheduler,
-        feedback,
+        wrapped_feedback,
         infant_feedback,
         objective,
         config.work_dir,
@@ -248,6 +263,7 @@ pub fn evm_fuzzer(
                             let repeat = splitter[7].parse::<usize>().unwrap_or(0);
                             let reentrancy_call_limits = splitter[8].parse::<u32>().unwrap_or(u32::MAX);
                             let is_step = splitter[9].parse::<bool>().unwrap_or(false);
+                            let randomness = hex::decode(splitter[10]).unwrap_or(vec![0]);
 
                             unsafe {CALL_UNTIL = reentrancy_call_limits;}
                             EVMInput {
@@ -286,7 +302,7 @@ pub fn evm_fuzzer(
                                 } else {
                                     Bytes::from(input.clone())
                                 },
-                                randomness: vec![],
+                                randomness,
                                 repeat,
                             }
                         }
