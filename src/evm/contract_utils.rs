@@ -415,7 +415,9 @@ mod tests {
 
     #[test]
     fn test_load() {
-        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0));
+        let codes: Vec<String> = vec![];
+        let args: HashMap<String, Vec<String>> = HashMap::new();
+        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0), &codes, &args);
         println!(
             "{:?}",
             loader

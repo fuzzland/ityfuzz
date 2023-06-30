@@ -593,7 +593,8 @@ where
                 output: r.output.to_vec(),
                 reverted: r.ret != InstructionResult::Return
                     && r.ret != InstructionResult::Stop
-                    && r.ret != ControlLeak,
+                    && r.ret != ControlLeak
+                    && r.ret != InstructionResult::SelfDestruct,
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -608,11 +609,15 @@ where
         }
     }
 
-    pub fn reexecute_with_middleware(&mut self, input: &I, state: &mut S, middleware: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
+    pub fn reexecute_with_middleware(
+        &mut self,
+        input: &I,
+        state: &mut S,
+        middleware: Rc<RefCell<dyn Middleware<VS, I, S>>>,
+    ) {
         self.host.add_middlewares(middleware.clone());
         self.execute(input, state);
         self.host.remove_middlewares(middleware);
-
     }
 }
 
