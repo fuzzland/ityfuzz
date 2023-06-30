@@ -38,6 +38,7 @@ pub struct InstructionCoverage {
     pub pc_coverage: HashMap<EVMAddress, HashSet<usize>>,
     pub total_instr: HashMap<EVMAddress, usize>,
     pub total_instr_set: HashMap<EVMAddress, HashSet<usize>>,
+    pub work_dir: String,
 }
 
 
@@ -47,6 +48,7 @@ impl InstructionCoverage {
             pc_coverage: HashMap::new(),
             total_instr: HashMap::new(),
             total_instr_set: HashMap::new(),
+            work_dir: "work_dir".to_string(),
         }
     }
 
@@ -109,7 +111,7 @@ impl InstructionCoverage {
             .write(true)
             .append(false)
             .create(true)
-            .open(format!("cov_{}.txt", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
+            .open(format!("{}/cov_{}.txt", self.work_dir.clone(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
             .unwrap();
         file.write_all(data.as_bytes()).unwrap();
     }
@@ -141,6 +143,7 @@ impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
     }
 
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+        self.work_dir = host.work_dir.clone();
         let pcs = instructions_pc(&bytecode.clone());
         self.total_instr.insert(address, pcs.len());
         self.total_instr_set.insert(address, pcs);

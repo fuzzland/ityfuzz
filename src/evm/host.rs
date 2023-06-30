@@ -124,6 +124,8 @@ where
     known_typed_bugs: HashSet<u64>,
     /// Randomness from inputs
     pub randomness: Vec<u8>,
+    /// workdir
+    pub work_dir: String,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -191,6 +193,7 @@ where
             current_typed_bug: self.current_typed_bug.clone(),
             known_typed_bugs: self.known_typed_bugs.clone(),
             randomness: vec![],
+            work_dir: self.work_dir.clone(),
         }
     }
 }
@@ -243,6 +246,7 @@ where
             current_typed_bug: Default::default(),
             known_typed_bugs: HashSet::new(),
             randomness: vec![],
+            work_dir: workdir.clone(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret

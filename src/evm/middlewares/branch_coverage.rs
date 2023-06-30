@@ -47,6 +47,7 @@ pub struct BranchCoverage {
     pub total_instr_set: HashMap<EVMAddress, HashSet<usize>>,
     pub total_jump_branch: HashMap<EVMAddress, usize>,
     pub total_jumpi_branch: HashMap<EVMAddress, usize>,
+    pub work_dir: String,
 }
 
 
@@ -58,6 +59,7 @@ impl BranchCoverage {
             total_instr_set: HashMap::new(),
             total_jump_branch: HashMap::new(),
             total_jumpi_branch: HashMap::new(),
+            work_dir: "work_dir".to_string(),
         }
     }
 
@@ -99,7 +101,7 @@ impl BranchCoverage {
             .write(true)
             .append(false)
             .create(true)
-            .open(format!("branch_cov_{}.txt", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
+            .open(format!("{}/branch_cov_{}.txt", self.work_dir, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()))
             .unwrap();
         file.write_all(data.as_bytes()).unwrap();
     }
@@ -182,6 +184,7 @@ impl<I, VS, S> Middleware<VS, I, S> for BranchCoverage
 
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
         // println!("on_insert: {:#X} {:?}", address, hex::encode(bytecode.clone().bytecode.as_ref()));
+        self.work_dir = host.work_dir.clone();
         let total = branch_pc(&bytecode.clone());
         self.total_jump_branch.insert(address, total.0);
         self.total_jumpi_branch.insert(address, total.1);
