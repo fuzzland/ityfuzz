@@ -2,15 +2,23 @@
 
 ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP）等。
 
-### 使用 UI 运行 ItyFuzz
+只需提供合约地址，就能**立即**找到漏洞：
+![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-安装 Docker，然后运行我们的 Docker 镜像（仅支持 x86，在非 x86 平台上运行会显著降低性能）：
+[英文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README.md) / [研究论文](https://scf.so/ityfuzz.pdf) / [开发信息](#development)
 
-```bash
-docker run -p 8000:8000 fuzzland/ityfuzz
+### 通过 UI 运行 ItyFuzz
+
+安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
+
+```
+docker pull fuzzland/ityfuzz:stable
+docker run -p 8000:8000 fuzzland/ityfuzz:stable
 ```
 
-然后，您可以在 http://localhost:8000 访问 UI。
+然后，你可以访问 http://localhost:8000 界面
+
+<sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
 
 ### 统计
 
@@ -33,22 +41,23 @@ docker run -p 8000:8000 fuzzland/ityfuzz
 | ---------- | ------------ | ----------- | ----------- |
 | B1         | 97.1%        | 47.1%       | 99.2%       |
 | B2         | 86.2%        | 82.9%       | 95.4%       |
-| Tests      | 不支持       | 52.9%       | 100%        |
+| 测试       | 不支持       | 52.9%       | 100%        |
 
-<sub>\* B1 和 B2 包含 72 个合约。Tests 是 `tests` 目录中的项目。覆盖率计算为 `（覆盖的指令）/（总指令 - 无效代码）`。 </sub>
+<sub>\* B1 和 B2 包含 72 个来自 SMARTIAN 的单合约项目。测试是`tests`目录中的项目。覆盖率计算公式为 `(被覆盖的指令) / (总指令 - 死代码)`。 </sub>
 
 # 开发
 
 ### 构建
 
-您需要安装`libssl-dev`（OpenSSL）和`libz3-dev`。
+您需要安装 `libssl-dev`（OpenSSL）和 `libz3-dev`（参见[Z3 安装](#z3-installation)章节中的说明）。
 
 ```bash
-# 下载依赖
 git submodule update --recursive --init
 cd cli/
 cargo build --release
 ```
+
+你需要`solc`来编译智能合约。你可以使用`solc-select`工具来管理`solc`的版本。
 
 ### 运行
 
@@ -56,12 +65,14 @@ cargo build --release
 
 ```bash
 cd ./tests/multi-contract/
+# 举例来说，引入来自./solidity_utils的库
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 ```
 
 运行 Fuzzer：
 
 ```bash
+# 如果 cli 二进制文件存在
 cd ./cli/
 ./cli -t '../tests/multi-contract/*'
 ```
@@ -70,6 +81,8 @@ cd ./cli/
 
 **Verilog CTF Challenge 2**
 `tests/verilog-2/`
+
+Flashloan 攻击 + 重入性。目标是达到`Bounty.sol`中的第 34 行。
 
 合约有闪电贷款攻击+重入漏洞。攻击目标是到达`Bounty.sol`中的第 34 行。
 
@@ -115,8 +128,6 @@ ItyFuzz 将自动检测目录中的合约之间的关联（参见`tests/multi-co
 - ItyFuzz 在无任何合约的区块链上进行 fuzz，
   因此您应该确保在 fuzz 之前将所有相关合约（例如，ERC20 令牌，Uniswap 等）都将部署到 ItyFuzz 的区块链中。
 
-- 您还需要覆盖智能合约中的所有`constructor(...)`使它没有参数。 ItyFuzz 假定构造函数没有参数。
-
 ### 在线 Fuzz 一个项目
 
 （可选）启用 flashloan_v2 重新构建以获得更好的结果。
@@ -142,3 +153,117 @@ cargo build --release
 
 ItyFuzz 将从 Etherscan 拉取合约的 ABI 并 fuzz 它。如果 ItyFuzz 遇到 Storage 中未知的槽，它将从 RPC 同步槽。
 如果 ItyFuzz 遇到对外部未知合约的调用，它将拉取该合约的字节码和 ABI。 如果它的 ABI 不可用，ItyFuzz 将使用 heimdall 对字节码进行反编译分析 ABI。
+
+### Onchain 获取
+
+当遇到目标未初始化的 SLOAD 时，ItyFuzz 尝试从区块链节点获取存储。有三种获取方式：
+
+- OneByOne：一次获取一个 slot 。这是默认模式。它很慢，但不会失败。
+- All：使用我们节点上的自定义 API `eth_getStorageAll` 一次性获取所有 slot 。这是最快的模式，但如果合约太大，可能会失败。
+- Dump：使用 debug API `debug_storageRangeAt` 来转储存储。这只适用于 ETH（目前），并且很容易失败。
+
+### 构造函数参数
+
+ItyFuzz 提供两种方法来传入构造函数参数。这些参数对于在部署时初始化合约的状态是必要的。
+
+**方法 1：CLI 参数**
+
+第一种方法是直接作为 CLI 参数传入构造函数参数。
+
+当你使用 CLI
+
+运行 ItyFuzz 时，你可以包含`--constructor-args`标志，后跟一个指定每个构造函数的参数的字符串。
+
+格式如下：
+
+```
+cli -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+```
+
+例如，如果你有两个合约，`main` 和 `main2`，它们都有一个 `bytes32` 和一个 `uint256` 作为构造函数参数，你可以这样传入它们：
+
+```bash
+cli -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+```
+
+**方法 2：服务器转发**
+
+第二种方法是使用我们的服务器将请求转发到用户指定的 RPC，cli 将从发送到 RPC 的交易中获取构造函数参数。
+
+首先，进入`/server`目录，并安装必要的包：
+
+```bash
+cd /server
+npm install
+```
+
+然后，使用以下命令启动服务器：
+
+```bash
+node app.js
+```
+
+默认情况下，服务器将请求转发到`http://localhost:8545`，这是[Ganache](https://github.com/trufflesuite/ganache)的默认地址，如果你没有运行本地区块链，你可以使用 Ganache 启动一个。
+如果你希望将请求转发到其他位置，你可以像这样指定地址作为命令行参数：
+
+```bash
+node app.js http://localhost:8546
+```
+
+一旦服务器运行起来，你就可以使用你选择的工具将你的合约部署到 `localhost:5001`。
+
+例如，你可以使用 Foundry 通过服务器部署你的合约：
+
+```bash
+forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-key 0x0000000000000000000000000000000000000000000000000000000000000000 --constructor-args "1" "0x6100000000000000000000000000000000000000000000000000000000000000"
+```
+
+最后，你可以使用`--fetch-tx-data`标志获取构造函数参数：
+
+```bash
+cli -t 'tests/multi-contract/*' --fetch-tx-data
+```
+
+ItyFuzz 将从通过服务器转发到 RPC 的交易中获取构造函数参数。
+
+### Z3 安装
+
+**macOS**
+
+```bash
+git clone https://github.com/Z3Prover/z3 && cd z3
+python scripts/mk_make.py --prefix=/usr/local
+cd build && make -j64 && sudo make install
+```
+
+如果构建命令仍然因找不到`z3.h`而失败，执行`export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h`
+
+**Ubuntu**
+
+```bash
+apt install libz3-dev
+```
+
+### 数据收集
+
+ItyFuzz 收集遥测数据以帮助我们改进模糊器。这些数据对我们非常有价值，我们非常感谢你让我们收集它们！
+
+ItyFuzz 收集以下类型的数据：
+
+- ItyFuzz 的版本
+- 运行模糊器的操作系统和版本
+- 模糊器运行的时间
+- 使用的命令行参数（不包括你的输入目录）
+- 生成的目标列表和数量
+- 发现的漏洞类型和数量
+- 测试生成器和模糊器的统计数据
+
+收集的数据不包括任何可以用来识别你的信息，例如 IP 地址，目录名或文件名。
+
+默认情况下，ItyFuzz 将在每次运行结束时将遥测数据发送到我们的服务器。你可以在每次运行结束时看到一个摘要，显示发送了哪些数据。
+
+如果你不希望 ItyFuzz 收集遥测数据，你可以在运行模糊器时使用`--no-telemetry`标志。
+
+```bash
+./cli -t '[DIR_PATH]/*' --no-telemetry
+```
