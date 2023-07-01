@@ -33,7 +33,7 @@ use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter, BytecodeLocked};
 use revm_primitives::{Bytecode, LatestSpec};
 
 
@@ -353,7 +353,7 @@ where
             .host
             .code
             .get(&call_ctx.code_address)
-            .expect(&*format!("no code {:?}", call_ctx.code_address))
+            .unwrap_or(&Arc::new(BytecodeLocked::default()))
             .clone();
 
         // Create the interpreter
