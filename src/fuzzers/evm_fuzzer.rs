@@ -45,6 +45,7 @@ use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::fuzzer::RUN_FOREVER;
 
@@ -68,6 +69,7 @@ pub fn evm_fuzzer(
     }
 
     let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
+    let branch_middleware = Rc::new(RefCell::new(BranchCoverage::new()));
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
@@ -165,6 +167,7 @@ pub fn evm_fuzzer(
     if config.replay_file.is_some() {
         // add coverage middleware for replay
         evm_executor.host.add_middlewares(cov_middleware.clone());
+        evm_executor.host.add_middlewares(branch_middleware.clone());
     }
 
     let mut corpus_initializer = EVMCorpusInitializer::new(
@@ -375,6 +378,7 @@ pub fn evm_fuzzer(
 
             // dump coverage:
             cov_middleware.borrow_mut().record_instruction_coverage();
+            branch_middleware.borrow_mut().record_branch_coverage();
         }
     }
 }

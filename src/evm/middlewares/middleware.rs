@@ -27,6 +27,7 @@ pub enum MiddlewareType {
     Flashloan,
     Selfdestruct,
     InstructionCoverage,
+    BranchCoverage,
     Sha3Bypass,
     Sha3TaintAnalysis
 }
