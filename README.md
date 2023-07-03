@@ -186,8 +186,20 @@ apt install libz3-dev
 ```
 
 ### Telemetry
-ItyFuzz collects telemetry data to help us improve the fuzzer. The data is collected anonymously and is not used for any commercial purpose.
+ItyFuzz collects telemetry data to help us improve the fuzzer. The data is collected anonymously and is not used for any commercial purpose. 
 You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variable.
+
+### Citation
+```
+@misc{ityfuzz,
+      title={ItyFuzz: Snapshot-Based Fuzzer for Smart Contract}, 
+      author={Chaofan Shou and Shangyin Tan and Koushik Sen},
+      year={2023},
+      eprint={2306.17135},
+      archivePrefix={arXiv},
+      primaryClass={cs.CR}
+}
+```
 
 
 ### Acknowledgement
