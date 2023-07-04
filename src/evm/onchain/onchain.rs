@@ -315,9 +315,6 @@ where
                              caller
                     );
 
-                    if !host.code.contains_key(&caller) {
-                        host.set_codedata(caller, Bytecode::new_raw(Bytes::from( interp.contract.bytecode.bytecode().to_vec())));
-                    }
                 } else {
                     abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
                     host.add_hashes(
