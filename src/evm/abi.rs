@@ -1117,7 +1117,12 @@ fn get_abi_type_basic(
                 });
             } else if abi_name.starts_with("bytes") {
                 let len = abi_name[5..].parse::<usize>().unwrap();
-                return get_abi_type_basic("bytes", len, with_address);
+                return Box::new(A256 {
+                    data: vec![0; len],
+                    is_address: false,
+                    dont_mutate: false,
+                });
+                
             } else if abi_name.len() == 0 {
                 return Box::new(AEmpty {});
             } else {
