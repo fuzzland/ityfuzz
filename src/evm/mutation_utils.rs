@@ -60,8 +60,10 @@ where
         let idx = state.rand_mut().next() as usize;
 
         let constant = match state.metadata().get::<ConstantPoolMetadata>() {
-            Some(meta) => unsafe { meta.constants.get_unchecked(idx % meta.constants.len()) },
-            None => return Ok(MutationResult::Skipped),
+            Some(meta) if !meta.constants.is_empty() => unsafe { 
+                meta.constants.get_unchecked(idx % meta.constants.len()) 
+            },
+            _ => return Ok(MutationResult::Skipped),
         };
 
         let input_bytes = input.bytes_mut();
