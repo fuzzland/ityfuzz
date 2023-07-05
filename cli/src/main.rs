@@ -1,14 +1,20 @@
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
+use ethers::types::Transaction;
+use hex::{decode, encode};
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
+use ityfuzz::evm::host::PANIC_ON_BUG;
+use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
 use ityfuzz::evm::input::EVMInput;
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracles::bug::BugOracle;
-use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
+use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
+use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
+use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use ityfuzz::evm::producers::pair::PairProducer;
@@ -22,12 +28,9 @@ use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use std::env;
-use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
-use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -72,6 +75,7 @@ struct Data {
 #[derive(Deserialize)]
 struct RPCCall {
     method: String,
+    params: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -184,7 +188,7 @@ struct Args {
 
     #[arg(long, default_value = "true")]
     selfdestruct_oracle: bool,
-  
+
     ///Enable oracle for detecting whether typed_bug() is called
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
@@ -378,13 +382,29 @@ fn main() {
         let data: Vec<Data> = serde_json::from_str(&response).unwrap();
 
         for d in data {
-            if d.body.method != "eth_getTransactionByHash" {
+            if d.body.method != "eth_sendRawTransaction" {
                 continue;
             }
 
-            let response: Response = serde_json::from_str(&d.response.to_string()).unwrap();
+            let tx = d.body.params.unwrap();
 
-            deploy_codes.push(response.data.result.input);
+            let params: Vec<String> = serde_json::from_value(tx).unwrap();
+
+            let data = params[0].clone();
+
+            let data = if data.starts_with("0x") {
+                &data[2..]
+            } else {
+                &data
+            };
+
+            let bytes_data = hex::decode(data).unwrap();
+
+            let transaction: Transaction = rlp::decode(&bytes_data).unwrap();
+
+            let code = hex::encode(transaction.input);
+
+            deploy_codes.push(code);
         }
     }
 
@@ -455,7 +475,7 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        selfdestruct_oracle:args.selfdestruct_oracle,
+        selfdestruct_oracle: args.selfdestruct_oracle,
         work_dir: args.work_dir,
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
