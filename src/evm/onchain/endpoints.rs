@@ -1098,7 +1098,13 @@ impl OnChainConfig {
         if r.find("error") != None {
             return None;
         }
-        return  Some(serde_json::from_str::<GetPairResponse>(&r).unwrap());
+        let r = r.replace("\"decimals\":null", "\"decimals\":\"18\"");  // thegraph return decimals is null
+        match serde_json::from_str::<GetPairResponse>(&r) {
+            Ok(v) => return Some(v),
+            Err(e) => {
+                return None;
+            }
+        }
     }
 }
 
