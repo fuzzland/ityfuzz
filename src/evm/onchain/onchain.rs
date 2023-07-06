@@ -32,6 +32,7 @@ use crate::evm::onchain::flashloan::register_borrow_txn;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use bytes::Bytes;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
@@ -313,6 +314,7 @@ where
                                  .collect::<Vec<_>>(),
                              caller
                     );
+
                 } else {
                     abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
                     host.add_hashes(

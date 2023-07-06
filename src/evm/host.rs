@@ -702,21 +702,32 @@ where
     }
 
     fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
-        if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
-            if unsafe {PANIC_ON_BUG} {
-                panic!("target hit");
+        // flag check
+        if  _topics.len() == 1 {
+            let current_flag = (*_topics.last().unwrap()).0;
+            /// hex is "fuzzland"
+            if  current_flag[0] == 0x66 && current_flag[1] == 0x75 && current_flag[2] == 0x7a && current_flag[3] == 0x7a &&
+                current_flag[4] == 0x6c && current_flag[5] == 0x61 && current_flag[6] == 0x6e && current_flag[7] == 0x64 &&
+                current_flag[8] == 0x00 && current_flag[9] == 0x00{
+                if current_flag[31] == 0x37 {
+                    if unsafe {PANIC_ON_BUG} {
+                        panic!("target hit");
+                    }
+                    self.bug_hit = true;
+                } else if current_flag[31] == 0x78 {
+                    if unsafe {PANIC_ON_TYPEDBUG} {
+                        panic!("target typed_bug hit");
+                    }
+                    let current_type = bytes_to_u64(&current_flag[23..31]);
+                    if !self.known_typed_bugs.contains(&current_type) {
+                        self.current_typed_bug.push(current_type);
+                        self.known_typed_bugs.insert(current_type);
+                    }
+                }
             }
-            self.bug_hit = true;
-        } else if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x78{
-            if unsafe {PANIC_ON_TYPEDBUG} {
-                panic!("target typed_bug hit");
-            }
-            let current_type = bytes_to_u64(&(*_topics.last().unwrap()).0[23..31]);
-            if !self.known_typed_bugs.contains(&current_type) {
-                self.current_typed_bug.push(current_type);
-                self.known_typed_bugs.insert(current_type);
-            }
+
         }
+
         #[cfg(feature = "print_logs")]
         {
             let mut hasher = DefaultHasher::new();
