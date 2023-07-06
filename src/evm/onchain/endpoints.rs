@@ -730,8 +730,7 @@ impl OnChainConfig {
                     "query": format!("{{ p0: pairs(block:{{number:{}}},first:10,where :{{token0 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} p1: pairs(block:{{number:{}}},first:10, where :{{token1 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} }}", block_int, token.to_lowercase(), block_int, token.to_lowercase())
                 }).to_string();
 
-                let r = self.post(url.to_string(), body).unwrap();
-                let res: GetPairResponse = serde_json::from_str(&r).unwrap();
+                let res = self.get_pair_response(url.to_string(), body);
 
                 for pair in res.data.p0.iter().chain(res.data.p1.iter()) {
                     next_tokens.push(PairData {
@@ -776,8 +775,7 @@ impl OnChainConfig {
                     "query": format!("{{ p0: pairs(block:{{number:{}}},first:10,where :{{token0 : \"{}\", token1: \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} p1: pairs(block:{{number:{}}},first:10, where :{{token1 : \"{}\", token0: \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} }}", block_int, token.to_lowercase(), self.get_weth(network), block_int, token.to_lowercase(), self.get_weth(network))
                 }).to_string();
 
-                let r = self.post(i.to_string(), body).unwrap();
-                let res: GetPairResponse = serde_json::from_str(&r).unwrap();
+                let res = self.get_pair_response(i.to_string(), body);
 
                 for pair in res.data.p0.iter().chain(res.data.p1.iter()) {
                     next_tokens.push(PairData {
@@ -1053,6 +1051,54 @@ impl OnChainConfig {
         }
 
         self.with_info(routes, network, token)
+    }
+
+    // fix get pair thegraph block sync old data
+    fn get_pair_response(&self, url: String, body: String)-> GetPairResponse
+    {
+        match self.try_get_pair(url.to_string(), body) {
+            Some(v) => v,
+            __ => {
+                GetPairResponse {
+                    data: GetPairResponseData {
+                        p0: vec![],
+                        p1: vec![],
+                    },
+                }
+            }
+        }
+    }
+
+    // try agin get thegraph pair
+    fn try_get_pair(&self, url: String, body: String)  -> Option<GetPairResponse>  {
+        let r = self.post(url.to_string(), body.clone());
+        if r.is_none() {
+            return None;
+        }
+        let r = r.unwrap();
+        if r.find("error") == None{
+            return  Some(serde_json::from_str::<GetPairResponse>(&r).unwrap());
+        }
+        if r.find("Failed to decode `block.number`") == None {
+            return None;
+        }
+        let lfind = r.find("for block number ").unwrap();
+        let rfind = r.find(" is therefore not yet available").unwrap();
+        let curblock = format!(":{}", &r[lfind + 17..rfind]);
+        let lfind = r.find("up to block number ").unwrap();
+        let rfind = r.find(" and data for block").unwrap();
+        let cur_maxblock = r[lfind + 19..rfind].to_string();
+        let maxblock = format!(":{}",cur_maxblock.parse::<i32>().unwrap()-1);
+        let newbody = body.replace(&curblock, &maxblock);
+        let r = self.post(url, newbody);
+        if r.is_none() {
+            return None;
+        }
+        let r = r.unwrap();
+        if r.find("error") != None {
+            return None;
+        }
+        return  Some(serde_json::from_str::<GetPairResponse>(&r).unwrap());
     }
 }
 
