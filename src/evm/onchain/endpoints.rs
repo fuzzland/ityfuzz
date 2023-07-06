@@ -24,7 +24,7 @@ use revm_primitives::bitvec::macros::internal::funty::Integral;
 use revm_primitives::{Bytecode, LatestSpec};
 use crate::evm::types::{EVMAddress, EVMU256};
 
-const MAX_HOPS: u32 = 5; // Assuming the value of MAX_HOPS
+const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum Chain {
@@ -715,7 +715,7 @@ impl OnChainConfig {
 impl OnChainConfig {
     fn get_pair(&self, token: &str, network: &str, block: &str) -> Vec<PairData> {
         let block_int;
-
+        println!("get pair {} {} {}", token, network, block);
         match block {
             "latest" => block_int = self.get_latest_block() - 50,
             _ => block_int = u64::from_str_radix(&block.trim_start_matches("0x"), 16).unwrap(),
@@ -757,6 +757,7 @@ impl OnChainConfig {
     }
 
     fn get_pair_pegged(&self, token: &str, network: &str, block: &str) -> Vec<PairData> {
+        println!("get pair pegged {} {} {}", token, network, block);
         let block_int = if block != "latest" {
             u64::from_str_radix(&block.trim_start_matches("0x"), 16)
                 .expect("failed to parse block number")
@@ -991,6 +992,9 @@ impl OnChainConfig {
         hops: &HashMap<String, Vec<PairData>>,
         routes: &mut Vec<Vec<PairData>>,
     ) {
+        if !hops.contains_key(token) {
+            return;
+        }
         if pegged_tokens.values().any(|v| v == token) {
             let mut new_path = path.clone();
             new_path.push(self.get_pegged_next_hop(token, network, block));
@@ -998,9 +1002,6 @@ impl OnChainConfig {
             return;
         }
         visited.insert(token.to_string());
-        if !hops.contains_key(token) {
-            return;
-        }
         for hop in hops.get(token).unwrap() {
             if visited.contains(&hop.next) {
                 continue;
