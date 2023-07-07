@@ -1,14 +1,14 @@
+---
 name: Rust
-
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - master
   pull_request:
-    branches: [ "master" ]
-
+    branches:
+      - master
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   start-runner:
     name: Start self-hosted EC2 runner
@@ -30,45 +30,35 @@ jobs:
           mode: start
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           ec2-image-id: ami-0b5bc504b604fe97d
-          ec2-instance-type: c4.8xlarge	
+          ec2-instance-type: c4.8xlarge
           subnet-id: subnet-0bdfed1a35eccc1fe
           security-group-id: sg-088af6a76c47f0e45
-          aws-resource-tags: > 
+          aws-resource-tags: |
             [
               {"Key": "Name", "Value": "ec2-github-runner"},
               {"Key": "GitHubRepository", "Value": "${{ github.repository }}"}
             ]
   build:
     needs: start-runner
-    runs-on: ${{ needs.start-runner.outputs.label }} 
+    runs-on: ${{ needs.start-runner.outputs.label }}
     steps:
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
-
-    - name: Build
-      uses: actions-rs/toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v3
         with:
-          toolchain: stable
-      run: cargo build --verbose
-
-    - name: Run tests
-      uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      run: cargo test --verbose
-
-    - name: Run integration tests
-      run: NO_TELEMETRY=1 python3 integration_test.py
-
+          submodules: recursive
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Run integration tests
+        run: NO_TELEMETRY=1 python3 integration_test.py
   stop-runner:
     name: Stop self-hosted EC2 runner
     needs:
       - start-runner
       - build
     runs-on: ubuntu-latest
-    if: ${{ always() }} 
+    if: ${{ always() }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -83,4 +73,3 @@ jobs:
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           label: ${{ needs.start-runner.outputs.label }}
           ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
-  
