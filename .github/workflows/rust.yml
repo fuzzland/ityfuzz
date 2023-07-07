@@ -48,7 +48,7 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: source "/root/.cargo/env" && cargo build --verbose
+        run: cat "/root/.cargo/env" && source "/root/.cargo/env" && cargo build --verbose
       - name: Run tests
         run: source "/root/.cargo/env" && cargo test --verbose
       - name: Run integration tests
