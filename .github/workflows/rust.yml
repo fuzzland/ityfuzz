@@ -47,13 +47,13 @@ jobs:
         submodules: 'recursive'
 
     - name: Build
-    - uses: actions-rs/toolchain@v1
+      uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
       run: cargo build --verbose
 
     - name: Run tests
-    - uses: actions-rs/toolchain@v1
+      uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
       run: cargo test --verbose
