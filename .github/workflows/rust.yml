@@ -50,11 +50,11 @@ jobs:
       - name: Setup Home
         run: export HOME="/root"
       - name: Build
-        run: export PATH="$HOME/.cargo/bin:$PATH" && echo $PATH && ls "$HOME/.cargo/bin" && cargo build --verbose
+        run: export PATH="/root/.cargo/bin:$PATH" && echo $PATH && ls "/root/.cargo/bin" && cargo build --verbose
       - name: Run tests
-        run: source "/root/.cargo/env" && cargo test --verbose
+        run: export PATH="/root/.cargo/bin:$PATH" && cargo test --verbose
       - name: Run integration tests
-        run: source "/root/.cargo/env" && NO_TELEMETRY=1 python3 integration_test.py
+        run: export PATH="/root/.cargo/bin:$PATH" && NO_TELEMETRY=1 python3 integration_test.py
   stop-runner:
     name: Stop self-hosted EC2 runner
     needs:
