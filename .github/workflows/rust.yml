@@ -42,6 +42,7 @@ jobs:
     needs: start-runner
     runs-on: ${{ needs.start-runner.outputs.label }} 
     steps:
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: actions/checkout@v3
       with:
         submodules: 'recursive'
