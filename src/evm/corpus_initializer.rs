@@ -7,7 +7,9 @@ use crate::evm::input::{EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256, fixed_address};
+use crate::evm::types::{
+    fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256,
+};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
@@ -26,10 +28,11 @@ use std::ops::Deref;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
+use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
+use hex;
+use itertools::Itertools;
 use std::rc::Rc;
 use std::time::Duration;
-use itertools::Itertools;
-use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
@@ -219,9 +222,11 @@ impl<'a> EVMCorpusInitializer<'a> {
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
-            self.executor
-                .host
-                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
+            self.executor.host.set_code(
+                caller,
+                Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+                self.state,
+            );
         }
     }
 

@@ -1,14 +1,16 @@
+use crate::evm::types::{
+    fixed_address, generate_random_address, EVMAddress, EVMFuzzMutator, EVMFuzzState,
+};
 /// Load contract from file system or remote
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, fixed_address, generate_random_address};
 use std::fs::File;
 
+use crate::state::FuzzState;
+use itertools::Itertools;
 use std::io::Read;
 use std::path::Path;
-use itertools::Itertools;
-use crate::state::FuzzState;
 extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
@@ -17,6 +19,8 @@ use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
+use hex::encode;
+use regex::Regex;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
@@ -134,17 +138,49 @@ impl ContractLoader {
         hex::decode(data).expect("Failed to parse hex file")
     }
 
-    pub fn from_prefix(prefix: &str, state: &mut EVMFuzzState, source_map_info: Option<ContractsSourceMapInfo>) -> Self {
+    pub fn from_prefix(
+        prefix: &str,
+        state: &mut EVMFuzzState,
+        source_map_info: Option<ContractsSourceMapInfo>,
+        deploy_codes: &Vec<String>,
+        constructor_args: &Vec<String>,
+    ) -> Self {
+        let constructor_args_in_bytes: Vec<u8> = constructor_args
+            .iter()
+            .flat_map(|arg| {
+                let arg = if arg.starts_with("0x") {
+                    &arg[2..]
+                } else {
+                    arg
+                };
+                let arg = if arg.len() % 2 == 1 {
+                    format!("0{}", arg)
+                } else {
+                    arg.to_string()
+                };
+                let mut decoded = hex::decode(arg).unwrap();
+                let len = decoded.len();
+                if len < 32 {
+                    let mut padding = vec![0; 32 - len]; // Create a vector of zeros
+                    padding.append(&mut decoded); // Append the original vector to it
+                    padding
+                } else {
+                    decoded
+                }
+            })
+            .collect();
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
             code: vec![],
             is_code_deployed: false,
-            constructor_args: vec![], // todo: fill this
+            constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
-            source_map: source_map_info.map(|info|
-                info.get(prefix).expect("combined.json provided but contract not found").clone()
-            ),
+            source_map: source_map_info.map(|info| {
+                info.get(prefix)
+                    .expect("combined.json provided but contract not found")
+                    .clone()
+            }),
         };
         println!("Loading contract {}", prefix);
         for i in glob(prefix).expect("not such path for prefix") {
@@ -185,9 +221,44 @@ impl ContractLoader {
             }
             print!("Random bytes {:?}", random_bytes);
             // result.constructor_args = random_bytes;
-            result.constructor_args = abi_instance.get().get_bytes();
+            if result.constructor_args.len() == 0 {
+                result.constructor_args = abi_instance.get().get_bytes();
+            }
             // println!("Constructor args: {:?}", result.constructor_args);
             result.code.extend(result.constructor_args.clone());
+        }
+
+        let s = hex::encode(&result.code);
+
+        for deploy_code in deploy_codes {
+            // if deploy_code startwiths '0x' then remove it
+            let deploy_code = if deploy_code.starts_with("0x") {
+                &deploy_code[2..]
+            } else {
+                deploy_code
+            };
+
+            let re = Regex::new(r"63.{8}14").unwrap();
+            let matches: Vec<String> = re
+                .find_iter(deploy_code)
+                .map(|m| m.as_str().to_string())
+                .collect();
+            let matches_for_s: Vec<String> =
+                re.find_iter(&s).map(|m| m.as_str().to_string()).collect();
+
+            // compare matches and match_for_s
+            if matches.len() == matches_for_s.len() {
+                let mut is_match = true;
+                for i in 0..matches.len() {
+                    if matches[i] != matches_for_s[i] {
+                        is_match = false;
+                        break;
+                    }
+                }
+                if is_match {
+                    result.code = hex::decode(deploy_code).expect("Failed to parse deploy code");
+                }
+            }
         }
         return Self {
             contracts: if result.code.len() > 0 {
@@ -205,7 +276,12 @@ impl ContractLoader {
     // |- contract1.bin
     // |- contract2.abi
     // |- contract2.bin
-    pub fn from_glob(p: &str, state: &mut EVMFuzzState) -> Self {
+    pub fn from_glob(
+        p: &str,
+        state: &mut EVMFuzzState,
+        deploy_codes: &Vec<String>,
+        constructor_args_map: &HashMap<String, Vec<String>>,
+    ) -> Self {
         let mut prefix_file_count: HashMap<String, u8> = HashMap::new();
         let mut contract_combined_json_info = None;
         for i in glob(p).expect("not such folder") {
@@ -242,11 +318,25 @@ impl ContractLoader {
 
         let mut contracts: Vec<ContractInfo> = vec![];
         for (prefix, count) in prefix_file_count {
+            let p = prefix.to_string();
             if count == 2 {
-                for contract in
-                    Self::from_prefix((prefix.to_owned() + &String::from('*')).as_str(),
-                                      state,
-                                      parsed_contract_info.clone()).contracts
+                let mut constructor_args: Vec<String> = vec![];
+                for (k, v) in constructor_args_map.iter() {
+                    let components: Vec<&str> = p.split('/').collect();
+                    if let Some(last_component) = components.last() {
+                        if last_component == &k {
+                            constructor_args = v.clone();
+                        }
+                    }
+                }
+                for contract in Self::from_prefix(
+                    (prefix.to_owned() + &String::from('*')).as_str(),
+                    state,
+                    parsed_contract_info.clone(),
+                    deploy_codes,
+                    &constructor_args,
+                )
+                .contracts
                 {
                     contracts.push(contract);
                 }
@@ -255,7 +345,6 @@ impl ContractLoader {
 
         ContractLoader { contracts }
     }
-
 
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
@@ -286,8 +375,11 @@ type ContractsSourceMapInfo = HashMap<String, HashMap<usize, SourceMapLocation>>
 pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
     let map_json = serde_json::from_str::<serde_json::Value>(&json).unwrap();
 
-    let contracts = map_json["contracts"].as_object().expect("contracts not found");
-    let file_list = map_json["sourceList"].as_array()
+    let contracts = map_json["contracts"]
+        .as_object()
+        .expect("contracts not found");
+    let file_list = map_json["sourceList"]
+        .as_array()
         .expect("sourceList not found")
         .iter()
         .map(|x| x.as_str().expect("sourceList is not string").to_string())
@@ -297,21 +389,21 @@ pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
 
     for (contract_name, contract_info) in contracts {
         let splitter = contract_name.split(':').collect::<Vec<&str>>();
-        let file_name = splitter.iter().take(splitter.len()-1).join(":");
+        let file_name = splitter.iter().take(splitter.len() - 1).join(":");
         let contract_name = splitter.last().unwrap().to_string();
 
-        let bin_runtime = contract_info["bin-runtime"].as_str().expect("bin-runtime not found");
+        let bin_runtime = contract_info["bin-runtime"]
+            .as_str()
+            .expect("bin-runtime not found");
         let bin_runtime_bytes = hex::decode(bin_runtime).expect("bin-runtime is not hex");
 
-        let srcmap_runtime = contract_info["srcmap-runtime"].as_str().expect("srcmap-runtime not found");
+        let srcmap_runtime = contract_info["srcmap-runtime"]
+            .as_str()
+            .expect("srcmap-runtime not found");
 
         result.insert(
             contract_name.clone(),
-            decode_instructions(
-                bin_runtime_bytes,
-                srcmap_runtime.to_string(),
-                &file_list
-            )
+            decode_instructions(bin_runtime_bytes, srcmap_runtime.to_string(), &file_list),
         );
     }
     result
@@ -323,7 +415,9 @@ mod tests {
 
     #[test]
     fn test_load() {
-        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0));
+        let codes: Vec<String> = vec![];
+        let args: HashMap<String, Vec<String>> = HashMap::new();
+        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0), &codes, &args);
         println!(
             "{:?}",
             loader

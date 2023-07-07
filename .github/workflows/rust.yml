@@ -1,29 +1,78 @@
+---
 name: Rust
-
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - master
   pull_request:
-    branches: [ "master" ]
-
+    branches:
+      - master
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
-  build:
-
-    runs-on: [self-hosted, 8xlarge]
-
+  start-runner:
+    name: Start self-hosted EC2 runner
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
-
-    - name: Build
-      run: cargo build --verbose
-
-    - name: Run tests
-      run: cargo test --verbose
-
-    - name: Run integration tests
-      run: NO_TELEMETRY=1 python3 integration_test.py
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: fuzzland/ec2-github-runner@v2
+        with:
+          mode: start
+          pre-runner-script: |
+            source "/root/.cargo/env"
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          ec2-image-id: ami-0b5bc504b604fe97d
+          ec2-instance-type: c5d.12xlarge
+          subnet-id: subnet-0bdfed1a35eccc1fe
+          security-group-id: sg-088af6a76c47f0e45
+          aws-resource-tags: |
+            [
+              {"Key": "Name", "Value": "ec2-github-runner"},
+              {"Key": "GitHubRepository", "Value": "${{ github.repository }}"}
+            ]
+  build:
+    needs: start-runner
+    runs-on: ${{ needs.start-runner.outputs.label }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Setup Home
+        run: export HOME="/root"
+      - name: Build
+        run: export PATH="/root/.cargo/bin:$PATH" && echo $PATH && ls "/root/.cargo/bin" && cargo build --verbose
+      - name: Run tests
+        run: export PATH="/root/.cargo/bin:$PATH" && cargo test --verbose
+      - name: Run integration tests
+        run: export PATH="/root/.cargo/bin:$PATH" && NO_TELEMETRY=1 python3 integration_test.py
+  stop-runner:
+    name: Stop self-hosted EC2 runner
+    needs:
+      - start-runner
+      - build
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Stop EC2 runner
+        uses: fuzzland/ec2-github-runner@v2
+        with:
+          mode: stop
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          label: ${{ needs.start-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
