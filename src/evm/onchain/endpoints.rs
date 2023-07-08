@@ -1077,8 +1077,14 @@ impl OnChainConfig {
             return None;
         }
         let r = r.unwrap();
-        if r.find("error") == None{
-            return  Some(serde_json::from_str::<GetPairResponse>(&r).unwrap());
+        if r.find("error") == None {
+            let r = r.replace("\"decimals\":null", "\"decimals\":\"18\""); 
+            match serde_json::from_str::<GetPairResponse>(&r) {
+                Ok(v) => return Some(v),
+                Err(e) => {
+                    return None;
+                }
+            }
         }
         if r.find("Failed to decode `block.number`") == None {
             return None;
