@@ -1070,6 +1070,16 @@ impl OnChainConfig {
         }
     }
 
+    fn try_get_pair_resut(&self, respose: &String)  -> Option<GetPairResponse>  {
+       let respose = respose.replace("\"decimals\":null", "\"decimals\":\"18\"");  // thegraph return decimals is null
+        match serde_json::from_str::<GetPairResponse>(&respose) {
+            Ok(v) => return Some(v),
+            Err(e) => {
+                return None;
+            }
+        }
+    }
+
     // try agin get thegraph pair
     fn try_get_pair(&self, url: String, body: String)  -> Option<GetPairResponse>  {
         let r = self.post(url.to_string(), body.clone());
@@ -1078,13 +1088,7 @@ impl OnChainConfig {
         }
         let r = r.unwrap();
         if r.find("error") == None {
-            let r = r.replace("\"decimals\":null", "\"decimals\":\"18\""); 
-            match serde_json::from_str::<GetPairResponse>(&r) {
-                Ok(v) => return Some(v),
-                Err(e) => {
-                    return None;
-                }
-            }
+            return self.try_get_pair_resut(&r);
         }
         if r.find("Failed to decode `block.number`") == None {
             return None;
@@ -1105,13 +1109,7 @@ impl OnChainConfig {
         if r.find("error") != None {
             return None;
         }
-        let r = r.replace("\"decimals\":null", "\"decimals\":\"18\"");  // thegraph return decimals is null
-        match serde_json::from_str::<GetPairResponse>(&r) {
-            Ok(v) => return Some(v),
-            Err(e) => {
-                return None;
-            }
-        }
+        self.try_get_pair_resut(&r)
     }
 }
 
