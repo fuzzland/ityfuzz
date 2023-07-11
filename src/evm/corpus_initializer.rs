@@ -3,13 +3,11 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::{EVMInput, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
-use crate::evm::types::{
-    fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256,
-};
+use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256, ProjectSourceMapTy};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
@@ -35,12 +33,16 @@ use std::rc::Rc;
 use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
-    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
+    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
     scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
     infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
     presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>,
+}
+
+pub struct EVMInitializationArtifacts {
+    pub address_to_sourcemap: ProjectSourceMapTy,
 }
 
 #[macro_export]
@@ -89,7 +91,7 @@ macro_rules! add_input_to_corpus {
 
 impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
+        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
         scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
         infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
         state: &'a mut EVMFuzzState,
@@ -109,13 +111,16 @@ impl<'a> EVMCorpusInitializer<'a> {
         self.presets.push(preset);
     }
 
-    pub fn initialize(&mut self, contracts: Vec<ContractInfo>) {
+    pub fn initialize(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts{
         self.setup_default_callers();
         self.setup_contract_callers();
-        self.initialize_corpus(contracts);
+        self.initialize_corpus(contracts)
     }
 
-    pub fn initialize_corpus(&mut self, contracts: Vec<ContractInfo>) {
+    pub fn initialize_corpus(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts {
+        let mut artifacts = EVMInitializationArtifacts {
+            address_to_sourcemap: HashMap::new(),
+        };
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
@@ -141,6 +146,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
+            artifacts.address_to_sourcemap.insert(deployed_address, contract.source_map);
 
             #[cfg(feature = "flashloan_v2")]
             {
@@ -200,6 +206,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         self.infant_scheduler
             .on_add(&mut self.state.infant_states_state, idx)
             .expect("failed to call infant scheduler on_add");
+        artifacts
     }
 
     pub fn setup_default_callers(&mut self) {

@@ -1,4 +1,4 @@
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
@@ -59,7 +59,7 @@ impl IERC20OracleFlashloan {
 
 pub static mut ORACLE_OUTPUT: String = String::new();
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {

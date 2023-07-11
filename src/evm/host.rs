@@ -1,5 +1,5 @@
 use crate::evm::bytecode_analyzer;
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
@@ -39,7 +39,6 @@ use crate::input::VMInputT;
 
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 
-use super::concolic::concolic_exe_host::ConcolicEVMExecutor;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -75,7 +74,7 @@ pub static mut WRITE_RELATIONSHIPS: bool = false;
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     pub evmstate: EVMState,
@@ -131,7 +130,7 @@ where
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -159,7 +158,7 @@ where
 impl<VS, I, S> Clone for FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     fn clone(&self) -> Self {
@@ -212,7 +211,7 @@ const CONTROL_LEAK_THRESHOLD: usize = 2;
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Clone + Debug + HasCorpus<I> + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>, workdir: String) -> Self {
@@ -451,7 +450,7 @@ pub static mut ARBITRARY_CALL: bool = false;
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
     S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> +  'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {

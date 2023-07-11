@@ -3,7 +3,7 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
@@ -51,7 +51,7 @@ macro_rules! scale {
 pub struct Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     phantom: PhantomData<(VS, I, S)>,
@@ -76,7 +76,7 @@ where
 impl<VS, I, S> Debug for Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -98,10 +98,10 @@ impl PriceOracle for DummyPriceOracle {
 
 pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, token: EVMAddress)
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + Clone
@@ -145,7 +145,7 @@ where
 impl<VS, I, S> Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -277,7 +277,7 @@ where
 impl<VS, I, S> Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     pub fn analyze_call(&self, input: &I, flashloan_data: &mut FlashloanData) {
@@ -302,7 +302,7 @@ where
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]

@@ -1,4 +1,4 @@
-use crate::evm::input::EVMInput;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{OracleCtx, Producer};
@@ -22,7 +22,7 @@ impl ERC20Producer {
     }
 }
 
-impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for ERC20Producer
 {
     fn produce(
@@ -37,6 +37,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
     ) {
         #[cfg(feature = "flashloan_v2")]
@@ -95,6 +96,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
     ) {
         self.balances.clear();

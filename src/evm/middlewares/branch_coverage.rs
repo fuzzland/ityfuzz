@@ -9,12 +9,13 @@ use libafl::prelude::{HasCorpus, HasMetadata, State};
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
 use crate::evm::host::FuzzHost;
-use crate::evm::input::EVMInputT;
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::evm::types::{as_u64, EVMAddress};
+use crate::evm::types::ProjectSourceMapTy;
 
 pub fn branch_pc(bytecode: &Bytecode) -> (usize, usize) {
     let mut JUMPCount = 0;
@@ -63,7 +64,7 @@ impl BranchCoverage {
         }
     }
 
-    pub fn record_branch_coverage(&mut self) {
+    pub fn record_branch_coverage(&mut self, source_map: &ProjectSourceMapTy) {
         /*
         println!("total_instr: {:?}", self.total_instr);
         println!("total_instr_set: {:?}", self.total_instr_set);
@@ -110,12 +111,12 @@ impl BranchCoverage {
 
 impl<I, VS, S> Middleware<VS, I, S> for BranchCoverage
     where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
         VS: VMStateT,
         S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug

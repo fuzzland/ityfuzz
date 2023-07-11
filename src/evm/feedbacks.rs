@@ -10,7 +10,7 @@ use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
 use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Named, State};
 use libafl::state::HasClientPerfMonitor;
-use crate::evm::input::EVMInputT;
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::sha3_bypass::Sha3TaintAnalysis;
 use crate::evm::types::EVMAddress;
 use crate::evm::vm::EVMExecutor;
@@ -22,13 +22,13 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 /// when the feedback is interesting.
 pub struct Sha3WrappedFeedback<I, S, VS, F>
     where S: State + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-          I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+          I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
           VS: VMStateT,
           F: Feedback<I, S>
 {
     pub inner_feedback: Box<F>,
     pub sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-    pub evm_executor: Rc<RefCell<EVMExecutor<I, S, VS>>>,
+    pub evm_executor: Rc<RefCell<EVMExecutor<I, S, VS, ConciseEVMInput>>>,
     pub enabled: bool,
 }
 
@@ -37,7 +37,7 @@ pub struct Sha3WrappedFeedback<I, S, VS, F>
 impl<I, S, VS, F> Feedback<I, S> for Sha3WrappedFeedback<I, S, VS, F>
 where S: State + HasRand
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + HasCurrentInputIdx
@@ -46,7 +46,7 @@ where S: State + HasRand
         + Clone
         + Debug
         + 'static,
-      I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+      I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
       VS: VMStateT + 'static,
       F: Feedback<I, S>
 {
@@ -83,12 +83,12 @@ where S: State + HasRand
 
 impl<I, S, VS, F> Sha3WrappedFeedback<I, S, VS, F>
     where S: State + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-          I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+          I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
           VS: VMStateT,
           F: Feedback<I, S>{
     pub(crate) fn new(inner_feedback: F,
                       sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-                      evm_executor: Rc<RefCell<EVMExecutor<I, S, VS>>>,
+                      evm_executor: Rc<RefCell<EVMExecutor<I, S, VS, ConciseEVMInput>>>,
                       enabled: bool
     ) -> Self {
         Self {
@@ -102,7 +102,7 @@ impl<I, S, VS, F> Sha3WrappedFeedback<I, S, VS, F>
 
 impl<I, S, VS, F> Named for Sha3WrappedFeedback<I, S, VS, F>
     where S: State + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-          I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+          I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
           VS: VMStateT,
           F: Feedback<I, S>{
     fn name(&self) -> &str {
@@ -112,7 +112,7 @@ impl<I, S, VS, F> Named for Sha3WrappedFeedback<I, S, VS, F>
 
 impl<I, S, VS, F> Debug for Sha3WrappedFeedback<I, S, VS, F>
     where S: State + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-          I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+          I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
           VS: VMStateT,
           F: Feedback<I, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {

@@ -6,7 +6,7 @@ use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
-use ityfuzz::evm::input::EVMInput;
+use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
@@ -196,6 +196,7 @@ struct Args {
     ///Enable oracle for detecting whether typed_bug() is called
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
+
     #[arg(long, default_value = "false")]
     panic_on_typedbug: bool,
 
@@ -222,6 +223,12 @@ struct Args {
     /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
+
+    /// Only needed when using combined.json (source map info).
+    /// Base path when running solc compile (--base-path passed to solc).
+    #[arg(long, default_value = "")]
+    base_path: String,
+
 }
 
 enum TargetType {
@@ -308,6 +315,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,
@@ -326,6 +334,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,
@@ -413,52 +422,50 @@ fn main() {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
-    let contract_info = match target_type {
-        Glob => {
-            ContractLoader::from_glob(
-                args.target.as_str(),
-                &mut state,
-                &deploy_codes,
-                &constructor_args_map,
-            )
-            .contracts
-        }
-        Address => {
-            if onchain.is_none() {
-                panic!("Onchain is required for address target type");
-            }
-            let mut args_target = args.target.clone();
-
-            if args.ierc20_oracle || args.flashloan {
-                const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
-                const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
-                if "bsc" == onchain.as_ref().unwrap().chain_name {
-                    if args_target.find(BSC_ADDRESS) == None {
-                        args_target.push_str(",");
-                        args_target.push_str(BSC_ADDRESS);
-                    }
-                } else if "eth" == onchain.as_ref().unwrap().chain_name {
-                    if args_target.find(ETH_ADDRESS) == None {
-                        args_target.push_str(",");
-                        args_target.push_str(ETH_ADDRESS);
-                    }
-                }
-            }
-            let addresses: Vec<EVMAddress> = args_target
-                .split(",")
-                .map(|s| EVMAddress::from_str(s).unwrap())
-                .collect();
-            ContractLoader::from_address(
-                &mut onchain.as_mut().unwrap(),
-                HashSet::from_iter(addresses),
-            )
-            .contracts
-        }
-    };
-
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
-        contract_info: contract_info,
+        contract_info: match target_type {
+            Glob => {
+                ContractLoader::from_glob(
+                    args.target.as_str(),
+                    &mut state,
+                    &deploy_codes,
+                    &constructor_args_map,
+                )
+                .contracts
+            }
+            Address => {
+                if onchain.is_none() {
+                    panic!("Onchain is required for address target type");
+                }
+                let mut args_target = args.target.clone();
+
+                if args.ierc20_oracle || args.flashloan {
+                    const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+                    const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
+                    if "bsc" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(BSC_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(BSC_ADDRESS);
+                        }
+                    } else if "eth" == onchain.as_ref().unwrap().chain_name {
+                        if args_target.find(ETH_ADDRESS) == None {
+                            args_target.push_str(",");
+                            args_target.push_str(ETH_ADDRESS);
+                        }
+                    }
+                }
+                let addresses: Vec<EVMAddress> = args_target
+                    .split(",")
+                    .map(|s| EVMAddress::from_str(s).unwrap())
+                    .collect();
+                ContractLoader::from_address(
+                    &mut onchain.as_mut().unwrap(),
+                    HashSet::from_iter(addresses),
+                )
+                .contracts
+            }
+        },
         onchain,
         concolic: args.concolic,
         oracle: oracles,
@@ -485,6 +492,7 @@ fn main() {
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
+        base_path: args.base_path,
         echidna_oracle: args.echidna_oracle,
     };
 

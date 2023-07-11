@@ -2,7 +2,7 @@ use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::{ABIConfig, ContractLoader};
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
 use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
@@ -43,7 +43,7 @@ const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -62,7 +62,7 @@ where
 
 impl<VS, I, S> Debug for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -77,7 +77,7 @@ where
 
 impl<VS, I, S> OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -142,12 +142,12 @@ pub fn keccak_hex(data: EVMU256) -> String {
 
 impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + Debug
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + Clone
         + 'static,
