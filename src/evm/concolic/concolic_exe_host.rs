@@ -8,7 +8,7 @@ use crate::{
     input::VMInputT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
     state_input::StagedVMState,
-    tracer::{BasicTxn, TxnTrace},
+    tracer::TxnTrace,
 };
 use bytes::Bytes;
 use libafl::state::{HasCorpus, HasMetadata, State};
