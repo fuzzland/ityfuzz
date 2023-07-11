@@ -2,7 +2,7 @@
 use crate::evm::input::EVMInputT;
 
 use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::state::{HasCaller, InfantStateState};
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
@@ -27,7 +27,7 @@ use crate::state_input::StagedVMState;
 ///
 /// Each mutant should report to its parent's access pattern
 /// if a new corpus item is added, it should inherit the access pattern of its source
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AccessPattern {
     pub caller: bool,       // or origin
     pub balance: Vec<EVMAddress>, // balance queried for accounts
@@ -87,25 +87,27 @@ impl AccessPattern {
 }
 
 /// [`FuzzMutator`] is a mutator that mutates the input based on the ABI and access pattern
-pub struct FuzzMutator<'a, VS, Loc, Addr, SC>
+pub struct FuzzMutator<'a, VS, Loc, Addr, SC, CI>
 where
     VS: Default + VMStateT,
-    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Scheduler for selecting the next VM state to use if we decide to mutate the VM state of
     /// the input
     pub infant_scheduler: &'a SC,
-    pub phantom: std::marker::PhantomData<(VS, Loc, Addr)>,
+    pub phantom: std::marker::PhantomData<(VS, Loc, Addr, CI)>,
 }
 
-impl<'a, VS, Loc, Addr, SC> FuzzMutator<'a, VS, Loc, Addr, SC>
+impl<'a, VS, Loc, Addr, SC, CI> FuzzMutator<'a, VS, Loc, Addr, SC, CI>
 where
     VS: Default + VMStateT,
-    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Create a new [`FuzzMutator`] with the given scheduler
     pub fn new(infant_scheduler: &'a SC) -> Self {
@@ -116,14 +118,15 @@ where
     }
 }
 
-impl<'a, VS, Loc, Addr, I, S, SC> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC>
+impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC, CI>
 where
-    I: VMInputT<VS, Loc, Addr> + Input + EVMInputT,
-    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS> + HasCaller<Addr> + HasMetadata,
-    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
+    S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Mutate the input
     fn mutate(

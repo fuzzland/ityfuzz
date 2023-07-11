@@ -20,9 +20,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::evm::types::{float_scale_to_u512, EVMU512};
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::state_input::StagedVMState;
-use crate::tracer::build_basic_txn_from_input;
 use bytes::Bytes;
 
 use libafl::prelude::{HasMetadata, HasRand};
@@ -37,12 +36,11 @@ use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Int
 use revm_primitives::{Bytecode, LatestSpec};
 
 use crate::evm::bytecode_analyzer;
-use crate::evm::concolic::concolic_exe_host::ConcolicEVMExecutor;
 use crate::evm::host::{
     ControlLeak, FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
-use crate::evm::input::{EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMAddress, EVMU256};
@@ -52,6 +50,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 
 /// Get the token context from the flashloan middleware,
@@ -247,17 +246,17 @@ pub static mut IS_FAST_CALL: bool = false;
 
 /// EVM executor, wrapper of revm
 #[derive(Debug, Clone)]
-pub struct EVMExecutor<I, S, VS>
+pub struct EVMExecutor<I, S, VS, CI>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
     pub host: FuzzHost<VS, I, S>,
     /// [Depreciated] Deployer address
     deployer: EVMAddress,
-    phandom: PhantomData<(I, S, VS)>,
+    phandom: PhantomData<(I, S, VS, CI)>,
 }
 
 /// Execution result that may have control leaked
@@ -278,13 +277,13 @@ pub struct IntermediateExecutionResult {
     pub memory: Vec<u8>,
 }
 
-impl<VS, I, S> EVMExecutor<I, S, VS>
+impl<VS, I, S, CI> EVMExecutor<I, S, VS, CI>
 where
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + HasCurrentInputIdx
@@ -293,6 +292,7 @@ where
         + Debug
         + 'static,
     VS: Default + VMStateT + 'static,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
@@ -509,7 +509,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
+    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
         // Get necessary info from input
         let mut vm_state = unsafe {
             input
@@ -621,14 +621,14 @@ where
     }
 }
 
-impl<VS, I, S> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S>
-    for EVMExecutor<I, S, VS>
+impl<VS, I, S, CI> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
+    for EVMExecutor<I, S, VS, CI>
 where
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + HasCurrentInputIdx
@@ -637,6 +637,7 @@ where
         + Debug
         + 'static,
     VS: VMStateT + Default + 'static,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Deploy a contract
     fn deploy(
@@ -687,7 +688,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
+    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
         self.execute_abi(input, state)
     }
 
@@ -697,7 +698,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>> {
+    ) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
         match input.get_input_type() {
             // buy (borrow because we have infinite ETH) tokens with ETH using uniswap
             EVMInputTy::Borrow => {
@@ -835,7 +836,7 @@ where
 
 mod tests {
     use crate::evm::host::{FuzzHost, JMP_MAP};
-    use crate::evm::input::{EVMInput, EVMInputTy};
+    use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
     use crate::evm::mutator::AccessPattern;
     use crate::evm::types::{generate_random_address, EVMFuzzState, EVMU256};
     use crate::evm::vm::{EVMExecutor, EVMState};
@@ -857,7 +858,7 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> = EVMExecutor::new(
             FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
             generate_random_address(&mut state),
         );

@@ -6,7 +6,7 @@ use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
-use ityfuzz::evm::input::EVMInput;
+use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
@@ -305,6 +305,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,
@@ -323,6 +324,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,

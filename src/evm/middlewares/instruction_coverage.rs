@@ -9,7 +9,7 @@ use libafl::prelude::{HasCorpus, HasMetadata, State};
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
 use crate::evm::host::FuzzHost;
-use crate::evm::input::EVMInputT;
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -120,12 +120,12 @@ impl InstructionCoverage {
 
 impl<I, VS, S> Middleware<VS, I, S> for InstructionCoverage
     where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
         VS: VMStateT,
         S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug

@@ -5,30 +5,33 @@ use crate::state_input::StagedVMState;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use crate::input::ConciseSerde;
 
 pub const MAP_SIZE: usize = 4096;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ExecutionResult<Loc, Addr, VS, Out>
+pub struct ExecutionResult<Loc, Addr, VS, Out, CI>
 where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     pub output: Out,
     pub reverted: bool,
     #[serde(deserialize_with = "StagedVMState::deserialize")]
-    pub new_state: StagedVMState<Loc, Addr, VS>,
+    pub new_state: StagedVMState<Loc, Addr, VS, CI>,
     pub additional_info: Option<Vec<u8>>,
 }
 
-impl<Loc, Addr, VS, Out> ExecutionResult<Loc, Addr, VS, Out>
+impl<Loc, Addr, VS, Out, CI> ExecutionResult<Loc, Addr, VS, Out, CI>
 where
     VS: Default + VMStateT + 'static,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     pub fn empty_result() -> Self {
         Self {
@@ -40,7 +43,7 @@ where
     }
 }
 
-pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
+pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
     fn deploy(
         &mut self,
         code: Code,
@@ -48,12 +51,13 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
         deployed_address: Addr,
         state: &mut S,
     ) -> Option<Addr>;
-    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<Loc, Addr, VS, Out>
+    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<Loc, Addr, VS, Out, CI>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default;
+        Out: Default,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde;
 
     fn fast_static_call(&mut self, data: &Vec<(Addr, By)>, vm_state: &VS, state: &mut S) -> Vec<Out>
     where

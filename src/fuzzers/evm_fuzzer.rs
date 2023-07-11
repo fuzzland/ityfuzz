@@ -32,7 +32,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{EVMInput, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
@@ -60,7 +60,7 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
+    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>, state: &mut EVMFuzzState
 ) {
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -161,7 +161,7 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
-    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
+    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
         EVMExecutor::new(fuzz_host, deployer);
 
     if config.replay_file.is_some() {

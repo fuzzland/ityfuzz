@@ -3,7 +3,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
-use crate::evm::input::{EVMInput, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
@@ -35,7 +35,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 pub struct EVMCorpusInitializer<'a> {
-    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
+    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
     scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
     infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
     state: &'a mut EVMFuzzState,
@@ -89,7 +89,7 @@ macro_rules! add_input_to_corpus {
 
 impl<'a> EVMCorpusInitializer<'a> {
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState>,
+        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
         scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
         infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
         state: &'a mut EVMFuzzState,

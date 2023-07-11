@@ -19,7 +19,6 @@ use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::HasExecutionResult;
-use crate::tracer::build_basic_txn;
 use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
@@ -39,7 +38,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use primitive_types::H256;
+use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
+use crate::input::ConciseSerde;
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
@@ -59,18 +60,19 @@ pub static mut RUN_FOREVER: bool = false;
 /// Addr: The address type (e.g., H160)
 /// Loc: The call target location type (e.g., H160)
 #[derive(Debug)]
-pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
+pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// The scheduler for the input corpus
     scheduler: CS,
@@ -85,24 +87,25 @@ where
     /// Map from hash of a testcase can do (e.g., coverage map) to the (testcase idx, fav factor)
     /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
-    phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out)>,
+    phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out, CI)>,
     /// work dir path
     work_dir: String,
 }
 
-impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
-    ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
+    ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Creates a new ItyFuzzer
     pub fn new(
@@ -177,21 +180,22 @@ where
 }
 
 /// Implement fuzzer trait for ItyFuzzer
-impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, I, OF, S, ST, OT> Fuzzer<E, EM, I, S, ST>
-    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, I, OF, S, ST, OT, CI> Fuzzer<E, EM, I, S, ST>
+    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor + HasExecutions + HasMetadata + HasCurrentInputIdx,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Fuzz one input
     fn fuzz_one(
@@ -236,29 +240,30 @@ where
 pub static mut DUMP_FILE_COUNT: usize = 0;
 
 // implement evaluator trait for ItyFuzzer
-impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT> Evaluator<E, EM, I, S>
-    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT>
+impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT, CI> Evaluator<E, EM, I, S>
+    for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
     OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
     EM: EventManager<E, I, S, Self>,
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<I, S>,
     S: HasClientPerfMonitor
         + HasCorpus<I>
         + HasSolutions<I>
-        + HasInfantStateState<Loc, Addr, VS>
-        + HasItyState<Loc, Addr, VS>
-        + HasExecutionResult<Loc, Addr, VS, Out>
+        + HasInfantStateState<Loc, Addr, VS, CI>
+        + HasItyState<Loc, Addr, VS, CI>
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + HasExecutions,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -300,13 +305,12 @@ where
         // add the trace of the new state
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
         {
-            let txn = build_basic_txn(&input, &state.get_execution_result());
             state.get_execution_result_mut().new_state.trace.from_idx = Some(input.get_state_idx());
             state
                 .get_execution_result_mut()
                 .new_state
                 .trace
-                .add_txn(txn);
+                .add_input(input.get_concise());
         }
 
         // add the new VM state to infant state corpus if it is interesting

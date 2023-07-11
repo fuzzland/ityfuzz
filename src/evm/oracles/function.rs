@@ -1,4 +1,4 @@
-use crate::evm::input::EVMInput;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::dummy_precondition;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
@@ -34,7 +34,7 @@ impl FunctionHarnessOracle {
     }
 }
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
@@ -53,6 +53,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
         stage: u64,
     ) -> Vec<u64> {
