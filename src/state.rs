@@ -109,6 +109,8 @@ where
 {
     /// Get the current execution result
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out, CI>;
+    /// Get the current execution result
+    fn get_execution_result_cloned(&self) -> ExecutionResult<Loc, Addr, VS, Out, CI>;
     /// Get the current execution result mutably
     fn get_execution_result_mut(&mut self) -> &mut ExecutionResult<Loc, Addr, VS, Out, CI>;
     /// Set the current execution result
@@ -623,12 +625,16 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the execution result
     fn get_execution_result(&self) -> &ExecutionResult<Loc, Addr, VS, Out, CI> {
         &self.execution_result
+    }
+
+    fn get_execution_result_cloned(&self) -> ExecutionResult<Loc, Addr, VS, Out, CI> {
+        self.execution_result.clone()
     }
 
     /// Get the mutable execution result

@@ -19,6 +19,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any;
 use std::fmt::Debug;
 use crate::evm::types::EVMU256;
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -196,7 +197,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> for Move
         todo!()
     }
 
-    fn get_concise(&self) -> MoveFunctionInput {
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, MoveFunctionInput>) -> MoveFunctionInput {
         todo!()
     }
 }

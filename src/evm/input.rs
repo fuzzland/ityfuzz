@@ -1,7 +1,7 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMStagedVMState, EVMU256, EVMU512};
+use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
 use crate::input::{ConciseSerde, VMInputT};
 use crate::state::{HasCaller, HasItyState};
@@ -20,6 +20,7 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
 
 
@@ -170,12 +171,17 @@ pub struct ConciseEVMInput {
 
     /// How many post execution steps to take
     pub layer: usize,
+
+    /// When to control leak, after `call_leak` number of calls
+    pub call_leak: u32,
 }
 
 
 impl ConciseEVMInput {
-    pub fn from_input<I>(input: &I) -> Self
-    where I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT {
+    pub fn from_input<I, Out>(input: &I, execution_result: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> Self
+    where I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    Out: Default
+    {
         Self {
             #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
@@ -190,7 +196,34 @@ impl ConciseEVMInput {
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
             layer: input.get_state().get_post_execution_len(),
+            call_leak: match execution_result.additional_info {
+                Some(ref info) => info[0] as u32,
+                None => u32::MAX
+            }
         }
+    }
+
+    pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
+        (
+            EVMInput {
+                #[cfg(feature = "flashloan_v2")]
+                input_type: self.input_type.clone(),
+                caller: self.caller,
+                contract: self.contract,
+                data: self.data.clone(),
+                sstate,
+                sstate_idx: 0,
+                txn_value: self.txn_value,
+                step: self.step,
+                env: self.env.clone(),
+                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                #[cfg(feature = "flashloan_v2")]
+                liquidation_percent: self.liquidation_percent,
+                direct_data: Bytes::new(),
+                randomness: self.randomness.clone(),
+                repeat: self.repeat,
+            }, self.call_leak
+        )
     }
 
     #[cfg(feature = "flashloan_v2")]
@@ -678,8 +711,8 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
         self.txn_value
     }
 
-    fn get_concise(&self) -> ConciseEVMInput {
-        ConciseEVMInput::from_input(self)
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> ConciseEVMInput {
+        ConciseEVMInput::from_input(self, exec_res)
     }
 }
 

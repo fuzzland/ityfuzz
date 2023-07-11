@@ -17,6 +17,7 @@ use primitive_types::U256;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::evm::types::EVMU256;
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 /// A trait for VM inputs that are sent to any smart contract VM
 pub trait VMInputT<VS, Loc, Addr, CI>:
@@ -93,9 +94,8 @@ where
     /// Used for EVM debug / replaying, get the encoded input
     fn get_direct_data(&self) -> Vec<u8>;
 
-
     /// Compressed representation of the input
-    fn get_concise(&self) -> CI;
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<Loc, Addr, VS, Out, CI>) -> CI;
 }
 
 pub trait ConciseSerde {

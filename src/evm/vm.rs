@@ -600,11 +600,11 @@ where
                         .downcast_ref_unchecked::<VS>()
                         .clone(),
                 ),
-                additional_info: Some(if r.ret == ControlLeak {
-                    vec![self.host.call_count as u8]
+                additional_info: if r.ret == ControlLeak {
+                    Some(vec![self.host.call_count as u8])
                 } else {
-                    vec![u8::MAX]
-                }),
+                    None
+                },
             }
         }
     }
@@ -751,7 +751,7 @@ where
                                         .downcast_ref_unchecked::<VS>()
                                         .clone(),
                                 ),
-                                additional_info: Some(vec![input.get_randomness()[0]]),
+                                additional_info: None,
                             }
                         }
                     }

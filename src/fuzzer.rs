@@ -291,7 +291,10 @@ where
         mark_feature_time!(state, PerfFeature::PostExecObservers);
 
         let observers = executor.observers();
-        let reverted = state.get_execution_result().reverted;
+
+        let exec_res = state.get_execution_result_cloned();
+
+        let reverted = exec_res.reverted;
 
         // get new stage first
         let is_infant_interesting = self
@@ -310,7 +313,7 @@ where
                 .get_execution_result_mut()
                 .new_state
                 .trace
-                .add_input(input.get_concise());
+                .add_input(input.get_concise(&exec_res));
         }
 
         // add the new VM state to infant state corpus if it is interesting
@@ -339,18 +342,12 @@ where
                         DUMP_FILE_COUNT += 1;
                     }
 
-                    let tx_trace = state
-                        .get_execution_result()
-                        .new_state
-                        .trace
-                        .clone();
-                    let txn_text = tx_trace.to_string(state);
-
-                    let txn_text_replayable = tx_trace.to_file_str(state);
+                    let txn_text = exec_res.new_state.trace.to_string(state);
+                    let txn_text_replayable = exec_res.new_state.trace.to_file_str(state);
 
                     let data = format!(
                         "Reverted? {} \n Txn: {}",
-                        state.get_execution_result().reverted,
+                        exec_res.reverted,
                         txn_text
                     );
                     println!("============= New Corpus Item =============");
