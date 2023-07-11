@@ -1,6 +1,6 @@
 use crate::evm::input::EVMInput;
 use crate::evm::oracles::erc20::ORACLE_OUTPUT;
-use crate::evm::oracles::FUNCTION_BUG_IDX;
+use crate::evm::oracles::{ECHIDNA_BUG_IDX, FUNCTION_BUG_IDX};
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
@@ -81,7 +81,7 @@ impl
                         ctx.input.contract
                     )
                 }
-                return vec![FUNCTION_BUG_IDX];
+                return vec![ECHIDNA_BUG_IDX];
             }
         }
 
