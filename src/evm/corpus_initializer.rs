@@ -43,6 +43,7 @@ pub struct EVMCorpusInitializer<'a> {
 
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
+    pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
 }
 
 #[macro_export]
@@ -120,6 +121,7 @@ impl<'a> EVMCorpusInitializer<'a> {
     pub fn initialize_corpus(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_sourcemap: HashMap::new(),
+            address_to_abi: HashMap::new(),
         };
         for contract in contracts {
             println!("Deploying contract: {}", contract.name);
@@ -147,6 +149,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                 contract.deployed_address
             };
             artifacts.address_to_sourcemap.insert(deployed_address, contract.source_map);
+            artifacts.address_to_abi.insert(deployed_address, contract.abi.clone());
 
             #[cfg(feature = "flashloan_v2")]
             {
