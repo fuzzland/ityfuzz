@@ -225,7 +225,8 @@ struct Args {
     sha3_bypass: bool,
 
     /// Only needed when using combined.json (source map info).
-    /// Base path when running solc compile (--base-path passed to solc).
+    /// This is the base path when running solc compile (--base-path passed to solc).
+    /// Also, please convert it to absolute path if you are not sure.
     #[arg(long, default_value = "")]
     base_path: String,
 
