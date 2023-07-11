@@ -456,35 +456,6 @@ fn main() {
         }
     };
 
-    if args.echidna_oracle {
-        let echidna_functions: Vec<String> = contract_info
-            .iter()
-            .flat_map(|contract| contract.abi.iter())
-            .filter_map(|abi| {
-                if abi.function_name.starts_with("echidna_") && abi.abi == "()" {
-                    Some(format!("{}{}", abi.function_name, abi.abi))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let mut hashed_functions: Vec<Vec<u8>> = Vec::new();
-
-        for function_name in echidna_functions {
-            let mut harness_hash: [u8; 4] = [0; 4];
-            set_hash(&function_name, &mut harness_hash);
-            hashed_functions.push(harness_hash.to_vec());
-        }
-
-        let mut echidna_oracle = Rc::new(RefCell::new(EchidnaOracle::new(
-            EVMAddress::zero(),
-            Vec::from(hashed_functions),
-        )));
-
-        oracles.push(echidna_oracle.clone());
-    }
-
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_info: contract_info,
@@ -514,6 +485,7 @@ fn main() {
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
+        echidna_oracle: args.echidna_oracle,
     };
 
     match config.fuzzer_type {

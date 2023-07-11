@@ -47,6 +47,7 @@ use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::fuzzer::RUN_FOREVER;
 
 struct ABIConfig {
@@ -207,6 +208,14 @@ pub fn evm_fuzzer(
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
     let mut oracles = config.oracle;
+
+    if config.echidna_oracle {
+        let echidna_oracle = EchidnaOracle::new(
+
+        );
+    }
+
+
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
