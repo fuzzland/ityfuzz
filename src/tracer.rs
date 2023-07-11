@@ -117,8 +117,9 @@ where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
         s
     }
 }
-impl<Loc, Addr, CI> Default for TxnTrace<Loc, Addr, CI> {
+impl<Loc, Addr, CI> Default for TxnTrace<Loc, Addr, CI>
+    where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
     fn default() -> Self {
-        todo!("Default for TxnTrace")
+        Self::new()
     }
 }
