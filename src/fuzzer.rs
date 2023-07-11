@@ -239,6 +239,8 @@ where
 #[cfg(feature = "print_txn_corpus")]
 pub static mut DUMP_FILE_COUNT: usize = 0;
 
+pub static mut REPLAY: bool = false;
+
 // implement evaluator trait for ItyFuzzer
 impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT, CI> Evaluator<E, EM, I, S>
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
@@ -292,9 +294,9 @@ where
 
         let observers = executor.observers();
 
-        let exec_res = state.get_execution_result_cloned();
+        let concise_input = input.get_concise(state.get_execution_result());
 
-        let reverted = exec_res.reverted;
+        let reverted = state.get_execution_result().reverted;
 
         // get new stage first
         let is_infant_interesting = self
@@ -313,7 +315,7 @@ where
                 .get_execution_result_mut()
                 .new_state
                 .trace
-                .add_input(input.get_concise(&exec_res));
+                .add_input(concise_input);
         }
 
         // add the new VM state to infant state corpus if it is interesting
@@ -337,17 +339,18 @@ where
 
                 // Debugging prints
                 #[cfg(feature = "print_txn_corpus")]
-                {
+                if !unsafe {REPLAY} {
                     unsafe {
                         DUMP_FILE_COUNT += 1;
                     }
 
-                    let txn_text = exec_res.new_state.trace.to_string(state);
-                    let txn_text_replayable = exec_res.new_state.trace.to_file_str(state);
+                    let tx_trace = state.get_execution_result().new_state.trace.clone();
+                    let txn_text = tx_trace.to_string(state);
+                    let txn_text_replayable = tx_trace.to_file_str(state);
 
                     let data = format!(
                         "Reverted? {} \n Txn: {}",
-                        exec_res.reverted,
+                        state.get_execution_result().reverted,
                         txn_text
                     );
                     println!("============= New Corpus Item =============");

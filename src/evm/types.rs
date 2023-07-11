@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 /// Common generic types for EVM fuzzing
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::mutator::FuzzMutator;
@@ -13,6 +14,7 @@ use primitive_types::{H160, H256};
 use revm_primitives::{B160, Bytecode, U256};
 use libafl::prelude::Rand;
 use revm_primitives::ruint::aliases::U512;
+use crate::evm::srcmap::parser::SourceMapLocation;
 use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub type EVMAddress = B160;
@@ -38,6 +40,8 @@ pub type EVMInfantStateState = InfantStateState<EVMAddress, EVMAddress, EVMState
 pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>;
 
 pub type EVMExecutionResult = ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
+
+pub type ProjectSourceMapTy = HashMap<EVMAddress, Option<HashMap<usize, SourceMapLocation>>>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_H160(v: [u8; 20]) -> H160 {
