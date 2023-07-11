@@ -145,6 +145,7 @@ impl ContractLoader {
         deploy_codes: &Vec<String>,
         constructor_args: &Vec<String>,
     ) -> Self {
+        let contract_name = prefix.split("/").last().unwrap().replace("*", "");
         let constructor_args_in_bytes: Vec<u8> = constructor_args
             .iter()
             .flat_map(|arg| {
@@ -169,6 +170,8 @@ impl ContractLoader {
                 }
             })
             .collect();
+
+        println!("source map information: {:?}", source_map_info);
         let mut result = ContractInfo {
             name: prefix.to_string(),
             abi: vec![],
@@ -177,8 +180,8 @@ impl ContractLoader {
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
             source_map: source_map_info.map(|info| {
-                info.get(prefix)
-                    .expect("combined.json provided but contract not found")
+                info.get(contract_name.as_str())
+                    .expect(format!("combined.json provided but contract ({:?}) not found", contract_name).as_str())
                     .clone()
             }),
         };

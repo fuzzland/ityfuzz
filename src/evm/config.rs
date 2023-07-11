@@ -58,4 +58,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub write_relationship: bool,
     pub run_forever: bool,
     pub sha3_bypass: bool,
+    pub base_path: String
 }

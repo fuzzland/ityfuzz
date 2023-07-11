@@ -15,6 +15,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::evm::types::{as_u64, EVMAddress};
+use crate::evm::types::ProjectSourceMapTy;
 
 pub fn branch_pc(bytecode: &Bytecode) -> (usize, usize) {
     let mut JUMPCount = 0;
@@ -63,7 +64,7 @@ impl BranchCoverage {
         }
     }
 
-    pub fn record_branch_coverage(&mut self) {
+    pub fn record_branch_coverage(&mut self, source_map: &ProjectSourceMapTy) {
         /*
         println!("total_instr: {:?}", self.total_instr);
         println!("total_instr_set: {:?}", self.total_instr_set);

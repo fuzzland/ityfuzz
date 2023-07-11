@@ -219,6 +219,12 @@ struct Args {
     /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
+
+    /// Only needed when using combined.json (source map info).
+    /// Base path when running solc compile (--base-path passed to solc).
+    #[arg(long, default_value = "")]
+    base_path: String,
+
 }
 
 enum TargetType {
@@ -482,6 +488,7 @@ fn main() {
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
+        base_path: args.base_path,
     };
 
     match config.fuzzer_type {

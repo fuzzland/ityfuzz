@@ -570,11 +570,11 @@ impl EVMInput {
 
 impl ConciseSerde for ConciseEVMInput {
     fn serialize_concise(&self) -> Vec<u8> {
-        serde_cbor::to_vec(self).expect("Failed to deserialize concise input")
+        serde_json::to_vec(self).expect("Failed to deserialize concise input")
     }
 
     fn deserialize_concise(data: Vec<u8>) -> Self {
-        serde_cbor::from_slice(&data.as_slice())
+        serde_json::from_slice(&data.as_slice())
             .expect("Failed to deserialize concise input")
     }
 

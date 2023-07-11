@@ -1,8 +1,13 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use itertools::Itertools;
 use serde_json;
 use revm;
 use revm_primitives::Bytecode;
+use crate::evm::types::{EVMAddress, ProjectSourceMapTy};
+
+pub static mut BASE_PATH: String = String::new();
 
 #[derive(Debug,Clone)]
 pub struct SourceMapLocation {
@@ -31,8 +36,71 @@ impl Default for SourceMapLocation {
     }
 }
 
+pub enum SourceMapAvailability {
+    Available(String),
+    Unavailable,
+    Unknown,
+}
 
+fn read_source_code(loc: &SourceMapLocation) -> String {
+    let file = loc.file.clone().unwrap();
+    let offset = loc.offset;
+    let length = loc.length;
 
+    let mut file = match File::open(unsafe {BASE_PATH.clone()} + file.as_str()) {
+        Ok(f) => f,
+        Err(e) => {
+            return format!("{:?}:{:?}", offset, length);
+        }
+    };
+
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+
+    // get starting and ending line number
+    let mut line_number = 1;
+    let mut start_line = 0;
+    let mut end_line = 0;
+
+    for (i, c) in contents.chars().enumerate() {
+        if i == offset {
+            start_line = line_number;
+        }
+        if i == offset + length {
+            end_line = line_number;
+            break;
+        }
+        if c == '\n' {
+            line_number += 1;
+        }
+    }
+
+    let lines_in_range = contents.lines()
+        .skip(start_line)
+        .take(end_line - start_line + 1)
+        .join("\n");
+
+    format!("\n{}", lines_in_range)
+}
+
+pub fn pretty_print_source_map(pc: usize, addr: &EVMAddress, data: &ProjectSourceMapTy) -> SourceMapAvailability {
+    match data.get(addr) {
+        Some(Some(contract_data)) => {
+            match contract_data.get(&pc) {
+                Some(info) => {
+                    match info.file {
+                        Some(ref file) => {
+                            SourceMapAvailability::Available(format!("{}:{}", file, read_source_code(info)))
+                        }
+                        None => SourceMapAvailability::Unknown
+                    }
+                }
+                None => SourceMapAvailability::Unknown
+            }
+        }
+        _ => SourceMapAvailability::Unavailable
+    }
+}
 
 pub fn uncompress_srcmap_single(map: String, files: &Vec<String>) -> Vec<SourceMapLocation> {
     let mut results: Vec<SourceMapLocation> = vec![];
