@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
 use crate::evm::types::{EVMAddress, EVMU256};
+use crate::input::ConciseSerde;
 
 use super::concolic::concolic_host::Expr;
 
@@ -224,12 +225,13 @@ impl BoxedABI {
 
 
 /// Randomly sample an args with any type with size `size`
-fn sample_abi<Loc, Addr, VS, S>(state: &mut S, size: usize) -> BoxedABI
+fn sample_abi<Loc, Addr, VS, S, CI>(state: &mut S, size: usize) -> BoxedABI
 where
-    S: State + HasRand + HasItyState<Loc, Addr, VS> + HasMaxSize + HasCaller<EVMAddress>,
+    S: State + HasRand + HasItyState<Loc, Addr, VS, CI> + HasMaxSize + HasCaller<EVMAddress>,
     VS: VMStateT + Default,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     // TODO(@shou): use a better sampling strategy
     if size == 32 {
@@ -285,17 +287,18 @@ where
 
 impl BoxedABI {
     /// Mutate the args
-    pub fn mutate<Loc, Addr, VS, S>(&mut self, state: &mut S) -> MutationResult
+    pub fn mutate<Loc, Addr, VS, S, CI>(&mut self, state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<Loc, Addr, VS>
+            + HasItyState<Loc, Addr, VS, CI>
             + HasCaller<EVMAddress>
             + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
     {
         self.mutate_with_vm_slots(state, None)
     }
@@ -303,7 +306,7 @@ impl BoxedABI {
     /// Mutate the args and crossover with slots in the VM state
     ///
     /// Check [`VMStateHintedMutator`] for more details
-    pub fn mutate_with_vm_slots<Loc, Addr, VS, S>(
+    pub fn mutate_with_vm_slots<Loc, Addr, VS, S, CI>(
         &mut self,
         state: &mut S,
         vm_slots: Option<HashMap<EVMU256, EVMU256>>,
@@ -312,12 +315,13 @@ impl BoxedABI {
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<Loc, Addr, VS>
+            + HasItyState<Loc, Addr, VS, CI>
             + HasCaller<EVMAddress>
             + HasMetadata,
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
     {
         match self.get_type() {
             // no need to mutate empty args
@@ -1138,12 +1142,13 @@ mod tests {
     use crate::evm::vm::EVMState;
     use crate::state::FuzzState;
     use hex;
+    use crate::evm::input::ConciseEVMInput;
 
     #[test]
     fn test_int() {
         let mut abi = get_abi_type_boxed(&String::from("int8"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1155,7 +1160,7 @@ mod tests {
     fn test_int256() {
         let mut abi = get_abi_type_boxed(&String::from("int256"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1167,7 +1172,7 @@ mod tests {
     fn test_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("string"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1179,7 +1184,7 @@ mod tests {
     fn test_tuple_static() {
         let mut abi = get_abi_type_boxed(&String::from("(uint256,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1191,7 +1196,7 @@ mod tests {
     fn test_tuple_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("(string)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1203,7 +1208,7 @@ mod tests {
     fn test_tuple_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("(string,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1215,7 +1220,7 @@ mod tests {
     fn test_array_static() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1227,7 +1232,7 @@ mod tests {
     fn test_array_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("bytes[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1239,7 +1244,7 @@ mod tests {
     fn test_array_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2][3]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1251,7 +1256,7 @@ mod tests {
     fn test_array_dyn() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[][]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1264,7 +1269,7 @@ mod tests {
         let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
         let mut test_state = FuzzState::new(0);
         test_state.addresses_pool.push(EVMAddress::zero());
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState>(&mut test_state);
+        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,

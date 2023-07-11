@@ -12,7 +12,7 @@ use revm_interpreter::Interpreter;
 use revm_interpreter::opcode::JUMPI;
 use revm_primitives::Bytecode;
 use crate::evm::host::FuzzHost;
-use crate::evm::input::EVMInputT;
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -44,12 +44,12 @@ impl Sha3TaintAnalysis {
 
 impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
     where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
         VS: VMStateT,
         S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
@@ -285,12 +285,12 @@ impl Sha3Bypass {
 
 impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
     where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
         VS: VMStateT,
         S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
@@ -340,7 +340,7 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> = EVMExecutor::new(
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> = EVMExecutor::new(
             FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
             generate_random_address(&mut state),
         );

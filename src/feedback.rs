@@ -3,7 +3,7 @@
 
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::{BugMetadata, Oracle, OracleCtx, Producer};
 use crate::scheduler::HasVote;
 use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
@@ -30,29 +30,31 @@ use std::rc::Rc;
 /// OracleFeedback is a wrapper around a set of oracles and producers.
 /// It executes the producers and then oracles after each successful execution. If any of the oracle
 /// returns true, then it returns true and report a vulnerability found.
-pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static>
+pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// A set of producers that produce data needed by oracles
-    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// A set of oracles that check for vulnerabilities
-    oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+    oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// VM executor
-    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     phantom: PhantomData<Out>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Debug
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OracleFeedback")
@@ -61,34 +63,36 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Named
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Named
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn name(&self) -> &str {
         "OracleFeedback"
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
-    OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+    OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`OracleFeedback`]
     pub fn new(
-        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>>,
+        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
         producers: &'a mut Vec<
-            Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S>>>,
+            Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>,
         >,
-        executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+        executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     ) -> Self {
         Self {
             producers,
@@ -99,20 +103,21 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S> Feedback<I, S>
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<I, S>
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
     S: State
         + HasClientPerfMonitor
-        + HasExecutionResult<Loc, Addr, VS, Out>
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + HasCorpus<I>
         + HasMetadata
         + 'static,
-    I: VMInputT<VS, Loc, Addr> + 'static,
+    I: VMInputT<VS, Loc, Addr, CI> + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// since OracleFeedback is just a wrapper around one stateless oracle
     /// we don't need to do initialization
@@ -145,7 +150,7 @@ where
         }
 
         // set up oracle context
-        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S> =
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> =
             OracleCtx::new(state, input.get_state(), &mut self.executor, input);
 
         // cleanup producers by calling `notify_end` hooks
@@ -223,7 +228,7 @@ where
 /// Logic: Maintains read and write map, if a write map idx is true in the read map,
 /// and that item is greater than what we have, then the state is interesting.
 #[cfg(feature = "dataflow")]
-pub struct DataflowFeedback<'a, VS, Loc, Addr, Out> {
+pub struct DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
     /// global write map that OR all the write maps from each execution
     /// `[bool;4]` means 4 categories of write map, representing which bucket the written value fails into
     /// 0 - 2^2, 2^2 - 2^4, 2^4 - 2^6, 2^6 - inf are 4 buckets
@@ -232,11 +237,11 @@ pub struct DataflowFeedback<'a, VS, Loc, Addr, Out> {
     read_map: &'a mut [bool],
     /// write map of the current execution
     write_map: &'a mut [u8],
-    phantom: PhantomData<(VS, Loc, Addr, Out)>,
+    phantom: PhantomData<(VS, Loc, Addr, Out, CI)>,
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Loc, Addr, Out> Debug for DataflowFeedback<'a, VS, Loc, Addr, Out> {
+impl<'a, VS, Loc, Addr, Out, CI> Debug for DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataflowFeedback")
             // .field("oracle", &self.oracle)
@@ -245,14 +250,14 @@ impl<'a, VS, Loc, Addr, Out> Debug for DataflowFeedback<'a, VS, Loc, Addr, Out> 
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Loc, Addr, Out> Named for DataflowFeedback<'a, VS, Loc, Addr, Out> {
+impl<'a, VS, Loc, Addr, Out, CI> Named for DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
     fn name(&self) -> &str {
         "DataflowFeedback"
     }
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Loc, Addr, Out> DataflowFeedback<'a, VS, Loc, Addr, Out> {
+impl<'a, VS, Loc, Addr, Out, CI> DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
     /// create a new dataflow feedback
     pub fn new(read_map: &'a mut [bool], write_map: &'a mut [u8]) -> Self {
         Self {
@@ -265,14 +270,15 @@ impl<'a, VS, Loc, Addr, Out> DataflowFeedback<'a, VS, Loc, Addr, Out> {
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Loc, Addr, I, S, Out> Feedback<I, S> for DataflowFeedback<'a, VS, Loc, Addr, Out>
+impl<'a, VS, Loc, Addr, I, S, Out, CI> Feedback<I, S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out>,
-    I: VMInputT<VS, Loc, Addr>,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -358,7 +364,7 @@ where
 /// for fuzzing.
 ///
 #[cfg(feature = "cmp")]
-pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> {
+pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
     /// global min map recording the minimum distance for each comparison
     min_map: [SlotTy; MAP_SIZE],
     /// min map recording the minimum distance for each comparison in the current execution
@@ -368,27 +374,28 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> {
     /// votable scheduler that can vote on whether a VMState is interesting or not
     scheduler: &'a SC,
     /// the VM providing information about the current execution
-    vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+    vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     phantom: PhantomData<(Addr, Out)>,
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC>
-    CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
+    CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
-    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
-        + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasVote<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT,
     SlotTy: PartialOrd + Copy + TryFrom<u128>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    <SlotTy as TryFrom<u128>>::Error: std::fmt::Debug
+    <SlotTy as TryFrom<u128>>::Error: std::fmt::Debug,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Create a new CmpFeedback.
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
         scheduler: &'a SC,
-        vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+        vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     ) -> Self {
         Self {
             min_map: [SlotTy::try_from(u128::MAX).expect(""); MAP_SIZE],
@@ -402,8 +409,8 @@ where
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> Named
-    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> Named
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 {
     fn name(&self) -> &str {
         "CmpFeedback"
@@ -411,8 +418,8 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> Named
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> Debug
-    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> Debug
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CmpFeedback").finish()
@@ -420,21 +427,22 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC> Debug
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, I0, S0, SC> Feedback<I0, S0>
-    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, I0, S0, SC, CI> Feedback<I0, S0>
+    for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
     S0: State
         + HasClientPerfMonitor
-        + HasInfantStateState<Loc, Addr, VS>
-        + HasExecutionResult<Loc, Addr, VS, Out>,
-    I0: Input + VMInputT<VS, Loc, Addr>,
-    SC: Scheduler<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>
-        + HasVote<StagedVMState<Loc, Addr, VS>, InfantStateState<Loc, Addr, VS>>,
+        + HasInfantStateState<Loc, Addr, VS, CI>
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>,
+    I0: Input + VMInputT<VS, Loc, Addr, CI>,
+    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasVote<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())

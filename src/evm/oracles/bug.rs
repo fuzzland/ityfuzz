@@ -1,4 +1,4 @@
-use crate::evm::input::EVMInput;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::dummy_precondition;
 use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::evm::producers::pair::PairProducer;
@@ -24,7 +24,7 @@ impl BugOracle {
 
 }
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for BugOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
@@ -43,6 +43,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
         stage: u64,
     ) -> Vec<u64> {

@@ -1,5 +1,5 @@
 
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType, add_corpus};
 use crate::evm::host::FuzzHost;
@@ -24,7 +24,7 @@ use std::cell::RefCell;
 pub struct Selfdestruct<VS, I, S>
     where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     _phantom: std::marker::PhantomData<(VS, I, S)>,
@@ -33,7 +33,7 @@ pub struct Selfdestruct<VS, I, S>
 impl<VS, I, S> Selfdestruct<VS, I, S>
     where
         S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-        I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+        I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
         VS: VMStateT,
 {
     pub fn new() -> Self {
@@ -46,7 +46,7 @@ impl<VS, I, S> Selfdestruct<VS, I, S>
 impl<VS, I, S> Debug for Selfdestruct<VS, I, S>
     where
         S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-        I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+        I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
         VS: VMStateT,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -62,11 +62,11 @@ impl<VS, I, S> Middleware<VS, I, S> for Selfdestruct<VS, I, S>
         + Debug
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + Clone
         + 'static,
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
         VS: VMStateT,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S)

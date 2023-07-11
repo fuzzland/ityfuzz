@@ -66,9 +66,10 @@ impl<I, S>
         MoveOutput,
         I,
         S,
+        MoveFunctionInput
     > for MoveVM<I, S>
 where
-    I: VMInputT<MoveVMState, ModuleId, AccountAddress> + MoveFunctionInputT,
+    I: VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> + MoveFunctionInputT,
 {
     fn deploy(
         &mut self,
@@ -126,7 +127,7 @@ where
         &mut self,
         input: &I,
         _state: &mut S,
-    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput>
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, MoveFunctionInput>
     where
         MoveVMState: VMStateT,
     {
@@ -241,13 +242,13 @@ mod tests {
         bytecode: &str,
     ) -> MoveVM<
         MoveFunctionInput,
-        FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
+        FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, MoveFunctionInput>,
     > {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
         let mut mv = MoveVM::<
             MoveFunctionInput,
-            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput>,
+            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, MoveFunctionInput>,
         >::new();
         let _loc = mv
             .deploy(

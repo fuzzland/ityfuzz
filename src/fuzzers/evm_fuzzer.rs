@@ -32,7 +32,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{EVMInput, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
@@ -47,7 +47,9 @@ use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
-use crate::fuzzer::RUN_FOREVER;
+use crate::evm::srcmap::parser::BASE_PATH;
+use crate::fuzzer::{REPLAY, RUN_FOREVER};
+use crate::input::ConciseSerde;
 
 struct ABIConfig {
     abi: String,
@@ -60,7 +62,7 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>, state: &mut EVMFuzzState
+    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>, state: &mut EVMFuzzState
 ) {
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -122,6 +124,10 @@ pub fn evm_fuzzer(
         }
     }
 
+    unsafe {
+        BASE_PATH = config.base_path;
+    }
+
     if config.run_forever {
         unsafe {
             RUN_FOREVER = true;
@@ -161,13 +167,16 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
-    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState> =
+    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
         EVMExecutor::new(fuzz_host, deployer);
 
     if config.replay_file.is_some() {
         // add coverage middleware for replay
         evm_executor.host.add_middlewares(cov_middleware.clone());
         evm_executor.host.add_middlewares(branch_middleware.clone());
+        unsafe {
+            REPLAY = true;
+        }
     }
 
     let mut corpus_initializer = EVMCorpusInitializer::new(
@@ -180,7 +189,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "use_presets")]
     corpus_initializer.register_preset(&PairPreset {});
 
-    corpus_initializer.initialize(config.contract_info);
+    let artifacts = corpus_initializer.initialize(config.contract_info);
 
     evm_executor.host.initialize(state);
 
@@ -244,114 +253,16 @@ pub fn evm_fuzzer(
 
                 for txn in transactions.split("\n") {
                     idx += 1;
-                    let splitter = txn.split(" ").collect::<Vec<&str>>();
-                    if splitter.len() < 4 {
+                    // let splitter = txn.split(" ").collect::<Vec<&str>>();
+                    if txn.len() < 4 {
                         continue;
                     }
 
                     // [is_step] [caller] [target] [input] [value]
-                    unsafe {CALL_UNTIL = u32::MAX;}
-
-                    let inp = match splitter[0] {
-                        "abi" => {
-                            let caller = EVMAddress::from_str(splitter[1]).unwrap();
-                            let contract = EVMAddress::from_str(splitter[2]).unwrap();
-                            let input = hex::decode(splitter[3]).unwrap();
-                            let value = EVMU256::from_str_radix(splitter[4], 10).unwrap();
-                            let liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
-                            let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
-                            let repeat = splitter[7].parse::<usize>().unwrap_or(0);
-                            let reentrancy_call_limits = splitter[8].parse::<u32>().unwrap_or(u32::MAX);
-                            let is_step = splitter[9].parse::<bool>().unwrap_or(false);
-                            let randomness = hex::decode(splitter[10]).unwrap_or(vec![0]);
-
-                            unsafe {CALL_UNTIL = reentrancy_call_limits;}
-                            EVMInput {
-                                caller,
-                                contract,
-                                data: None,
-                                sstate: vm_state.clone(),
-                                sstate_idx: 0,
-                                txn_value: if value == EVMU256::ZERO {
-                                    None
-                                } else {
-                                    Some(value)
-                                },
-                                step: is_step,
-                                env: Env {
-                                    cfg: Default::default(),
-                                    block: BlockEnv {
-                                        number: EVMU256::from(warp_to),
-                                        coinbase: Default::default(),
-                                        timestamp: EVMU256::from(warp_to * 1000),
-                                        difficulty: Default::default(),
-                                        prevrandao: None,
-                                        basefee: Default::default(),
-                                        gas_limit: Default::default(),
-                                    },
-                                    tx: Default::default(),
-                                },
-                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                                #[cfg(feature = "flashloan_v2")]
-                                liquidation_percent,
-
-                                #[cfg(feature = "flashloan_v2")]
-                                input_type: EVMInputTy::ABI,
-                                direct_data: if input.len() == 1 && input[0] == 0 {
-                                    Bytes::new()
-                                } else {
-                                    Bytes::from(input.clone())
-                                },
-                                randomness,
-                                repeat,
-                            }
-                        }
-                        "borrow" => {
-                            let caller = EVMAddress::from_str(splitter[1]).unwrap();
-                            let contract = EVMAddress::from_str(splitter[2]).unwrap();
-                            let randomness = hex::decode(splitter[3]).unwrap();
-                            let value = EVMU256::from_str(splitter[4]).unwrap();
-                            let _liquidation_percent = splitter[5].parse::<u8>().unwrap_or(0);
-                            let warp_to = splitter[6].parse::<u64>().unwrap_or(0);
-                            EVMInput {
-                                caller,
-                                contract,
-                                data: None,
-                                sstate: vm_state.clone(),
-                                sstate_idx: 0,
-                                txn_value: if value == EVMU256::ZERO {
-                                    None
-                                } else {
-                                    Some(value)
-                                },
-                                step: false,
-                                env: Env {
-                                    cfg: Default::default(),
-                                    block: BlockEnv {
-                                        number: EVMU256::from(warp_to),
-                                        coinbase: Default::default(),
-                                        timestamp: EVMU256::from(warp_to * 1000),
-                                        difficulty: Default::default(),
-                                        prevrandao: None,
-                                        basefee: Default::default(),
-                                        gas_limit: Default::default(),
-                                    },
-                                    tx: Default::default(),
-                                },
-                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                                #[cfg(feature = "flashloan_v2")]
-                                liquidation_percent: 0,
-                                #[cfg(feature = "flashloan_v2")]
-                                input_type: EVMInputTy::Borrow,
-                                direct_data: Bytes::new(),
-                                randomness,
-                                repeat: 1,
-                            }
-                        }
-                        _ => {
-                            unreachable!()
-                        }
-                    };
+                    let (inp, call_until) = ConciseEVMInput::deserialize_concise(hex::decode(txn).unwrap())
+                        .to_input(vm_state.clone());
+                    println!("{:?}", inp);
+                    unsafe {CALL_UNTIL = call_until;}
 
                     fuzzer
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
@@ -377,8 +288,8 @@ pub fn evm_fuzzer(
             }
 
             // dump coverage:
-            cov_middleware.borrow_mut().record_instruction_coverage();
-            branch_middleware.borrow_mut().record_branch_coverage();
+            cov_middleware.borrow_mut().record_instruction_coverage(&artifacts.address_to_sourcemap);
+            branch_middleware.borrow_mut().record_branch_coverage(&artifacts.address_to_sourcemap);
         }
     }
 }

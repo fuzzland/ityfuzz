@@ -6,7 +6,7 @@ use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::host::PANIC_ON_BUG;
 use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
-use ityfuzz::evm::input::EVMInput;
+use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
@@ -219,6 +219,12 @@ struct Args {
     /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
+
+    /// Only needed when using combined.json (source map info).
+    /// Base path when running solc compile (--base-path passed to solc).
+    #[arg(long, default_value = "")]
+    base_path: String,
+
 }
 
 enum TargetType {
@@ -305,6 +311,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,
@@ -323,6 +330,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
+                    ConciseEVMInput
                 >,
             >,
         >,
@@ -480,6 +488,7 @@ fn main() {
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
+        base_path: args.base_path,
     };
 
     match config.fuzzer_type {
