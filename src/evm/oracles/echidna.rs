@@ -5,18 +5,22 @@ use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
+use itertools::Itertools;
 use revm_primitives::Bytecode;
 
 pub struct EchidnaOracle {
-    pub address: EVMAddress,
-    echidna_funcs: Vec<Vec<u8>>,
+    pub batch_call_txs: Vec<(EVMAddress, Bytes)>
 }
 
 impl EchidnaOracle {
-    pub fn new(address: EVMAddress, echidna_funcs: Vec<Vec<u8>>) -> Self {
+    pub fn new(echidna_funcs: Vec<(EVMAddress, Vec<u8>)>) -> Self {
         Self {
-            address,
-            echidna_funcs,
+            batch_call_txs: echidna_funcs.iter().map(
+                |(address, echidna_func)| {
+                    let echidna_txn = Bytes::from(echidna_func.clone());
+                    (address.clone(), echidna_txn)
+                }
+            ).collect_vec()
         }
     }
 }
@@ -53,38 +57,10 @@ impl
         >,
         stage: u64,
     ) -> Vec<u64> {
-        for echidna_func in self.echidna_funcs.iter() {
-            let echidna_txn = Bytes::from(echidna_func.clone());
-            let addr = if self.address.is_zero() {
-                ctx.input.contract
-            } else {
-                self.address
-            };
-
-            let data = vec![(addr, echidna_txn)];
-
-            let res = ctx.call_post_batch(&data);
-
-            if res.len() == 0 || res[0].len() == 0 {
-                continue;
-            }
-
-            let res_bool = res
-                .iter()
-                .map(|out| out.iter().map(|x| *x == 0).all(|x| x))
-                .all(|x| x);
-
-            if (res_bool) {
-                unsafe {
-                    ORACLE_OUTPUT = format!(
-                        "[echidna] echidna invariant violated {:?}",
-                        ctx.input.contract
-                    )
-                }
-                return vec![ECHIDNA_BUG_IDX];
-            }
-        }
-
-        vec![]
+        ctx.call_post_batch(&self.batch_call_txs)
+            .iter()
+            .map(|out| out.iter().map(|x| *x == 0).all(|x| x))
+            .map(|x| if x { ECHIDNA_BUG_IDX } else { 0 })
+            .collect_vec()
     }
 }
