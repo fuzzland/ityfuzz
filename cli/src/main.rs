@@ -11,6 +11,7 @@ use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
 use ityfuzz::evm::oracles::bug::BugOracle;
+use ityfuzz::evm::oracles::echidna::EchidnaOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
 use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
@@ -189,6 +190,9 @@ struct Args {
     #[arg(long, default_value = "true")]
     selfdestruct_oracle: bool,
 
+    #[arg(long, default_value = "true")]
+    echidna_oracle: bool,
+
     ///Enable oracle for detecting whether typed_bug() is called
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
@@ -221,7 +225,8 @@ struct Args {
     sha3_bypass: bool,
 
     /// Only needed when using combined.json (source map info).
-    /// Base path when running solc compile (--base-path passed to solc).
+    /// This is the base path when running solc compile (--base-path passed to solc).
+    /// Also, please convert it to absolute path if you are not sure.
     #[arg(long, default_value = "")]
     base_path: String,
 
@@ -489,6 +494,7 @@ fn main() {
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
         base_path: args.base_path,
+        echidna_oracle: args.echidna_oracle,
     };
 
     match config.fuzzer_type {

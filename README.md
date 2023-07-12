@@ -130,6 +130,7 @@ Caveats:
 
 - Keep in mind that ItyFuzz is fuzzing on a clean blockchain,
   so you should ensure all related contracts (e.g., ERC20 token, Uniswap, etc.) are deployed to the blockchain before fuzzing.
+- If your smart contract requires constructor arguments, please refer to below [Constructor Arguments](#constructor-arguments) section.
 
 ### Fuzz a Project (Online)
 
@@ -236,6 +237,55 @@ cli -t 'tests/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
+
+### Echidna Support
+
+Any contracts bearing functions starting with `echidna_` will be treated as invariants and will be tested by ItyFuzz.
+If it returns `false`, the fuzzer will report a bug.
+
+```solidity
+function echidna_test() public {
+    assert(false);
+}
+```
+
+### Collecting Test Coverage
+
+ItyFuzz can collect instruction and branch coverage information for all the contracts it fuzzes. You simply
+need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all these information.
+```bash
+./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
+```
+
+Example:
+```bash
+./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
+```
+
+You may add source map information to the targets to get more accurate coverage information and uncovered source code.
+To get source map information, you simply need to append `--combined-json bin-runtime,srcmap-runtime` to the solc command when building the targets.
+```bash
+# run in your target building directory (where you run solc)
+solc [Options Used During Building] --combined-json bin-runtime,srcmap-runtime 
+```
+
+Example:
+```bash
+# build contracts in tests/verilog-2/
+solc *.sol -o . --bin --abi --overwrite --base-path ../../ --combined-json bin-runtime,srcmap-runtime
+```
+Rarely, ItyFuzz has trouble to figure out the source code location.
+You may supply the **absolute** path to the base location (what you passed to solc's --base-path or if you didn't pass anything, it is the building directory)
+to ItyFuzz.
+```bash
+./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
+```
+
+Example:
+```bash
+# note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/verilog-2/../../
+./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
+```
 
 ### Z3 Installation
 

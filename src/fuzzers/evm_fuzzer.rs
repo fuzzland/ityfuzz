@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -20,6 +21,7 @@ use libafl::{
     Evaluator, Fuzzer,
 };
 use glob::glob;
+use itertools::Itertools;
 
 use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
@@ -47,6 +49,7 @@ use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::ConciseSerde;
@@ -216,6 +219,41 @@ pub fn evm_fuzzer(
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
 
     let mut oracles = config.oracle;
+
+    if config.echidna_oracle {
+        let echidna_oracle = EchidnaOracle::new(
+            artifacts.address_to_abi.iter()
+                .map(
+                    |(address, abis)| {
+                        abis.iter().filter(
+                            |abi| {
+                                abi.function_name.starts_with("echidna_")
+                                    && abi.abi == "()"
+                            }
+                        ).map(
+                            |abi| (address.clone(), abi.function.to_vec())
+                        ).collect_vec()
+                    }
+                ).flatten().collect_vec(),
+
+            artifacts.address_to_abi.iter()
+                .map(
+                    |(address, abis)| {
+                        abis.iter().filter(
+                            |abi| {
+                                abi.function_name.starts_with("echidna_")
+                                    && abi.abi == "()"
+                            }
+                        ).map(
+                            |abi| (abi.function.to_vec(), abi.function_name.clone())
+                        ).collect_vec()
+                    }
+                ).flatten().collect::<HashMap<Vec<u8>, String>>(),
+        );
+        oracles.push(Rc::new(RefCell::new(echidna_oracle)));
+    }
+
+
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
