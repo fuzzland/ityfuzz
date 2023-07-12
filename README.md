@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[中文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#development)
+[中文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#building)
 
 ### Run ItyFuzz with UI
 
@@ -45,9 +45,8 @@ Test Coverage:
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
-# Development
 
-### Building
+# Building
 
 You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.
 
@@ -62,7 +61,7 @@ You can enable certain debug gates in `Cargo.toml`
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
 
-### Run
+# Run
 
 Compile Smart Contracts:
 
@@ -167,14 +166,6 @@ If ItyFuzz encounters calls to external unknown contract, it would pull the byte
 If its ABI is not available, ItyFuzz would not send any transaction to that contract.
 
 
-### Onchain Fetching
-
-ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
-There are three ways of fetching:
-
-- OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
-- All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large.
-- Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
 
 ### Constructor Arguments
 
@@ -238,6 +229,41 @@ cli -t 'tests/multi-contract/*' --fetch-tx-data
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
 
+# Finding Custom Bugs
+
+You can simply insert `bug()` or `typed_bug(string message)` in your contract to report a condition when bug is found.
+
+For instance, a simple case can be written as follows:
+```solidity
+function buy_token() public {
+    if (msg.sender != owner) {
+        bug();
+    }
+}
+```
+
+The implementation of `bug()` is as follows:
+```solidity
+library FuzzLand {
+    event AssertionFailed(string message);
+    function bug() internal {
+        emit AssertionFailed("Bug");
+    }
+    function typed_bug(string memory data) internal {
+        emit AssertionFailed(data);
+    }
+
+}
+function bug()  {
+    FuzzLand.bug();
+}
+function typed_bug(string memory data)  {
+    FuzzLand.typed_bug(data);
+}
+```
+
+You can either paste the code above in your contract or import it from `solidity_utils/lib.sol` if you are using `bug` or `typed_bug`.
+
 ### Echidna Support
 
 Any contracts bearing functions starting with `echidna_` will be treated as invariants and will be tested by ItyFuzz.
@@ -249,7 +275,36 @@ function echidna_test() public {
 }
 ```
 
-### Collecting Test Coverage
+
+### Scribble Support
+
+Scribble is a tool for writing specifications for Solidity contracts. ItyFuzz supports Scribble annotations after
+it is compiled by `scribble`.
+
+For example, the following contract has a Scribble annotation that specifies the return value of `inc`:
+```bash
+contract Foo {
+    /// #if_succeeds {:msg "P1"} y == x + 2;
+    function inc(uint x) public pure returns (uint y) {
+        return x+1;
+    }
+}
+```
+
+You need to compile the contract using `scribble` and pass the compiled contract to ItyFuzz
+
+Note that you must add `--no-assert` to the `scribble` command. Otherwise, ItyFuzz will not detect any bugs.
+```bash
+scribble test.sol --output-mode flat --output compiled.sol --no-assert
+```
+
+Then compile with `solc` and run ItyFuzz:
+```bash
+solc compiled.sol --bin --abi --overwrite -o build
+./cli -t build/* [More Arguments]
+```
+
+# Test Coverage
 
 ItyFuzz can collect instruction and branch coverage information for all the contracts it fuzzes. You simply
 need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all these information.
@@ -287,6 +342,8 @@ Example:
 ./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
+
+# Troubleshooting
 ### Z3 Installation
 
 **macOS**
@@ -305,12 +362,21 @@ If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HE
 apt install libz3-dev
 ```
 
-### Telemetry
+### Onchain Fetching
+
+ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
+There are three ways of fetching:
+
+- OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
+- All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large.
+- Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
+
+# Telemetry
 
 ItyFuzz collects telemetry data to help us improve the fuzzer. The data is collected anonymously and is not used for any commercial purpose.
 You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variable.
 
-### Citation
+# Citation
 ```
 @misc{ityfuzz,
       title={ItyFuzz: Snapshot-Based Fuzzer for Smart Contract}, 
@@ -322,7 +388,7 @@ You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variab
 }
 ```
 
-### Acknowledgement
+# Acknowledgement
 
 This work was supported in part by NSF grants CCF-1900968, CCF1908870, and CNS1817122 and SKY Lab industrial sponsors and
 affiliates Astronomer, Google, IBM, Intel, Lacework, Microsoft, Mohamed Bin Zayed University of Artificial Intelligence, Nexla, Samsung SDS, Uber, and VMware. Any opinions, findings, conclusions,
