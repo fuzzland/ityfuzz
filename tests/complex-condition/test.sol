@@ -15,7 +15,7 @@ contract main {
         require(a[6] == 7, "a[6] != 7");
         require(a[7] == 8, "a[7] != 8");
         bug();
-        typed_bug(0x3322);
+        typed_bug("0x3322");
         return 'Hello Contracts';
     }
 
@@ -28,7 +28,7 @@ contract main {
             require(a[5] == 9, "a[5] == 9");
             require(a[6] == 9, "a[6] == 9");
             require(a[7] == 9, "a[7] == 9");
-            typed_bug(0x10010);
+            typed_bug("0x10010");
             return 'Hello Contracts';
         }
 
@@ -41,7 +41,7 @@ contract main {
             require(a[5] == 2, "a[5] == 2");
             require(a[6] == 1, "a[6] == 1");
             require(a[7] == 0, "a[7] == 0");
-            typed_bug(0x1234);
+            typed_bug("0x1234");
             return 'Hello Contracts';
         }
 }

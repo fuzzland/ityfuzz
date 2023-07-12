@@ -23,7 +23,7 @@ use libafl::{
 use glob::glob;
 use itertools::Itertools;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, WRITE_RELATIONSHIPS};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
@@ -135,6 +135,10 @@ pub fn evm_fuzzer(
         unsafe {
             RUN_FOREVER = true;
         }
+    }
+
+    unsafe {
+        PANIC_ON_BUG = config.panic_on_bug;
     }
 
     if config.flashloan {

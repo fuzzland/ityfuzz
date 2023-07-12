@@ -136,7 +136,7 @@ pub struct EVMState {
     /// selftdestruct() call in Solidity hit?
     pub selfdestruct_hit: bool,
     /// bug type call in solidity type
-    pub typed_bug: Vec<u64>,
+    pub typed_bug: HashSet<String>,
 }
 
 impl Default for EVMState {
@@ -149,7 +149,7 @@ impl Default for EVMState {
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
             selfdestruct_hit: false,
-            typed_bug: vec![],
+            typed_bug: Default::default(),
         }
     }
 }
@@ -220,7 +220,7 @@ impl EVMState {
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
             selfdestruct_hit: false,
-            typed_bug: vec![],
+            typed_bug: Default::default(),
         }
     }
 
@@ -586,7 +586,11 @@ where
 
         r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
         r.new_state.selfdestruct_hit = vm_state.selfdestruct_hit || self.host.selfdestruct_hit;
-        r.new_state.typed_bug = [vm_state.typed_bug, self.host.current_typed_bug.clone()].concat();
+        r.new_state.typed_bug = HashSet::from_iter(
+            vm_state.typed_bug.iter().cloned().chain(
+                self.host.current_typed_bug.iter().cloned()
+            )
+        );
 
         unsafe {
             ExecutionResult {
