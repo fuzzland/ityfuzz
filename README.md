@@ -74,9 +74,9 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 Run Fuzzer:
 
 ```bash
-# if cli binary exists
+# after building, there should be a binary in ./cli/target/release/cli
 cd ./cli/
-./cli -t '../tests/multi-contract/*'
+./target/release/cli -t '../tests/multi-contract/*'
 ```
 
 ### Demo
@@ -246,23 +246,27 @@ The implementation of `bug()` is as follows:
 ```solidity
 library FuzzLand {
     event AssertionFailed(string message);
+  
     function bug() internal {
         emit AssertionFailed("Bug");
     }
+  
     function typed_bug(string memory data) internal {
         emit AssertionFailed(data);
     }
 
 }
+
 function bug()  {
     FuzzLand.bug();
 }
+
 function typed_bug(string memory data)  {
     FuzzLand.typed_bug(data);
 }
 ```
 
-You can either paste the code above in your contract or import it from `solidity_utils/lib.sol` if you are using `bug` or `typed_bug`.
+You can either paste the code above into your contract or import it from `solidity_utils/lib.sol`, if you are using `bug` or `typed_bug`.
 
 ### Echidna Support
 
@@ -301,7 +305,7 @@ scribble test.sol --output-mode flat --output compiled.sol --no-assert
 Then compile with `solc` and run ItyFuzz:
 ```bash
 solc compiled.sol --bin --abi --overwrite -o build
-./cli -t build/* [More Arguments]
+./cli -t "build/*" [More Arguments]
 ```
 
 # Test Coverage
