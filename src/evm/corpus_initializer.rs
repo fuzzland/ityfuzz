@@ -134,7 +134,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
         };
-        for contract in contracts {
+        for contract in contracts.clone() {
             println!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(

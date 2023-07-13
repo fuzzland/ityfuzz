@@ -15,7 +15,6 @@ use crate::{
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use glob::glob;
-use glob::glob;
 use itertools::Itertools;
 use libafl::feedbacks::Feedback;
 use libafl::prelude::ShMemProvider;
@@ -42,12 +41,8 @@ use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 
 use crate::evm::feedbacks::Sha3WrappedFeedback;
-use crate::evm::feedbacks::Sha3WrappedFeedback;
-use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
-use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
-use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
