@@ -464,6 +464,7 @@ where
         mut state: &mut S,
     ) -> InstructionResult {
         match self.spec_id {
+            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state),
             SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S>, FrontierSpec>(&mut self.host, state),
             SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S>, HomesteadSpec>(&mut self.host, state),
             SpecId::TANGERINE => interp.run_inspect::<S, FuzzHost<VS, I, S>, TangerineSpec>(&mut self.host, state),
