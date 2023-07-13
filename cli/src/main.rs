@@ -5,12 +5,10 @@ use hex::{decode, encode};
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::host::PANIC_ON_TYPEDBUG;
 use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracles::bug::BugOracle;
 use ityfuzz::evm::oracles::echidna::EchidnaOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
 use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
@@ -180,10 +178,6 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     pair_oracle: bool,
 
-    // Enable oracle for detecting whether bug() is called
-    #[arg(long, default_value = "true")]
-    bug_oracle: bool,
-
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
@@ -193,12 +187,9 @@ struct Args {
     #[arg(long, default_value = "true")]
     echidna_oracle: bool,
 
-    ///Enable oracle for detecting whether typed_bug() is called
+    ///Enable oracle for detecting whether bug() / typed_bug() is called
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
-
-    #[arg(long, default_value = "false")]
-    panic_on_typedbug: bool,
 
     /// Replay?
     #[arg(long)]
@@ -351,15 +342,6 @@ fn main() {
         oracles.push(flashloan_oracle.clone());
     }
 
-    if args.bug_oracle {
-        oracles.push(Rc::new(RefCell::new(BugOracle::new())));
-
-        if args.panic_on_bug {
-            unsafe {
-                PANIC_ON_BUG = true;
-            }
-        }
-    }
     if args.selfdestruct_oracle {
         oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
     }
@@ -367,11 +349,6 @@ fn main() {
     if args.typed_bug_oracle {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
 
-        if args.panic_on_typedbug {
-            unsafe {
-                PANIC_ON_TYPEDBUG = true;
-            }
-        }
     }
 
     if args.ierc20_oracle || args.pair_oracle {
@@ -495,6 +472,7 @@ fn main() {
         sha3_bypass: args.sha3_bypass,
         base_path: args.base_path,
         echidna_oracle: args.echidna_oracle,
+        panic_on_bug: args.panic_on_bug,
     };
 
     match config.fuzzer_type {

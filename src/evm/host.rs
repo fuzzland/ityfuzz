@@ -63,12 +63,13 @@ pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
 pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
-pub static mut PANIC_ON_TYPEDBUG: bool = false;
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
 /// Shall we dump the contract calls
 pub static mut WRITE_RELATIONSHIPS: bool = false;
+
+const SCRIBBLE_EVENT_HEX: [u8; 32] = [0xb4,0x26,0x04,0xcb,0x10,0x5a,0x16,0xc8,0xf6,0xdb,0x8a,0x41,0xe6,0xb0,0x0c,0x0c,0x1b,0x48,0x26,0x46,0x5e,0x8b,0xc5,0x04,0xb3,0xeb,0x3e,0x88,0xb3,0xe6,0xa4,0xa0];
 
 
 pub struct FuzzHost<VS, I, S>
@@ -106,7 +107,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub current_typed_bug: Vec<u64>,
+    pub current_typed_bug: Vec<String>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -120,7 +121,6 @@ where
     // Filter duplicate relations
     relations_hash: HashSet<u64>,
     /// Known typed bugs, used for filtering in duplicate bugs
-    known_typed_bugs: HashSet<u64>,
     /// Randomness from inputs
     pub randomness: Vec<u8>,
     /// workdir
@@ -190,7 +190,6 @@ where
             relations_file: self.relations_file.try_clone().unwrap(),
             relations_hash: self.relations_hash.clone(),
             current_typed_bug: self.current_typed_bug.clone(),
-            known_typed_bugs: self.known_typed_bugs.clone(),
             randomness: vec![],
             work_dir: self.work_dir.clone(),
         }
@@ -243,7 +242,6 @@ where
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
             current_typed_bug: Default::default(),
-            known_typed_bugs: HashSet::new(),
             randomness: vec![],
             work_dir: workdir.clone(),
         };
@@ -707,24 +705,16 @@ where
             /// hex is "fuzzland"
             if  current_flag[0] == 0x66 && current_flag[1] == 0x75 && current_flag[2] == 0x7a && current_flag[3] == 0x7a &&
                 current_flag[4] == 0x6c && current_flag[5] == 0x61 && current_flag[6] == 0x6e && current_flag[7] == 0x64 &&
-                current_flag[8] == 0x00 && current_flag[9] == 0x00{
-                if current_flag[31] == 0x37 {
-                    if unsafe {PANIC_ON_BUG} {
-                        panic!("target hit");
-                    }
-                    self.bug_hit = true;
-                } else if current_flag[31] == 0x78 {
-                    if unsafe {PANIC_ON_TYPEDBUG} {
-                        panic!("target typed_bug hit");
-                    }
-                    let current_type = bytes_to_u64(&current_flag[23..31]);
-                    if !self.known_typed_bugs.contains(&current_type) {
-                        self.current_typed_bug.push(current_type);
-                        self.known_typed_bugs.insert(current_type);
-                    }
+                current_flag[8] == 0x00 && current_flag[9] == 0x00
+                || current_flag == SCRIBBLE_EVENT_HEX {
+                let data_string = String::from_utf8(_data[64..].to_vec()).unwrap();
+                if unsafe {PANIC_ON_BUG} {
+                    panic!(
+                        "target bug found: {}", data_string
+                    );
                 }
+                self.current_typed_bug.push(data_string.clone().trim_end_matches("\u{0}").to_string());
             }
-
         }
 
         #[cfg(feature = "print_logs")]

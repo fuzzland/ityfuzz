@@ -60,4 +60,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub sha3_bypass: bool,
     pub base_path: String,
     pub echidna_oracle: bool,
+    pub panic_on_bug: bool,
 }

@@ -11,7 +11,9 @@ use primitive_types::{H160, H256, U256};
 use revm_primitives::Bytecode;
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::rc::Rc;
 use itertools::Itertools;
@@ -53,13 +55,15 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         if ctx.post_state.typed_bug.len() > 0 {
             unsafe {
                 ORACLE_OUTPUT += format!(
-                    "[typed_bug] typed_bug({:?}) hit at contract {:?}\n",
-                    ctx.post_state.typed_bug.clone(),
+                    "[typed_bug] {:?} hit at contract {:?}\n",
+                    ctx.post_state.typed_bug,
                     ctx.input.contract
                 ).as_str();
             }
             ctx.post_state.typed_bug.iter().map(|bug_id| {
-                bug_id << 8 + TYPED_BUG_BUG_IDX
+                let mut hasher = DefaultHasher::new();
+                bug_id.hash(&mut hasher);
+                (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX
             }).collect_vec()
         } else {
             vec![]
