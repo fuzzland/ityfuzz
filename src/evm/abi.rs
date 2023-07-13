@@ -228,7 +228,7 @@ impl BoxedABI {
 
     /// Set the bytes to args, used for decoding
     pub fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.b.set_bytes(bytes);
+        self.b.set_bytes(bytes[4..].to_vec());
     }
 }
 
