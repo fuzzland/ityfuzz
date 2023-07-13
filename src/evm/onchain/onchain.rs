@@ -20,7 +20,7 @@ use crypto::sha3::Sha3;
 use libafl::corpus::Corpus;
 use libafl::prelude::{HasCorpus, HasMetadata, Input};
 
-use libafl::state::State;
+use libafl::state::{HasRand, State};
 
 
 use std::cell::RefCell;
@@ -144,6 +144,7 @@ impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
+        +HasRand
         + Debug
         + HasCaller<EVMAddress>
         + HasCorpus<I>
