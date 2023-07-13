@@ -463,7 +463,6 @@ where
         mut interp: &mut Interpreter,
         mut state: &mut S,
     ) -> InstructionResult {
-        //let spec_id = SpecId::from(self.host.spec_id.clone().unwrap().as_str());
         match self.spec_id {
             SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S>, FrontierSpec>(&mut self.host, state),
             SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S>, HomesteadSpec>(&mut self.host, state),
