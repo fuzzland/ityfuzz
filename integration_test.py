@@ -30,7 +30,12 @@ def test_one(path):
         shell=True
     )
 
-    if b"target bug found" not in p.stderr and b"bug() hit" not in p.stdout and b"[typed_bug]" not in p.stdout and b"[selfdestruct]" not in p.stdout and b"[echidna_bug]" not in p.stdout:
+    if b"target bug found" not in p.stderr \
+            and b"bug() hit" not in p.stdout \
+            and b"[typed_bug]" not in p.stdout \
+            and b"[selfdestruct]" not in p.stdout \
+            and b"[echidna_bug]" not in p.stdout\
+            and b"Found violations!" not in p.stdout:
         print(p.stderr.decode("utf-8"))
         print(p.stdout.decode("utf-8"))
         raise Exception(f"Failed to fuzz {path}")
