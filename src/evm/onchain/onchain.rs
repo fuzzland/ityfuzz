@@ -159,7 +159,7 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        let _pc = interp.program_counter();
+        let pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {

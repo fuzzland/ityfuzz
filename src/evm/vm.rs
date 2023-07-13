@@ -68,6 +68,20 @@ macro_rules! get_token_ctx {
     };
 }
 
+/// Determine whether a call is successful
+#[macro_export]
+macro_rules! is_call_success {
+    ($ret: expr) => {
+        $ret == InstructionResult::Return
+                    || $ret == InstructionResult::Stop
+                    || $ret == ControlLeak
+                    || $ret == InstructionResult::SelfDestruct
+    };
+}
+
+
+pub const MEM_LIMIT: u64 = 10 * 1024; // 10K
+
 /// A post execution context
 /// When control is leaked, we dump the current execution context. This context includes
 /// all information needed to continue subsequent execution (e.g., stack, pc, memory, etc.)
@@ -366,7 +380,7 @@ where
                     call_ctx,
                 );
                 let new_ip = call.bytecode.as_ptr().add(new_pc);
-                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 for v in post_exec_ctx.stack.clone() {
                     interp.stack.push(v);
                 }
@@ -389,7 +403,7 @@ where
             // if there is no post execution context, then we create the interpreter from the
             // beginning
             let call = Contract::new_with_context_analyzed(data, bytecode, call_ctx);
-            Interpreter::new(call, 1e10 as u64, false)
+            Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT)
         };
 
         // Execute the contract for `repeats` times or until revert
@@ -400,12 +414,12 @@ where
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
-            if r == InstructionResult::Revert {
+            if !is_call_success!(r) {
                 interp.return_range = 0..0;
                 break;
             }
         }
-        if r != InstructionResult::Revert {
+        if is_call_success!(r) {
             r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         }
 
@@ -489,7 +503,7 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new(call, 1e10 as u64, false);
+        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
         let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
         unsafe {
             IS_FAST_CALL = false;
@@ -595,10 +609,7 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != InstructionResult::Return
-                    && r.ret != InstructionResult::Stop
-                    && r.ret != ControlLeak
-                    && r.ret != InstructionResult::SelfDestruct,
+                reverted: !is_call_success!(r.ret),
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -661,7 +672,7 @@ where
         let middleware_status = self.host.middlewares_enabled;
         // disable middleware for deployment
         self.host.middlewares_enabled = false;
-        let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
+        let mut interp = Interpreter::new_with_memory_limit(deployer, 1e10 as u64, false, MEM_LIMIT);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
         let r = interp
@@ -747,9 +758,7 @@ where
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: res.ret != InstructionResult::Return
-                                    && res.ret != InstructionResult::Stop
-                                    && res.ret != ControlLeak,
+                                reverted: !is_call_success!(res.ret),
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
@@ -805,10 +814,10 @@ where
                 };
                 let code = self.host.code.get(&address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
-                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret =
                     interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
-                if ret == InstructionResult::Revert {
+                if !is_call_success!(ret) {
                     vec![]
                 } else {
                     interp.return_value().to_vec()

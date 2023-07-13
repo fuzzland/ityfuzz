@@ -32,7 +32,7 @@ use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
 use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
-use crate::evm::vm::EVMState;
+use crate::evm::vm::{EVMState, MEM_LIMIT};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -746,7 +746,7 @@ where
         unsafe {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
-            let mut interp = Interpreter::new(
+            let mut interp = Interpreter::new_with_memory_limit(
                 Contract::new_with_context(
                     Bytes::new(),
                     Bytecode::new_raw(inputs.init_code.clone()),
@@ -759,7 +759,8 @@ where
                     },
                 ),
                 1e10 as u64,
-                false
+                false,
+                MEM_LIMIT
             );
             let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             if ret == InstructionResult::Continue {
@@ -914,14 +915,15 @@ where
                 if loc.len() != 1 {
                     panic!("more than one contract found for the same hash");
                 }
-                let mut interp = Interpreter::new(
+                let mut interp = Interpreter::new_with_memory_limit(
                     Contract::new_with_context_analyzed(
                         input_bytes,
                         self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
                         &input.context,
                     ),
                     1e10 as u64,
-                    false
+                    false,
+                    MEM_LIMIT
                 );
 
                 let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
@@ -932,14 +934,15 @@ where
 
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
-            let mut interp = Interpreter::new(
+            let mut interp = Interpreter::new_with_memory_limit(
                 Contract::new_with_context_analyzed(
                     input_bytes.clone(),
                     code.clone(),
                     &input.context,
                 ),
                 1e10 as u64,
-                false
+                false,
+                MEM_LIMIT
             );
             let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             ret_back_ctx!();
