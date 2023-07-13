@@ -88,6 +88,7 @@ pub fn evm_fuzzer(
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_concolic_enabled(config.concolic);
+    fuzz_host.set_spec_id(config.spec_id);
 
     if config.selfdestruct_oracle {
         //Selfdestruct middlewares

@@ -125,6 +125,8 @@ where
     pub randomness: Vec<u8>,
     /// workdir
     pub work_dir: String,
+    /// custom SpecId
+    pub spec_id: Option<String>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -192,6 +194,7 @@ where
             current_typed_bug: self.current_typed_bug.clone(),
             randomness: vec![],
             work_dir: self.work_dir.clone(),
+            spec_id: self.spec_id.clone(),
         }
     }
 }
@@ -244,9 +247,14 @@ where
             current_typed_bug: Default::default(),
             randomness: vec![],
             work_dir: workdir.clone(),
+            spec_id:Some("Latest".to_string()),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
+    }
+
+    pub fn set_spec_id(&mut self, spec_id: String) {
+        self.spec_id = Some(spec_id);
     }
 
     pub fn remove_all_middlewares(&mut self) {
