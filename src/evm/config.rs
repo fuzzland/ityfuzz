@@ -4,6 +4,7 @@ use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 
 use crate::evm::oracles::erc20::IERC20OracleFlashloan;
 use crate::oracle::{Oracle, Producer};
+use bytes::Bytes;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -61,4 +62,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub base_path: String,
     pub echidna_oracle: bool,
     pub panic_on_bug: bool,
+    pub initial_txs: Vec<(String, Vec<u8>)>,
 }

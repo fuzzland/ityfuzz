@@ -1,4 +1,5 @@
 use crate::TargetType::{Address, Glob};
+use bytes::Bytes;
 use clap::Parser;
 use ethers::types::Transaction;
 use hex::{decode, encode};
@@ -91,6 +92,13 @@ struct ResponseData {
 #[derive(Deserialize)]
 struct TXResult {
     input: String,
+}
+
+#[derive(Deserialize)]
+struct SendTransactionParams {
+    from: String,
+    to: String,
+    data: String,
 }
 
 /// CLI for ItyFuzz
@@ -220,7 +228,6 @@ struct Args {
     /// Also, please convert it to absolute path if you are not sure.
     #[arg(long, default_value = "")]
     base_path: String,
-
 }
 
 enum TargetType {
@@ -307,7 +314,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
-                    ConciseEVMInput
+                    ConciseEVMInput,
                 >,
             >,
         >,
@@ -326,7 +333,7 @@ fn main() {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
-                    ConciseEVMInput
+                    ConciseEVMInput,
                 >,
             >,
         >,
@@ -348,7 +355,6 @@ fn main() {
 
     if args.typed_bug_oracle {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
-
     }
 
     if args.ierc20_oracle || args.pair_oracle {
@@ -364,6 +370,8 @@ fn main() {
 
     let mut deploy_codes: Vec<String> = vec![];
 
+    let mut initial_txs: Vec<(String, Vec<u8>)> = vec![];
+
     if args.fetch_tx_data {
         let response = reqwest::blocking::get(args.proxy_address)
             .unwrap()
@@ -372,29 +380,46 @@ fn main() {
         let data: Vec<Data> = serde_json::from_str(&response).unwrap();
 
         for d in data {
-            if d.body.method != "eth_sendRawTransaction" {
-                continue;
+            match d.body.method.as_str() {
+                "eth_sendRawTransaction" => {
+                    let tx = d.body.params.unwrap();
+
+                    let params: Vec<String> = serde_json::from_value(tx).unwrap();
+
+                    let data = params[0].clone();
+
+                    let data = if data.starts_with("0x") {
+                        &data[2..]
+                    } else {
+                        &data
+                    };
+
+                    let bytes_data = hex::decode(data).unwrap();
+
+                    let transaction: Transaction = rlp::decode(&bytes_data).unwrap();
+
+                    let code = hex::encode(transaction.input);
+
+                    deploy_codes.push(code);
+                }
+
+                "eth_sendTransaction" => {
+                    let tx = d.body.params.unwrap();
+
+                    let params: Vec<SendTransactionParams> = serde_json::from_value(tx).unwrap();
+
+                    for p in params {
+                        let data = if p.data.starts_with("0x") {
+                            &p.data[2..]
+                        } else {
+                            &p.data
+                        };
+                        initial_txs.push((p.from, hex::decode(data).unwrap()));
+                    }
+                }
+
+                _ => {}
             }
-
-            let tx = d.body.params.unwrap();
-
-            let params: Vec<String> = serde_json::from_value(tx).unwrap();
-
-            let data = params[0].clone();
-
-            let data = if data.starts_with("0x") {
-                &data[2..]
-            } else {
-                &data
-            };
-
-            let bytes_data = hex::decode(data).unwrap();
-
-            let transaction: Transaction = rlp::decode(&bytes_data).unwrap();
-
-            let code = hex::encode(transaction.input);
-
-            deploy_codes.push(code);
         }
     }
 
@@ -473,6 +498,7 @@ fn main() {
         base_path: args.base_path,
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
+        initial_txs: initial_txs,
     };
 
     match config.fuzzer_type {

@@ -5,11 +5,14 @@ use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ContractInfo};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
-
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
-use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState, EVMU256, ProjectSourceMapTy};
+use crate::evm::types::{
+    fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState,
+    ProjectSourceMapTy, EVMU256,
+};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
+use std::str::FromStr;
 
 use crate::state::HasCaller;
 use crate::state_input::StagedVMState;
@@ -112,13 +115,21 @@ impl<'a> EVMCorpusInitializer<'a> {
         self.presets.push(preset);
     }
 
-    pub fn initialize(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts{
+    pub fn initialize(
+        &mut self,
+        contracts: Vec<ContractInfo>,
+        initial_txs: Vec<(String, Vec<u8>)>,
+    ) -> EVMInitializationArtifacts {
         self.setup_default_callers();
         self.setup_contract_callers();
-        self.initialize_corpus(contracts)
+        self.initialize_corpus(contracts, initial_txs)
     }
 
-    pub fn initialize_corpus(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts {
+    pub fn initialize_corpus(
+        &mut self,
+        contracts: Vec<ContractInfo>,
+        initial_txs: Vec<(String, Vec<u8>)>,
+    ) -> EVMInitializationArtifacts {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
@@ -148,8 +159,12 @@ impl<'a> EVMCorpusInitializer<'a> {
                     .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
-            artifacts.address_to_sourcemap.insert(deployed_address, contract.source_map);
-            artifacts.address_to_abi.insert(deployed_address, contract.abi.clone());
+            artifacts
+                .address_to_sourcemap
+                .insert(deployed_address, contract.source_map);
+            artifacts
+                .address_to_abi
+                .insert(deployed_address, contract.abi.clone());
 
             #[cfg(feature = "flashloan_v2")]
             {
@@ -196,6 +211,40 @@ impl<'a> EVMCorpusInitializer<'a> {
                 add_input_to_corpus!(self.state, self.scheduler, input);
             }
         }
+
+        for tx in initial_txs.iter() {
+            for contract in contracts.iter() {
+                for abi in contract.abi.iter() {
+                    let from = EVMAddress::from_str(&tx.0).unwrap();
+                    let b = tx.1.clone();
+                    if b.starts_with(&abi.function) {
+                        let input = EVMInput {
+                            caller: from,
+                            contract: contract.deployed_address,
+                            data: None,
+                            sstate: StagedVMState::new_with_state(
+                                self.executor.host.evmstate.clone(),
+                            ),
+                            sstate_idx: 0,
+                            txn_value: Some(EVMU256::ZERO),
+                            step: false,
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent: 0,
+                            direct_data: Bytes::from(b),
+                            #[cfg(feature = "flashloan_v2")]
+                            input_type: EVMInputTy::ABI,
+                            randomness: vec![],
+                            repeat: 1,
+                        };
+
+                        let r = self.executor.execute(&input, self.state);
+                    }
+                }
+            }
+        }
+
         let mut tc = Testcase::new(StagedVMState::new_with_state(
             self.executor.host.evmstate.clone(),
         ));

@@ -8,10 +8,15 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::executor;
+use crate::generic_vm::vm_executor::GenericVM;
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
+use glob::glob;
+use glob::glob;
+use itertools::Itertools;
 use libafl::feedbacks::Feedback;
 use libafl::prelude::ShMemProvider;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
@@ -20,11 +25,11 @@ use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
-use glob::glob;
-use itertools::Itertools;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, WRITE_RELATIONSHIPS};
-use crate::evm::host::{CALL_UNTIL};
+use crate::evm::host::CALL_UNTIL;
+use crate::evm::host::{
+    ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, WRITE_RELATIONSHIPS,
+};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 
@@ -36,23 +41,27 @@ use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 
+use crate::evm::feedbacks::Sha3WrappedFeedback;
+use crate::evm::feedbacks::Sha3WrappedFeedback;
+use crate::evm::middlewares::branch_coverage::BranchCoverage;
+use crate::evm::middlewares::branch_coverage::BranchCoverage;
+use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::OnChain;
-use crate::evm::onchain::selfdestruct::{Selfdestruct};
-use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
-use primitive_types::{H160, U256};
-use revm_primitives::{BlockEnv, Bytecode, Env};
-use revm_primitives::bitvec::view::BitViewSized;
-use crate::evm::feedbacks::Sha3WrappedFeedback;
-use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
-use crate::evm::middlewares::branch_coverage::BranchCoverage;
-use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::onchain::selfdestruct::Selfdestruct;
 use crate::evm::oracles::echidna::EchidnaOracle;
+use crate::evm::presets::pair::PairPreset;
 use crate::evm::srcmap::parser::BASE_PATH;
+use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256};
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::ConciseSerde;
+use primitive_types::{H160, U256};
+use revm_primitives::bitvec::view::BitViewSized;
+use revm_primitives::{BlockEnv, Bytecode, Env};
 
 struct ABIConfig {
     abi: String,
@@ -65,7 +74,19 @@ struct ContractInfo {
 }
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>, state: &mut EVMFuzzState
+    config: Config<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+    >,
+    state: &mut EVMFuzzState,
 ) {
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -186,17 +207,13 @@ pub fn evm_fuzzer(
         }
     }
 
-    let mut corpus_initializer = EVMCorpusInitializer::new(
-        &mut evm_executor,
-        &mut scheduler,
-        &infant_scheduler,
-        state,
-    );
+    let mut corpus_initializer =
+        EVMCorpusInitializer::new(&mut evm_executor, &mut scheduler, &infant_scheduler, state);
 
     #[cfg(feature = "use_presets")]
     corpus_initializer.register_preset(&PairPreset {});
 
-    let artifacts = corpus_initializer.initialize(config.contract_info);
+    let artifacts = corpus_initializer.initialize(config.contract_info, config.initial_txs.clone());
 
     evm_executor.host.initialize(state);
 
@@ -205,16 +222,12 @@ pub fn evm_fuzzer(
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
 
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
-    feedback
-        .init_state(state)
-        .expect("Failed to init state");
+    feedback.init_state(state).expect("Failed to init state");
     let calibration = CalibrationStage::new(&feedback);
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(calibration, std_stage);
-
-
 
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
@@ -226,37 +239,31 @@ pub fn evm_fuzzer(
 
     if config.echidna_oracle {
         let echidna_oracle = EchidnaOracle::new(
-            artifacts.address_to_abi.iter()
-                .map(
-                    |(address, abis)| {
-                        abis.iter().filter(
-                            |abi| {
-                                abi.function_name.starts_with("echidna_")
-                                    && abi.abi == "()"
-                            }
-                        ).map(
-                            |abi| (address.clone(), abi.function.to_vec())
-                        ).collect_vec()
-                    }
-                ).flatten().collect_vec(),
-
-            artifacts.address_to_abi.iter()
-                .map(
-                    |(address, abis)| {
-                        abis.iter().filter(
-                            |abi| {
-                                abi.function_name.starts_with("echidna_")
-                                    && abi.abi == "()"
-                            }
-                        ).map(
-                            |abi| (abi.function.to_vec(), abi.function_name.clone())
-                        ).collect_vec()
-                    }
-                ).flatten().collect::<HashMap<Vec<u8>, String>>(),
+            artifacts
+                .address_to_abi
+                .iter()
+                .map(|(address, abis)| {
+                    abis.iter()
+                        .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
+                        .map(|abi| (address.clone(), abi.function.to_vec()))
+                        .collect_vec()
+                })
+                .flatten()
+                .collect_vec(),
+            artifacts
+                .address_to_abi
+                .iter()
+                .map(|(address, abis)| {
+                    abis.iter()
+                        .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
+                        .map(|abi| (abi.function.to_vec(), abi.function_name.clone()))
+                        .collect_vec()
+                })
+                .flatten()
+                .collect::<HashMap<Vec<u8>, String>>(),
         );
         oracles.push(Rc::new(RefCell::new(echidna_oracle)));
     }
-
 
     let mut producers = config.producers;
 
@@ -265,7 +272,7 @@ pub fn evm_fuzzer(
         feedback,
         sha3_taint,
         evm_executor_ref.clone(),
-        config.sha3_bypass
+        config.sha3_bypass,
     );
 
     let mut fuzzer = ItyFuzzer::new(
@@ -301,10 +308,13 @@ pub fn evm_fuzzer(
                     }
 
                     // [is_step] [caller] [target] [input] [value]
-                    let (inp, call_until) = ConciseEVMInput::deserialize_concise(hex::decode(txn).unwrap())
-                        .to_input(vm_state.clone());
+                    let (inp, call_until) =
+                        ConciseEVMInput::deserialize_concise(hex::decode(txn).unwrap())
+                            .to_input(vm_state.clone());
                     println!("{:?}", inp);
-                    unsafe {CALL_UNTIL = call_until;}
+                    unsafe {
+                        CALL_UNTIL = call_until;
+                    }
 
                     fuzzer
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
@@ -330,8 +340,12 @@ pub fn evm_fuzzer(
             }
 
             // dump coverage:
-            cov_middleware.borrow_mut().record_instruction_coverage(&artifacts.address_to_sourcemap);
-            branch_middleware.borrow_mut().record_branch_coverage(&artifacts.address_to_sourcemap);
+            cov_middleware
+                .borrow_mut()
+                .record_instruction_coverage(&artifacts.address_to_sourcemap);
+            branch_middleware
+                .borrow_mut()
+                .record_branch_coverage(&artifacts.address_to_sourcemap);
         }
     }
 }
