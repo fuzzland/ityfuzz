@@ -38,6 +38,8 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
+use revm_primitives::{SpecId, FrontierSpec, HomesteadSpec, TangerineSpec, SpuriousDragonSpec, ByzantiumSpec,
+                      PetersburgSpec, IstanbulSpec, BerlinSpec, LondonSpec, MergeSpec, ShanghaiSpec};
 
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -126,7 +128,7 @@ where
     /// workdir
     pub work_dir: String,
     /// custom SpecId
-    pub spec_id: Option<String>,
+    pub spec_id: SpecId,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -212,7 +214,7 @@ const CONTROL_LEAK_THRESHOLD: usize = 2;
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
-    S: State + HasCaller<EVMAddress> + Clone + Debug + HasCorpus<I> + 'static,
+    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> +  'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
@@ -247,14 +249,37 @@ where
             current_typed_bug: Default::default(),
             randomness: vec![],
             work_dir: workdir.clone(),
-            spec_id:Some("Latest".to_string()),
+            spec_id: SpecId::LATEST,
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
     }
 
     pub fn set_spec_id(&mut self, spec_id: String) {
-        self.spec_id = Some(spec_id);
+        self.spec_id = SpecId::from(spec_id.as_str());
+    }
+
+    /// custom spec id run_inspect
+    pub fn run_inspect(
+        &mut self,
+        mut interp: &mut Interpreter,
+        mut state:  &mut S,
+    ) -> InstructionResult {
+        match self.spec_id {
+            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state),
+            SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S>, FrontierSpec>(self, state),
+            SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S>, HomesteadSpec>(self, state),
+            SpecId::TANGERINE => interp.run_inspect::<S, FuzzHost<VS, I, S>, TangerineSpec>(self, state),
+            SpecId::SPURIOUS_DRAGON => interp.run_inspect::<S, FuzzHost<VS, I, S>, SpuriousDragonSpec>(self, state),
+            SpecId::BYZANTIUM => interp.run_inspect::<S, FuzzHost<VS, I, S>, ByzantiumSpec>( self, state),
+            SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => interp.run_inspect::<S, FuzzHost<VS, I, S>, PetersburgSpec>(self, state),
+            SpecId::ISTANBUL => interp.run_inspect::<S, FuzzHost<VS, I, S>, IstanbulSpec>(self, state),
+            SpecId::MUIR_GLACIER | SpecId::BERLIN => interp.run_inspect::<S, FuzzHost<VS, I, S>, BerlinSpec>(self, state),
+            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S>, LondonSpec>(self, state),
+            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S>, MergeSpec>(self, state),
+            SpecId::SHANGHAI => interp.run_inspect::<S, FuzzHost<VS, I, S>, ShanghaiSpec>(self, state),
+            _=> interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state),
+        }
     }
 
     pub fn remove_all_middlewares(&mut self) {
@@ -769,7 +794,7 @@ where
                 1e10 as u64,
                 false
             );
-            let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+            let ret = self.run_inspect(&mut interp, state);
             if ret == InstructionResult::Continue {
                 self.set_code(
                     r_addr,
@@ -932,7 +957,7 @@ where
                     false
                 );
 
-                let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+                let ret = self.run_inspect(&mut interp, state);
                 ret_back_ctx!();
                 return (ret, Gas::new(0), interp.return_value());
             }
@@ -949,7 +974,7 @@ where
                 1e10 as u64,
                 false
             );
-            let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
+            let ret = self.run_inspect(&mut interp, state);
             ret_back_ctx!();
             return (ret, Gas::new(0), interp.return_value());
         }

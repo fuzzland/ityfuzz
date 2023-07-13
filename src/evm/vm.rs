@@ -33,8 +33,7 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
-use revm_primitives::{Bytecode, LatestSpec, SpecId, FrontierSpec, HomesteadSpec, TangerineSpec, SpuriousDragonSpec, ByzantiumSpec,
-                      PetersburgSpec, IstanbulSpec, BerlinSpec, LondonSpec, MergeSpec, ShanghaiSpec};
+use revm_primitives::{Bytecode};
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
@@ -258,7 +257,6 @@ where
     /// [Depreciated] Deployer address
     deployer: EVMAddress,
     phandom: PhantomData<(I, S, VS, CI)>,
-    spec_id: SpecId,
 }
 
 /// Execution result that may have control leaked
@@ -299,7 +297,6 @@ where
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
         Self {
-            spec_id: SpecId::from(fuzz_host.spec_id.clone().unwrap().as_str()),
             host: fuzz_host,
             deployer,
             phandom: PhantomData,
@@ -399,7 +396,7 @@ where
         let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
-            r = self.run_inspect(&mut interp, state);
+            r = self.host.run_inspect(&mut interp, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
@@ -409,7 +406,7 @@ where
             }
         }
         if r != InstructionResult::Revert {
-            r = self.run_inspect(&mut interp, state);
+            r = self.host.run_inspect(&mut interp, state);
         }
 
         // Build the result
@@ -457,31 +454,6 @@ where
         result
     }
 
-    /// custom spec id run_inspect
-    pub fn run_inspect(
-        &mut self,
-        mut interp: &mut Interpreter,
-        mut state: &mut S,
-    ) -> InstructionResult {
-        match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state),
-            SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S>, FrontierSpec>(&mut self.host, state),
-            SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S>, HomesteadSpec>(&mut self.host, state),
-            SpecId::TANGERINE => interp.run_inspect::<S, FuzzHost<VS, I, S>, TangerineSpec>(&mut self.host, state),
-            SpecId::SPURIOUS_DRAGON => interp.run_inspect::<S, FuzzHost<VS, I, S>, SpuriousDragonSpec>(&mut self.host, state),
-            SpecId::BYZANTIUM => interp.run_inspect::<S, FuzzHost<VS, I, S>, ByzantiumSpec>(&mut self.host, state),
-            SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => interp.run_inspect::<S, FuzzHost<VS, I, S>, PetersburgSpec>(&mut self.host, state),
-            SpecId::ISTANBUL => interp.run_inspect::<S, FuzzHost<VS, I, S>, IstanbulSpec>(&mut self.host, state),
-            SpecId::MUIR_GLACIER | SpecId::BERLIN => interp.run_inspect::<S, FuzzHost<VS, I, S>, BerlinSpec>(&mut self.host, state),
-            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S>, LondonSpec>(&mut self.host, state),
-            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S>, MergeSpec>(&mut self.host, state),
-            SpecId::SHANGHAI => interp.run_inspect::<S, FuzzHost<VS, I, S>, ShanghaiSpec>(&mut self.host, state),
-            _=> interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state),
-        }
-
-    }
-
-
     /// Conduct a fast call that does not change the state
     fn fast_call(
         &mut self,
@@ -518,7 +490,7 @@ where
                 .clone();
         }
         let mut interp = Interpreter::new(call, 1e10 as u64, false);
-        let ret = self.run_inspect(&mut interp, state);
+        let ret = self.host.run_inspect(&mut interp, state);
         unsafe {
             IS_FAST_CALL = false;
         }
@@ -692,7 +664,7 @@ where
         let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = self.run_inspect(&mut interp, &mut dummy_state);
+        let r = self.host.run_inspect(&mut interp, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
@@ -833,7 +805,7 @@ where
                 let code = self.host.code.get(&address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp = Interpreter::new(call, 1e10 as u64, false);
-                let ret = self.run_inspect(&mut interp, state);
+                let ret = self.host.run_inspect(&mut interp, state);
                 if ret == InstructionResult::Revert {
                     vec![]
                 } else {
