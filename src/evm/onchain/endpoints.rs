@@ -992,9 +992,7 @@ impl OnChainConfig {
         hops: &HashMap<String, Vec<PairData>>,
         routes: &mut Vec<Vec<PairData>>,
     ) {
-        if !hops.contains_key(token) {
-            return;
-        }
+
         if pegged_tokens.values().any(|v| v == token) {
             let mut new_path = path.clone();
             new_path.push(self.get_pegged_next_hop(token, network, block));
@@ -1002,6 +1000,9 @@ impl OnChainConfig {
             return;
         }
         visited.insert(token.to_string());
+        if !hops.contains_key(token) {
+            return;
+        }
         for hop in hops.get(token).unwrap() {
             if visited.contains(&hop.next) {
                 continue;
