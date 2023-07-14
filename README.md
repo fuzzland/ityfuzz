@@ -346,6 +346,7 @@ Example:
 ./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
+We do not track coverage of static calls (view, pure functions) by default!
 
 # Troubleshooting
 ### Z3 Installation
