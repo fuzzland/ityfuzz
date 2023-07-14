@@ -112,7 +112,8 @@ where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
         // Dump the current transaction
         for concise_input in &self.transactions {
             // get liquidation percentage (EVM Specific)
-            s.push_str(format!("{}\n", hex::encode(concise_input.serialize_concise())).as_str());
+            s.push_str(format!("{}\n", String::from_utf8(concise_input.serialize_concise()).unwrap())
+                .as_str());
         }
         s
     }
