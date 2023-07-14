@@ -1,6 +1,6 @@
 use crate::evm::contract_utils::ABIConfig;
 use heimdall::decompile::decompile_with_bytecode;
-use heimdall::decompile::output::ABIStructure;
+use heimdall::decompile::out::solidity::ABIStructure;
 use std::fs;
 use std::path::Path;
 
