@@ -100,6 +100,6 @@ where
 
 pub trait ConciseSerde {
     fn serialize_concise(&self) -> Vec<u8>;
-    fn deserialize_concise(data: Vec<u8>) -> Self;
+    fn deserialize_concise(data: &[u8]) -> Self;
     fn serialize_string(&self) -> String;
 }

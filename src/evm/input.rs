@@ -573,8 +573,8 @@ impl ConciseSerde for ConciseEVMInput {
         serde_json::to_vec(self).expect("Failed to deserialize concise input")
     }
 
-    fn deserialize_concise(data: Vec<u8>) -> Self {
-        serde_json::from_slice(&data.as_slice())
+    fn deserialize_concise(data: &[u8]) -> Self {
+        serde_json::from_slice(data)
             .expect("Failed to deserialize concise input")
     }
 

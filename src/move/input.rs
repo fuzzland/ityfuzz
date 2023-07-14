@@ -48,7 +48,7 @@ impl ConciseSerde for MoveFunctionInput {
         todo!()
     }
 
-    fn deserialize_concise(data: Vec<u8>) -> Self {
+    fn deserialize_concise(data: &[u8]) -> Self {
         todo!()
     }
 

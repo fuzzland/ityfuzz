@@ -160,7 +160,7 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        let _pc = interp.program_counter();
+        let pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {
@@ -270,6 +270,8 @@ where
                 if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                     host.set_codedata(address_h160, contract_code.clone());
+                    println!("fetching code from {:?} due to call by {:?}",
+                             address_h160, caller);
                 }
                 if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
                     *interp.instruction_pointer == 0x3b ||

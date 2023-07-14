@@ -87,7 +87,7 @@ where
     pub hash_to_address: HashMap<[u8; 4], HashSet<EVMAddress>>,
     pub address_to_hash: HashMap<EVMAddress, Vec<[u8; 4]>>,
     pub _pc: usize,
-    pub pc_to_addresses: HashMap<usize, HashSet<EVMAddress>>,
+    pub pc_to_addresses: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
     pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
@@ -907,10 +907,12 @@ where
 
         // control leak check
         assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&self._pc) {
-            self.pc_to_addresses.insert(self._pc, HashSet::new());
+        if !self.pc_to_addresses.contains_key(&(input.context.caller, self._pc)) {
+            self.pc_to_addresses.insert((input.context.caller, self._pc), HashSet::new());
         }
-        let addresses_at_pc = self.pc_to_addresses.get_mut(&self._pc).unwrap();
+        let addresses_at_pc = self.pc_to_addresses
+            .get_mut(&(input.context.caller, self._pc))
+            .unwrap();
         addresses_at_pc.insert(input.contract);
 
         // if control leak is enabled, return controlleak if it is unbounded call
