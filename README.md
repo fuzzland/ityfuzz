@@ -144,20 +144,20 @@ cargo build --release
 You can fuzz a project by providing an address, a block, and a chain type.
 
 ```bash
-./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE]
+./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 Example:
 Fuzzing WETH contract (`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`) on Ethereum mainnet at latest block.
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH
+./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 Fuzzing with flashloan and oracles enabled:
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p
+./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.

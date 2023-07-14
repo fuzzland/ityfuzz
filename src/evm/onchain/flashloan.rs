@@ -20,7 +20,7 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::impl_serdeany;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
-use libafl::state::HasMetadata;
+use libafl::state::{HasMetadata, HasRand};
 use serde::{Deserialize, Serialize};
 
 use std::cell::RefCell;
@@ -144,7 +144,7 @@ where
 
 impl<VS, I, S> Flashloan<VS, I, S>
 where
-    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
+    S: State + HasRand + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
@@ -301,7 +301,7 @@ where
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 where
-    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
+    S: State +HasRand+ HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {

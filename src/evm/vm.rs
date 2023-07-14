@@ -33,7 +33,7 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
-use revm_primitives::{Bytecode, LatestSpec};
+use revm_primitives::{Bytecode};
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
@@ -410,7 +410,7 @@ where
         let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
-            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+            r = self.host.run_inspect(&mut interp, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
@@ -420,7 +420,7 @@ where
             }
         }
         if is_call_success!(r) {
-            r = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+            r = self.host.run_inspect(&mut interp, state);
         }
 
         // Build the result
@@ -504,7 +504,7 @@ where
                 .clone();
         }
         let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
-        let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+        let ret = self.host.run_inspect(&mut interp, state);
         unsafe {
             IS_FAST_CALL = false;
         }
@@ -675,8 +675,7 @@ where
         let mut interp = Interpreter::new_with_memory_limit(deployer, 1e10 as u64, false, MEM_LIMIT);
         self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
-        let r = interp
-            .run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, &mut dummy_state);
+        let r = self.host.run_inspect(&mut interp, &mut dummy_state);
         #[cfg(feature = "evaluation")]
         {
             self.host.pc_coverage = Default::default();
@@ -815,8 +814,7 @@ where
                 let code = self.host.code.get(&address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
-                let ret =
-                    interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(&mut self.host, state);
+                let ret = self.host.run_inspect(&mut interp, state);
                 if !is_call_success!(ret) {
                     vec![]
                 } else {

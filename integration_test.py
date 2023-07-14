@@ -36,7 +36,9 @@ def test_one(path):
             and b"[selfdestruct]" not in p.stdout \
             and b"[echidna_bug]" not in p.stdout\
             and b"Found violations!" not in p.stdout:
+        print("================ STDERR =================")
         print(p.stderr.decode("utf-8"))
+        print("================ STDOUT =================")
         print(p.stdout.decode("utf-8"))
         raise Exception(f"Failed to fuzz {path}")
 
