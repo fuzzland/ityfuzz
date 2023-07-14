@@ -221,6 +221,10 @@ struct Args {
     #[arg(long, default_value = "")]
     base_path: String,
 
+    ///spec id
+    #[arg(long, default_value = "Latest")]
+    spec_id: String,
+
 }
 
 enum TargetType {
@@ -473,6 +477,7 @@ fn main() {
         base_path: args.base_path,
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
+        spec_id: args.spec_id,
     };
 
     match config.fuzzer_type {
