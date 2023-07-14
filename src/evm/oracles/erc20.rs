@@ -192,8 +192,8 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         {
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;
-            // we scaled by 1e24, so divide by 1e24 to get ETH
-            let net_eth = net / EVMU512::from(10_000_000_000_000_000_000_000_00u128);
+            // we scaled by 1e18, so divide by 1e18 to get ETH
+            let net_eth = net / EVMU512::from(10_000_000_000_000_000_00u128);
             unsafe {
 
 
