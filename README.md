@@ -48,7 +48,7 @@ Test Coverage:
 
 # Building
 
-You can first need to install Rust through https://rustup.rs/
+You first need to install Rust through https://rustup.rs/
 
 You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.
 
