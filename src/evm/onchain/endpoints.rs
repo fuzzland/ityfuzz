@@ -302,8 +302,8 @@ impl OnChainConfig {
             }
             Err(_) => {}
         }
-        match retry_with_index(Fixed::from_millis(100), |current_try| {
-            if current_try > 3 {
+        match retry_with_index(Fixed::from_millis(1000), |current_try| {
+            if current_try > 5 {
                 return OperationResult::Err("did not succeed within 3 tries".to_string());
             }
             match self
@@ -316,7 +316,12 @@ impl OnChainConfig {
                     let text = resp.text();
                     match text {
                         Ok(t) => {
-                            return OperationResult::Ok(t);
+                            if t.contains("Max rate limit reached") {
+                                println!("Etherscan max rate limit reached, retrying...");
+                                return OperationResult::Retry("Rate limit reached".to_string());
+                            } else {
+                                return OperationResult::Ok(t);
+                            }
                         }
                         Err(e) => {
                             println!("{:?}", e);
@@ -1261,7 +1266,9 @@ fn get_uniswap_api(network: &str) -> HashMap<&str, HashMap<&str, &str>> {
             );
             api.insert("v2", v2);
         }
-        _ => return panic!("[Flashloan] Network is not supported"),
+        _ => {
+            println!("[Flashloan] Network {} is not supported for ERC20 Flashloan", network)
+        },
     }
 
     api

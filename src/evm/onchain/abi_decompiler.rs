@@ -1,18 +1,27 @@
+use std::collections::hash_map::DefaultHasher;
+use std::error::Error;
 use crate::evm::contract_utils::ABIConfig;
 use heimdall::decompile::decompile_with_bytecode;
 use heimdall::decompile::out::solidity::ABIStructure;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
+use crate::cache::{Cache, FileSystemCache};
 
 pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
-    let output_dir = "/tmp/heimdall";
-
-    if !Path::new(output_dir).exists() {
-        fs::create_dir(output_dir).unwrap();
+    let mut hasher = DefaultHasher::new();
+    bytecode.hash(&mut hasher);
+    let bytecode_hash = hasher.finish();
+    let cache_key = format!("{}.json", bytecode_hash);
+    let cache = FileSystemCache::new("cache/heimdall");
+    match cache.load(cache_key.as_str()) {
+        Ok(res) => {
+            println!("using cached result of decompiling contract");
+            return serde_json::from_str(res.as_str()).unwrap();
+        }
+        Err(_) => {}
     }
-
-    let heimdall_result = decompile_with_bytecode(bytecode, output_dir.to_string());
-
+    let heimdall_result = decompile_with_bytecode(bytecode, "".to_string());
     let mut result = vec![];
     for heimdall_abi in heimdall_result {
         match heimdall_abi {
@@ -46,7 +55,10 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
             }
         }
     }
-
+    FileSystemCache::new("cache/heimdall").save(
+        cache_key.as_str(),
+        serde_json::to_string(&result).unwrap().as_str(),
+    ).expect("unable to save cache");
     result
 }
 
