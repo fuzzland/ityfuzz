@@ -1,5 +1,5 @@
 /// Configuration for the EVM fuzzer
-use crate::evm::contract_utils::ContractInfo;
+use crate::evm::contract_utils::{ContractInfo, ContractLoader};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 
 use crate::evm::oracles::erc20::IERC20OracleFlashloan;
@@ -47,7 +47,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub flashloan: bool,
     pub concolic: bool,
     pub fuzzer_type: FuzzerTypes,
-    pub contract_info: Vec<ContractInfo>,
+    pub contract_loader: ContractLoader,
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     pub producers: Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     pub price_oracle: Box<dyn PriceOracle>,

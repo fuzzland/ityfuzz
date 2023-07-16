@@ -197,7 +197,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "use_presets")]
     corpus_initializer.register_preset(&PairPreset {});
 
-    let artifacts = corpus_initializer.initialize(config.contract_info);
+    let artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     evm_executor.host.initialize(state);
 
