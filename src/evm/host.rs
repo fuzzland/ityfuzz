@@ -1,11 +1,13 @@
 use crate::evm::bytecode_analyzer;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middlewares::middleware::{CallMiddlewareReturn, Middleware, MiddlewareType};
+use crate::evm::middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
+
+use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, Scheduler, HasRand};
+use libafl::prelude::{HasCorpus, Scheduler, HasRand, HasMetadata};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
@@ -32,7 +34,7 @@ use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
 use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
-use crate::evm::vm::EVMState;
+use crate::evm::vm::{EVMState, IN_DEPLOY};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -40,6 +42,12 @@ use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use revm_primitives::{SpecId, FrontierSpec, HomesteadSpec, TangerineSpec, SpuriousDragonSpec, ByzantiumSpec,
                       PetersburgSpec, IstanbulSpec, BerlinSpec, LondonSpec, MergeSpec, ShanghaiSpec};
+use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::contract_utils::extract_sig_from_contract;
+use crate::evm::corpus_initializer::ABIMap;
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
+use crate::handle_contract_insertion;
+use crate::state_input::StagedVMState;
 
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -72,7 +80,7 @@ pub static mut CALL_UNTIL: u32 = u32::MAX;
 pub static mut WRITE_RELATIONSHIPS: bool = false;
 
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [0xb4,0x26,0x04,0xcb,0x10,0x5a,0x16,0xc8,0xf6,0xdb,0x8a,0x41,0xe6,0xb0,0x0c,0x0c,0x1b,0x48,0x26,0x46,0x5e,0x8b,0xc5,0x04,0xb3,0xeb,0x3e,0x88,0xb3,0xe6,0xa4,0xa0];
-
+pub static mut CONCRETE_CREATE: bool = false;
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -88,6 +96,7 @@ where
     pub address_to_hash: HashMap<EVMAddress, Vec<[u8; 4]>>,
     pub _pc: usize,
     pub pc_to_addresses: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
+    pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
     pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
@@ -174,6 +183,7 @@ where
             address_to_hash: self.address_to_hash.clone(),
             _pc: self._pc,
             pc_to_addresses: self.pc_to_addresses.clone(),
+            pc_to_create: self.pc_to_create.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
             concolic_enabled: false,
             middlewares_enabled: false,
@@ -214,8 +224,8 @@ const CONTROL_LEAK_THRESHOLD: usize = 2;
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
-    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> +  'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> + HasMetadata + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> +  'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>, workdir: String) -> Self {
@@ -227,6 +237,7 @@ where
             address_to_hash: HashMap::new(),
             _pc: 0,
             pc_to_addresses: HashMap::new(),
+            pc_to_create: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
             concolic_enabled: false,
             middlewares_enabled: false,
@@ -480,8 +491,8 @@ pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
-    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> +  'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> + HasMetadata + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> +  'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
@@ -641,6 +652,10 @@ where
                     }
                     self._pc = interp.program_counter();
                 }
+                0xf0 | 0xf5 => {
+                    // CREATE, CREATE2
+                    self._pc = interp.program_counter();
+                }
                 _ => {}
             }
 
@@ -777,44 +792,129 @@ where
         state: &mut S,
     ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
         unsafe {
-            // todo: use nonce + hash instead
-            let r_addr = generate_random_address(state);
-            let mut interp = Interpreter::new(
-                Contract::new_with_context(
-                    Bytes::new(),
-                    Bytecode::new_raw(inputs.init_code.clone()),
-                    &CallContext {
-                        address: r_addr,
-                        caller: inputs.caller,
-                        code_address: r_addr,
-                        apparent_value: inputs.value,
-                        scheme: CallScheme::Call,
-                    },
-                ),
-                1e10 as u64,
-                false
-            );
-            let ret = self.run_inspect(&mut interp, state);
-            if ret == InstructionResult::Continue {
-                self.set_code(
-                    r_addr,
-                    Bytecode::new_raw(interp.return_value()),
-                    state
+            if unsafe {CONCRETE_CREATE || IN_DEPLOY} {
+                // todo: use nonce + hash instead
+                let r_addr = generate_random_address(state);
+                let mut interp = Interpreter::new(
+                    Contract::new_with_context(
+                        Bytes::new(),
+                        Bytecode::new_raw(inputs.init_code.clone()),
+                        &CallContext {
+                            address: r_addr,
+                            caller: inputs.caller,
+                            code_address: r_addr,
+                            apparent_value: inputs.value,
+                            scheme: CallScheme::Call,
+                        },
+                    ),
+                    1e10 as u64,
+                    false
                 );
-                (
-                    Continue,
-                    Some(r_addr),
-                    Gas::new(0),
-                    interp.return_value(),
-                )
+                let ret = self.run_inspect(&mut interp, state);
+                if ret == InstructionResult::Continue {
+                    let runtime_code = interp.return_value();
+                    self.set_code(
+                        r_addr,
+                        Bytecode::new_raw(runtime_code.clone()),
+                        state
+                    );
+                    {
+                        // now we build & insert abi
+                        let contract_code_str = hex::encode(runtime_code.clone());
+                        let sigs = extract_sig_from_contract(&contract_code_str);
+                        let mut unknown_sigs: usize = 0;
+                        let mut parsed_abi = vec![];
+                        for sig in &sigs {
+                            if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                                parsed_abi.push(abi.clone());
+                            } else {
+                                unknown_sigs += 1;
+                            }
+                        }
+
+                        if unknown_sigs > sigs.len() * 10 / 9 {
+                            println!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
+                            let abis = fetch_abi_heimdall(contract_code_str)
+                                .iter()
+                                .map(|abi| {
+                                    if let Some(known_abi) = state.metadata().get::<ABIMap>().unwrap().get(&abi.function) {
+                                        known_abi
+                                    } else {
+                                        abi
+                                    }
+                                })
+                                .cloned()
+                                .collect_vec();
+                            parsed_abi = abis;
+                        }
+                        // notify flashloan and blacklisting flashloan addresses
+                        #[cfg(feature = "flashloan_v2")]
+                        {
+                            handle_contract_insertion!(state, self, r_addr, parsed_abi);
+                        }
+
+                        parsed_abi
+                            .iter()
+                            .filter(|v| !v.is_constructor)
+                            .for_each(|abi| {
+                                #[cfg(not(feature = "fuzz_static"))]
+                                if abi.is_static {
+                                    return;
+                                }
+
+                                let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                                abi_instance
+                                    .set_func_with_name(abi.function, abi.function_name.clone());
+                                let input = EVMInput {
+                                    caller: state.get_rand_caller(),
+                                    contract: r_addr,
+                                    data: Some(abi_instance),
+                                    sstate: StagedVMState::new_uninitialized(),
+                                    sstate_idx: 0,
+                                    txn_value: if abi.is_payable {
+                                        Some(EVMU256::ZERO)
+                                    } else {
+                                        None
+                                    },
+                                    step: false,
+
+                                    env: Default::default(),
+                                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                                    #[cfg(feature = "flashloan_v2")]
+                                    liquidation_percent: 0,
+                                    #[cfg(feature = "flashloan_v2")]
+                                    input_type: EVMInputTy::ABI,
+                                    direct_data: Default::default(),
+                                    randomness: vec![0],
+                                    repeat: 1,
+                                };
+                                add_corpus(self, state, &input);
+                            });
+
+                    }
+                    (
+                        Continue,
+                        Some(r_addr),
+                        Gas::new(0),
+                        runtime_code,
+                    )
+                } else {
+                    (
+                        ret,
+                        Some(r_addr),
+                        Gas::new(0),
+                        Bytes::new(),
+                    )
+                }
             } else {
                 (
-                    ret,
-                    Some(r_addr),
+                    InstructionResult::Revert,
+                    None,
                     Gas::new(0),
                     Bytes::new(),
                 )
             }
+
         }
     }
 
