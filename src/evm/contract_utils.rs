@@ -21,12 +21,13 @@ use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
 use hex::encode;
 use regex::Regex;
+use serde::{Serialize, Deserialize};
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIConfig {
     pub abi: String,
     pub function: [u8; 4],
