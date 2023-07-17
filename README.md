@@ -48,6 +48,8 @@ Test Coverage:
 
 # Building
 
+You first need to install Rust through https://rustup.rs/
+
 You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.
 
 ```bash
@@ -346,6 +348,7 @@ Example:
 ./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
+We do not track coverage of static calls (view, pure functions) by default!
 
 # Troubleshooting
 ### Z3 Installation

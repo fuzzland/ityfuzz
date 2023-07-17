@@ -453,12 +453,30 @@ where
                 );
                 println!("{}", cur_report);
 
-                let mut file = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(format!("{}/vulnerabilities", self.work_dir.as_str()))
-                    .unwrap();
-                file.write_all(cur_report.as_bytes()).unwrap();
+                #[cfg(feature = "print_txn_corpus")]
+                {
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(format!("{}/vulnerabilities", self.work_dir.as_str()))
+                        .unwrap();
+                    file.write_all(cur_report.as_bytes()).unwrap();
+                    unsafe {
+                        DUMP_FILE_COUNT += 1;
+                    }
+                    let corpus_path = format!("{}/corpus", self.work_dir.as_str());
+                    let mut replayable_file =
+                        File::create(format!("{}/vuln_{}", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+                    replayable_file.write_all(
+                        state
+                            .get_execution_result()
+                            .new_state
+                            .trace
+                            .clone()
+                            .to_file_str(state)
+                            .as_bytes()
+                    ).unwrap();
+                }
 
                 if !unsafe { RUN_FOREVER } {
                     exit(0);

@@ -21,11 +21,13 @@ use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
 use hex::encode;
 use regex::Regex;
+use serde::{Serialize, Deserialize};
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIConfig {
     pub abi: String,
     pub function: [u8; 4],
@@ -353,14 +355,19 @@ impl ContractLoader {
         let mut contracts: Vec<ContractInfo> = vec![];
         for addr in address {
             let abi = onchain.fetch_abi(addr);
-            if abi.is_none() {
-                println!("ABI not found for {}", addr);
-                continue;
-            }
+            let contract_code = onchain.get_contract_code(addr, false);
+
+            let abi_parsed = if let Some(abi) = abi {
+                Self::parse_abi_str(&abi)
+            } else {
+                println!("ABI not found for {}, we'll decompile", addr);
+                fetch_abi_heimdall(hex::encode(contract_code.bytes()))
+            };
+
             let contract = ContractInfo {
                 name: addr.to_string(),
-                abi: Self::parse_abi_str(&abi.unwrap()),
-                code: onchain.get_contract_code(addr, false).bytes().to_vec(),
+                abi: abi_parsed,
+                code: contract_code.bytes().to_vec(),
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,

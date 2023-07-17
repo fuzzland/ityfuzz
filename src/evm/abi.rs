@@ -457,7 +457,7 @@ impl Input for AEmpty {
 
 impl ABI for AEmpty {
     fn is_static(&self) -> bool {
-        panic!("unreachable");
+        true
     }
 
     fn get_bytes(&self) -> Vec<u8> {

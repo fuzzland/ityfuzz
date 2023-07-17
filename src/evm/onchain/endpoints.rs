@@ -29,9 +29,21 @@ const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum Chain {
     ETH,
+    GOERLI,
+    SEPOLIA,
     BSC,
+    CHAPEL,
     POLYGON,
     MUMBAI,
+    FANTOM,
+    AVALANCHE,
+    OPTIMISM,
+    ARBITRUM,
+    GNOSIS,
+    BASE,
+    CELO,
+    ZKEVM,
+    ZKEVM_TESTNET,
     LOCAL,
 }
 
@@ -45,9 +57,21 @@ impl Chain {
     pub fn from_str(s: &String) -> Option<Self> {
         match s.as_str() {
             "ETH" | "eth" => Some(Self::ETH),
+            "GOERLI" | "goerli" => Some(Self::GOERLI),
+            "SEPOLIA" | "sepolia" => Some(Self::SEPOLIA),
             "BSC" | "bsc" => Some(Self::BSC),
+            "CHAPEL" | "chapel" => Some(Self::CHAPEL),
             "POLYGON" | "polygon" => Some(Self::POLYGON),
             "MUMBAI" | "mumbai" => Some(Self::MUMBAI),
+            "FANTOM" | "fantom" => Some(Self::FANTOM),
+            "AVALANCHE" | "avalanche" => Some(Self::AVALANCHE),
+            "OPTIMISM" | "optimism" => Some(Self::OPTIMISM),
+            "ARBITRUM" | "arbitrum" => Some(Self::ARBITRUM),
+            "GNOSIS" | "gnosis" => Some(Self::GNOSIS),
+            "BASE" | "base" => Some(Self::BASE),
+            "CELO" | "celo" => Some(Self::CELO),
+            "ZKEVM" | "zkevm" => Some(Self::ZKEVM),
+            "ZKEVM_TESTNET" | "zkevm_testnet" => Some(Self::ZKEVM_TESTNET),
             "LOCAL" | "local" => Some(Self::LOCAL),
             _ => None,
         }
@@ -56,9 +80,21 @@ impl Chain {
     pub fn get_chain_id(&self) -> u32 {
         match self {
             Chain::ETH => 1,
+            Chain::GOERLI => 5,
+            Chain::SEPOLIA => 11155111,
             Chain::BSC => 56,
+            Chain::CHAPEL => 97,
             Chain::POLYGON => 137,
             Chain::MUMBAI => 80001,
+            Chain::FANTOM => 250,
+            Chain::AVALANCHE => 43114,
+            Chain::OPTIMISM => 10,
+            Chain::ARBITRUM => 42161,
+            Chain::GNOSIS => 100,
+            Chain::BASE => 8453,
+            Chain::CELO => 42220,
+            Chain::ZKEVM => 1101,
+            Chain::ZKEVM_TESTNET => 1442,
             Chain::LOCAL => 31337,
         }
     }
@@ -66,9 +102,21 @@ impl Chain {
     pub fn to_lowercase(&self) -> String {
         match self {
             Chain::ETH => "eth",
+            Chain::GOERLI => "goerli",
+            Chain::SEPOLIA => "sepolia",
             Chain::BSC => "bsc",
+            Chain::CHAPEL => "chapel",
             Chain::POLYGON => "polygon",
             Chain::MUMBAI => "mumbai",
+            Chain::FANTOM => "fantom",
+            Chain::AVALANCHE => "avalanche",
+            Chain::OPTIMISM => "optimism",
+            Chain::ARBITRUM => "arbitrum",
+            Chain::GNOSIS => "gnosis",
+            Chain::BASE => "base",
+            Chain::CELO => "celo",
+            Chain::ZKEVM => "zkevm",
+            Chain::ZKEVM_TESTNET => "zkevm_testnet",
             Chain::LOCAL => "local",
         }
         .to_string()
@@ -77,10 +125,45 @@ impl Chain {
     pub fn get_chain_rpc(&self) -> String {
         match self {
             Chain::ETH => "https://eth.llamarpc.com",
+            Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
+            Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
             Chain::BSC => "https://rpc.ankr.com/bsc",
+            Chain::CHAPEL => "https://rpc.ankr.com/bsc_testnet_chapel",
             Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
+            Chain::FANTOM => "https://rpc.ankr.com/fantom",
+            Chain::AVALANCHE => "https://rpc.ankr.com/avalanche",
+            Chain::OPTIMISM => "https://rpc.ankr.com/optimism",
+            Chain::ARBITRUM => "https://rpc.ankr.com/arbitrum",
+            Chain::GNOSIS => "https://rpc.ankr.com/gnosis",
+            Chain::BASE => "https://developer-access-mainnet.base.org",
+            Chain::CELO => "https://rpc.ankr.com/celo",
+            Chain::ZKEVM => "https://rpc.ankr.com/polygon_zkevm",
+            Chain::ZKEVM_TESTNET => "https://rpc.ankr.com/polygon_zkevm_testnet",
             Chain::LOCAL => "http://localhost:8545",
+        }
+        .to_string()
+    }
+
+    pub fn get_chain_etherscan_base(&self) -> String {
+        match self {
+            Chain::ETH => "https://api.etherscan.io/api",
+            Chain::GOERLI => "https://api-goerli.etherscan.io/api",
+            Chain::SEPOLIA => "https://api-sepolia.etherscan.io/api",
+            Chain::BSC => "https://api.bscscan.com/api",
+            Chain::CHAPEL => "https://api-testnet.bscscan.com/api",
+            Chain::POLYGON => "https://api.polygonscan.com/api",
+            Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
+            Chain::FANTOM => "https://api.ftmscan.com/api",
+            Chain::AVALANCHE => "https://api.snowtrace.io/api",
+            Chain::OPTIMISM => "https://api-optimistic.etherscan.io/api",
+            Chain::ARBITRUM => "https://api.arbiscan.io/api",
+            Chain::GNOSIS => "https://api.gnosisscan.io/api",
+            Chain::BASE => "https://api.basescan.org/api",
+            Chain::CELO => "https://api.celoscan.io/api",
+            Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
+            Chain::ZKEVM_TESTNET => "https://api-testnet-zkevm.polygonscan.com/api",
+            Chain::LOCAL => "http://localhost:8080/abi/",
         }
         .to_string()
     }
@@ -168,14 +251,7 @@ impl OnChainConfig {
             chain.get_chain_rpc(),
             chain.get_chain_id(),
             block_number,
-            match chain {
-                Chain::ETH => "https://api.etherscan.io/api",
-                Chain::BSC => "https://api.bscscan.com/api",
-                Chain::POLYGON => "https://api.polygonscan.com/api",
-                Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
-                Chain::LOCAL => "http://localhost:8080/abi/",
-            }
-            .to_string(),
+            chain.get_chain_etherscan_base(),
             chain.to_lowercase(),
         )
     }
@@ -226,8 +302,8 @@ impl OnChainConfig {
             }
             Err(_) => {}
         }
-        match retry_with_index(Fixed::from_millis(100), |current_try| {
-            if current_try > 3 {
+        match retry_with_index(Fixed::from_millis(1000), |current_try| {
+            if current_try > 5 {
                 return OperationResult::Err("did not succeed within 3 tries".to_string());
             }
             match self
@@ -240,7 +316,12 @@ impl OnChainConfig {
                     let text = resp.text();
                     match text {
                         Ok(t) => {
-                            return OperationResult::Ok(t);
+                            if t.contains("Max rate limit reached") {
+                                println!("Etherscan max rate limit reached, retrying...");
+                                return OperationResult::Retry("Rate limit reached".to_string());
+                            } else {
+                                return OperationResult::Ok(t);
+                            }
                         }
                         Err(e) => {
                             println!("{:?}", e);
@@ -869,7 +950,7 @@ impl OnChainConfig {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
-            _ => panic!("Unknown network"),
+            _ => panic!("[Flashloan] Network is not supported"),
         }
     }
 
@@ -992,9 +1073,7 @@ impl OnChainConfig {
         hops: &HashMap<String, Vec<PairData>>,
         routes: &mut Vec<Vec<PairData>>,
     ) {
-        if !hops.contains_key(token) {
-            return;
-        }
+
         if pegged_tokens.values().any(|v| v == token) {
             let mut new_path = path.clone();
             new_path.push(self.get_pegged_next_hop(token, network, block));
@@ -1002,6 +1081,9 @@ impl OnChainConfig {
             return;
         }
         visited.insert(token.to_string());
+        if !hops.contains_key(token) {
+            return;
+        }
         for hop in hops.get(token).unwrap() {
             if visited.contains(&hop.next) {
                 continue;
@@ -1184,16 +1266,9 @@ fn get_uniswap_api(network: &str) -> HashMap<&str, HashMap<&str, &str>> {
             );
             api.insert("v2", v2);
         }
-        "polygon" => {
-            let mut v3 = HashMap::new();
-            v3.insert(
-                "uniswapv3",
-                "https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon",
-            );
-            api.insert("v3", v3);
-        }
-        "mumbai" => {}
-        _ => return panic!("Unknown network"),
+        _ => {
+            println!("[Flashloan] Network {} is not supported for ERC20 Flashloan", network)
+        },
     }
 
     api

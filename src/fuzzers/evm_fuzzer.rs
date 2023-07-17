@@ -302,9 +302,8 @@ pub fn evm_fuzzer(
                     }
 
                     // [is_step] [caller] [target] [input] [value]
-                    let (inp, call_until) = ConciseEVMInput::deserialize_concise(hex::decode(txn).unwrap())
+                    let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())
                         .to_input(vm_state.clone());
-                    println!("{:?}", inp);
                     unsafe {CALL_UNTIL = call_until;}
 
                     fuzzer
