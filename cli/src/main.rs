@@ -398,9 +398,13 @@ fn main() {
 
                     let transaction: Transaction = rlp::decode(&bytes_data).unwrap();
 
-                    let code = hex::encode(transaction.input);
-
-                    deploy_codes.push(code);
+                    match transaction.to {
+                        Some(to) => initial_txs.push((
+                            format!("{:#x}", transaction.from),
+                            transaction.input.to_vec(),
+                        )),
+                        None => deploy_codes.push(hex::encode(transaction.input)),
+                    }
                 }
 
                 "eth_sendTransaction" => {
