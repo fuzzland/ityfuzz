@@ -515,3 +515,80 @@ where
         Ok(())
     }
 }
+
+#[cfg(feature = "reentrancy")]
+pub struct ReentrancyFeedback<VS, Loc, Addr, Out> {
+    /// write map of the current execution
+    written: bool,
+    phantom: PhantomData<(VS, Loc, Addr, Out)>,
+}
+
+#[cfg(feature = "reentrancy")]
+impl<VS, Loc, Addr, Out> Debug for ReentrancyFeedback<VS, Loc, Addr, Out> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReentrancyFeedback").finish()
+    }
+}
+
+#[cfg(feature = "reentrancy")]
+impl<VS, Loc, Addr, Out> Named for ReentrancyFeedback<VS, Loc, Addr, Out> {
+    fn name(&self) -> &str {
+        "ReentrancyFeedback"
+    }
+}
+
+#[cfg(feature = "reentrancy")]
+impl<VS, Loc, Addr, Out> ReentrancyFeedback<VS, Loc, Addr, Out> {
+    pub fn new(written: bool) -> Self {
+        Self {
+            written,
+            phantom: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "reentrancy")]
+impl<VS, Loc, Addr, I, S, Out> Feedback<I, S> for ReentrancyFeedback<VS, Loc, Addr, Out>
+where
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out>,
+    I: VMInputT<VS, Loc, Addr>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+{
+    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
+        Ok(())
+    }
+
+    // simply returns true if written is true, i.e. there has been a write after a control leak.
+    fn is_interesting<EMI, OT>(
+        &mut self,
+        _state: &mut S,
+        _manager: &mut EMI,
+        _input: &I,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
+    ) -> Result<bool, Error>
+    where
+        EMI: EventFirer<I>,
+        OT: ObserversTuple<I, S>,
+    {
+        let mut interesting = self.written;
+        self.written = false;
+        Ok(interesting)
+    }
+
+    fn append_metadata(
+        &mut self,
+        _state: &mut S,
+        _testcase: &mut Testcase<I>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
