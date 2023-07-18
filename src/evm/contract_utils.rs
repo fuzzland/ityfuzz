@@ -116,8 +116,8 @@ impl ContractLoader {
                         abi: format!("({})", abi_name.join(",")),
                         function: [0; 4],
                         function_name: name.to_string(),
-                        is_static: abi["stateMutability"].as_str().unwrap() == "view",
-                        is_payable: abi["stateMutability"].as_str().unwrap() == "payable",
+                        is_static: abi["stateMutability"].as_str().unwrap_or_default() == "view",
+                        is_payable: abi["stateMutability"].as_str().unwrap_or_default() == "payable",
                         is_constructor: abi["type"] == "constructor",
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
