@@ -385,13 +385,20 @@ You can disable telemetry by setting `NO_TELEMETRY=1` in your environment variab
 
 # Citation
 ```
-@misc{ityfuzz,
-      title={ItyFuzz: Snapshot-Based Fuzzer for Smart Contract}, 
-      author={Chaofan Shou and Shangyin Tan and Koushik Sen},
-      year={2023},
-      eprint={2306.17135},
-      archivePrefix={arXiv},
-      primaryClass={cs.CR}
+@inproceedings{10.1145/3597926.3598059,
+  author = {Shou, Chaofan and Tan, Shangyin and Sen, Koushik},
+  title = {ItyFuzz: Snapshot-Based Fuzzer for Smart Contract},
+  year = {2023},
+  isbn = {9798400702211},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3597926.3598059},
+  doi = {10.1145/3597926.3598059},
+  booktitle = {Proceedings of the 32nd ACM SIGSOFT International Symposium on Software Testing and Analysis},
+  pages = {322–333},
+  numpages = {12},
+  location = {Seattle, WA, USA},
+  series = {ISSTA 2023}
 }
 ```
 
