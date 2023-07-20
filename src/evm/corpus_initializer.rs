@@ -49,6 +49,7 @@ pub struct EVMCorpusInitializer<'a> {
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
+    pub initial_state: EVMStagedVMState,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -178,19 +179,6 @@ impl<'a> EVMCorpusInitializer<'a> {
             contract.deployed_address = deployed_address;
             self.state.add_address(&deployed_address);
         }
-        let mut tc = Testcase::new(StagedVMState::new_with_state(
-            self.executor.host.evmstate.clone(),
-        ));
-        tc.set_exec_time(Duration::from_secs(0));
-        let idx = self
-            .state
-            .infant_states_state
-            .corpus_mut()
-            .add(tc)
-            .expect("failed to add");
-        self.infant_scheduler
-            .on_add(&mut self.state.infant_states_state, idx)
-            .expect("failed to call infant scheduler on_add");
     }
 
 
@@ -198,6 +186,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
+            initial_state: StagedVMState::new_uninitialized()
         };
         for contract in &mut loader.contracts {
             if contract.abi.len() == 0 {
@@ -281,9 +270,11 @@ impl<'a> EVMCorpusInitializer<'a> {
                 add_input_to_corpus!(self.state, self.scheduler, input);
             }
         }
-        let mut tc = Testcase::new(StagedVMState::new_with_state(
+        artifacts.initial_state = StagedVMState::new_with_state(
             self.executor.host.evmstate.clone(),
-        ));
+        );
+
+        let mut tc = Testcase::new(artifacts.initial_state.clone());
         tc.set_exec_time(Duration::from_secs(0));
         let idx = self
             .state

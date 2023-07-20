@@ -125,7 +125,7 @@ pub fn uncompress_srcmap_single(map: String, files: &Vec<String>) -> Vec<SourceM
             results.push(
                 SourceMapLocation::new(
                     if has_file {
-                        let idx = parts[2].parse::<usize>().unwrap();
+                        let idx = parts[2].parse::<usize>().unwrap_or(usize::MAX);
                         if idx < files.len() {
                             Some(files[idx].clone())
                         } else {
@@ -134,13 +134,13 @@ pub fn uncompress_srcmap_single(map: String, files: &Vec<String>) -> Vec<SourceM
                     } else {
                         results[counter - 1].file.clone()
                     },
-                    if has_offset {
-                        parts[0].parse::<usize>().unwrap()
+                    if has_offset && let Ok(res) = parts[0].parse::<usize>() {
+                        res
                     } else {
                         results[counter - 1].offset
                     },
-                    if has_length {
-                        parts[1].parse::<usize>().unwrap()
+                    if has_length && let Ok(res) = parts[1].parse::<usize>() {
+                        res
                     } else {
                         results[counter - 1].length
                     }

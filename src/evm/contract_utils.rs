@@ -211,7 +211,7 @@ impl ContractLoader {
         for i in glob(prefix).expect("not such path for prefix") {
             match i {
                 Ok(path) => {
-                    if path.to_str().unwrap().ends_with(".abis") {
+                    if path.to_str().unwrap().ends_with(".abi") {
                         // this is an ABI file
                         abi_result.abi = Self::parse_abi(&path);
                         contract_result.abi = abi_result.abi.clone();
@@ -337,9 +337,9 @@ impl ContractLoader {
 
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
-        for (prefix, count) in prefix_file_count {
+        for (prefix, count) in prefix_file_count.iter().sorted_by_key(|(k, _)| k.clone()) {
             let p = prefix.to_string();
-            if count > 0 {
+            if *count > 0 {
                 let mut constructor_args: Vec<String> = vec![];
                 for (k, v) in constructor_args_map.iter() {
                     let components: Vec<&str> = p.split('/').collect();
