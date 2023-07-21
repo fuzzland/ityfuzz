@@ -13,7 +13,7 @@ use crate::{
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::ShMemProvider;
+use libafl::prelude::{HasMetadata, ProbabilitySamplingScheduler, ShMemProvider};
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
@@ -45,6 +45,7 @@ use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
+use crate::evm::experiments::priority_scoring::{ProbabilityABISamplingScheduler, SigScore};
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::coverage::Coverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
@@ -78,7 +79,19 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
-    let mut scheduler = QueueScheduler::new();
+
+    let mut sig_score = match config.priority_file {
+        Some(path) => {
+            SigScore::from_file(path.as_str()).expect("Failed to load priority file")
+        }
+        None => {
+            SigScore::new()
+        }
+    };
+    state.metadata_mut().insert(sig_score);
+
+
+    let mut scheduler: ProbabilityABISamplingScheduler<EVMInput, EVMFuzzState> = ProbabilityABISamplingScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };

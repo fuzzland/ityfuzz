@@ -225,6 +225,9 @@ struct Args {
     #[arg(long, default_value = "Latest")]
     spec_id: String,
 
+    /// [Experimental] Priority of ABI functions
+    #[arg(long)]
+    priority_file: Option<String>,
 }
 
 enum TargetType {
@@ -476,6 +479,7 @@ fn main() {
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
+        priority_file: args.priority_file,
     };
 
     match config.fuzzer_type {
