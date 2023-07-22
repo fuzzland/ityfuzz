@@ -140,6 +140,9 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
+        if state.get_execution_result().reverted {
+            return Ok(false);
+        }
         {
             if !state.has_metadata::<BugMetadata>() {
                 state.metadata_mut().insert(BugMetadata::default());
@@ -169,6 +172,11 @@ where
 
 
         let mut is_any_bug_hit = false;
+        let has_post_exec = oracle_ctx.fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .has_post_execution();
 
 
         // execute oracles and update stages if needed
@@ -184,7 +192,7 @@ where
                 .borrow()
                 .oracle(&mut oracle_ctx, original_stage) {
                 let metadata = oracle_ctx.fuzz_state.metadata_mut().get_mut::<BugMetadata>().unwrap();
-                if metadata.known_bugs.contains(&bug_idx) {
+                if metadata.known_bugs.contains(&bug_idx) || has_post_exec {
                     continue;
                 }
                 metadata.known_bugs.insert(bug_idx);
@@ -193,18 +201,11 @@ where
             }
         }
 
-        {
-            // ensure the execution is finished
-            let has_post_exec = oracle_ctx.fuzz_state
-                .get_execution_result()
-                .new_state
-                .state
-                .has_post_execution();
+        // ensure the execution is finished
+        if has_post_exec {
+            before_exit!();
+            return Ok(false);
 
-            if has_post_exec {
-                before_exit!();
-                return Ok(false);
-            }
         }
 
         before_exit!();
