@@ -41,6 +41,7 @@ use revm_primitives::Bytecode;
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, EVMU512};
 use crate::evm::types::convert_u256_to_h160;
 use crate::evm::types::float_scale_to_u512;
+use crate::evm::vm::IS_FAST_CALL_STATIC;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -451,20 +452,25 @@ where
     where
         S: HasCaller<EVMAddress>,
     {
-        let offset_of_arg_offset = match *interp.instruction_pointer {
+        // if simply static call, we dont care
+        if unsafe { IS_FAST_CALL_STATIC } {
+            return;
+        }
+
+
+        match *interp.instruction_pointer {
             // detect whether it mutates token balance
-            0xf1 => 3,
-            0xfa => 2,
+            0xf1 | 0xfa => {},
             0x55 => {
-                // detect whether it mutates pair reserve
-                let key = interp.stack.peek(0).unwrap();
-                if key == EVMU256::from(8) && self.pair_address.contains(&interp.contract.address) {
-                    host.evmstate
-                        .flashloan_data
-                        .oracle_recheck_reserve
-                        .insert(interp.contract.address);
+                if self.pair_address.contains(&interp.contract.address) {
+                    let key = interp.stack.peek(0).unwrap();
+                    if key == EVMU256::from(8) {
+                        host.evmstate
+                            .flashloan_data
+                            .oracle_recheck_reserve
+                            .insert(interp.contract.address);
+                    }
                 }
-                return;
             }
             _ => {
                 return;
@@ -475,52 +481,6 @@ where
             0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
             _ => EVMU256::ZERO,
         };
-
-        // if a program counter can transfer any token, with value > 0 & dst = caller
-        // then we give maximum rewards to trigger the bug
-        {
-            let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
-            let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
-            let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-            if size >= EVMU256::from(4) {
-                let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-                macro_rules! handle_transfer {
-                    ($dst: ident, $amount: ident) => {
-                        // if $amount > EVMU256::ZERO && $dst == interp.contract.caller {
-                        //     let pc = interp.program_counter();
-                        //
-                        //     match self.unbound_tracker.get_mut(&pc) {
-                        //         None => {
-                        //             self.unbound_tracker
-                        //                 .insert(pc, HashSet::from([call_target]));
-                        //         }
-                        //         Some(set) => {
-                        //             if set.len() > UNBOUND_TRANSFER_AMT {
-                        //                 host.evmstate.flashloan_data.earned = EVMU512::max_value();
-                        //             }
-                        //             set.insert(call_target);
-                        //         }
-                        //     }
-                        // }
-                    };
-                }
-                match data[0..4] {
-                    // transfer
-                    [0xa9, 0x05, 0x9c, 0xbb] => {
-                        let dst = EVMAddress::from_slice(&data[16..36]);
-                        let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
-                        handle_transfer!(dst, amount);
-                    }
-                    // transferFrom
-                    [0x23, 0xb8, 0x72, 0xdd] => {
-                        let dst = EVMAddress::from_slice(&data[48..68]);
-                        let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
-                        handle_transfer!(dst, amount);
-                    }
-                    _ => {}
-                };
-            }
-        }
 
         // todo: fix for delegatecall
         let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());

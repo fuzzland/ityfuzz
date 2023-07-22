@@ -32,7 +32,7 @@ use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
 use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
-use crate::evm::vm::EVMState;
+use crate::evm::vm::{EVMState, IS_FAST_CALL, IS_FAST_CALL_STATIC};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -455,6 +455,184 @@ where
             .write_all(cur_write_str.as_bytes())
             .unwrap();
     }
+
+    fn call_allow_control_leak(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        self.call_count += 1;
+        if self.call_count >= unsafe {CALL_UNTIL} {
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
+        if unsafe { WRITE_RELATIONSHIPS } {
+            self.write_relations(
+                input.transfer.source.clone(),
+                input.contract.clone(),
+                input.input.clone(),
+            );
+        }
+
+        let mut hash = input.input.to_vec();
+        hash.resize(4, 0);
+
+        macro_rules! record_func_hash {
+            () => {
+                unsafe {
+                    let mut s = DefaultHasher::new();
+                    hash.hash(&mut s);
+                    let _hash = s.finish();
+                    ABI_MAX_SIZE[(_hash as usize) % MAP_SIZE] = RET_SIZE;
+                }
+            };
+        }
+
+        // middlewares
+        let mut middleware_result: Option<(InstructionResult, Gas, Bytes)> = None;
+        for action in &self.middlewares_latent_call_actions {
+            match action {
+                CallMiddlewareReturn::Continue => {}
+                CallMiddlewareReturn::ReturnRevert => {
+                    middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
+                }
+                CallMiddlewareReturn::ReturnSuccess(b) => {
+                    middleware_result = Some((Continue, Gas::new(0), b.clone()));
+                }
+            }
+            if middleware_result.is_some() {
+                break;
+            }
+        }
+        self.middlewares_latent_call_actions.clear();
+
+        if middleware_result.is_some() {
+            return middleware_result.unwrap();
+        }
+
+        // if calling sender, then definitely control leak
+        if self.origin == input.contract {
+            record_func_hash!();
+            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+            return (ControlLeak, Gas::new(0), Bytes::new());
+        }
+
+        let mut input_seq = input.input.to_vec();
+
+        // check whether the whole CALLDATAVALUE can be arbitrary
+        if !self.pc_to_call_hash.contains_key(&self._pc) {
+            self.pc_to_call_hash.insert(self._pc, HashSet::new());
+        }
+        self.pc_to_call_hash
+            .get_mut(&self._pc)
+            .unwrap()
+            .insert(hash.to_vec());
+        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD
+            && input_seq.len() >= 4
+        {
+            unsafe {
+                ARBITRARY_CALL = true;
+            }
+            // random sample a key from hash_to_address
+            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+            match self.address_to_hash.get_mut(&input.context.code_address) {
+                None => {}
+                Some(hashes) => {
+                    let selected_key =
+                        hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
+                    for i in 0..4 {
+                        input_seq[i] = selected_key[i];
+                    }
+                }
+            }
+        }
+
+        // control leak check
+        assert_ne!(self._pc, 0);
+        if !self.pc_to_addresses.contains_key(&(input.context.caller, self._pc)) {
+            self.pc_to_addresses.insert((input.context.caller, self._pc), HashSet::new());
+        }
+        let addresses_at_pc = self.pc_to_addresses
+            .get_mut(&(input.context.caller, self._pc))
+            .unwrap();
+        addresses_at_pc.insert(input.contract);
+
+        // if control leak is enabled, return controlleak if it is unbounded call
+        if CONTROL_LEAK_DETECTION == true {
+            if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
+                record_func_hash!();
+                return (ControlLeak, Gas::new(0), Bytes::new());
+            }
+        }
+
+        let mut old_call_context = None;
+        unsafe {
+            old_call_context = GLOBAL_CALL_CONTEXT.clone();
+            GLOBAL_CALL_CONTEXT = Some(input.context.clone());
+        }
+
+        macro_rules! ret_back_ctx {
+            () => {
+                unsafe {
+                    GLOBAL_CALL_CONTEXT = old_call_context;
+                }
+            };
+        }
+
+        let input_bytes = Bytes::from(input_seq);
+
+        // find contracts that have this function hash
+        let contract_loc_option = self.hash_to_address.get(hash.as_slice());
+        if unsafe { ACTIVE_MATCH_EXT_CALL } && contract_loc_option.is_some() {
+            let loc = contract_loc_option.unwrap();
+            // if there is such a location known, then we can use exact call
+            if !loc.contains(&input.contract) {
+                // todo(@shou): resolve multi locs
+                if loc.len() != 1 {
+                    panic!("more than one contract found for the same hash");
+                }
+                let mut interp = Interpreter::new(
+                    Contract::new_with_context_analyzed(
+                        input_bytes,
+                        self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
+                        &input.context,
+                    ),
+                    1e10 as u64,
+                    false
+                );
+
+                let ret = self.run_inspect(&mut interp, state);
+                ret_back_ctx!();
+                return (ret, Gas::new(0), interp.return_value());
+            }
+        }
+
+        // if there is code, then call the code
+        let res = self.call_forbid_control_leak(input, state);
+        ret_back_ctx!();
+        res
+    }
+
+    fn call_forbid_control_leak(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        let mut hash = input.input.to_vec();
+        hash.resize(4, 0);
+        // if there is code, then call the code
+        if let Some(code) = self.code.get(&input.context.code_address) {
+            let mut interp = Interpreter::new(
+                Contract::new_with_context_analyzed(
+                    Bytes::from(input.input.to_vec()),
+                    code.clone(),
+                    &input.context,
+                ),
+                1e10 as u64,
+                false
+            );
+            let ret = self.run_inspect(&mut interp, state);
+            return (ret, Gas::new(0), interp.return_value());
+        }
+
+        // transfer txn and fallback provided
+        if hash == [0x00, 0x00, 0x00, 0x00] {
+            return (Continue, Gas::new(0), Bytes::new());
+        }
+        return (Revert, Gas::new(0), Bytes::new());
+    }
 }
 
 macro_rules! process_rw_key {
@@ -494,7 +672,9 @@ where
                     }
                     _ => {}
                 }
-                self.clear_codedata();
+                if self.setcode_data.len() > 0 {
+                    self.clear_codedata();
+                }
                 for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
@@ -504,9 +684,16 @@ where
                         .on_step(interp, self, state);
                 }
 
-                for (address, code) in &self.setcode_data.clone() {
-                    self.set_code(address.clone(), code.clone(), state);
+
+                if self.setcode_data.len() > 0 {
+                    for (address, code) in &self.setcode_data.clone() {
+                        self.set_code(address.clone(), code.clone(), state);
+                    }
                 }
+            }
+
+            if IS_FAST_CALL_STATIC {
+                return Continue;
             }
 
             macro_rules! fast_peek {
@@ -819,175 +1006,11 @@ where
     }
 
     fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
-        self.call_count += 1;
-        if self.call_count >= unsafe {CALL_UNTIL} {
-            return (ControlLeak, Gas::new(0), Bytes::new());
+        if unsafe { IS_FAST_CALL_STATIC } {
+            self.call_forbid_control_leak(input, state)
+        } else {
+            self.call_allow_control_leak(input, state)
         }
 
-        if unsafe { WRITE_RELATIONSHIPS } {
-            self.write_relations(
-                input.transfer.source.clone(),
-                input.contract.clone(),
-                input.input.clone(),
-            );
-        }
-
-        let mut hash = input.input.to_vec();
-        hash.resize(4, 0);
-
-        macro_rules! record_func_hash {
-            () => {
-                unsafe {
-                    let mut s = DefaultHasher::new();
-                    hash.hash(&mut s);
-                    let _hash = s.finish();
-                    ABI_MAX_SIZE[(_hash as usize) % MAP_SIZE] = RET_SIZE;
-                }
-            };
-        }
-
-        // middlewares
-        let mut middleware_result: Option<(InstructionResult, Gas, Bytes)> = None;
-        for action in &self.middlewares_latent_call_actions {
-            match action {
-                CallMiddlewareReturn::Continue => {}
-                CallMiddlewareReturn::ReturnRevert => {
-                    middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
-                }
-                CallMiddlewareReturn::ReturnSuccess(b) => {
-                    middleware_result = Some((Continue, Gas::new(0), b.clone()));
-                }
-            }
-            if middleware_result.is_some() {
-                break;
-            }
-        }
-        self.middlewares_latent_call_actions.clear();
-
-        if middleware_result.is_some() {
-            return middleware_result.unwrap();
-        }
-
-        // if calling sender, then definitely control leak
-        if self.origin == input.contract {
-            record_func_hash!();
-            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-            return (ControlLeak, Gas::new(0), Bytes::new());
-        }
-
-        let mut input_seq = input.input.to_vec();
-
-        // check whether the whole CALLDATAVALUE can be arbitrary
-        if !self.pc_to_call_hash.contains_key(&self._pc) {
-            self.pc_to_call_hash.insert(self._pc, HashSet::new());
-        }
-        self.pc_to_call_hash
-            .get_mut(&self._pc)
-            .unwrap()
-            .insert(hash.to_vec());
-        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD
-            && input_seq.len() >= 4
-        {
-            unsafe {
-                ARBITRARY_CALL = true;
-            }
-            // random sample a key from hash_to_address
-            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-            match self.address_to_hash.get_mut(&input.context.code_address) {
-                None => {}
-                Some(hashes) => {
-                    let selected_key =
-                        hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
-                    for i in 0..4 {
-                        input_seq[i] = selected_key[i];
-                    }
-                }
-            }
-        }
-
-        // control leak check
-        assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&(input.context.caller, self._pc)) {
-            self.pc_to_addresses.insert((input.context.caller, self._pc), HashSet::new());
-        }
-        let addresses_at_pc = self.pc_to_addresses
-            .get_mut(&(input.context.caller, self._pc))
-            .unwrap();
-        addresses_at_pc.insert(input.contract);
-
-        // if control leak is enabled, return controlleak if it is unbounded call
-        if CONTROL_LEAK_DETECTION == true {
-            if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
-                record_func_hash!();
-                return (ControlLeak, Gas::new(0), Bytes::new());
-            }
-        }
-
-        let mut old_call_context = None;
-        unsafe {
-            old_call_context = GLOBAL_CALL_CONTEXT.clone();
-            GLOBAL_CALL_CONTEXT = Some(input.context.clone());
-        }
-
-        macro_rules! ret_back_ctx {
-            () => {
-                unsafe {
-                    GLOBAL_CALL_CONTEXT = old_call_context;
-                }
-            };
-        }
-
-        let input_bytes = Bytes::from(input_seq);
-
-        // find contracts that have this function hash
-        let contract_loc_option = self.hash_to_address.get(hash.as_slice());
-        if unsafe { ACTIVE_MATCH_EXT_CALL } && contract_loc_option.is_some() {
-            let loc = contract_loc_option.unwrap();
-            // if there is such a location known, then we can use exact call
-            if !loc.contains(&input.contract) {
-                // todo(@shou): resolve multi locs
-                if loc.len() != 1 {
-                    panic!("more than one contract found for the same hash");
-                }
-                let mut interp = Interpreter::new(
-                    Contract::new_with_context_analyzed(
-                        input_bytes,
-                        self.code.get(loc.iter().nth(0).unwrap()).unwrap().clone(),
-                        &input.context,
-                    ),
-                    1e10 as u64,
-                    false
-                );
-
-                let ret = self.run_inspect(&mut interp, state);
-                ret_back_ctx!();
-                return (ret, Gas::new(0), interp.return_value());
-            }
-        }
-
-        // if there is code, then call the code
-        if let Some(code) = self.code.get(&input.context.code_address) {
-            let mut interp = Interpreter::new(
-                Contract::new_with_context_analyzed(
-                    input_bytes.clone(),
-                    code.clone(),
-                    &input.context,
-                ),
-                1e10 as u64,
-                false
-            );
-            let ret = self.run_inspect(&mut interp, state);
-            ret_back_ctx!();
-            return (ret, Gas::new(0), interp.return_value());
-        }
-
-        // transfer txn and fallback provided
-        if hash == [0x00, 0x00, 0x00, 0x00] {
-            ret_back_ctx!();
-            return (Continue, Gas::new(0), Bytes::new());
-        }
-
-        ret_back_ctx!();
-        return (Revert, Gas::new(0), Bytes::new());
     }
 }
