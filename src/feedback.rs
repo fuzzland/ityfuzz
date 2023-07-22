@@ -170,19 +170,7 @@ where
 
         let mut is_any_bug_hit = false;
 
-        // ensure the execution is finished
-        {
-            let has_post_exec = oracle_ctx.fuzz_state
-                .get_execution_result()
-                .new_state
-                .state
-                .has_post_execution();
 
-            if has_post_exec {
-                before_exit!();
-                return Ok(false);
-            }
-        }
         // execute oracles and update stages if needed
         for idx in 0..self.oracle.len() {
             let original_stage = if idx >= input.get_staged_state().stage.len() {
@@ -204,6 +192,21 @@ where
                 is_any_bug_hit = true;
             }
         }
+
+        {
+            // ensure the execution is finished
+            let has_post_exec = oracle_ctx.fuzz_state
+                .get_execution_result()
+                .new_state
+                .state
+                .has_post_execution();
+
+            if has_post_exec {
+                before_exit!();
+                return Ok(false);
+            }
+        }
+
         before_exit!();
         Ok(is_any_bug_hit)
     }
