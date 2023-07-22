@@ -46,7 +46,7 @@ use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
-use crate::evm::middlewares::instruction_coverage::InstructionCoverage;
+use crate::evm::middlewares::coverage::Coverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
@@ -73,8 +73,7 @@ pub fn evm_fuzzer(
         std::fs::create_dir(path).unwrap();
     }
 
-    let cov_middleware = Rc::new(RefCell::new(InstructionCoverage::new()));
-    let branch_middleware = Rc::new(RefCell::new(BranchCoverage::new()));
+    let cov_middleware = Rc::new(RefCell::new(Coverage::new()));
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
@@ -181,7 +180,6 @@ pub fn evm_fuzzer(
     if config.replay_file.is_some() {
         // add coverage middleware for replay
         evm_executor.host.add_middlewares(cov_middleware.clone());
-        evm_executor.host.add_middlewares(branch_middleware.clone());
         unsafe {
             REPLAY = true;
         }
@@ -197,7 +195,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "use_presets")]
     corpus_initializer.register_preset(&PairPreset {});
 
-    let artifacts = corpus_initializer.initialize(config.contract_info);
+    let artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     evm_executor.host.initialize(state);
 
@@ -284,13 +282,14 @@ pub fn evm_fuzzer(
                 .expect("Fuzzing failed");
         }
         Some(files) => {
+            let initial_vm_state = artifacts.initial_state.clone();
             for file in glob(files.as_str()).expect("Failed to read glob pattern") {
                 let mut f = File::open(file.expect("glob issue")).expect("Failed to open file");
                 let mut transactions = String::new();
                 f.read_to_string(&mut transactions)
                     .expect("Failed to read file");
 
-                let mut vm_state = StagedVMState::new_with_state(EVMState::new());
+                let mut vm_state = initial_vm_state.clone();
 
                 let mut idx = 0;
 
@@ -331,7 +330,6 @@ pub fn evm_fuzzer(
 
             // dump coverage:
             cov_middleware.borrow_mut().record_instruction_coverage(&artifacts.address_to_sourcemap);
-            branch_middleware.borrow_mut().record_branch_coverage(&artifacts.address_to_sourcemap);
         }
     }
 }

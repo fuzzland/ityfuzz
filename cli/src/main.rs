@@ -366,7 +366,7 @@ fn main() {
     let is_onchain = onchain.is_some();
     let mut state: EVMFuzzState = FuzzState::new(args.seed);
 
-    let mut deploy_codes: Vec<String> = vec![];
+    let mut proxy_deploy_codes: Vec<String> = vec![];
 
     if args.fetch_tx_data {
         let response = reqwest::blocking::get(args.proxy_address)
@@ -398,7 +398,7 @@ fn main() {
 
             let code = hex::encode(transaction.input);
 
-            deploy_codes.push(code);
+            proxy_deploy_codes.push(code);
         }
     }
 
@@ -406,15 +406,14 @@ fn main() {
 
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
-        contract_info: match target_type {
+        contract_loader: match target_type {
             Glob => {
                 ContractLoader::from_glob(
                     args.target.as_str(),
                     &mut state,
-                    &deploy_codes,
+                    &proxy_deploy_codes,
                     &constructor_args_map,
                 )
-                .contracts
             }
             Address => {
                 if onchain.is_none() {
@@ -445,7 +444,6 @@ fn main() {
                     &mut onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
                 )
-                .contracts
             }
         },
         onchain,
