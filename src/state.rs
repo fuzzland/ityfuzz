@@ -450,7 +450,6 @@ where
             .corpus_mut()
             .add(Testcase::new(state.clone()))
             .expect("Failed to add new infant state");
-        assert!(idx > parent_idx);
         self.infant_states_state.current_parent_idx = parent_idx;
         scheduler
             .on_add(&mut self.infant_states_state, idx)
