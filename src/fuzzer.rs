@@ -41,6 +41,7 @@ use primitive_types::H256;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
+use crate::scheduler::HasReportCorpus;
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
@@ -63,7 +64,7 @@ pub static mut RUN_FOREVER: bool = false;
 pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -96,7 +97,7 @@ impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
     ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -184,7 +185,7 @@ impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, I, OF, S, ST, OT, CI> Fuzzer<
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
@@ -246,7 +247,7 @@ impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, OF, OT, CI> Evaluator<E
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
@@ -319,10 +320,12 @@ where
         }
 
         // add the new VM state to infant state corpus if it is interesting
+        let mut state_idx = input.get_state_idx();
         if is_infant_interesting && !reverted {
-            state.add_infant_state(
+            state_idx = state.add_infant_state(
                 &state.get_execution_result().new_state.clone(),
                 self.infant_scheduler,
+                input.get_state_idx()
             );
         }
 
@@ -385,6 +388,10 @@ where
                         let mut testcase = Testcase::new(input.clone());
                         self.feedback.append_metadata(state, &mut testcase)?;
                         let new_testcase_idx = state.corpus_mut().add(testcase)?;
+                        self.infant_scheduler.report_corpus(
+                            state.get_infant_state_state(),
+                            state_idx
+                        );
                         self.scheduler.on_add(state, new_testcase_idx)?;
                         self.on_replace_corpus(
                             (hash, new_fav_factor, old_testcase_idx),
@@ -408,6 +415,10 @@ where
                 let mut testcase = Testcase::new(input.clone());
                 self.feedback.append_metadata(state, &mut testcase)?;
                 let idx = state.corpus_mut().add(testcase)?;
+                self.infant_scheduler.report_corpus(
+                    state.get_infant_state_state(),
+                    state_idx
+                );
                 self.scheduler.on_add(state, idx)?;
                 self.on_add_corpus(&input, unsafe { &JMP_MAP }, idx);
 

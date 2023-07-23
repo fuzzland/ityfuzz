@@ -33,7 +33,7 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
-use revm_primitives::{Bytecode};
+use revm_primitives::{Bytecode, LatestSpec};
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
@@ -241,8 +241,11 @@ impl EVMState {
 }
 
 /// Is current EVM execution fast call
-/// - Fast call is a call that does not change the state of the contract
 pub static mut IS_FAST_CALL: bool = false;
+
+/// Is current EVM execution fast call (static)
+/// - Fast call is a call that does not change the state of the contract
+pub static mut IS_FAST_CALL_STATIC: bool = false;
 
 /// EVM executor, wrapper of revm
 #[derive(Debug, Clone)]
@@ -454,7 +457,7 @@ where
         result
     }
 
-    /// Conduct a fast call that does not change the state
+    /// Conduct a fast call that does not write to the feedback
     fn fast_call(
         &mut self,
         address: EVMAddress,
@@ -782,6 +785,7 @@ where
         state: &mut S,
     ) -> Vec<Vec<u8>> {
         unsafe {
+            IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
@@ -793,7 +797,7 @@ where
             self.host.randomness = vec![9];
         }
 
-        data.iter()
+        let res = data.iter()
             .map(|(address, by)| {
                 let ctx = CallContext {
                     address: *address,
@@ -812,7 +816,12 @@ where
                     interp.return_value().to_vec()
                 }
             })
-            .collect::<Vec<Vec<u8>>>()
+            .collect::<Vec<Vec<u8>>>();
+
+        unsafe {
+            IS_FAST_CALL_STATIC = false;
+        }
+        res
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {

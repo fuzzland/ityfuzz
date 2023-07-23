@@ -206,7 +206,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                     }
                 }
 
-                if unknown_sigs > sigs.len() * 10 / 9 {
+                if unknown_sigs >= sigs.len() / 30 {
                     println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()

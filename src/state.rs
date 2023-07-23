@@ -52,7 +52,7 @@ where
         SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>;
 
     /// Add a VMState to the infant state corpus
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC, parent_idx: usize) -> usize
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>;
 }
@@ -289,8 +289,30 @@ where
 {
     #[serde(deserialize_with = "IndexedInMemoryCorpus::deserialize")]
     pub infant_state: IndexedInMemoryCorpus<StagedVMState<Loc, Addr, VS, CI>>,
+    pub current_parent_idx: usize,
     metadata: SerdeAnyMap,
     pub rand_generator: StdRand,
+}
+
+pub trait HasParent {
+    fn get_parent_idx(&self) -> usize;
+    fn set_parent_idx(&mut self, idx: usize);
+}
+
+impl<Loc, Addr, VS, CI> HasParent for InfantStateState<Loc, Addr, VS, CI>
+    where
+        VS: Default + VMStateT,
+        Addr: Serialize + DeserializeOwned + Debug + Clone,
+        Loc: Serialize + DeserializeOwned + Debug + Clone,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn get_parent_idx(&self) -> usize {
+        self.current_parent_idx
+    }
+
+    fn set_parent_idx(&mut self, idx: usize) {
+        self.current_parent_idx = idx;
+    }
 }
 
 impl<Loc, Addr, VS, CI> InfantStateState<Loc, Addr, VS, CI>
@@ -304,6 +326,7 @@ where
     pub fn new() -> Self {
         Self {
             infant_state: IndexedInMemoryCorpus::new(),
+            current_parent_idx: 0,
             metadata: SerdeAnyMap::new(),
             rand_generator: Default::default(),
         }
@@ -418,7 +441,7 @@ where
 
     /// Add a new infant state to the infant state corpus
     /// and setup the scheduler
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC)
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC, parent_idx: usize) -> usize
     where
         SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
     {
@@ -427,9 +450,12 @@ where
             .corpus_mut()
             .add(Testcase::new(state.clone()))
             .expect("Failed to add new infant state");
+        assert!(idx > parent_idx);
+        self.infant_states_state.current_parent_idx = parent_idx;
         scheduler
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
+        idx
     }
 }
 
