@@ -7,3 +7,4 @@ bin
 corpus
 .vscode
 node_modules
+cache
