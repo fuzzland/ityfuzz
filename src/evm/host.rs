@@ -131,7 +131,6 @@ where
     relations_file: std::fs::File,
     // Filter duplicate relations
     relations_hash: HashSet<u64>,
-    /// Known typed bugs, used for filtering in duplicate bugs
     /// Randomness from inputs
     pub randomness: Vec<u8>,
     /// workdir
@@ -541,7 +540,6 @@ where
                 ARBITRARY_CALL = true;
             }
             // random sample a key from hash_to_address
-            // println!("unbound call {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
             match self.address_to_hash.get_mut(&input.context.code_address) {
                 None => {}
                 Some(hashes) => {
@@ -1019,7 +1017,7 @@ where
                             }
                         }
 
-                        if unknown_sigs > sigs.len() * 10 / 9 {
+                        if unknown_sigs >= sigs.len() / 30 {
                             println!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
                             let abis = fetch_abi_heimdall(contract_code_str)
                                 .iter()
