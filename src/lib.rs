@@ -1,4 +1,5 @@
 #![feature(downcast_unchecked)]
+#![feature(let_chains)]
 extern crate core;
 
 pub mod cache;

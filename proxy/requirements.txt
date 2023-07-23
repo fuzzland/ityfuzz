@@ -1,5 +1,0 @@
-flask
-requests
-retry
-gunicorn
-ratelimit

@@ -145,8 +145,8 @@ where
 
 impl<VS, I, S> Flashloan<VS, I, S>
 where
-    S: State + HasRand + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    S: State + HasRand + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + HasMetadata + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -302,8 +302,8 @@ where
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 where
-    S: State +HasRand+ HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    S: State +HasRand+ HasCaller<EVMAddress>+ HasMetadata + HasCorpus<I> + Debug + Clone + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]

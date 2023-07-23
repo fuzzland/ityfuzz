@@ -1,7 +1,7 @@
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
-use crate::evm::contract_utils::{ABIConfig, ContractLoader};
+use crate::evm::contract_utils::{ABIConfig, ContractLoader, extract_sig_from_contract};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
@@ -33,8 +33,10 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use bytes::Bytes;
+use itertools::Itertools;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
+use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
@@ -289,10 +291,44 @@ where
                 println!("fetching abi {:?}", address_h160);
                 let abi = self.endpoint.fetch_abi(address_h160);
 
-                let parsed_abi = match abi {
-                    Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
-                    None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
-                };
+                let mut parsed_abi = vec![];
+                match abi {
+                    Some(ref abi_ins) => {
+                        parsed_abi = ContractLoader::parse_abi_str(abi_ins)
+                    }
+                    None => {
+                        // 1. Extract abi from bytecode, and see do we have any function sig available in state
+                        // 2. Use Heimdall to extract abi
+                        // 3. Reconfirm on failures of heimdall
+                        println!("Contract {:?} has no abi", address_h160);
+                        let contract_code_str = hex::encode(contract_code.bytes());
+                        let sigs = extract_sig_from_contract(&contract_code_str);
+                        let mut unknown_sigs: usize = 0;
+                        for sig in &sigs {
+                            if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                                parsed_abi.push(abi.clone());
+                            } else {
+                                unknown_sigs += 1;
+                            }
+                        }
+
+                        if unknown_sigs > sigs.len() * 10 / 9 {
+                            println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", address_h160);
+                            let abis = fetch_abi_heimdall(contract_code_str)
+                                .iter()
+                                .map(|abi| {
+                                    if let Some(known_abi) = state.metadata().get::<ABIMap>().unwrap().get(&abi.function) {
+                                        known_abi
+                                    } else {
+                                        abi
+                                    }
+                                })
+                                .cloned()
+                                .collect_vec();
+                            parsed_abi = abis;
+                        }
+                    }
+                }
 
                 // set up host
                 let mut abi_hashes_to_add = HashSet::new();

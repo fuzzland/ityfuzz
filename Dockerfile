@@ -49,9 +49,6 @@ COPY ui /app/ui
 RUN pip3 install -r ui/requirements.txt
 RUN pip3 install solc-select
 
-COPY proxy /app/proxy
-RUN pip3 install -r proxy/requirements.txt
-
 COPY ui/start.sh .
 RUN chmod +x start.sh
 

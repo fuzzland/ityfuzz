@@ -628,6 +628,8 @@ where
     }
 }
 
+pub static mut IN_DEPLOY: bool = false;
+
 impl<VS, I, S, CI> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
     for EVMExecutor<I, S, VS, CI>
 where
@@ -661,22 +663,20 @@ where
             self.deployer,
             EVMU256::from(0),
         );
-        let middleware_status = self.host.middlewares_enabled;
         // disable middleware for deployment
-        self.host.middlewares_enabled = false;
+        unsafe {
+            IN_DEPLOY = true;
+        }
         let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
-        self.host.middlewares_enabled = middleware_status;
         let mut dummy_state = S::default();
         let r = self.host.run_inspect(&mut interp, &mut dummy_state);
-        #[cfg(feature = "evaluation")]
-        {
-            self.host.pc_coverage = Default::default();
+        unsafe {
+            IN_DEPLOY = false;
         }
         if r != InstructionResult::Return {
             println!("deploy failed: {:?}", r);
             return None;
         }
-        assert_eq!(r, InstructionResult::Return);
         println!(
             "deployer = 0x{} contract = {:?}",
             hex::encode(self.deployer),

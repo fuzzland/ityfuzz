@@ -2,7 +2,7 @@
 /// Add all potential calls with default args to the corpus
 use crate::evm::abi::get_abi_type_boxed;
 use crate::evm::bytecode_analyzer;
-use crate::evm::contract_utils::{ABIConfig, ContractInfo};
+use crate::evm::contract_utils::{ABIConfig, ABIInfo, ContractInfo, ContractLoader, extract_sig_from_contract};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
 use crate::evm::mutator::AccessPattern;
 
@@ -31,6 +31,11 @@ use hex;
 use itertools::Itertools;
 use std::rc::Rc;
 use std::time::Duration;
+use crypto::sha3::Sha3Mode::Keccak256;
+use libafl::impl_serdeany;
+use libafl::prelude::HasMetadata;
+use serde::{Deserialize, Serialize};
+use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
@@ -44,6 +49,30 @@ pub struct EVMCorpusInitializer<'a> {
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
+    pub initial_state: EVMStagedVMState,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ABIMap {
+    pub signature_to_abi: HashMap<[u8; 4], ABIConfig>,
+}
+
+impl_serdeany!(ABIMap);
+
+impl ABIMap {
+    pub fn new() -> Self {
+        Self {
+            signature_to_abi: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, abi: ABIConfig) {
+        self.signature_to_abi.insert(abi.function.clone(), abi);
+    }
+
+    pub fn get(&self, signature: &[u8; 4]) -> Option<&ABIConfig> {
+        self.signature_to_abi.get(signature)
+    }
 }
 
 #[macro_export]
@@ -112,23 +141,21 @@ impl<'a> EVMCorpusInitializer<'a> {
         self.presets.push(preset);
     }
 
-    pub fn initialize(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts{
+    pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts{
+        self.state.metadata_mut().insert(ABIMap::new());
         self.setup_default_callers();
         self.setup_contract_callers();
-        self.initialize_corpus(contracts)
+        self.initialize_contract(loader);
+        self.initialize_corpus(loader)
     }
 
-    pub fn initialize_corpus(&mut self, contracts: Vec<ContractInfo>) -> EVMInitializationArtifacts {
-        let mut artifacts = EVMInitializationArtifacts {
-            address_to_sourcemap: HashMap::new(),
-            address_to_abi: HashMap::new(),
-        };
-        for contract in contracts {
+    pub fn initialize_contract(&mut self, loader: &mut ContractLoader) {
+        for contract in &mut loader.contracts {
             println!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(
-                    Bytecode::new_raw(Bytes::from(contract.code)),
-                    Some(Bytes::from(contract.constructor_args)),
+                    Bytecode::new_raw(Bytes::from(contract.code.clone())),
+                    Some(Bytes::from(contract.constructor_args.clone())),
                     contract.deployed_address,
                     self.state,
                 ) {
@@ -141,43 +168,90 @@ impl<'a> EVMCorpusInitializer<'a> {
                 }
             } else {
                 // directly set bytecode
-                let contract_code = Bytecode::new_raw(Bytes::from(contract.code));
+                let contract_code = Bytecode::new_raw(Bytes::from(contract.code.clone()));
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
                 self.executor
                     .host
                     .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
-            artifacts.address_to_sourcemap.insert(deployed_address, contract.source_map);
-            artifacts.address_to_abi.insert(deployed_address, contract.abi.clone());
+
+            contract.deployed_address = deployed_address;
+            self.state.add_address(&deployed_address);
+        }
+    }
+
+
+    pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
+        let mut artifacts = EVMInitializationArtifacts {
+            address_to_sourcemap: HashMap::new(),
+            address_to_abi: HashMap::new(),
+            initial_state: StagedVMState::new_uninitialized()
+        };
+        for contract in &mut loader.contracts {
+            if contract.abi.len() == 0 {
+                // this contract's abi is not available, we will use 3 layers to handle this
+                // 1. Extract abi from bytecode, and see do we have any function sig available in state
+                // 2. Use Heimdall to extract abi
+                // 3. Reconfirm on failures of heimdall
+                println!("Contract {} has no abi", contract.name);
+                let contract_code = hex::encode(contract.code.clone());
+                let sigs = extract_sig_from_contract(&contract_code);
+                let mut unknown_sigs: usize = 0;
+                for sig in &sigs {
+                    if let Some(abi) = self.state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                        contract.abi.push(abi.clone());
+                    } else {
+                        unknown_sigs += 1;
+                    }
+                }
+
+                if unknown_sigs > sigs.len() * 10 / 9 {
+                    println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
+                    let abis = fetch_abi_heimdall(contract_code)
+                        .iter()
+                        .map(|abi| {
+                            if let Some(known_abi) = self.state.metadata().get::<ABIMap>().unwrap().get(&abi.function) {
+                                known_abi
+                            } else {
+                                abi
+                            }
+                        })
+                        .cloned()
+                        .collect_vec();
+                    contract.abi = abis;
+                }
+            }
+
+            artifacts.address_to_sourcemap.insert(contract.deployed_address, contract.source_map.clone());
+            artifacts.address_to_abi.insert(contract.deployed_address, contract.abi.clone());
 
             #[cfg(feature = "flashloan_v2")]
             {
                 handle_contract_insertion!(
                     self.state,
                     self.executor.host,
-                    deployed_address,
-                    contract.abi
+                    contract.deployed_address,
+                    contract.abi.clone()
                 );
             }
 
-            self.state.add_address(&deployed_address);
 
             if unsafe {
                 BLACKLIST_ADDR.is_some()
-                    && BLACKLIST_ADDR.as_ref().unwrap().contains(&deployed_address)
+                    && BLACKLIST_ADDR.as_ref().unwrap().contains(&contract.deployed_address)
             } {
                 continue;
             }
 
-            for abi in contract.abi {
-                self.add_abi(&abi, self.scheduler, deployed_address);
+            for abi in contract.abi.clone() {
+                self.add_abi(&abi, self.scheduler, contract.deployed_address);
             }
             // add transfer txn
             {
                 let input = EVMInput {
                     caller: self.state.get_rand_caller(),
-                    contract: deployed_address,
+                    contract: contract.deployed_address,
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
@@ -196,9 +270,11 @@ impl<'a> EVMCorpusInitializer<'a> {
                 add_input_to_corpus!(self.state, self.scheduler, input);
             }
         }
-        let mut tc = Testcase::new(StagedVMState::new_with_state(
+        artifacts.initial_state = StagedVMState::new_with_state(
             self.executor.host.evmstate.clone(),
-        ));
+        );
+
+        let mut tc = Testcase::new(artifacts.initial_state.clone());
         tc.set_exec_time(Duration::from_secs(0));
         let idx = self
             .state
