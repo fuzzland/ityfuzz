@@ -1106,10 +1106,10 @@ where
     }
 
     fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
-        self.call_count += 1;
-        if self.call_count >= unsafe {CALL_UNTIL} {
-            return (ControlLeak, Gas::new(0), Bytes::new());
+        if unsafe { IS_FAST_CALL_STATIC } {
+            self.call_forbid_control_leak(input, state)
+        } else {
+            self.call_allow_control_leak(input, state)
         }
-
     }
 }

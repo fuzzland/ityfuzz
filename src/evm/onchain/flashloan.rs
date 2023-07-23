@@ -471,6 +471,7 @@ where
                             .insert(interp.contract.address);
                     }
                 }
+                return;
             }
             _ => {
                 return;
