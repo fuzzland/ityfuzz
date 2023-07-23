@@ -11,7 +11,7 @@ use libafl::prelude::{HasCorpus, Scheduler, HasRand, HasMetadata};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
-use revm_interpreter::InstructionResult::{Continue, Return, Revert};
+use revm_interpreter::InstructionResult::{Continue, ControlLeak, Return, Revert};
 
 
 use std::cell::RefCell;
@@ -212,7 +212,6 @@ where
 
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
-pub(crate) const ControlLeak: InstructionResult = InstructionResult::FatalExternalError;
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = true;
 const UNBOUND_CALL_THRESHOLD: usize = 3;

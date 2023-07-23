@@ -33,11 +33,12 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_interpreter::InstructionResult::ControlLeak;
 use revm_primitives::{Bytecode, LatestSpec};
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
-    ControlLeak, FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
+    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
@@ -600,7 +601,7 @@ where
                 output: r.output.to_vec(),
                 reverted: r.ret != InstructionResult::Return
                     && r.ret != InstructionResult::Stop
-                    && r.ret != ControlLeak
+                    && r.ret != InstructionResult::ControlLeak
                     && r.ret != InstructionResult::SelfDestruct,
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
@@ -751,7 +752,7 @@ where
                                 output: res.output.to_vec(),
                                 reverted: res.ret != InstructionResult::Return
                                     && res.ret != InstructionResult::Stop
-                                    && res.ret != ControlLeak,
+                                    && res.ret != InstructionResult::ControlLeak,
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
