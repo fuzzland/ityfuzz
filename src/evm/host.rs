@@ -543,10 +543,12 @@ where
             match self.address_to_hash.get_mut(&input.context.code_address) {
                 None => {}
                 Some(hashes) => {
-                    let selected_key =
-                        hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
-                    for i in 0..4 {
-                        input_seq[i] = selected_key[i];
+                    if hashes.len() != 0 {
+                        let selected_key =
+                            hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
+                        for i in 0..4 {
+                            input_seq[i] = selected_key[i];
+                        }
                     }
                 }
             }
