@@ -17,6 +17,7 @@ use crate::evm::input::EVMInputTy::Borrow;
 use std::fmt::Debug;
 use revm_interpreter::Interpreter;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress};
+use crate::evm::vm::{Constraint, EVMStateT};
 
 use crate::state::HasItyState;
 use crate::state_input::StagedVMState;
@@ -116,6 +117,14 @@ where
             phantom: Default::default(),
         }
     }
+
+    fn ensure_constraint<I>(input: &mut I, constraints: Vec<Constraint>)
+        where
+            I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT, {
+        for constraint in constraints {
+            unreachable!()
+        }
+    }
 }
 
 impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<'a, VS, Loc, Addr, SC, CI>
@@ -123,7 +132,7 @@ where
     I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
     S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata,
     SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
-    VS: Default + VMStateT,
+    VS: Default + VMStateT + EVMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
@@ -152,14 +161,33 @@ where
             1
         };
 
+        // if the input is a step input (resume execution from a control leak)
+        // we should not mutate the VM state, but only mutate the bytes
+        if input.is_step() {
+            let mut res = MutationResult::Skipped;
+            let mut tries = 0;
+            while res != MutationResult::Mutated && tries < 20 {
+                for _ in 0..havoc_times {
+                    if input.mutate(state) == MutationResult::Mutated {
+                        res = MutationResult::Mutated;
+                    }
+                }
+                tries += 1;
+            }
+            return Ok(res);
+        }
+
+        // 5% chance to mutate the VM state
+        if state.rand_mut().below(100) < 5 {
+            // cross over infant state
+            let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
+            let constraints = new_state.state.get_constraints();
+            input.set_staged_state(new_state, idx);
+            Self::ensure_constraint(input, constraints);
+        }
+
         // mutate the input once
         let mut mutator = || -> MutationResult {
-            // if the input is a step input (resume execution from a control leak)
-            // we should not mutate the VM state, but only mutate the bytes
-            if input.is_step() {
-                return input.mutate(state);
-            }
-
             // if the input is to borrow token, we should mutate the randomness
             // (use to select the paths to buy token), VM state, and bytes
             #[cfg(feature = "flashloan_v2")]
@@ -205,18 +233,8 @@ where
             // mutate the bytes or VM state or liquidation percent (percentage of token to liquidate)
             // by default
             match state.rand_mut().below(100) {
-                0..=5 => {
-                    // cross over infant state
-                    let old_idx = input.get_state_idx();
-                    let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
-                    if idx == old_idx {
-                        return MutationResult::Skipped;
-                    }
-                    input.set_staged_state(new_state, idx);
-                    MutationResult::Mutated
-                }
                 #[cfg(feature = "flashloan_v2")]
-                6..=10 => {
+                0..=5 => {
                     let prev_percent = input.get_liquidation_percent();
                     input.set_liquidation_percent(if state.rand_mut().below(100) < 80 {
                         10

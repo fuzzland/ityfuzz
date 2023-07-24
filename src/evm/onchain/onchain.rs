@@ -1,4 +1,4 @@
-use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::{ABIConfig, ContractLoader, extract_sig_from_contract};
@@ -391,6 +391,8 @@ where
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
                         abi_instance
                             .set_func_with_name(abi.function, abi.function_name.clone());
+                        register_abi_instance(target, abi_instance.clone(), state);
+
                         let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: target,

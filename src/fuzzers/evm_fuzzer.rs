@@ -13,7 +13,7 @@ use crate::{
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::ShMemProvider;
+use libafl::prelude::{HasMetadata, ShMemProvider};
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
@@ -45,6 +45,7 @@ use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
+use crate::evm::abi::ABIAddressToInstanceMap;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::coverage::Coverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
@@ -196,6 +197,16 @@ pub fn evm_fuzzer(
     corpus_initializer.register_preset(&PairPreset {});
 
     let artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
+
+    let mut instance_map = ABIAddressToInstanceMap::new();
+    artifacts.address_to_abi_object.iter().for_each(
+        |(addr, abi)| {
+            instance_map.map.insert(addr.clone(), abi.clone());
+        }
+    );
+    state.add_metadata(
+        instance_map
+    );
 
     evm_executor.host.initialize(state);
 

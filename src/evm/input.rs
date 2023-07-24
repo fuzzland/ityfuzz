@@ -31,6 +31,8 @@ pub enum EVMInputTy {
     ABI,
     /// A flashloan transaction
     Borrow,
+    /// An arbitrary external call with same address tx
+    ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
 }
@@ -239,7 +241,7 @@ impl ConciseEVMInput {
                 liq
             )),
             None => match self.input_type {
-                EVMInputTy::ABI => Some(format!(
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
                     "{:?} => {:?} with {:?} ETH, liq percent: {}",
                     self.caller, self.contract,
                     self.txn_value, liq

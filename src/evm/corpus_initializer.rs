@@ -1,6 +1,6 @@
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
-use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::abi::{BoxedABI, get_abi_type_boxed};
 use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{ABIConfig, ABIInfo, ContractInfo, ContractLoader, extract_sig_from_contract};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
@@ -49,6 +49,7 @@ pub struct EVMCorpusInitializer<'a> {
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
+    pub address_to_abi_object: HashMap<EVMAddress, Vec<BoxedABI>>,
     pub initial_state: EVMStagedVMState,
 }
 
@@ -186,6 +187,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
+            address_to_abi_object: Default::default(),
             initial_state: StagedVMState::new_uninitialized()
         };
         for contract in &mut loader.contracts {
@@ -245,7 +247,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             }
 
             for abi in contract.abi.clone() {
-                self.add_abi(&abi, self.scheduler, contract.deployed_address);
+                self.add_abi(&abi, self.scheduler, contract.deployed_address, &mut artifacts);
             }
             // add transfer txn
             {
@@ -321,6 +323,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         abi: &ABIConfig,
         scheduler: &dyn Scheduler<EVMInput, EVMFuzzState>,
         deployed_address: EVMAddress,
+        artifacts: &mut EVMInitializationArtifacts,
     ) {
         if abi.is_constructor {
             return;
@@ -346,6 +349,11 @@ impl<'a> EVMCorpusInitializer<'a> {
         }
         let mut abi_instance = get_abi_type_boxed(&abi.abi);
         abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
+
+        artifacts.address_to_abi_object
+            .entry(deployed_address)
+            .or_insert(vec![])
+            .push(abi_instance.clone());
         let input = EVMInput {
             caller: self.state.get_rand_caller(),
             contract: deployed_address,
