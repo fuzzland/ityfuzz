@@ -622,7 +622,7 @@ where
             if (exec_res.ret == InstructionResult::Return || exec_res.ret == InstructionResult::Stop) && need_step {
                 is_step = true;
                 data = Bytes::from([vec![0; 4], exec_res.output.to_vec()].concat());
-                /// we dont need to clean up bug info and state info
+                // we dont need to clean up bug info and state info
                 cleanup = false;
             } else {
                 r = Some(exec_res);

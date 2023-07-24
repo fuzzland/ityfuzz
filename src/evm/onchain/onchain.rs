@@ -117,6 +117,7 @@ where
                 EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
                 EVMAddress::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
+                EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),

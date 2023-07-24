@@ -28,6 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use hex::FromHex;
+use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
@@ -82,6 +83,19 @@ pub static mut WRITE_RELATIONSHIPS: bool = false;
 
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [0xb4,0x26,0x04,0xcb,0x10,0x5a,0x16,0xc8,0xf6,0xdb,0x8a,0x41,0xe6,0xb0,0x0c,0x0c,0x1b,0x48,0x26,0x46,0x5e,0x8b,0xc5,0x04,0xb3,0xeb,0x3e,0x88,0xb3,0xe6,0xa4,0xa0];
 pub static mut CONCRETE_CREATE: bool = false;
+
+
+/// Check if address is precompile by having assumption
+/// that precompiles are in range of 1 to N.
+#[inline(always)]
+pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
+    if !address[..18].iter().all(|i| *i == 0) {
+        return false;
+    }
+    let num = u16::from_be_bytes([address[18], address[19]]);
+    num.wrapping_sub(1) < num_of_precompiles as u16
+}
+
 
 pub struct FuzzHost<VS, I, S>
 where
@@ -138,6 +152,8 @@ where
     pub work_dir: String,
     /// custom SpecId
     pub spec_id: SpecId,
+    /// Precompiles
+    pub precompiles: Precompiles,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -207,6 +223,7 @@ where
             randomness: vec![],
             work_dir: self.work_dir.clone(),
             spec_id: self.spec_id.clone(),
+            precompiles: Precompiles::default(),
         }
     }
 }
@@ -260,6 +277,7 @@ where
             randomness: vec![],
             work_dir: workdir.clone(),
             spec_id: SpecId::LATEST,
+            precompiles: Default::default(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -632,6 +650,25 @@ where
             return (Continue, Gas::new(0), Bytes::new());
         }
         return (Revert, Gas::new(0), Bytes::new());
+    }
+
+    fn call_precompile(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        let precompile = self
+            .precompiles
+            .get(&input.contract)
+            .expect("Check for precompile should be already done");
+        let out = match precompile {
+            Precompile::Standard(fun) => fun(&input.input.to_vec().as_slice(), u64::MAX),
+            Precompile::Custom(fun) => fun(&input.input.to_vec().as_slice(), u64::MAX),
+        };
+        match out {
+            Ok((_, data)) => {
+                (InstructionResult::Return, Gas::new(0), Bytes::from(data))
+            }
+            Err(e) => {
+                (InstructionResult::PrecompileError, Gas::new(0), Bytes::new())
+            }
+        }
     }
 }
 
@@ -1096,6 +1133,10 @@ where
     }
 
     fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        if is_precompile(input.contract, self.precompiles.len()) {
+            return self.call_precompile(input, state);
+        }
+
         if unsafe { IS_FAST_CALL_STATIC } {
             self.call_forbid_control_leak(input, state)
         } else {
