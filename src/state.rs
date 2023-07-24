@@ -65,6 +65,8 @@ pub trait HasCaller<Addr> {
     fn get_rand_address(&mut self) -> Addr;
     /// Get a random caller from the caller set, used for transaction sender mutation
     fn get_rand_caller(&mut self) -> Addr;
+    /// Does the address exist in the caller set
+    fn has_caller(&self, addr: &Addr) -> bool;
     /// Add a caller to the caller set
     fn add_caller(&mut self, caller: &Addr);
     /// Add an address to the address set
@@ -259,6 +261,11 @@ where
     fn get_rand_caller(&mut self) -> Addr {
         let idx = self.rand_generator.below(self.callers_pool.len() as u64);
         self.callers_pool[idx as usize].clone()
+    }
+
+    /// Get a random caller from the caller pool, used for mutating the caller
+    fn has_caller(&self, addr: &Addr) -> bool {
+        self.callers_pool.contains(addr)
     }
 
     /// Add a caller to the caller pool

@@ -126,7 +126,6 @@ impl<'a, VS, Loc, Addr, SC, CI> FuzzMutator<'a, VS, Loc, Addr, SC, CI>
         for constraint in constraints {
             match constraint {
                 Constraint::Caller(caller) => {
-                    println!("[shou]arbitrary external call mutator: {:?}", caller);
                     input.set_caller_evm(caller);
                 }
                 Constraint::Contract(target) => {
@@ -258,6 +257,10 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<'a, VS, Loc,
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
+                    if !state.has_caller(&input.get_caller()) {
+                        input.set_caller(state.get_rand_caller());
+                    }
+
                     Self::ensures_constraint(input, state,new_state.state.get_constraints());
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated

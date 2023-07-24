@@ -55,6 +55,8 @@ use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
 
+const MAX_POST_EXECUTION: usize = 3;
+
 /// Get the token context from the flashloan middleware,
 /// which contains uniswap pairs of that token
 #[macro_export]
@@ -357,34 +359,49 @@ where
         input: &I,
         post_exec: Option<PostExecutionCtx>,
         mut state: &mut S,
+        cleanup: bool
     ) -> IntermediateExecutionResult {
         // Initial setups
-        self.host.coverage_changed = false;
+        if cleanup {
+            self.host.coverage_changed = false;
+            self.host.bug_hit = false;
+            self.host.selfdestruct_hit = false;
+            self.host.current_typed_bug = vec![];
+            // Initially, there is no state change
+            unsafe {
+                STATE_CHANGE = false;
+            }
+        }
+
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
-        self.host.bug_hit = false;
-        self.host.selfdestruct_hit = false;
-        self.host.current_typed_bug = vec![];
         self.host.call_count = 0;
         self.host.randomness = input.get_randomness();
         let mut repeats = input.get_repeat();
-        // Initially, there is no state change
-        unsafe {
-            STATE_CHANGE = false;
-        }
         // Ensure that the call context is correct
         unsafe {
             GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
         }
 
         // Get the bytecode
-        let mut bytecode = self
+        let mut bytecode = match self
             .host
             .code
-            .get(&call_ctx.code_address)
-            .expect(&*format!("no code {:?}", call_ctx.code_address))
-            .clone();
+            .get(&call_ctx.code_address) {
+            Some(i) => i.clone(),
+            None => {
+                println!("no code @ {:?}, did you forget to deploy?", call_ctx.code_address);
+                return IntermediateExecutionResult {
+                    output: Bytes::new(),
+                    new_state: EVMState::default(),
+                    pc: 0,
+                    ret: InstructionResult::Revert,
+                    stack: Default::default(),
+                    memory: Default::default(),
+                };
+            }
+        };
 
         // Create the interpreter
         let mut interp = if let Some(ref post_exec_ctx) = post_exec {
@@ -561,6 +578,8 @@ where
             data = Bytes::from(input.get_direct_data());
         }
 
+        let mut cleanup = true;
+
         loop {
             // Execute the transaction
             let exec_res = if is_step {
@@ -576,6 +595,7 @@ where
                     input,
                     Some(post_exec),
                     state,
+                    cleanup
                 )
             } else {
                 let caller = input.get_caller();
@@ -595,12 +615,15 @@ where
                     input,
                     None,
                     state,
+                    cleanup
                 )
             };
             let need_step = exec_res.new_state.post_execution.len() > 0 && exec_res.new_state.post_execution.last().unwrap().must_step;
             if (exec_res.ret == InstructionResult::Return || exec_res.ret == InstructionResult::Stop) && need_step {
                 is_step = true;
                 data = Bytes::from([vec![0; 4], exec_res.output.to_vec()].concat());
+                /// we dont need to clean up bug info and state info
+                cleanup = false;
             } else {
                 r = Some(exec_res);
                 break;
@@ -612,6 +635,14 @@ where
                 let global_ctx = GLOBAL_CALL_CONTEXT
                     .clone()
                     .expect("global call context should be set");
+                if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
+                    return ExecutionResult {
+                        output: r.output.to_vec(),
+                        reverted: true,
+                        new_state: StagedVMState::new_uninitialized(),
+                        additional_info: None,
+                    };
+                }
                 r.new_state.post_execution.push(PostExecutionCtx {
                     stack: r.stack,
                     pc: r.pc,
@@ -638,7 +669,6 @@ where
                     constraints: match r.ret {
                         ControlLeak => vec![],
                         InstructionResult::ArbitraryExternalCallAddressBounded(caller, target) => {
-                            println!("[shou]arbitrary external call: {:?} -> {:?}", caller, target);
                             vec![Constraint::Caller(caller), Constraint::Contract(target), NoLiquidation]
                         }
                         _ => unreachable!(),
