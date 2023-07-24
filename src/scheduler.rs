@@ -25,7 +25,7 @@ where
     S: HasCorpus<I> + HasRand + HasMetadata,
     I: Input,
 {
-    fn vote(&self, state: &mut S, idx: usize);
+    fn vote(&self, state: &mut S, idx: usize, amount: usize);
 }
 
 /// The maximum number of inputs (or VMState) to keep in the corpus before pruning
@@ -148,6 +148,7 @@ impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
         I: Input + Debug,
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
+        self.vote(state, state_idx, 3);
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         data.deps.mark_never_delete(state_idx);
     }
@@ -328,14 +329,10 @@ where
     I: Input,
 {
     /// Vote for an input (or VMState)
-    fn vote(&self, state: &mut S, idx: usize) {
+    fn vote(&self, state: &mut S, idx: usize, increment: usize) {
         let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
 
         // increment votes for the input (or VMState)
-        let mut increment = 3; //data.votes_total / data.votes_and_visits.len();
-        if increment < 1 {
-            increment = 1;
-        }
         data.votes_total += increment;
         {
             let v = data.votes_and_visits.get_mut(&idx);

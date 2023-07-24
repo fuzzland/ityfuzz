@@ -53,6 +53,7 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
+use crate::evm::vm::Constraint::NoLiquidation;
 
 /// Get the token context from the flashloan middleware,
 /// which contains uniswap pairs of that token
@@ -74,6 +75,7 @@ macro_rules! get_token_ctx {
 pub enum Constraint {
     Caller(EVMAddress),
     Contract(EVMAddress),
+    NoLiquidation
 }
 
 /// A post execution context
@@ -636,7 +638,8 @@ where
                     constraints: match r.ret {
                         ControlLeak => vec![],
                         InstructionResult::ArbitraryExternalCallAddressBounded(caller, target) => {
-                            vec![Constraint::Caller(caller), Constraint::Contract(target)]
+                            println!("[shou]arbitrary external call: {:?} -> {:?}", caller, target);
+                            vec![Constraint::Caller(caller), Constraint::Contract(target), NoLiquidation]
                         }
                         _ => unreachable!(),
                     },
@@ -656,10 +659,12 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != InstructionResult::Return
-                    && r.ret != InstructionResult::Stop
-                    && r.ret != InstructionResult::ControlLeak
-                    && r.ret != InstructionResult::SelfDestruct,
+                reverted: match r.ret {
+                    InstructionResult::Return | InstructionResult::Stop | InstructionResult::ControlLeak
+                    | InstructionResult::SelfDestruct
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => false,
+                    _ => true,
+                },
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
