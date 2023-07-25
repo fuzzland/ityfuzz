@@ -53,6 +53,7 @@ You first need to install Rust through https://rustup.rs/
 You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.
 
 ```bash
+git clone https://github.com/fuzzland/ityfuzz.git && cd ityfuzz && git checkout stable
 # download move dependencies
 git submodule update --recursive --init
 cd cli/
