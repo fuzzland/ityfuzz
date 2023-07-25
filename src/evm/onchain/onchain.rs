@@ -1,4 +1,4 @@
-use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
 use crate::evm::contract_utils::{ABIConfig, ContractLoader, extract_sig_from_contract};
@@ -117,6 +117,7 @@ where
                 EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
                 EVMAddress::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
+                EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),
@@ -391,6 +392,8 @@ where
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
                         abi_instance
                             .set_func_with_name(abi.function, abi.function_name.clone());
+                        register_abi_instance(target, abi_instance.clone(), state);
+
                         let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: target,

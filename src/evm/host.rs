@@ -11,7 +11,7 @@ use libafl::prelude::{HasCorpus, Scheduler, HasRand, HasMetadata};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
-use revm_interpreter::InstructionResult::{Continue, Return, Revert};
+use revm_interpreter::InstructionResult::{Continue, ControlLeak, Return, Revert};
 
 
 use std::cell::RefCell;
@@ -28,6 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use hex::FromHex;
+use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
@@ -42,9 +43,10 @@ use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
 use revm_primitives::{SpecId, FrontierSpec, HomesteadSpec, TangerineSpec, SpuriousDragonSpec, ByzantiumSpec,
                       PetersburgSpec, IstanbulSpec, BerlinSpec, LondonSpec, MergeSpec, ShanghaiSpec};
-use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::contract_utils::extract_sig_from_contract;
 use crate::evm::corpus_initializer::ABIMap;
+use crate::evm::input::EVMInputTy::ArbitraryCallBoundedAddr;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::handle_contract_insertion;
 use crate::state_input::StagedVMState;
@@ -82,6 +84,19 @@ pub static mut WRITE_RELATIONSHIPS: bool = false;
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [0xb4,0x26,0x04,0xcb,0x10,0x5a,0x16,0xc8,0xf6,0xdb,0x8a,0x41,0xe6,0xb0,0x0c,0x0c,0x1b,0x48,0x26,0x46,0x5e,0x8b,0xc5,0x04,0xb3,0xeb,0x3e,0x88,0xb3,0xe6,0xa4,0xa0];
 pub static mut CONCRETE_CREATE: bool = false;
 
+
+/// Check if address is precompile by having assumption
+/// that precompiles are in range of 1 to N.
+#[inline(always)]
+pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
+    if !address[..18].iter().all(|i| *i == 0) {
+        return false;
+    }
+    let num = u16::from_be_bytes([address[18], address[19]]);
+    num.wrapping_sub(1) < num_of_precompiles as u16
+}
+
+
 pub struct FuzzHost<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
@@ -97,7 +112,7 @@ where
     pub _pc: usize,
     pub pc_to_addresses: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
     pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
-    pub pc_to_call_hash: HashMap<usize, HashSet<Vec<u8>>>,
+    pub pc_to_call_hash: HashMap<(EVMAddress, usize), HashSet<Vec<u8>>>,
     pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
     pub middlewares: Rc<RefCell<HashMap<MiddlewareType, Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
@@ -137,6 +152,8 @@ where
     pub work_dir: String,
     /// custom SpecId
     pub spec_id: SpecId,
+    /// Precompiles
+    pub precompiles: Precompiles,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -206,13 +223,13 @@ where
             randomness: vec![],
             work_dir: self.work_dir.clone(),
             spec_id: self.spec_id.clone(),
+            precompiles: Precompiles::default(),
         }
     }
 }
 
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
-pub(crate) const ControlLeak: InstructionResult = InstructionResult::FatalExternalError;
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = true;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
@@ -260,6 +277,7 @@ where
             randomness: vec![],
             work_dir: workdir.clone(),
             spec_id: SpecId::LATEST,
+            precompiles: Default::default(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -526,32 +544,21 @@ where
         let mut input_seq = input.input.to_vec();
 
         // check whether the whole CALLDATAVALUE can be arbitrary
-        if !self.pc_to_call_hash.contains_key(&self._pc) {
-            self.pc_to_call_hash.insert(self._pc, HashSet::new());
+        if !self.pc_to_call_hash.contains_key(&(input.context.caller, self._pc)) {
+            self.pc_to_call_hash.insert((input.context.caller, self._pc), HashSet::new());
         }
         self.pc_to_call_hash
-            .get_mut(&self._pc)
+            .get_mut(&(input.context.caller, self._pc))
             .unwrap()
             .insert(hash.to_vec());
-        if self.pc_to_call_hash.get(&self._pc).unwrap().len() > UNBOUND_CALL_THRESHOLD
+        if self.pc_to_call_hash.get(&(input.context.caller, self._pc)).unwrap().len() > UNBOUND_CALL_THRESHOLD
             && input_seq.len() >= 4
         {
-            unsafe {
-                ARBITRARY_CALL = true;
-            }
-            // random sample a key from hash_to_address
-            match self.address_to_hash.get_mut(&input.context.code_address) {
-                None => {}
-                Some(hashes) => {
-                    if hashes.len() != 0 {
-                        let selected_key =
-                            hashes[hash.iter().map(|x| (*x) as usize).sum::<usize>() % hashes.len()];
-                        for i in 0..4 {
-                            input_seq[i] = selected_key[i];
-                        }
-                    }
-                }
-            }
+            return (
+                InstructionResult::ArbitraryExternalCallAddressBounded(input.context.caller, input.context.address),
+                Gas::new(0),
+                Bytes::new()
+            );
         }
 
         // control leak check
@@ -644,6 +651,25 @@ where
         }
         return (Revert, Gas::new(0), Bytes::new());
     }
+
+    fn call_precompile(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        let precompile = self
+            .precompiles
+            .get(&input.contract)
+            .expect("Check for precompile should be already done");
+        let out = match precompile {
+            Precompile::Standard(fun) => fun(&input.input.to_vec().as_slice(), u64::MAX),
+            Precompile::Custom(fun) => fun(&input.input.to_vec().as_slice(), u64::MAX),
+        };
+        match out {
+            Ok((_, data)) => {
+                (InstructionResult::Return, Gas::new(0), Bytes::from(data))
+            }
+            Err(e) => {
+                (InstructionResult::PrecompileError, Gas::new(0), Bytes::new())
+            }
+        }
+    }
 }
 
 macro_rules! process_rw_key {
@@ -665,7 +691,6 @@ macro_rules! u256_to_u8 {
     };
 }
 
-pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
@@ -1052,6 +1077,8 @@ where
                                 let mut abi_instance = get_abi_type_boxed(&abi.abi);
                                 abi_instance
                                     .set_func_with_name(abi.function, abi.function_name.clone());
+                                register_abi_instance(r_addr, abi_instance.clone(), state);
+
                                 let input = EVMInput {
                                     caller: state.get_rand_caller(),
                                     contract: r_addr,
@@ -1106,6 +1133,10 @@ where
     }
 
     fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        if is_precompile(input.contract, self.precompiles.len()) {
+            return self.call_precompile(input, state);
+        }
+
         if unsafe { IS_FAST_CALL_STATIC } {
             self.call_forbid_control_leak(input, state)
         } else {

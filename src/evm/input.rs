@@ -31,6 +31,8 @@ pub enum EVMInputTy {
     ABI,
     /// A flashloan transaction
     Borrow,
+    /// An arbitrary external call with same address tx
+    ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
 }
@@ -43,6 +45,12 @@ impl Default for EVMInputTy {
 
 /// EVM Input Trait
 pub trait EVMInputT {
+    /// Set the contract and ABI
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>);
+
+    /// Set the caller
+    fn set_caller_evm(&mut self, caller: EVMAddress);
+
     /// Get the ABI encoded input
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -239,7 +247,7 @@ impl ConciseEVMInput {
                 liq
             )),
             None => match self.input_type {
-                EVMInputTy::ABI => Some(format!(
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
                     "{:?} => {:?} with {:?} ETH, liq percent: {}",
                     self.caller, self.contract,
                     self.txn_value, liq
@@ -298,6 +306,16 @@ impl std::fmt::Debug for EVMInput {
 }
 
 impl EVMInputT for EVMInput {
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>) {
+        self.contract = contract;
+        self.access_pattern = Rc::new(RefCell::new(AccessPattern::new()));
+        self.data = abi;
+    }
+
+    fn set_caller_evm(&mut self, caller: EVMAddress) {
+        self.caller = caller;
+    }
+
     fn to_bytes(&self) -> Vec<u8> {
         match self.data {
             Some(ref d) => d.get_bytes(),

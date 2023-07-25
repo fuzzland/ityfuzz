@@ -33,11 +33,12 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_interpreter::InstructionResult::ControlLeak;
 use revm_primitives::{Bytecode, LatestSpec};
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
-    ControlLeak, FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
+    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
@@ -52,6 +53,9 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
+use crate::evm::vm::Constraint::NoLiquidation;
+
+const MAX_POST_EXECUTION: usize = 3;
 
 /// Get the token context from the flashloan middleware,
 /// which contains uniswap pairs of that token
@@ -66,6 +70,14 @@ macro_rules! get_token_ctx {
             .get(&$token)
             .expect(format!("unknown token : {:?}", $token).as_str())
     };
+}
+
+/// A post execution constraint
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Constraint {
+    Caller(EVMAddress),
+    Contract(EVMAddress),
+    NoLiquidation
 }
 
 /// A post execution context
@@ -99,6 +111,9 @@ pub struct PostExecutionCtx {
     pub caller: EVMAddress,
     pub code_address: EVMAddress,
     pub apparent_value: EVMU256,
+
+    pub must_step: bool,
+    pub constraints: Vec<Constraint>,
 }
 
 impl PostExecutionCtx {
@@ -138,6 +153,21 @@ pub struct EVMState {
     /// bug type call in solidity type
     pub typed_bug: HashSet<String>,
 }
+
+
+pub trait EVMStateT {
+    fn get_constraints(&self) -> Vec<Constraint>;
+}
+
+impl EVMStateT for EVMState {
+    fn get_constraints(&self) -> Vec<Constraint> {
+        match self.post_execution.last() {
+            Some(i) => i.constraints.clone(),
+            None => vec![],
+        }
+    }
+}
+
 
 impl Default for EVMState {
     /// Default VM state, containing empty state, no post execution context,
@@ -259,6 +289,8 @@ where
     pub host: FuzzHost<VS, I, S>,
     /// [Depreciated] Deployer address
     deployer: EVMAddress,
+    /// Known arbitrary (caller,pc)
+    pub _known_arbitrary: HashSet<(EVMAddress, usize)>,
     phandom: PhantomData<(I, S, VS, CI)>,
 }
 
@@ -302,6 +334,7 @@ where
         Self {
             host: fuzz_host,
             deployer,
+            _known_arbitrary: Default::default(),
             phandom: PhantomData,
         }
     }
@@ -326,34 +359,49 @@ where
         input: &I,
         post_exec: Option<PostExecutionCtx>,
         mut state: &mut S,
+        cleanup: bool
     ) -> IntermediateExecutionResult {
         // Initial setups
-        self.host.coverage_changed = false;
+        if cleanup {
+            self.host.coverage_changed = false;
+            self.host.bug_hit = false;
+            self.host.selfdestruct_hit = false;
+            self.host.current_typed_bug = vec![];
+            // Initially, there is no state change
+            unsafe {
+                STATE_CHANGE = false;
+            }
+        }
+
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
         self.host.access_pattern = input.get_access_pattern().clone();
-        self.host.bug_hit = false;
-        self.host.selfdestruct_hit = false;
-        self.host.current_typed_bug = vec![];
         self.host.call_count = 0;
         self.host.randomness = input.get_randomness();
         let mut repeats = input.get_repeat();
-        // Initially, there is no state change
-        unsafe {
-            STATE_CHANGE = false;
-        }
         // Ensure that the call context is correct
         unsafe {
             GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
         }
 
         // Get the bytecode
-        let mut bytecode = self
+        let mut bytecode = match self
             .host
             .code
-            .get(&call_ctx.code_address)
-            .expect(&*format!("no code {:?}", call_ctx.code_address))
-            .clone();
+            .get(&call_ctx.code_address) {
+            Some(i) => i.clone(),
+            None => {
+                println!("no code @ {:?}, did you forget to deploy?", call_ctx.code_address);
+                return IntermediateExecutionResult {
+                    output: Bytes::new(),
+                    new_state: EVMState::default(),
+                    pc: 0,
+                    ret: InstructionResult::Revert,
+                    stack: Default::default(),
+                    memory: Default::default(),
+                };
+            }
+        };
 
         // Create the interpreter
         let mut interp = if let Some(ref post_exec_ctx) = post_exec {
@@ -521,53 +569,80 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone()
         };
-        let is_step = input.is_step();
-        let caller = input.get_caller();
+
+        let mut r = None;
+        let mut is_step = input.is_step();
         let mut data = Bytes::from(input.to_bytes());
         // use direct data (mostly used for debugging) if there is no data
         if data.len() == 0 {
             data = Bytes::from(input.get_direct_data());
         }
-        let value = input.get_txn_value().unwrap_or(EVMU256::ZERO);
-        let contract_address = input.get_contract();
 
-        // Execute the transaction
-        let mut r = if is_step {
-            let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
-            self.host.origin = post_exec.caller;
-            // we need push the output of CALL instruction
-            post_exec.stack.push(EVMU256::from(1));
-            // post_exec.pc += 1;
-            self.execute_from_pc(
-                &post_exec.get_call_ctx(),
-                &vm_state,
-                data,
-                input,
-                Some(post_exec),
-                state,
-            )
-        } else {
-            self.host.origin = caller;
-            self.execute_from_pc(
-                &CallContext {
-                    address: contract_address,
-                    caller,
-                    code_address: contract_address,
-                    apparent_value: value,
-                    scheme: CallScheme::Call,
-                },
-                &vm_state,
-                data,
-                input,
-                None,
-                state,
-            )
-        };
+        let mut cleanup = true;
+
+        loop {
+            // Execute the transaction
+            let exec_res = if is_step {
+                let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
+                self.host.origin = post_exec.caller;
+                // we need push the output of CALL instruction
+                post_exec.stack.push(EVMU256::from(1));
+                // post_exec.pc += 1;
+                self.execute_from_pc(
+                    &post_exec.get_call_ctx(),
+                    &vm_state,
+                    data,
+                    input,
+                    Some(post_exec),
+                    state,
+                    cleanup
+                )
+            } else {
+                let caller = input.get_caller();
+                let value = input.get_txn_value().unwrap_or(EVMU256::ZERO);
+                let contract_address = input.get_contract();
+                self.host.origin = caller;
+                self.execute_from_pc(
+                    &CallContext {
+                        address: contract_address,
+                        caller,
+                        code_address: contract_address,
+                        apparent_value: value,
+                        scheme: CallScheme::Call,
+                    },
+                    &vm_state,
+                    data,
+                    input,
+                    None,
+                    state,
+                    cleanup
+                )
+            };
+            let need_step = exec_res.new_state.post_execution.len() > 0 && exec_res.new_state.post_execution.last().unwrap().must_step;
+            if (exec_res.ret == InstructionResult::Return || exec_res.ret == InstructionResult::Stop) && need_step {
+                is_step = true;
+                data = Bytes::from([vec![0; 4], exec_res.output.to_vec()].concat());
+                // we dont need to clean up bug info and state info
+                cleanup = false;
+            } else {
+                r = Some(exec_res);
+                break;
+            }
+        }
+        let mut r = r.unwrap();
         match r.ret {
-            ControlLeak => unsafe {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => unsafe {
                 let global_ctx = GLOBAL_CALL_CONTEXT
                     .clone()
                     .expect("global call context should be set");
+                if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
+                    return ExecutionResult {
+                        output: r.output.to_vec(),
+                        reverted: true,
+                        new_state: StagedVMState::new_uninitialized(),
+                        additional_info: None,
+                    };
+                }
                 r.new_state.post_execution.push(PostExecutionCtx {
                     stack: r.stack,
                     pc: r.pc,
@@ -582,6 +657,22 @@ where
                     apparent_value: global_ctx.apparent_value,
 
                     memory: r.memory,
+
+                    // must step only when arbitrary external call because the caller
+                    // can only call the function once
+                    must_step: match r.ret {
+                        ControlLeak => false,
+                        InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => true,
+                        _ => unreachable!(),
+                    },
+
+                    constraints: match r.ret {
+                        ControlLeak => vec![],
+                        InstructionResult::ArbitraryExternalCallAddressBounded(caller, target) => {
+                            vec![Constraint::Caller(caller), Constraint::Contract(target), NoLiquidation]
+                        }
+                        _ => unreachable!(),
+                    },
                 });
             },
             _ => {}
@@ -598,10 +689,12 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: r.ret != InstructionResult::Return
-                    && r.ret != InstructionResult::Stop
-                    && r.ret != ControlLeak
-                    && r.ret != InstructionResult::SelfDestruct,
+                reverted: match r.ret {
+                    InstructionResult::Return | InstructionResult::Stop | InstructionResult::ControlLeak
+                    | InstructionResult::SelfDestruct
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => false,
+                    _ => true,
+                },
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&mut r.new_state)
                         .downcast_ref_unchecked::<VS>()
@@ -751,7 +844,7 @@ where
                                 output: res.output.to_vec(),
                                 reverted: res.ret != InstructionResult::Return
                                     && res.ret != InstructionResult::Stop
-                                    && res.ret != ControlLeak,
+                                    && res.ret != InstructionResult::ControlLeak,
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
@@ -774,6 +867,11 @@ where
                 unreachable!("liquidate should be handled by middleware");
             }
             EVMInputTy::ABI => self.execute_abi(input, state),
+            EVMInputTy::ArbitraryCallBoundedAddr => {
+                assert!(input.is_step() == false);
+                assert!(input.get_state().has_post_execution() == true);
+                self.execute_abi(input, state)
+            },
         }
     }
 

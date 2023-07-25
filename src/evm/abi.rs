@@ -18,6 +18,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
+use libafl::impl_serdeany;
 use crate::evm::types::{EVMAddress, EVMU256};
 use crate::input::ConciseSerde;
 
@@ -66,6 +67,40 @@ fn get_size(bytes: &Vec<u8>) -> usize {
         size += bytes[i] as usize;
     }
     size
+}
+
+/// ABI instance map from address
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ABIAddressToInstanceMap {
+    /// Mapping from address to ABI instance
+    pub map: HashMap<EVMAddress, Vec<BoxedABI>>,
+}
+
+impl_serdeany!(ABIAddressToInstanceMap);
+
+impl ABIAddressToInstanceMap {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    /// Add an ABI instance to the map
+    pub fn add(&mut self, address: EVMAddress, abi: BoxedABI) {
+        if !self.map.contains_key(&address) {
+            self.map.insert(address, Vec::new());
+        }
+        self.map.get_mut(&address).unwrap().push(abi);
+    }
+}
+
+pub fn register_abi_instance<S: HasMetadata>(
+    address: EVMAddress,
+    abi: BoxedABI,
+    state: &mut S
+) {
+    let mut abi_map = state.metadata_mut().get_mut::<ABIAddressToInstanceMap>().expect("ABIAddressToInstanceMap not found");
+    abi_map.add(address, abi);
 }
 
 /// ABI types
