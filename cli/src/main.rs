@@ -1,14 +1,19 @@
 use crate::TargetType::{Address, Glob};
 use clap::Parser;
+use ethers::types::Transaction;
+use hex::{decode, encode};
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
 use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
 use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::input::EVMInput;
+use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
 use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
 use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracles::bug::BugOracle;
+use ityfuzz::evm::oracles::echidna::EchidnaOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
+use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
+use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
+use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
 use ityfuzz::evm::producers::erc20::ERC20Producer;
 use ityfuzz::evm::producers::pair::PairProducer;
@@ -16,8 +21,11 @@ use ityfuzz::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use ityfuzz::evm::vm::EVMState;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 use ityfuzz::oracle::{Oracle, Producer};
+use ityfuzz::r#const;
 use ityfuzz::state::FuzzState;
+use serde::Deserialize;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
@@ -38,6 +46,53 @@ pub fn init_sentry() {
     }
 }
 
+pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::new();
+
+    if input.len() == 0 {
+        return map;
+    }
+
+    let pairs: Vec<&str> = input.split(';').collect();
+    for pair in pairs {
+        let key_value: Vec<&str> = pair.split(':').collect();
+        if key_value.len() == 2 {
+            let values: Vec<String> = key_value[1].split(',').map(|s| s.to_string()).collect();
+            map.insert(key_value[0].to_string(), values);
+        }
+    }
+
+    map
+}
+
+#[derive(Deserialize)]
+struct Data {
+    body: RPCCall,
+    response: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct RPCCall {
+    method: String,
+    params: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct Response {
+    data: ResponseData,
+}
+
+#[derive(Deserialize)]
+struct ResponseData {
+    id: u16,
+    result: TXResult,
+}
+
+#[derive(Deserialize)]
+struct TXResult {
+    input: String,
+}
+
 /// CLI for ItyFuzz
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -45,6 +100,15 @@ struct Args {
     /// Glob pattern / address to find contracts
     #[arg(short, long)]
     target: String,
+
+    #[arg(long, default_value = "false")]
+    fetch_tx_data: bool,
+
+    #[arg(long, default_value = "http://localhost:5001/data")]
+    proxy_address: String,
+
+    #[arg(long, default_value = "")]
+    constructor_args: String,
 
     /// Target type (glob, address) (Default: Automatically infer from target)
     #[arg(long)]
@@ -114,24 +178,53 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     pair_oracle: bool,
 
-    // Enable oracle for detecting whether bug() is called
-    #[arg(long, default_value = "true")]
-    bug_oracle: bool,
-
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
+
+    #[arg(long, default_value = "true")]
+    selfdestruct_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    echidna_oracle: bool,
+
+    ///Enable oracle for detecting whether bug() / typed_bug() is called
+    #[arg(long, default_value = "true")]
+    typed_bug_oracle: bool,
 
     /// Replay?
     #[arg(long)]
     replay_file: Option<String>,
 
-    // allow users to pass the path through CLI
-    #[arg(long, default_value = "corpus")]
-    corpus_path: String,
+    /// Path of work dir, saves corpus, logs, and other stuffs
+    #[arg(long, default_value = "work_dir")]
+    work_dir: String,
 
-    // random seed
+    /// Write contract relationship to files
+    #[arg(long, default_value = "false")]
+    write_relationship: bool,
+
+    /// Do not quit when a bug is found, continue find new bugs
+    #[arg(long, default_value = "false")]
+    run_forever: bool,
+
+    /// random seed
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
+
+    /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
+    #[arg(long, default_value = "false")]
+    sha3_bypass: bool,
+
+    /// Only needed when using combined.json (source map info).
+    /// This is the base path when running solc compile (--base-path passed to solc).
+    /// Also, please convert it to absolute path if you are not sure.
+    #[arg(long, default_value = "")]
+    base_path: String,
+
+    ///spec id
+    #[arg(long, default_value = "Latest")]
+    spec_id: String,
+
 }
 
 enum TargetType {
@@ -206,13 +299,39 @@ fn main() {
     //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(), Vec::from(harness_hash));
 
     let mut oracles: Vec<
-        Rc<RefCell<dyn Oracle<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>>>,
+        Rc<
+            RefCell<
+                dyn Oracle<
+                    EVMState,
+                    EVMAddress,
+                    _,
+                    _,
+                    EVMAddress,
+                    EVMU256,
+                    Vec<u8>,
+                    EVMInput,
+                    EVMFuzzState,
+                    ConciseEVMInput
+                >,
+            >,
+        >,
     > = vec![];
 
     let mut producers: Vec<
         Rc<
             RefCell<
-                dyn Producer<EVMState, EVMAddress, _, _, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>,
+                dyn Producer<
+                    EVMState,
+                    EVMAddress,
+                    _,
+                    _,
+                    EVMAddress,
+                    EVMU256,
+                    Vec<u8>,
+                    EVMInput,
+                    EVMFuzzState,
+                    ConciseEVMInput
+                >,
             >,
         >,
     > = vec![];
@@ -227,14 +346,13 @@ fn main() {
         oracles.push(flashloan_oracle.clone());
     }
 
-    if args.bug_oracle {
-        oracles.push(Rc::new(RefCell::new(BugOracle::new())));
+    if args.selfdestruct_oracle {
+        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
+    }
 
-        if args.panic_on_bug {
-            unsafe {
-                PANIC_ON_BUG = true;
-            }
-        }
+    if args.typed_bug_oracle {
+        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
+
     }
 
     if args.ierc20_oracle || args.pair_oracle {
@@ -248,10 +366,55 @@ fn main() {
     let is_onchain = onchain.is_some();
     let mut state: EVMFuzzState = FuzzState::new(args.seed);
 
+    let mut proxy_deploy_codes: Vec<String> = vec![];
+
+    if args.fetch_tx_data {
+        let response = reqwest::blocking::get(args.proxy_address)
+            .unwrap()
+            .text()
+            .unwrap();
+        let data: Vec<Data> = serde_json::from_str(&response).unwrap();
+
+        for d in data {
+            if d.body.method != "eth_sendRawTransaction" {
+                continue;
+            }
+
+            let tx = d.body.params.unwrap();
+
+            let params: Vec<String> = serde_json::from_value(tx).unwrap();
+
+            let data = params[0].clone();
+
+            let data = if data.starts_with("0x") {
+                &data[2..]
+            } else {
+                &data
+            };
+
+            let bytes_data = hex::decode(data).unwrap();
+
+            let transaction: Transaction = rlp::decode(&bytes_data).unwrap();
+
+            let code = hex::encode(transaction.input);
+
+            proxy_deploy_codes.push(code);
+        }
+    }
+
+    let constructor_args_map = parse_constructor_args_string(args.constructor_args);
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
-        contract_info: match target_type {
-            Glob => ContractLoader::from_glob(args.target.as_str(), &mut state).contracts,
+        contract_loader: match target_type {
+            Glob => {
+                ContractLoader::from_glob(
+                    args.target.as_str(),
+                    &mut state,
+                    &proxy_deploy_codes,
+                    &constructor_args_map,
+                )
+            }
             Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
@@ -281,7 +444,6 @@ fn main() {
                     &mut onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
                 )
-                .contracts
             }
         },
         onchain,
@@ -305,7 +467,15 @@ fn main() {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        corpus_path: args.corpus_path,
+        selfdestruct_oracle: args.selfdestruct_oracle,
+        work_dir: args.work_dir,
+        write_relationship: args.write_relationship,
+        run_forever: args.run_forever,
+        sha3_bypass: args.sha3_bypass,
+        base_path: args.base_path,
+        echidna_oracle: args.echidna_oracle,
+        panic_on_bug: args.panic_on_bug,
+        spec_id: args.spec_id,
     };
 
     match config.fuzzer_type {

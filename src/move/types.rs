@@ -18,7 +18,7 @@ pub struct MoveOutput {
     pub vars: Vec<TypedValue>
 }
 
-pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState>;
+pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState, MoveFunctionInput>;
 pub type MoveInfantStateState = InfantStateState<ModuleId, AccountAddress, MoveVMState>;
 
 pub type MoveFuzzState = FuzzState<

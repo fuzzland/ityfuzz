@@ -1,5 +1,6 @@
+use std::collections::HashMap;
 /// Common generic types for EVM fuzzing
-use crate::evm::input::EVMInput;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::mutator::FuzzMutator;
 use crate::evm::vm::EVMState;
 
@@ -13,29 +14,34 @@ use primitive_types::{H160, H256};
 use revm_primitives::{B160, Bytecode, U256};
 use libafl::prelude::Rand;
 use revm_primitives::ruint::aliases::U512;
+use crate::evm::srcmap::parser::SourceMapLocation;
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub type EVMAddress = B160;
 pub type EVMU256 = U256;
 pub type EVMU512 = U512;
-pub type EVMFuzzState = FuzzState<EVMInput, EVMState, EVMAddress, EVMAddress, Vec<u8>>;
+pub type EVMFuzzState = FuzzState<EVMInput, EVMState, EVMAddress, EVMAddress, Vec<u8>, ConciseEVMInput>;
 pub type EVMOracleCtx<'a> =
-    OracleCtx<'a, EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>;
-
+    OracleCtx<'a, EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>;
 pub type EVMFuzzMutator<'a> = FuzzMutator<
     'a,
     EVMState,
     EVMAddress,
     EVMAddress,
     SortedDroppingScheduler<
-        StagedVMState<EVMAddress, EVMAddress, EVMState>,
-        InfantStateState<EVMAddress, EVMAddress, EVMState>,
+        StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
+        InfantStateState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
     >,
+    ConciseEVMInput
 >;
 
-pub type EVMInfantStateState = InfantStateState<EVMAddress, EVMAddress, EVMState>;
+pub type EVMInfantStateState = InfantStateState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>;
 
-pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState>;
+pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>;
 
+pub type EVMExecutionResult = ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
+
+pub type ProjectSourceMapTy = HashMap<EVMAddress, Option<HashMap<usize, SourceMapLocation>>>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_H160(v: [u8; 20]) -> H160 {
@@ -83,7 +89,12 @@ pub fn as_u64(v: EVMU256) -> u64 {
     v.as_limbs()[0]
 }
 
-
+/// Convert big endian bytes to u64
+pub fn bytes_to_u64(v: &[u8]) -> u64 {
+    let mut data: [u8; 8] = [0; 8];
+    data.copy_from_slice(v);
+    u64::from_be_bytes(data)
+}
 
 mod tests {
     use crate::evm::types::{as_u64, EVMU256};

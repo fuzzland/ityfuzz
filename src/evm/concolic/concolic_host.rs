@@ -1,7 +1,7 @@
 use bytes::Bytes;
 
 use crate::evm::abi::BoxedABI;
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
 use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 
@@ -550,12 +550,12 @@ fn str_to_bytes(s: &str) -> Vec<u8> {
 
 impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug

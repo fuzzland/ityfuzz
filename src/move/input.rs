@@ -1,5 +1,5 @@
 use crate::evm::abi::BoxedABI;
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::r#move::types::MoveStagedVMState;
 use crate::r#move::vm_state::{MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
@@ -31,6 +31,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use crate::evm::types::EVMU256;
 use crate::mutation_utils::byte_mutator;
 use crate::r#move::movevm::MoveVM;
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub trait MoveFunctionInputT {
     fn module_id(&self) -> &ModuleId;
@@ -135,6 +136,20 @@ impl Debug for MoveFunctionInput {
     }
 }
 
+
+impl ConciseSerde for MoveFunctionInput {
+    fn serialize_concise(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize_concise(data: &[u8]) -> Self {
+        todo!()
+    }
+
+    fn serialize_string(&self) -> String {
+        todo!()
+    }
+}
 
 #[derive(Debug)]
 pub struct CloneableValue {
@@ -636,13 +651,13 @@ impl MoveFunctionInput {
     }
 }
 
-impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
+impl VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> for MoveFunctionInput {
     fn mutate<S>(&mut self, _state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<ModuleId, AccountAddress, MoveVMState>
+            + HasItyState<ModuleId, AccountAddress, MoveVMState, MoveFunctionInput>
             + HasCaller<AccountAddress> + HasMetadata,
     {
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
@@ -702,13 +717,6 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
         todo!()
     }
 
-    fn pretty_txn(&self) -> Option<String> {
-        Some(format!(
-            "{}::{}({:?})",
-            self.module, self.function, self.args
-        ))
-
-    }
     fn as_any(&self) -> &dyn any::Any {
         self
     }
@@ -733,6 +741,10 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress> for MoveFunctionInput {
     }
 
     fn get_direct_data(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, MoveFunctionInput>) -> MoveFunctionInput {
         todo!()
     }
 }

@@ -17,14 +17,16 @@ use primitive_types::U256;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::evm::types::EVMU256;
+use crate::generic_vm::vm_executor::ExecutionResult;
 
 /// A trait for VM inputs that are sent to any smart contract VM
-pub trait VMInputT<VS, Loc, Addr>:
+pub trait VMInputT<VS, Loc, Addr, CI>:
     Input + Debug + Clone + serde_traitobject::Serialize + serde_traitobject::Deserialize
 where
     VS: Default + VMStateT,
     Addr: Debug + Clone + Serialize + DeserializeOwned,
     Loc: Debug + Clone + Serialize + DeserializeOwned,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Mutate the input
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
@@ -32,7 +34,7 @@ where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<Loc, Addr, VS>
+            + HasItyState<Loc, Addr, VS, CI>
             + HasCaller<Addr>
             + HasMetadata;
     /// Get the caller address of the input (the address that sent the transaction)
@@ -50,13 +52,13 @@ where
     /// Get the VM state of the input
     fn get_state_mut(&mut self) -> &mut VS;
     /// Set the staged VM state of the input
-    fn set_staged_state(&mut self, state: StagedVMState<Loc, Addr, VS>, idx: usize);
+    fn set_staged_state(&mut self, state: StagedVMState<Loc, Addr, VS, CI>, idx: usize);
 
     /// Get the ID of the VM state in the infant state corpus
     fn get_state_idx(&self) -> usize;
 
     /// Get the staged VM state of the input
-    fn get_staged_state(&self) -> &StagedVMState<Loc, Addr, VS>;
+    fn get_staged_state(&self) -> &StagedVMState<Loc, Addr, VS, CI>;
 
     /// Set to have post execution (incomplete execution)
     fn set_as_post_exec(&mut self, out_size: usize);
@@ -66,9 +68,6 @@ where
 
     /// Set the execution to be a step to finish incomplete execution
     fn set_step(&mut self, gate: bool);
-
-    /// Get a pretty string of the transaction
-    fn pretty_txn(&self) -> Option<String>;
 
     /// Used for downcasting
     fn as_any(&self) -> &dyn any::Any;
@@ -94,4 +93,13 @@ where
 
     /// Used for EVM debug / replaying, get the encoded input
     fn get_direct_data(&self) -> Vec<u8>;
+
+    /// Compressed representation of the input
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<Loc, Addr, VS, Out, CI>) -> CI;
+}
+
+pub trait ConciseSerde {
+    fn serialize_concise(&self) -> Vec<u8>;
+    fn deserialize_concise(data: &[u8]) -> Self;
+    fn serialize_string(&self) -> String;
 }

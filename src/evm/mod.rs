@@ -17,3 +17,4 @@ pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
+pub mod feedbacks;

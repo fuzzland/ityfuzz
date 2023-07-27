@@ -1,4 +1,4 @@
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::evm::oracles::ERC20_BUG_IDX;
 use crate::evm::producers::erc20::ERC20Producer;
 
 pub struct IERC20OracleFlashloan {
@@ -58,7 +59,7 @@ impl IERC20OracleFlashloan {
 
 pub static mut ORACLE_OUTPUT: String = String::new();
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
@@ -66,24 +67,24 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
     }
 
     #[cfg(not(feature = "flashloan_v2"))]
-    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
+    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
         // has balance increased?
         let exec_res = &ctx.fuzz_state.get_execution_result().new_state.state;
         if exec_res.flashloan_data.earned > exec_res.flashloan_data.owed {
             unsafe {
-                ORACLE_OUTPUT = format!(
+                ORACLE_OUTPUT += format!(
                     "[Flashloan] Earned {} more than owed {}",
                     exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
-                );
+                ).as_str();
             }
-            true
+            vec![ERC20_BUG_IDX]
         } else {
-            false
+            vec![]
         }
     }
 
     #[cfg(feature = "flashloan_v2")]
-    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> bool {
+    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
         let prev_reserves = ctx
             .fuzz_state
             .get_execution_result()
@@ -197,19 +198,19 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
 
                 {
-                    ORACLE_OUTPUT = format!(
-                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}",
+                    ORACLE_OUTPUT += format!(
+                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}\n",
                         exec_res.new_state.state.flashloan_data.earned,
                         exec_res.new_state.state.flashloan_data.owed,
                         net,
                         net_eth,
                         exec_res.new_state.state.flashloan_data.extra_info
-                    );
+                    ).as_str();
                 }
             }
-            true
+            vec![ERC20_BUG_IDX]
         } else {
-            false
+            vec![]
         }
     }
 }

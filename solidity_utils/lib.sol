@@ -1,10 +1,23 @@
 pragma solidity ^0.8.0;
 
-function bug() {
-    bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
-    assembly {
-        let p := add(msize(), 0x20)
-        mstore(p, t2)
-        log1(p, 0x20, 0x133337)
+library FuzzLand {
+    event AssertionFailed(string message);
+
+    function bug() internal {
+        emit AssertionFailed("Bug");
     }
+
+    function typed_bug(string memory data) internal {
+        emit AssertionFailed(data);
+    }
+
+}
+
+
+function bug()  {
+    FuzzLand.bug();
+}
+
+function typed_bug(string memory data)  {
+    FuzzLand.typed_bug(data);
 }

@@ -1,7 +1,9 @@
 #![feature(downcast_unchecked)]
+#![feature(let_chains)]
 #![feature(unchecked_math)]
 extern crate core;
 
+pub mod cache;
 pub mod r#const;
 pub mod evm;
 pub mod executor;
@@ -16,7 +18,5 @@ pub mod oracle;
 pub mod scheduler;
 pub mod state;
 pub mod state_input;
-pub mod tracer;
 pub mod telemetry;
-pub mod mutation_utils;
-pub mod cache;
+pub mod tracer;

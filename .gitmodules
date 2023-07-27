@@ -4,6 +4,7 @@
 [submodule "heimdall"]
 	path = externals/heimdall-rs
 	url = https://github.com/fuzzland/heimdall-rs.git
+	branch = v0.4.8
 [submodule "revm"]
     path = externals/revm
     url = https://github.com/fuzzland/revm.git

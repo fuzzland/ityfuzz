@@ -1,5 +1,5 @@
 use crate::evm::host::FuzzHost;
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
@@ -25,7 +25,11 @@ pub enum MiddlewareType {
     OnChain,
     Concolic,
     Flashloan,
-    InstructionCoverage
+    Selfdestruct,
+    InstructionCoverage,
+    BranchCoverage,
+    Sha3Bypass,
+    Sha3TaintAnalysis
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -57,10 +61,10 @@ pub enum MiddlewareOp {
 
 pub fn add_corpus<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, input: &EVMInput)
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + Clone
@@ -79,7 +83,7 @@ where
 pub trait Middleware<VS, I, S>: Debug
 where
     S: State + HasCaller<EVMAddress> + Clone + Debug,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     unsafe fn on_step(

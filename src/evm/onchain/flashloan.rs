@@ -3,7 +3,7 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType};
 use crate::evm::mutator::AccessPattern;
@@ -20,7 +20,7 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::impl_serdeany;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State};
-use libafl::state::HasMetadata;
+use libafl::state::{HasMetadata, HasRand};
 use serde::{Deserialize, Serialize};
 
 use std::cell::RefCell;
@@ -41,6 +41,7 @@ use revm_primitives::Bytecode;
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, EVMU512};
 use crate::evm::types::convert_u256_to_h160;
 use crate::evm::types::float_scale_to_u512;
+use crate::evm::vm::IS_FAST_CALL_STATIC;
 
 const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
@@ -51,7 +52,7 @@ macro_rules! scale {
 pub struct Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     phantom: PhantomData<(VS, I, S)>,
@@ -76,7 +77,7 @@ where
 impl<VS, I, S> Debug for Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -98,10 +99,10 @@ impl PriceOracle for DummyPriceOracle {
 
 pub fn register_borrow_txn<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, token: EVMAddress)
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + Clone
@@ -144,8 +145,8 @@ where
 
 impl<VS, I, S> Flashloan<VS, I, S>
 where
-    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    S: State + HasRand + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + HasMetadata + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -277,7 +278,7 @@ where
 impl<VS, I, S> Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     pub fn analyze_call(&self, input: &I, flashloan_data: &mut FlashloanData) {
@@ -301,8 +302,8 @@ where
 
 impl<VS, I, S> Middleware<VS, I, S> for Flashloan<VS, I, S>
 where
-    S: State + HasCaller<EVMAddress> + HasCorpus<I> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
+    S: State +HasRand+ HasCaller<EVMAddress>+ HasMetadata + HasCorpus<I> + Debug + Clone + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> + 'static,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
     #[cfg(not(feature = "flashloan_v2"))]
@@ -451,18 +452,24 @@ where
     where
         S: HasCaller<EVMAddress>,
     {
-        let offset_of_arg_offset = match *interp.instruction_pointer {
+        // if simply static call, we dont care
+        if unsafe { IS_FAST_CALL_STATIC } {
+            return;
+        }
+
+
+        match *interp.instruction_pointer {
             // detect whether it mutates token balance
-            0xf1 => 3,
-            0xfa => 2,
+            0xf1 | 0xfa => {},
             0x55 => {
-                // detect whether it mutates pair reserve
-                let key = interp.stack.peek(0).unwrap();
-                if key == EVMU256::from(8) && self.pair_address.contains(&interp.contract.address) {
-                    host.evmstate
-                        .flashloan_data
-                        .oracle_recheck_reserve
-                        .insert(interp.contract.address);
+                if self.pair_address.contains(&interp.contract.address) {
+                    let key = interp.stack.peek(0).unwrap();
+                    if key == EVMU256::from(8) {
+                        host.evmstate
+                            .flashloan_data
+                            .oracle_recheck_reserve
+                            .insert(interp.contract.address);
+                    }
                 }
                 return;
             }
@@ -475,52 +482,6 @@ where
             0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
             _ => EVMU256::ZERO,
         };
-
-        // if a program counter can transfer any token, with value > 0 & dst = caller
-        // then we give maximum rewards to trigger the bug
-        {
-            let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
-            let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
-            let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-            if size >= EVMU256::from(4) {
-                let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-                macro_rules! handle_transfer {
-                    ($dst: ident, $amount: ident) => {
-                        // if $amount > EVMU256::ZERO && $dst == interp.contract.caller {
-                        //     let pc = interp.program_counter();
-                        //
-                        //     match self.unbound_tracker.get_mut(&pc) {
-                        //         None => {
-                        //             self.unbound_tracker
-                        //                 .insert(pc, HashSet::from([call_target]));
-                        //         }
-                        //         Some(set) => {
-                        //             if set.len() > UNBOUND_TRANSFER_AMT {
-                        //                 host.evmstate.flashloan_data.earned = EVMU512::max_value();
-                        //             }
-                        //             set.insert(call_target);
-                        //         }
-                        //     }
-                        // }
-                    };
-                }
-                match data[0..4] {
-                    // transfer
-                    [0xa9, 0x05, 0x9c, 0xbb] => {
-                        let dst = EVMAddress::from_slice(&data[16..36]);
-                        let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
-                        handle_transfer!(dst, amount);
-                    }
-                    // transferFrom
-                    [0x23, 0xb8, 0x72, 0xdd] => {
-                        let dst = EVMAddress::from_slice(&data[48..68]);
-                        let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
-                        handle_transfer!(dst, amount);
-                    }
-                    _ => {}
-                };
-            }
-        }
 
         // todo: fix for delegatecall
         let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());

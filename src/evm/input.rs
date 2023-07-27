@@ -1,9 +1,9 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMStagedVMState, EVMU256, EVMU512};
+use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 
@@ -20,6 +20,8 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::generic_vm::vm_executor::ExecutionResult;
+use crate::generic_vm::vm_state::VMStateT;
 
 
 /// EVM Input Types
@@ -29,12 +31,26 @@ pub enum EVMInputTy {
     ABI,
     /// A flashloan transaction
     Borrow,
+    /// An arbitrary external call with same address tx
+    ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
 }
 
+impl Default for EVMInputTy {
+    fn default() -> Self {
+        EVMInputTy::ABI
+    }
+}
+
 /// EVM Input Trait
 pub trait EVMInputT {
+    /// Set the contract and ABI
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>);
+
+    /// Set the caller
+    fn set_caller_evm(&mut self, caller: EVMAddress);
+
     /// Get the ABI encoded input
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -92,9 +108,11 @@ pub struct EVMInput {
     pub data: Option<BoxedABI>,
 
     /// Staged VM state
-    pub sstate: StagedVMState<EVMAddress, EVMAddress, EVMState>,
+    #[serde(skip_deserializing)]
+    pub sstate: StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
 
     /// Staged VM state index in the corpus
+    #[serde(skip_deserializing)]
     pub sstate_idx: usize,
 
     /// Transaction value in wei
@@ -107,6 +125,7 @@ pub struct EVMInput {
     pub env: Env,
 
     /// Access pattern
+    #[serde(skip_deserializing)]
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     /// Percentage of the token amount in all callers' account to liquidate
@@ -122,6 +141,145 @@ pub struct EVMInput {
     /// Execute the transaction multiple times
     pub repeat: usize,
 }
+
+/// EVM Input Minimum for Deserializing
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ConciseEVMInput {
+    /// Input type
+    #[cfg(feature = "flashloan_v2")]
+    pub input_type: EVMInputTy,
+
+    /// Caller address
+    pub caller: EVMAddress,
+
+    /// Contract address
+    pub contract: EVMAddress,
+
+    /// Input data in ABI format
+    pub data: Option<BoxedABI>,
+
+    /// Transaction value in wei
+    pub txn_value: Option<EVMU256>,
+
+    /// Whether to resume execution from the last control leak
+    pub step: bool,
+
+    /// Environment (block, timestamp, etc.)
+    pub env: Env,
+
+    /// Percentage of the token amount in all callers' account to liquidate
+    #[cfg(feature = "flashloan_v2")]
+    pub liquidation_percent: u8,
+
+    /// Additional random bytes for mutator
+    pub randomness: Vec<u8>,
+
+    /// Execute the transaction multiple times
+    pub repeat: usize,
+
+    /// How many post execution steps to take
+    pub layer: usize,
+
+    /// When to control leak, after `call_leak` number of calls
+    pub call_leak: u32,
+}
+
+
+impl ConciseEVMInput {
+    pub fn from_input<I, Out>(input: &I, execution_result: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> Self
+    where I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    Out: Default
+    {
+        Self {
+            #[cfg(feature = "flashloan_v2")]
+            input_type: input.get_input_type(),
+            caller: input.get_caller(),
+            contract: input.get_contract(),
+            data: input.get_data_abi(),
+            txn_value: input.get_txn_value(),
+            step: input.is_step(),
+            env: input.get_vm_env().clone(),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: input.get_liquidation_percent(),
+            randomness: input.get_randomness(),
+            repeat: input.get_repeat(),
+            layer: input.get_state().get_post_execution_len(),
+            call_leak: match execution_result.additional_info {
+                Some(ref info) => info[0] as u32,
+                None => u32::MAX
+            }
+        }
+    }
+
+    pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
+        (
+            EVMInput {
+                #[cfg(feature = "flashloan_v2")]
+                input_type: self.input_type.clone(),
+                caller: self.caller,
+                contract: self.contract,
+                data: self.data.clone(),
+                sstate,
+                sstate_idx: 0,
+                txn_value: self.txn_value,
+                step: self.step,
+                env: self.env.clone(),
+                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                #[cfg(feature = "flashloan_v2")]
+                liquidation_percent: self.liquidation_percent,
+                direct_data: Bytes::new(),
+                randomness: self.randomness.clone(),
+                repeat: self.repeat,
+            }, self.call_leak
+        )
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn pretty_txn(&self) -> Option<String> {
+        let liq = self.liquidation_percent;
+        match self.data {
+            Some(ref d) => Some(format!(
+                "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
+                self.caller, self.contract,
+                d.to_string(),
+                self.txn_value.unwrap_or(EVMU256::ZERO),
+                hex::encode(d.get_bytes()),
+                liq
+            )),
+            None => match self.input_type {
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
+                    "{:?} => {:?} with {:?} ETH, liq percent: {}",
+                    self.caller, self.contract,
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Borrow => Some(format!(
+                    "{:?} borrow token {:?} with {:?} ETH, liq percent: {}",
+                    self.caller, self.contract,
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Liquidate => None,
+            },
+        }
+    }
+
+    #[cfg(not(feature = "flashloan_v2"))]
+    fn pretty_txn(&self) -> Option<String> {
+        match self.data {
+            Some(ref d) => Some(format!(
+                "{:?} => {:?} {} with {} ETH ({})",
+                self.caller, self.contract,
+                d.to_string(),
+                self.txn_value.unwrap_or(EVMU256::ZERO),
+                hex::encode(d.get_bytes())
+            )),
+            None => Some(format!("{:?} => {:?} transfer {} ETH",
+                                 self.caller, self.contract,
+                                 self.txn_value.unwrap_or(EVMU256::ZERO),
+            )),
+        }
+    }
+}
+
 
 impl HasLen for EVMInput {
     /// Get the length of the ABI encoded input
@@ -148,6 +306,16 @@ impl std::fmt::Debug for EVMInput {
 }
 
 impl EVMInputT for EVMInput {
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>) {
+        self.contract = contract;
+        self.access_pattern = Rc::new(RefCell::new(AccessPattern::new()));
+        self.data = abi;
+    }
+
+    fn set_caller_evm(&mut self, caller: EVMAddress) {
+        self.caller = caller;
+    }
+
     fn to_bytes(&self) -> Vec<u8> {
         match self.data {
             Some(ref d) => d.get_bytes(),
@@ -418,13 +586,37 @@ impl EVMInput {
     }
 }
 
-impl VMInputT<EVMState, EVMAddress, EVMAddress> for EVMInput {
+impl ConciseSerde for ConciseEVMInput {
+    fn serialize_concise(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("Failed to deserialize concise input")
+    }
+
+    fn deserialize_concise(data: &[u8]) -> Self {
+        serde_json::from_slice(data)
+            .expect("Failed to deserialize concise input")
+    }
+
+    fn serialize_string(&self) -> String {
+        let mut s = String::new();
+        for _ in 0..self.layer {
+            s.push_str("==");
+        }
+        if self.layer > 0 {
+            s.push_str(" ");
+        }
+
+        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+        s
+    }
+}
+
+impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<EVMAddress, EVMAddress, EVMState>
+            + HasItyState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>
             + HasCaller<EVMAddress>
             + HasMetadata,
     {
@@ -495,44 +687,6 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress> for EVMInput {
         self.step = gate;
     }
 
-    #[cfg(feature = "flashloan_v2")]
-    fn pretty_txn(&self) -> Option<String> {
-        let liq = self.liquidation_percent;
-        match self.data {
-            Some(ref d) => Some(format!(
-                "{} with {:?} ETH ({}), liq percent: {}",
-                d.to_string(),
-                self.txn_value,
-                hex::encode(d.get_bytes()),
-                liq
-            )),
-            None => match self.input_type {
-                EVMInputTy::ABI => Some(format!(
-                    "ABI with {:?} ETH, liq percent: {}",
-                    self.txn_value, liq
-                )),
-                EVMInputTy::Borrow => Some(format!(
-                    "Borrow with {:?} ETH, liq percent: {}",
-                    self.txn_value, liq
-                )),
-                EVMInputTy::Liquidate => None,
-            },
-        }
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn pretty_txn(&self) -> Option<String> {
-        match self.data {
-            Some(ref d) => Some(format!(
-                "{} with {:?} ETH ({})",
-                d.to_string(),
-                self.txn_value,
-                hex::encode(d.get_bytes())
-            )),
-            None => Some(format!("ABI with {:?} ETH", self.txn_value)),
-        }
-    }
-
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -573,6 +727,10 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress> for EVMInput {
     #[cfg(feature = "evm")]
     fn get_txn_value_temp(&self) -> Option<EVMU256> {
         self.txn_value
+    }
+
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> ConciseEVMInput {
+        ConciseEVMInput::from_input(self, exec_res)
     }
 }
 
