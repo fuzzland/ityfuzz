@@ -123,6 +123,31 @@ pub struct MoveFunctionInput {
     pub _deps: HashMap<Type, usize>,
 }
 
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConciseMoveInput {
+    pub module: ModuleId,
+    pub function: Identifier,
+    pub args: Vec<CloneableValue>,
+    pub ty_args: Vec<Type>,
+    pub caller: AccountAddress,
+}
+
+
+impl ConciseSerde for ConciseMoveInput {
+    fn serialize_concise(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize_concise(data: &[u8]) -> Self {
+        todo!()
+    }
+
+    fn serialize_string(&self) -> String {
+        todo!()
+    }
+}
+
 impl Debug for MoveFunctionInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MoveFunctionInput")
@@ -475,7 +500,7 @@ impl MoveFunctionInput {
         S: State
         + HasRand
         + HasMaxSize
-        + HasItyState<ModuleId, AccountAddress, MoveVMState>
+        + HasItyState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>
         + HasCaller<AccountAddress> + HasMetadata,
     {
 
@@ -526,7 +551,7 @@ impl MoveFunctionInput {
             S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<ModuleId, AccountAddress, MoveVMState>
+            + HasItyState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>
             + HasCaller<AccountAddress> + HasMetadata,
     {
         macro_rules! mutate_u {
@@ -651,13 +676,13 @@ impl MoveFunctionInput {
     }
 }
 
-impl VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> for MoveFunctionInput {
+impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveFunctionInput {
     fn mutate<S>(&mut self, _state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<ModuleId, AccountAddress, MoveVMState, MoveFunctionInput>
+            + HasItyState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>
             + HasCaller<AccountAddress> + HasMetadata,
     {
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
@@ -744,7 +769,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> for Move
         todo!()
     }
 
-    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, MoveFunctionInput>) -> MoveFunctionInput {
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, ConciseMoveInput>) -> ConciseMoveInput {
         todo!()
     }
 }

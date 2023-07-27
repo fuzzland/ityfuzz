@@ -1,4 +1,4 @@
-use crate::r#move::input::MoveFunctionInput;
+use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput};
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
 
@@ -18,11 +18,11 @@ pub struct MoveOutput {
     pub vars: Vec<TypedValue>
 }
 
-pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState, MoveFunctionInput>;
-pub type MoveInfantStateState = InfantStateState<ModuleId, AccountAddress, MoveVMState>;
+pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>;
+pub type MoveInfantStateState = InfantStateState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>;
 
 pub type MoveFuzzState = FuzzState<
-    MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput
+    MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, ConciseMoveInput
 >;
 
 pub type TypedValue = (Type, Value);

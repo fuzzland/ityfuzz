@@ -1,7 +1,7 @@
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
-use crate::r#move::input::{MoveFunctionInput, MoveFunctionInputT, StructAbilities};
+use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
 use crate::r#move::types::MoveOutput;
 use crate::r#move::vm_state::MoveVMState;
 use crate::state_input::StagedVMState;
@@ -257,10 +257,10 @@ impl<I, S>
         MoveOutput,
         I,
         S,
-        MoveFunctionInput
+        ConciseMoveInput
     > for MoveVM<I, S>
 where
-    I: VMInputT<MoveVMState, ModuleId, AccountAddress, MoveFunctionInput> + MoveFunctionInputT,
+    I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT,
     S: HasMetadata,
 {
     fn deploy(
@@ -312,7 +312,7 @@ where
         &mut self,
         input: &I,
         _state: &mut S,
-    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, MoveFunctionInput>
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, ConciseMoveInput>
     where
         MoveVMState: VMStateT,
     {
@@ -486,7 +486,7 @@ mod tests {
     use move_vm_types::loaded_data::runtime_types::CachedStructIndex;
     use move_vm_types::loaded_data::runtime_types::Type::Struct;
     use super::*;
-    use crate::r#move::input::{CloneableValue};
+    use crate::r#move::input::{CloneableValue, ConciseMoveInput};
     use crate::state::FuzzState;
 
     use move_vm_types::values::{ContainerRef, Reference, ReferenceImpl, Value, ValueImpl};
@@ -495,13 +495,13 @@ mod tests {
         bytecode: &str,
         args: Vec<CloneableValue>,
         func: &str,
-    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, MoveFunctionInput> {
+    ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, ConciseMoveInput> {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize(&module_bytecode).unwrap();
         let module_idx = module.self_id();
         let mut mv = MoveVM::<
             MoveFunctionInput,
-            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, MoveFunctionInput>,
+            FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, ConciseMoveInput>,
         >::new();
         let _loc = mv
             .deploy(
