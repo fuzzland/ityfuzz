@@ -76,18 +76,15 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
                     // we need power schedule here for infant states
                     let old_idx = input.get_state_idx();
                     let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
-
-                    if !input.ensure_deps(&new_state.state) {
-                        return MutationResult::Skipped;
-                    }
-
-                    // slash all structs in input right now and replace with those inside new state
-                    todo!("");
-
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
+                    if !input.ensure_deps(&new_state.state) {
+                        return MutationResult::Skipped;
+                    }
                     input.set_staged_state(new_state, idx);
+                    // slash all structs in input right now and replace with those inside new state
+                    input.slash(state);
                     MutationResult::Mutated
                 }
                 _ => input.mutate(state),

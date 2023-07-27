@@ -56,6 +56,10 @@ pub trait MoveFunctionInputT {
     /// This ensures all the structs in the input are valid!
     fn slash<S>(&mut self, state: &mut S)
         where S: HasMetadata + HasRand;
+
+
+    /// Does the input have all its dependencies resolved?
+    fn deps_resolved(&self) -> bool;
 }
 
 pub struct FunctionDefaultable {
@@ -121,6 +125,7 @@ pub struct MoveFunctionInput {
     pub vm_state_idx: usize,
 
     pub _deps: HashMap<Type, usize>,
+    pub _resolved: bool,
 }
 
 
@@ -310,6 +315,10 @@ impl MoveFunctionInputT for MoveFunctionInput {
             }
 
         }
+    }
+
+    fn deps_resolved(&self) -> bool {
+        self.resolved
     }
 }
 
