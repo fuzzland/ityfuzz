@@ -16,7 +16,7 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::state::{HasCorpus, State};
 
 use revm_interpreter::{Interpreter, Host};
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, HashMap};
 
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -24,9 +24,11 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
+use itertools::Itertools;
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
+use crate::evm::concolic::concolic_exe_host::SymbolicMemory;
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -49,16 +51,11 @@ enum ConcolicOp {
     SHL,
     SHR,
     SAR,
-    INPUT,
     SLICEDINPUT(EVMU256),
     BALANCE,
     CALLVALUE,
-    // Represent a symbolic BV with width u32
-    BVVAR(u32),
     // symbolic byte
     SYMBYTE(String),
-    // helper OP for concrete btyes
-    CONSTBYTES(Bytes),
     // helper OP for input slicing (not in EVM)
     CONSTBYTE(u8),
     // (start, end) in bytes, end is not included
@@ -70,6 +67,8 @@ enum ConcolicOp {
     GT,
     SGT,
     LNOT,
+
+    SELECT(u32),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,10 +100,10 @@ macro_rules! box_bv {
 macro_rules! bv_from_u256 {
     ($val:expr, $ctx:expr) => {{
         let u64x4 = $val.as_limbs();
-        let bv = BV::from_u64(&$ctx, u64x4[0], 64);
-        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
+        let bv = BV::from_u64(&$ctx, u64x4[3], 64);
         let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[2], 64));
-        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[3], 64));
+        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
+        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[0], 64));
         bv
     }};
 }
@@ -131,14 +130,6 @@ impl Expr {
             lhs: None,
             rhs: None,
             op: ConcolicOp::CALLVALUE,
-        })
-    }
-
-    pub fn new_bv_with_width(width: u32) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::BVVAR(width),
         })
     }
 
@@ -244,11 +235,33 @@ impl Expr {
             op: ConcolicOp::LNOT,
         })
     }
+
+    pub fn is_concrete(&self) -> bool {
+        match (&self.lhs, &self.rhs) {
+            (Some(l), Some(r)) => {
+                l.is_concrete() && r.is_concrete()
+            },
+            (None, None) => {
+                match self.op {
+                    ConcolicOp::EVMU256(_) => true,
+                    ConcolicOp::SLICEDINPUT(_) => false,
+                    ConcolicOp::BALANCE => false,
+                    ConcolicOp::CALLVALUE => false,
+                    ConcolicOp::SYMBYTE(_) => false,
+                    ConcolicOp::CONSTBYTE(_) => true,
+                    ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
+                    _ => unreachable!()
+                }
+            }
+            (Some(l), None) => l.is_concrete(),
+            _ => unreachable!()
+        }
+    }
 }
 
 pub struct Solving<'a> {
     context: &'a Context,
-    input: &'a Vec<BV<'a>>,
+    input: Vec<BV<'a>>,
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
     constraints: &'a Vec<Box<Expr>>,
@@ -257,14 +270,27 @@ pub struct Solving<'a> {
 impl<'a> Solving<'a> {
     fn new(
         context: &'a Context,
-        input: &'a Vec<BV<'a>>,
+        input: &'a Vec<Box<Expr>>,
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
         constraints: &'a Vec<Box<Expr>>,
     ) -> Self {
         Solving {
             context,
-            input,
+            input: (*input).iter().enumerate().map(
+                |(idx, x)| {
+                    let bv = match &x.op {
+                        ConcolicOp::SYMBYTE(name) => {
+                            BV::new_const(context, name.clone(), 8)
+                        }
+                        ConcolicOp::CONSTBYTE(val) => {
+                            BV::from_u64(context, *val as u64, 8)
+                        }
+                        _ => unreachable!("input should be symbolic or concrete"),
+                    };
+                    bv
+                }
+            ).collect_vec(),
             balance,
             calldatavalue,
             constraints,
@@ -305,19 +331,50 @@ impl<'a> Solving<'a> {
         slice
     }
 
-    pub fn generate_z3_bv(&mut self, bv: &Expr, ctx: &'a Context) -> SymbolicTy<'a> {
+    pub fn generate_z3_bv(&self, bv: &Expr, ctx: &'a Context) -> SymbolicTy<'a> {
+        println!("[concolic] generate_z3_bv: {:?}", bv);
         macro_rules! binop {
             ($lhs:expr, $rhs:expr, $op:ident) => {
-                self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
-                    .expect_bv()
-                    .$op(
-                        &self
-                            .generate_z3_bv($rhs.as_ref().unwrap(), ctx)
-                            .expect_bv(),
-                    )
+                {
+                    let l = self.generate_z3_bv($lhs.as_ref().unwrap(), ctx)
+                        .expect_bv();
+                    let r = self.generate_z3_bv($rhs.as_ref().unwrap(), ctx)
+                        .expect_bv();
+                    println!("[concolic ]binop: {:?} {:?}", l, r);
+                    l.$op(&r)
+                }
+
             };
         }
         // println!("generate_z3_bv: {:?}", bv);
+
+        macro_rules! comparisons2 {
+            ($lhs:expr, $rhs:expr, $op:ident) => {
+                {
+                    let lhs = self.generate_z3_bv($lhs.as_ref().unwrap(), ctx);
+                    let rhs = self.generate_z3_bv($rhs.as_ref().unwrap(), ctx);
+                    match (lhs, rhs) {
+                        (SymbolicTy::BV(lhs), SymbolicTy::BV(rhs)) => SymbolicTy::Bool(lhs.$op(&rhs)),
+                        (SymbolicTy::Bool(lhs), SymbolicTy::Bool(rhs)) => SymbolicTy::Bool(lhs.$op(&rhs)),
+                        _ => panic!("op {:?} not supported as operands", bv.op),
+                    }
+                }
+            };
+        }
+
+        macro_rules! comparisons1 {
+            ($lhs:expr, $rhs:expr, $op:ident) => {
+                {
+                    let lhs = self.generate_z3_bv($lhs.as_ref().unwrap(), ctx);
+                    let rhs = self.generate_z3_bv($rhs.as_ref().unwrap(), ctx);
+                    match (lhs, rhs) {
+                        (SymbolicTy::BV(lhs), SymbolicTy::BV(rhs)) => SymbolicTy::Bool(lhs.$op(&rhs)),
+                        _ => panic!("op {:?} not supported as operands", bv.op),
+                    }
+                }
+            };
+        }
+
         match &bv.op {
             ConcolicOp::EVMU256(constant) => SymbolicTy::BV(bv_from_u256!(constant, ctx)),
             ConcolicOp::ADD => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvadd)),
@@ -343,7 +400,9 @@ impl<'a> Solving<'a> {
             ConcolicOp::SAR => SymbolicTy::BV(binop!(bv.lhs, bv.rhs, bvashr)),
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.as_limbs()[0] as u32;
-                SymbolicTy::BV(self.slice_input(idx, idx + 4))
+                let skv = self.slice_input(idx, idx + 32);
+                println!("[concolic] SLICEDINPUT: {} {:?}", idx, skv);
+                SymbolicTy::BV(skv)
             }
             ConcolicOp::BALANCE => SymbolicTy::BV(self.balance.clone()),
             ConcolicOp::CALLVALUE => SymbolicTy::BV(self.calldatavalue.clone()),
@@ -359,16 +418,16 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::CONSTBYTE(b) => SymbolicTy::BV(BV::from_u64(ctx, *b as u64, 8)),
             ConcolicOp::SYMBYTE(s) => SymbolicTy::BV(BV::new_const(ctx, s.clone(), 8)),
-            ConcolicOp::EQ => {
+            ConcolicOp::EQ => comparisons2!(bv.lhs, bv.rhs, _eq),
+            ConcolicOp::LT => comparisons1!(bv.lhs, bv.rhs, bvult),
+            ConcolicOp::SLT => comparisons1!(bv.lhs, bv.rhs, bvslt),
+            ConcolicOp::GT => comparisons1!(bv.lhs, bv.rhs, bvugt),
+            ConcolicOp::SGT => comparisons1!(bv.lhs, bv.rhs, bvsgt),
+            ConcolicOp::SELECT(idx) => {
                 let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
-                let rhs = self.generate_z3_bv(bv.rhs.as_ref().unwrap(), ctx);
-                match (lhs, rhs) {
-                    (SymbolicTy::BV(lhs), SymbolicTy::BV(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
-                    (SymbolicTy::Bool(lhs), SymbolicTy::Bool(rhs)) => SymbolicTy::Bool(lhs._eq(&rhs)),
-                    _ => panic!("op {:?} not supported as operands", bv.op),
-                }
-            }
-            _ => panic!("op {:?} not supported as operands", bv.op),
+                lhs.expect_bv().extract(*idx, *idx)
+            },
+
         }
     }
 
@@ -488,9 +547,60 @@ impl<'a> Solving<'a> {
 
 // Q: Why do we need to make persistent memory symbolic?
 
+#[derive(Clone, Debug)]
+pub struct SymbolicMemory {
+    pub memory: Vec<Option<Box<Expr>>>
+}
+
+impl SymbolicMemory {
+    pub fn insert_256(&mut self, idx: EVMU256, val: Box<Expr>) {
+        let idx = idx.as_limbs()[0] as usize;
+        for i in 0..32 {
+            self.memory[idx*32 + i] = Some(Box::new(
+                Expr {
+                    lhs: Some(val.clone()),
+                    rhs: None,
+                    op: ConcolicOp::SELECT(i as u32),
+                }
+            ));
+        }
+    }
+
+    pub fn insert_8(&mut self, idx: EVMU256, val: Box<Expr>) {
+        let idx = idx.as_limbs()[0] as usize;
+        self.memory[idx] = Some(Box::new(Expr {
+            lhs: Some(val),
+            rhs: None,
+            op: ConcolicOp::SELECT(0),
+        }));
+    }
+
+    pub fn get_256(&self, idx: EVMU256) -> Option<Box<Expr>> {
+        let idx = idx.as_limbs()[0] as usize;
+        let mut res = None;
+        for i in 0..32 {
+            match self.memory[idx*32 + i].clone() {
+                Some(bv) => {
+                    res = Some(Box::new(
+                        Expr {
+                            lhs: Some(bv),
+                            rhs: None,
+                            op: ConcolicOp::SELECT(i as u32),
+                        }
+                    ));
+                }
+                None => {}
+            }
+        }
+        res
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConcolicHost<I, VS> {
     pub symbolic_stack: Vec<Option<Box<Expr>>>,
+    pub symbolic_memory: SymbolicMemory,
+    pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
     pub bytes: u32,
@@ -502,6 +612,8 @@ impl<I, VS> ConcolicHost<I, VS> {
     pub fn new(bytes: u32, vm_input: BoxedABI, caller: EVMAddress) -> Self {
         Self {
             symbolic_stack: Vec::new(),
+            symbolic_memory: SymbolicMemory::new(),
+            symbolic_state: Default::default(),
             input_bytes: Self::construct_input_from_abi(vm_input),
             constraints: vec![],
             bytes,
@@ -511,7 +623,9 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 
     fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
-        vm_input.b.get_concolic()
+        let res = vm_input.get_concolic();
+        println!("[concolic] construct_input_from_abi: {:?}", res);
+        res
     }
 
     fn string_to_bytes(s: &str) -> Vec<u8> {
@@ -521,13 +635,13 @@ impl<I, VS> ConcolicHost<I, VS> {
 
     pub fn solve(&self) -> Option<String> {
         let context = Context::new(&Config::default());
-        let input = (0..self.bytes)
-            .map(|idx| BV::new_const(&context, format!("input_{}", idx), 8))
-            .collect::<Vec<_>>();
+        // let input = (0..self.bytes)
+        //     .map(|idx| BV::new_const(&context, format!("input_{}", idx), 8))
+        //     .collect::<Vec<_>>();
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let balance = BV::new_const(&context, "balance", 256);
 
-        let mut solving = Solving::new(&context, &input, &balance, &callvalue, &self.constraints);
+        let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &self.constraints);
         let input_str = solving.solve();
         match input_str {
             Some(s) => {
@@ -598,13 +712,44 @@ where
             }};
         }
 
+        macro_rules! concrete_eval {
+            ($in_cnt: expr, $out_cnt: expr) => {
+                {
+                    println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
+                    for _ in 0..$in_cnt {
+                        self.symbolic_stack.pop();
+                    }
+                    vec![None; $out_cnt]
+                }
+            };
+        }
+
+
         let mut solutions = Vec::<String>::new();
 
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
-        println!("concolic {:?}", interp.stack);
-        println!("{:?}", self.symbolic_stack);
+        println!("[concolic] on_step @ {:x}: {:x}", interp.program_counter(), *interp.instruction_pointer);
+        // println!("[concolic] stack: {:?}", interp.stack);
+        // println!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
+
+
+        for idx in 0..interp.stack.len() {
+            let real = interp.stack.data[idx].clone();
+            let sym = self.symbolic_stack[idx].clone();
+            if sym.is_some() {
+                match sym.unwrap().op {
+                    ConcolicOp::EVMU256(v) => {
+                        assert_eq!(real, v);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+
+        assert_eq!(interp.stack.len(), self.symbolic_stack.len());
         let bv: Vec<Option<Box<Expr>>> = match *interp.instruction_pointer {
             // ADD
             0x01 => {
@@ -649,16 +794,15 @@ where
                 vec![res]
             }
             // SMOD
-            // FIXME: should we use bvsrem or bvsmod?
             0x07 => {
-                let res = Some(stack_bv!(0).bvsrem(stack_bv!(1)));
+                let res = Some(stack_bv!(0).bvsmod(stack_bv!(1)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![res]
             }
             // ADDMOD
             0x08 => {
-                let res = Some(stack_bv!(0).add(stack_bv!(1)).bvsrem(stack_bv!(2)));
+                let res = Some(stack_bv!(0).add(stack_bv!(1)).bvsmod(stack_bv!(2)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
@@ -666,7 +810,7 @@ where
             }
             // MULMOD
             0x09 => {
-                let res = Some(stack_bv!(0).mul(stack_bv!(1)).bvsrem(stack_bv!(2)));
+                let res = Some(stack_bv!(0).mul(stack_bv!(1)).bvsmod(stack_bv!(2)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
@@ -674,21 +818,11 @@ where
             }
             // EXP - fallback to concrete due to poor Z3 performance support
             0x0a => {
-                let res = stack_concrete!(0).pow(stack_concrete!(1));
-                self.symbolic_stack.pop();
-                self.symbolic_stack.pop();
-                vec![Some(Box::new(Expr {
-                    lhs: None,
-                    rhs: None,
-                    op: ConcolicOp::EVMU256(res),
-                }))]
+                concrete_eval!(2, 1)
             }
             // SIGNEXTEND - FIXME: need to check
             0x0b => {
-                // let bv = stack_bv!(0);
-                // let bv = bv.bvshl(&self.ctx.bv_val(248, 256));
-                // let bv = bv.bvashr(&self.ctx.bv_val(248, 256));
-                vec![None]
+                concrete_eval!(2, 1)
             }
             // LT
             0x10 => {
@@ -763,34 +897,34 @@ where
                 vec![res]
             }
             // BYTE
+            // FIXME: support this
             0x1a => {
-                // wtf is this
-                vec![None]
+                concrete_eval!(2, 1)
             }
             // SHL
             0x1b => {
-                let res = Some(stack_bv!(0).bvshl(stack_bv!(1)));
+                let res = Some(stack_bv!(1).bvshl(stack_bv!(0)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![res]
             }
             // SHR
             0x1c => {
-                let res = Some(stack_bv!(0).bvlshr(stack_bv!(1)));
+                let res = Some(stack_bv!(1).bvlshr(stack_bv!(0)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![res]
             }
             // SAR
             0x1d => {
-                let res = Some(stack_bv!(0).bvsar(stack_bv!(1)));
+                let res = Some(stack_bv!(1).bvsar(stack_bv!(0)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![res]
             }
             // SHA3
             0x20 => {
-                vec![None]
+                concrete_eval!(2, 1)
             }
             // ADDRESS
             0x30 => {
@@ -799,7 +933,7 @@ where
             // BALANCE
             // TODO: need to get value from a hashmap
             0x31 => {
-                vec![Some(Expr::new_balance())]
+                concrete_eval!(1, 1)
             }
             // ORIGIN
             0x32 => {
@@ -815,6 +949,7 @@ where
             }
             // CALLDATALOAD
             0x35 => {
+                self.symbolic_stack.pop();
                 vec![Some(Expr::new_sliced_input(interp.stack.peek(0).unwrap()))]
             }
             // CALLDATASIZE
@@ -823,7 +958,7 @@ where
             }
             // CALLDATACOPY
             0x37 => {
-                vec![None]
+                concrete_eval!(3, 0)
             }
             // CODESIZE
             0x38 => {
@@ -831,7 +966,7 @@ where
             }
             // CODECOPY
             0x39 => {
-                vec![None]
+                concrete_eval!(3, 0)
             }
             // GASPRICE
             0x3a => {
@@ -839,11 +974,11 @@ where
             }
             // EXTCODESIZE
             0x3b => {
-                vec![None]
+                concrete_eval!(1, 1)
             }
             // EXTCODECOPY
             0x3c => {
-                vec![None]
+                concrete_eval!(4, 0)
             }
             // RETURNDATASIZE
             0x3d => {
@@ -851,11 +986,15 @@ where
             }
             // RETURNDATACOPY
             0x3e => {
-                vec![None]
+                concrete_eval!(3, 0)
+            }
+            // EXTCODEHASH
+            0x3f => {
+                concrete_eval!(1, 1)
             }
             // BLOCKHASH
             0x40 => {
-                vec![None]
+                concrete_eval!(1, 1)
             }
             // COINBASE
             0x41 => {
@@ -891,42 +1030,62 @@ where
             }
             // POP
             0x50 => {
-                vec![None]
+                self.symbolic_stack.pop();
+                vec![]
             }
             // MLOAD
             0x51 => {
-                vec![None]
+                println!("[concolic] MLOAD: {:?}", self.symbolic_stack);
+                let offset = fast_peek!(0).expect("[Concolic] MLOAD stack error at 0");
+                let idx = offset.as_limbs()[0] as usize;
+                self.symbolic_stack.pop();
+                vec![match self.symbolic_memory.get(idx) {
+                    Some(v) => v.clone(),
+                    None => None,
+                }]
             }
             // MSTORE
             0x52 => {
-                // todo: write to symbolic memory
+                let offset = fast_peek!(0).expect("[Concolic] MSTORE stack error at 1");
+                let idx = offset.as_limbs()[0] as usize;
+                let value = stack_bv!(1);
+                self.symbolic_memory[idx] = Some(value);
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![]
             }
             // MSTORE8
             0x53 => {
-                vec![None]
+                concrete_eval!(2, 0)
             }
             // SLOAD
             0x54 => {
-                vec![None]
+                self.symbolic_stack.pop();
+                let key = fast_peek!(0).expect("[Concolic] SLOAD stack error at 0");
+                vec![match self.symbolic_state.get(&key) {
+                    Some(v) => v.clone(),
+                    None => None,
+                }]
             }
             // SSTORE
             0x55 => {
-                vec![None]
+                let key = fast_peek!(1).expect("[Concolic] SSTORE stack error at 1");
+                let value = stack_bv!(0);
+                self.symbolic_state.insert(key, Some(value));
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![]
             }
             // JUMP
             0x56 => {
-                self.symbolic_stack.pop();
-                vec![]
+                concrete_eval!(1, 0)
             }
             // JUMPI
             0x57 => {
                 // println!("{:?}", interp.stack);
                 // println!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
-                let jump_dest_concolic = if is_zero(fast_peek!(1)
+                let jmp_dest = if is_zero(fast_peek!(1)
                     .expect("[Concolic] JUMPI stack error at 1"))
                 {
                     1
@@ -934,19 +1093,23 @@ where
                     as_u64(fast_peek!(0)
                         .expect("[Concolic] JUMPI stack error at 0"))
                 };
-                let idx = (interp.program_counter() * (jump_dest_concolic as usize)) % MAP_SIZE;
-                if JMP_MAP[idx] == 0 {
-                    let path_constraint = stack_bv!(1);
-                    self.constraints.push(path_constraint.lnot());
+                let idx = (interp.program_counter() * (jmp_dest as usize)) % MAP_SIZE;
+                let path_constraint = stack_bv!(1);
+                if JMP_MAP[idx] == 0 && !path_constraint.is_concrete() {
+                    self.constraints.push(path_constraint.clone().lnot());
+                    println!("[concolic] to solve {:?}", self.constraints);
+
                     match self.solve() {
                         Some(s) => solutions.push(s),
                         None => {}
                     };
-                    // println!("Solutions: {:?}", solutions);
+                    println!("[concolic] Solutions: {:?}", solutions);
                     self.constraints.pop();
                 }
                 // jumping only happens if the second element is false
-                self.constraints.push(stack_bv!(1));
+                if !path_constraint.is_concrete() {
+                    self.constraints.push(path_constraint);
+                }
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![]
@@ -983,18 +1146,68 @@ where
             // SWAP
             0x90..=0x9f => {
                 let _n = (*interp.instruction_pointer) - 0x90 + 1;
-                vec![
-                    //todo!
-                ]
+                let swapper = stack_bv!(usize::from(_n));
+                let swappee = stack_bv!(0);
+                let symbolic_stack_len = self.symbolic_stack.len();
+                self.symbolic_stack[symbolic_stack_len - usize::from(_n) - 1] = Some(swapper);
+                self.symbolic_stack[symbolic_stack_len - usize::from(_n) - 1] = Some(swappee);
+                vec![]
             }
             // LOG
             0xa0..=0xa4 => {
+                let _n = (*interp.instruction_pointer) - 0xa0;
+                concrete_eval!(_n + 2, 0)
+            }
+            // CREATE
+            0xf0 => {
+                concrete_eval!(3, 1)
+            }
+            // CALL
+            0xf1 => {
+                concrete_eval!(7, 1)
+            }
+            // CALLCODE
+            0xf2 => {
+                concrete_eval!(7, 1)
+            }
+            // RETURN
+            0xf3 => {
+                concrete_eval!(2, 0)
+            }
+            // DELEGATECALL
+            0xf4 => {
+                concrete_eval!(6, 1)
+            }
+            // CREATE2
+            0xf5 => {
+                concrete_eval!(4, 1)
+            }
+            // STATICCALL
+            0xfa => {
+                concrete_eval!(6, 1)
+            }
+            // REVERT
+            0xfd => {
+                concrete_eval!(2, 0)
+            }
+            // INVALID
+            0xfe => {
+                vec![]
+            }
+            // SELFDESTRUCT
+            0xff => {
+                concrete_eval!(1, 0)
+            }
+            // STOP
+            0x00 => {
                 vec![]
             }
             _ => {
+                panic!("Unsupported opcode: {:?}", *interp.instruction_pointer);
                 vec![]
             }
         };
+        // println!("[concolic] adding bv to stack {:?}", bv);
         for v in bv {
             self.symbolic_stack.push(v);
         }

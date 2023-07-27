@@ -20,8 +20,7 @@ use std::{fmt::Debug, marker::PhantomData};
 use revm_primitives::{LatestSpec, SpecId};
 use crate::evm::types::{EVMAddress, EVMU256};
 
-#[derive(Clone, Debug)]
-pub struct SymbolicMemory {}
+
 //
 // #[derive(Clone, Debug)]
 // pub struct ConcolicExeHost<Loc, Addr, VS>
