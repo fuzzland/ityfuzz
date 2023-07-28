@@ -536,6 +536,7 @@ mod tests {
             },
             vm_state_idx: 0,
             _deps: Default::default(),
+            _resolved: true,
         };
         let mut res= ExecutionResult::empty_result();
         res = mv.execute(&input.clone(), &mut FuzzState::new(0));

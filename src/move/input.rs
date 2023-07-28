@@ -318,7 +318,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
     }
 
     fn deps_resolved(&self) -> bool {
-        self.resolved
+        self._resolved
     }
 }
 

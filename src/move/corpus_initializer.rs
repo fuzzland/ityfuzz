@@ -41,6 +41,12 @@ pub struct MoveCorpusInitializer {
 
 impl MoveCorpusInitializer
 {
+
+    pub fn setup(&mut self, targets: Vec<String>) {
+        self.basic_setup();
+        self.initialize_glob(targets);
+    }
+
     pub fn basic_setup(&mut self) {
         // setup callers
         self.state.add_caller(&AccountAddress::random());
@@ -125,12 +131,7 @@ impl MoveCorpusInitializer
                 }
             }
         }
-
-
     }
-
-
-
 
     // if struct is found, return None because we cannot instantiate a struct
     fn gen_default_value(state: &mut MoveFuzzState, ty: Box<Type>) -> MoveInputStatus {
