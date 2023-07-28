@@ -467,7 +467,7 @@ where
         OT: ObserversTuple<I0, S0>,
     {
         let mut cmp_interesting = false;
-        let cov_interesting = false;
+        let mut cov_interesting = false;
 
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
@@ -475,12 +475,6 @@ where
                 self.min_map[i] = self.current_map[i];
                 cmp_interesting = true;
             }
-            // unsafe {
-            //     if self.known_jmp_map[i] < JMP_MAP[i] {
-            //         self.known_jmp_map[i] = JMP_MAP[i];
-            //         cov_interesting = true;
-            //     }
-            // }
         }
 
         // if the current distance is smaller than the min_map, vote for the state
@@ -496,8 +490,6 @@ where
         }
 
         unsafe {
-            let cur_read_map = self.vm.deref().borrow_mut().get_read();
-            let cur_write_map = self.vm.deref().borrow_mut().get_write();
             // hack to account for saving reentrancy without dataflow
             let pc_interesting = state
                 .get_execution_result()
@@ -507,27 +499,7 @@ where
                 != 0;
 
             if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
-                // the state is already added to corpus previously, just dont add it again to corpus
-                let hash = state.get_execution_result().new_state.state.get_hash();
-                if self.known_states.contains(&hash) {
-                    return Ok(false);
-                }
-
-                // ensure dataflow / coverage-wise is interesting for new encountered VM state
-                let mut df_interesting = false;
-                for i in 0..MAP_SIZE {
-                    if cur_read_map[i] && cur_write_map[i] != 0 {
-                        df_interesting = true;
-                        break;
-                    }
-                }
-                for i in 0..MAP_SIZE {
-                    cur_write_map[i] = 0;
-                }
-                if df_interesting || pc_interesting {
-                    self.known_states.insert(hash);
-                    return Ok(true);
-                }
+                return Ok(true);
             }
         }
         Ok(false)

@@ -22,7 +22,7 @@ use libafl::{
 };
 use glob::glob;
 use itertools::Itertools;
-use crate::feedback::{CmpFeedback, OracleFeedback};
+use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::oracle::Oracle;
 use crate::r#move::config::MoveFuzzConfig;
@@ -63,6 +63,7 @@ pub fn move_fuzzer(
     let mut executor = FuzzExecutor::new(vm_ref.clone(), tuple_list!(jmp_observer));
 
     let infant_feedback = CmpFeedback::new(vm_ref.borrow().get_cmp(), &infant_scheduler, vm_ref.clone());
+    let infant_result_feedback = DataflowFeedback::new(vm_ref.borrow().get_read(), vm_ref.borrow().get_write());
 
     let mut oracles: Vec<Rc<RefCell<dyn Oracle<_, _, _, _, _, _, _, _, _, _>>>> = vec![
         Rc::new(RefCell::new(TypedBugOracle::new()))
@@ -78,6 +79,7 @@ pub fn move_fuzzer(
         &infant_scheduler,
         feedback,
         infant_feedback,
+        infant_result_feedback,
         objective,
         config.work_dir.clone(),
     );

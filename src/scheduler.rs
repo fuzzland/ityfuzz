@@ -140,6 +140,7 @@ pub struct VoteData {
 pub trait HasReportCorpus<S>
     where S: HasMetadata {
     fn report_corpus(&self, state: &mut S, state_idx: usize);
+    fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize);
 }
 
 impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
@@ -151,6 +152,10 @@ impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
         self.vote(state, state_idx, 3);
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         data.deps.mark_never_delete(state_idx);
+    }
+
+    fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize) {
+        self.vote(state, state_idx, amt);
     }
 }
 

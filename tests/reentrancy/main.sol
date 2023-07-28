@@ -26,7 +26,7 @@ contract main {
     }
 
     function b() public {
-        if (is_success == 10) {
+        if (is_success == 5) {
             bug();
         }
     }
