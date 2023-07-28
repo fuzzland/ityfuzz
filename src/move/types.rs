@@ -13,6 +13,7 @@ use crate::state::{FuzzState, InfantStateState};
 
 pub type MoveAddress = AccountAddress;
 pub type MoveSlotTy = u128;
+pub type MoveLoc = ModuleId;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MoveOutput {
