@@ -9,4 +9,5 @@ pub mod mutator;
 pub mod corpus_initializer;
 pub mod scheduler;
 pub mod config;
+pub mod oracles;
 

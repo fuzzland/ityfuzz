@@ -24,10 +24,12 @@ use glob::glob;
 use itertools::Itertools;
 use crate::feedback::{CmpFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
+use crate::oracle::Oracle;
 use crate::r#move::config::MoveFuzzConfig;
 use crate::r#move::input::MoveFunctionInput;
 use crate::r#move::movevm::MoveVM;
 use crate::r#move::mutator::MoveFuzzMutator;
+use crate::r#move::oracles::typed_bug::TypedBugOracle;
 use crate::r#move::types::MoveFuzzState;
 use crate::scheduler::SortedDroppingScheduler;
 
@@ -62,7 +64,9 @@ pub fn move_fuzzer(
 
     let infant_feedback = CmpFeedback::new(vm_ref.borrow().get_cmp(), &infant_scheduler, vm_ref.clone());
 
-    let mut oracles = vec![];
+    let mut oracles: Vec<Rc<RefCell<dyn Oracle<_, _, _, _, _, _, _, _, _, _>>>> = vec![
+        Rc::new(RefCell::new(TypedBugOracle::new()))
+    ];
     let mut producers = vec![];
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, vm_ref.clone());
