@@ -26,6 +26,7 @@ use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::oracle::Oracle;
 use crate::r#move::config::MoveFuzzConfig;
+use crate::r#move::corpus_initializer::MoveCorpusInitializer;
 use crate::r#move::input::MoveFunctionInput;
 use crate::r#move::movevm::MoveVM;
 use crate::r#move::mutator::MoveFuzzMutator;
@@ -38,13 +39,23 @@ pub fn move_fuzzer(
     config: &MoveFuzzConfig,
     state: &mut MoveFuzzState
 ) {
-    let vm: MoveVM<MoveFunctionInput, MoveFuzzState> = MoveVM::new();
-    let vm_ref = Rc::new(RefCell::new(vm));
+    let mut vm: MoveVM<MoveFunctionInput, MoveFuzzState> = MoveVM::new();
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
     let infant_scheduler = SortedDroppingScheduler::new();
     let mut scheduler = QueueScheduler::new();
+
+    {
+        MoveCorpusInitializer::new(
+            state,
+            &mut vm,
+            &scheduler,
+            &infant_scheduler,
+        ).setup(vec![config.target.clone()]);
+    }
+
+    let vm_ref = Rc::new(RefCell::new(vm));
 
     let jmp_observer = StdMapObserver::new("jmp", vm_ref.borrow().get_jmp());
     let mut feedback:

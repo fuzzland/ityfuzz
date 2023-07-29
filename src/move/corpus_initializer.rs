@@ -31,16 +31,33 @@ pub enum MoveInputStatus {
     DependentOnStructs(Value, Vec<Type>),
 }
 
-pub struct MoveCorpusInitializer {
-    pub state: &'static mut MoveFuzzState,
-    pub executor: &'static mut movevm::MoveVM<MoveFunctionInput, MoveFuzzState>,
-    pub scheduler: &'static dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
-    pub infant_scheduler: &'static dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
+pub struct MoveCorpusInitializer<'a> {
+    pub state: &'a mut MoveFuzzState,
+    pub executor: &'a mut movevm::MoveVM<MoveFunctionInput, MoveFuzzState>,
+    pub scheduler: &'a dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
+    pub infant_scheduler: &'a dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
     pub default_state: MoveStagedVMState,
 }
 
-impl MoveCorpusInitializer
+impl<'a> MoveCorpusInitializer<'a>
 {
+
+    pub fn new(
+        state: &'a mut MoveFuzzState,
+        executor: &'a mut movevm::MoveVM<MoveFunctionInput, MoveFuzzState>,
+        scheduler: &'a dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
+        infant_scheduler: &'a dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
+    ) -> Self {
+        Self {
+            state,
+            executor,
+            scheduler,
+            infant_scheduler,
+            default_state: MoveStagedVMState::new_with_state(
+                MoveVMState::new()
+            ),
+        }
+    }
 
     pub fn setup(&mut self, targets: Vec<String>) {
         self.basic_setup();
@@ -84,6 +101,7 @@ impl MoveCorpusInitializer
                 let module = std::fs::read(path.unwrap()).unwrap();
                 // deserialize the vector of bytes into a CompiledModule
                 let module = CompiledModule::deserialize(&module).unwrap();
+                println!("deploying module: {:?}", module.self_id());
                 // add the module to the corpus
                 modules.push(module);
             }
