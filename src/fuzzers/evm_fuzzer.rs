@@ -321,17 +321,6 @@ pub fn evm_fuzzer(
                         .to_input(vm_state.clone());
                     unsafe {CALL_UNTIL = call_until;}
 
-
-                    let concolic_middleware = Rc::new(RefCell::new(ConcolicHost::new(
-                        inp.to_bytes().len() as u32,
-                        inp.get_data_abi().unwrap(),
-                        inp.get_caller()
-                    )));
-
-                    evm_executor_ref.borrow_mut().host.add_middlewares(
-                        concolic_middleware.clone()
-                    );
-
                     fuzzer
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                         .unwrap();
