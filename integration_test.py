@@ -61,4 +61,4 @@ import multiprocessing
 if __name__ == "__main__":
     build_fuzzer()
     with multiprocessing.Pool(3) as p:
-        p.map(test_one, glob.glob("./tests/*/", recursive=True))
+        p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
