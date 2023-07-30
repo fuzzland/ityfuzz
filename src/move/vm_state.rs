@@ -346,19 +346,19 @@ impl VMStateT for MoveVMState {
     }
 
     fn has_post_execution(&self) -> bool {
-        todo!()
+        false
     }
 
     fn get_post_execution_needed_len(&self) -> usize {
-        todo!()
+        0
     }
 
     fn get_post_execution_pc(&self) -> usize {
-        todo!()
+        0
     }
 
     fn get_post_execution_len(&self) -> usize {
-        todo!()
+        0
     }
 
     #[cfg(feature = "full_trace")]
@@ -367,7 +367,7 @@ impl VMStateT for MoveVMState {
     }
 
     fn as_any(&self) -> &dyn Any {
-        todo!()
+        self
     }
 }
 

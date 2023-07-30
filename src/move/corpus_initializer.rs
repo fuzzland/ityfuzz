@@ -246,30 +246,34 @@ impl<'a> MoveCorpusInitializer<'a>
     }
 
     fn build_input(&mut self, module_id: &ModuleId, function: Arc<Function>) -> Option<MoveFunctionInput> {
-        todo!("build input");
-        // let mut values = vec![];
-        //
-        // for parameter_type in &function.parameter_types {
-        //     let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
-        //     if default_val.is_none() {
-        //         return None;
-        //     }
-        //     values.push(CloneableValue::from(default_val.unwrap()));
-        // }
-        // let input = MoveFunctionInput {
-        //     module: module_id.clone(),
-        //     function: function.name.clone(),
-        //     function_info: Arc::new(FunctionDefaultable {
-        //         function: Some(function),
-        //     }),
-        //     args: values,
-        //     ty_args: vec![],
-        //     caller: self.state.get_rand_caller(),
-        //     vm_state: StagedVMState::new_uninitialized(),
-        //     vm_state_idx: 0,
-        //     _deps: vec![],
-        //     _deps_amount: vec![],
-        // };
-        // return Some(input);
+        let mut values = vec![];
+
+        for parameter_type in &function.parameter_types {
+            let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
+
+            match default_val {
+                MoveInputStatus::Complete(v) => {
+                    values.push(CloneableValue::from(v));
+                }
+                MoveInputStatus::DependentOnStructs(_, _) => {
+                    todo!("structs")
+                }
+            }
+        }
+        let input = MoveFunctionInput {
+            module: module_id.clone(),
+            function: function.name.clone(),
+            function_info: Arc::new(FunctionDefaultable {
+                function: Some(function),
+            }),
+            args: values,
+            ty_args: vec![],
+            caller: self.state.get_rand_caller(),
+            vm_state: StagedVMState::new_uninitialized(),
+            vm_state_idx: 0,
+            _deps: Default::default(),
+            _resolved: true,
+        };
+        return Some(input);
     }
 }

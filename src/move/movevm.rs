@@ -323,7 +323,7 @@ where
             .get(input.function_name())
             .unwrap();
 
-        println!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
+        // println!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
 
 
         // setup interpreter
@@ -358,7 +358,7 @@ where
             let resolver = current_frame.resolver(&self.loader);
             let ret =
                 current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter, &mut MoveVMTracer{});
-            println!("{:?}", ret);
+            // println!("{:?}", ret);
 
             if ret.is_err() {
                 reverted = true;
@@ -428,7 +428,7 @@ where
 
         let mut out: MoveOutput = MoveOutput { vars: vec![] };
 
-        println!("{:?}", interp.operand_stack.value);
+        // println!("{:?}", interp.operand_stack.value);
 
         for (v, t) in interp.operand_stack.value.iter().zip(
             initial_function
@@ -448,7 +448,7 @@ where
             );
 
             out.vars.push((t.clone(), v.clone()));
-            println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
+            // println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
         ExecutionResult {
             new_state: StagedVMState::new_with_state(state),

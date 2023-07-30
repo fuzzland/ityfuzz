@@ -363,7 +363,7 @@ impl CloneableValue {
             ValueImpl::Container(v) => {
                 match v {
                     Container::VecU8(v) => {
-                        println!("{:?}", v.borrow().deref());
+                        // println!("{:?}", v.borrow().deref());
                         return leb_tns!(vec, v)
                     }
                     Container::VecU64(v) => {
@@ -569,7 +569,7 @@ impl MoveFunctionInput {
                     let orig = *$v;
                     while *$v == orig {
                         *$v = _state.rand_mut().below(<$ty>::MAX as u64) as $ty;
-                        println!("mutate_u: {} {}", $v, orig);
+                        // println!("mutate_u: {} {}", $v, orig);
                     }
                     MutationResult::Mutated
                 }
@@ -779,7 +779,13 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
     }
 
     fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, ConciseMoveInput>) -> ConciseMoveInput {
-        todo!()
+        ConciseMoveInput {
+            module: self.module.clone(),
+            function: self.function.clone(),
+            args: self.args.clone(),
+            ty_args: self.ty_args.clone(),
+            caller: self.caller.clone(),
+        }
     }
 }
 
@@ -872,7 +878,7 @@ mod tests {
         ($init_v: expr, $tys: expr) => {
             let mut v = dummy_input!($init_v, $tys);
             v.mutate::<MoveFuzzState>(&mut Default::default());
-            println!("{:?}", v.args[0]);
+            // println!("{:?}", v.args[0]);
             let o = (v.args[0].value.equals(&Value($init_v)).expect("failed to compare"));
             assert!(!o, "value was not mutated");
         };
@@ -949,7 +955,7 @@ mod tests {
                     let res = v.mutate::<MoveFuzzState>(&mut state);
                     (v, res)
                 };
-                println!("{:?}", v.args[0]);
+                // println!("{:?}", v.args[0]);
                 (res, Value($init_v), v.args[0].value.clone(), v.vm_state.clone())
             }
         };
