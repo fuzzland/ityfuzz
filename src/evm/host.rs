@@ -35,7 +35,7 @@ use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
 use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
-use crate::evm::vm::{EVMState, IN_DEPLOY, IS_FAST_CALL_STATIC};
+use crate::evm::vm::{EVMState, IN_DEPLOY, IS_FAST_CALL_STATIC, PostExecutionCtx, SinglePostExecution};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -71,8 +71,6 @@ pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 pub static mut COVERAGE_NOT_CHANGED: u32 = 0;
 pub static mut RET_SIZE: usize = 0;
 pub static mut RET_OFFSET: usize = 0;
-pub static mut GLOBAL_CALL_CONTEXT: Option<CallContext> = None;
-pub static mut GLOBAL_CALL_DATA: Option<CallContext> = None;
 
 pub static mut PANIC_ON_BUG: bool = false;
 // for debugging purpose, return ControlLeak when the calls amount exceeds this value
@@ -123,8 +121,6 @@ where
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
 
-    pub origin: EVMAddress,
-
     pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
 
     // controlled by onchain module, if sload cant find the slot, use this value
@@ -154,6 +150,9 @@ where
     pub spec_id: SpecId,
     /// Precompiles
     pub precompiles: Precompiles,
+
+    /// For future continue executing when control leak happens
+    pub leak_ctx: Vec<SinglePostExecution>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -178,7 +177,6 @@ where
                 "middlewares_latent_call_actions",
                 &self.middlewares_latent_call_actions,
             )
-            .field("origin", &self.origin)
             .finish()
     }
 }
@@ -207,7 +205,6 @@ where
             coverage_changed: false,
             flashloan_middleware: None,
             middlewares_latent_call_actions: vec![],
-            origin: self.origin.clone(),
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
             access_pattern: self.access_pattern.clone(),
@@ -224,6 +221,7 @@ where
             work_dir: self.work_dir.clone(),
             spec_id: self.spec_id.clone(),
             precompiles: Precompiles::default(),
+            leak_ctx: self.leak_ctx.clone(),
         }
     }
 }
@@ -261,7 +259,6 @@ where
             coverage_changed: false,
             flashloan_middleware: None,
             middlewares_latent_call_actions: vec![],
-            origin: Default::default(),
             scheduler,
             next_slot: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -278,6 +275,7 @@ where
             work_dir: workdir.clone(),
             spec_id: SpecId::LATEST,
             precompiles: Default::default(),
+            leak_ctx: vec![]
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -484,7 +482,7 @@ where
             .unwrap();
     }
 
-    fn call_allow_control_leak(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+    fn call_allow_control_leak(&mut self, input: &mut CallInputs, interp: &mut Interpreter, (out_offset, out_len): (usize, usize), state: &mut S) -> (InstructionResult, Gas, Bytes) {
         self.call_count += 1;
         if self.call_count >= unsafe {CALL_UNTIL} {
             return (ControlLeak, Gas::new(0), Bytes::new());
@@ -534,64 +532,66 @@ where
             return middleware_result.unwrap();
         }
 
-        // if calling sender, then definitely control leak
-        if self.origin == input.contract {
-            record_func_hash!();
-            // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-            return (ControlLeak, Gas::new(0), Bytes::new());
-        }
+
 
         let mut input_seq = input.input.to_vec();
 
-        // check whether the whole CALLDATAVALUE can be arbitrary
-        if !self.pc_to_call_hash.contains_key(&(input.context.caller, self._pc)) {
-            self.pc_to_call_hash.insert((input.context.caller, self._pc), HashSet::new());
-        }
-        self.pc_to_call_hash
-            .get_mut(&(input.context.caller, self._pc))
-            .unwrap()
-            .insert(hash.to_vec());
-        if self.pc_to_call_hash.get(&(input.context.caller, self._pc)).unwrap().len() > UNBOUND_CALL_THRESHOLD
-            && input_seq.len() >= 4
-        {
-            return (
-                InstructionResult::ArbitraryExternalCallAddressBounded(input.context.caller, input.context.address),
-                Gas::new(0),
-                Bytes::new()
-            );
-        }
-
-        // control leak check
-        assert_ne!(self._pc, 0);
-        if !self.pc_to_addresses.contains_key(&(input.context.caller, self._pc)) {
-            self.pc_to_addresses.insert((input.context.caller, self._pc), HashSet::new());
-        }
-        let addresses_at_pc = self.pc_to_addresses
-            .get_mut(&(input.context.caller, self._pc))
-            .unwrap();
-        addresses_at_pc.insert(input.contract);
-
-        // if control leak is enabled, return controlleak if it is unbounded call
-        if CONTROL_LEAK_DETECTION == true {
-            if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
+        if input.context.scheme == CallScheme::Call {
+            macro_rules! push_interp {
+                () => {
+                    unsafe {
+                        self.leak_ctx = vec![SinglePostExecution::from_interp(interp, (out_offset, out_len))];
+                    }
+                };
+            }
+            // if calling sender, then definitely control leak
+            if state.has_caller(&input.contract) {
                 record_func_hash!();
+                push_interp!();
+                println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 return (ControlLeak, Gas::new(0), Bytes::new());
+            }
+            // check whether the whole CALLDATAVALUE can be arbitrary
+            if !self.pc_to_call_hash.contains_key(&(input.context.caller, self._pc)) {
+                self.pc_to_call_hash.insert((input.context.caller, self._pc), HashSet::new());
+            }
+            self.pc_to_call_hash
+                .get_mut(&(input.context.caller, self._pc))
+                .unwrap()
+                .insert(hash.to_vec());
+            if self.pc_to_call_hash.get(&(input.context.caller, self._pc)).unwrap().len() > UNBOUND_CALL_THRESHOLD
+                && input_seq.len() >= 4
+            {
+                println!("ub leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                push_interp!();
+                return (
+                    InstructionResult::ArbitraryExternalCallAddressBounded(input.context.caller, input.context.address),
+                    Gas::new(0),
+                    Bytes::new()
+                );
+            }
+
+            // control leak check
+            assert_ne!(self._pc, 0);
+            if !self.pc_to_addresses.contains_key(&(input.context.caller, self._pc)) {
+                self.pc_to_addresses.insert((input.context.caller, self._pc), HashSet::new());
+            }
+            let addresses_at_pc = self.pc_to_addresses
+                .get_mut(&(input.context.caller, self._pc))
+                .unwrap();
+            addresses_at_pc.insert(input.contract);
+
+            // if control leak is enabled, return controlleak if it is unbounded call
+            if CONTROL_LEAK_DETECTION == true {
+                if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
+                    record_func_hash!();
+                    push_interp!();
+                    println!("control leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                    return (ControlLeak, Gas::new(0), Bytes::new());
+                }
             }
         }
 
-        let mut old_call_context = None;
-        unsafe {
-            old_call_context = GLOBAL_CALL_CONTEXT.clone();
-            GLOBAL_CALL_CONTEXT = Some(input.context.clone());
-        }
-
-        macro_rules! ret_back_ctx {
-            () => {
-                unsafe {
-                    GLOBAL_CALL_CONTEXT = old_call_context;
-                }
-            };
-        }
 
         let input_bytes = Bytes::from(input_seq);
 
@@ -616,14 +616,20 @@ where
                 );
 
                 let ret = self.run_inspect(&mut interp, state);
-                ret_back_ctx!();
                 return (ret, Gas::new(0), interp.return_value());
             }
         }
 
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
-        ret_back_ctx!();
+        match res.0 {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _) => unsafe {
+                unsafe {
+                    self.leak_ctx.push(SinglePostExecution::from_interp(interp, (out_offset, out_len)));
+                }
+            }
+            _ => {}
+        }
         res
     }
 
@@ -1132,7 +1138,7 @@ where
         }
     }
 
-    fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+    fn call(&mut self, input: &mut CallInputs, interp: &mut Interpreter, output_info: (usize, usize), state: &mut S) -> (InstructionResult, Gas, Bytes) {
         if is_precompile(input.contract, self.precompiles.len()) {
             return self.call_precompile(input, state);
         }
@@ -1140,7 +1146,7 @@ where
         if unsafe { IS_FAST_CALL_STATIC } {
             self.call_forbid_control_leak(input, state)
         } else {
-            self.call_allow_control_leak(input, state)
+            self.call_allow_control_leak(input, interp, output_info, state)
         }
     }
 }

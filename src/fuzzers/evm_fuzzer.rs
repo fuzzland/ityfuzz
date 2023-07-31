@@ -338,6 +338,11 @@ pub fn evm_fuzzer(
                         "output: {:?}",
                         hex::encode(state.get_execution_result().clone().output)
                     );
+
+                    println!(
+                        "new_state: {:?}",
+                        state.get_execution_result().clone().new_state.state
+                    );
                     println!("================================================");
 
                     vm_state = state.get_execution_result().new_state.clone();

@@ -1,6 +1,6 @@
 use crate::{
     evm::{
-        host::{FuzzHost, GLOBAL_CALL_CONTEXT, STATE_CHANGE},
+        host::{FuzzHost, STATE_CHANGE},
         input::EVMInputT,
         vm::EVMState,
     },
