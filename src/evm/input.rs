@@ -156,7 +156,10 @@ pub struct ConciseEVMInput {
     pub contract: EVMAddress,
 
     /// Input data in ABI format
+    #[cfg(not(feature = "debug"))]
     pub data: Option<BoxedABI>,
+    #[cfg(feature = "debug")]
+    pub direct_data: Vec<u8>,
 
     /// Transaction value in wei
     pub txn_value: Option<EVMU256>,
@@ -195,7 +198,13 @@ impl ConciseEVMInput {
             input_type: input.get_input_type(),
             caller: input.get_caller(),
             contract: input.get_contract(),
+            #[cfg(not(feature = "debug"))]
             data: input.get_data_abi(),
+            #[cfg(feature = "debug")]
+            direct_data: match &input.get_data_abi() {
+                Some(v) => v.get_bytes(),
+                None => vec![],
+            },
             txn_value: input.get_txn_value(),
             step: input.is_step(),
             env: input.get_vm_env().clone(),
@@ -218,7 +227,10 @@ impl ConciseEVMInput {
                 input_type: self.input_type.clone(),
                 caller: self.caller,
                 contract: self.contract,
+                #[cfg(not(feature = "debug"))]
                 data: self.data.clone(),
+                #[cfg(feature = "debug")]
+                data: None,
                 sstate,
                 sstate_idx: 0,
                 txn_value: self.txn_value,
@@ -227,7 +239,10 @@ impl ConciseEVMInput {
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                 #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: self.liquidation_percent,
+                #[cfg(not(feature = "debug"))]
                 direct_data: Bytes::new(),
+                #[cfg(feature = "debug")]
+                direct_data: Bytes::from(self.direct_data.clone()),
                 randomness: self.randomness.clone(),
                 repeat: self.repeat,
             }, self.call_leak
@@ -237,6 +252,8 @@ impl ConciseEVMInput {
     #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
         let liq = self.liquidation_percent;
+
+        #[cfg(not(feature = "debug"))]
         match self.data {
             Some(ref d) => Some(format!(
                 "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
@@ -260,6 +277,9 @@ impl ConciseEVMInput {
                 EVMInputTy::Liquidate => None,
             },
         }
+
+        #[cfg(feature = "debug")]
+        Some(format!("{:?} => {:?} with {:?} ETH, {}", self.caller, self.contract, self.txn_value, hex::encode(self.direct_data.clone())))
     }
 
     #[cfg(not(feature = "flashloan_v2"))]

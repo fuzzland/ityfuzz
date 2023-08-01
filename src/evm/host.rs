@@ -483,8 +483,17 @@ where
     }
 
     fn call_allow_control_leak(&mut self, input: &mut CallInputs, interp: &mut Interpreter, (out_offset, out_len): (usize, usize), state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        macro_rules! push_interp {
+
+            () => {
+                unsafe {
+                    self.leak_ctx = vec![SinglePostExecution::from_interp(interp, (out_offset, out_len))];
+                }
+            };
+        }
         self.call_count += 1;
         if self.call_count >= unsafe {CALL_UNTIL} {
+            push_interp!();
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
@@ -537,18 +546,12 @@ where
         let mut input_seq = input.input.to_vec();
 
         if input.context.scheme == CallScheme::Call {
-            macro_rules! push_interp {
-                () => {
-                    unsafe {
-                        self.leak_ctx = vec![SinglePostExecution::from_interp(interp, (out_offset, out_len))];
-                    }
-                };
-            }
+
             // if calling sender, then definitely control leak
             if state.has_caller(&input.contract) {
                 record_func_hash!();
                 push_interp!();
-                println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
@@ -562,7 +565,7 @@ where
             if self.pc_to_call_hash.get(&(input.context.caller, self._pc)).unwrap().len() > UNBOUND_CALL_THRESHOLD
                 && input_seq.len() >= 4
             {
-                println!("ub leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                // println!("ub leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 push_interp!();
                 return (
                     InstructionResult::ArbitraryExternalCallAddressBounded(input.context.caller, input.context.address),
@@ -586,7 +589,7 @@ where
                 if addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
                     record_func_hash!();
                     push_interp!();
-                    println!("control leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                    // println!("control leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                     return (ControlLeak, Gas::new(0), Bytes::new());
                 }
             }

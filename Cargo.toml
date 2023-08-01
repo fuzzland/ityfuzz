@@ -28,6 +28,7 @@ full_trace = []
 force_cache = []
 use_presets = []
 print_logs = []
+debug = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

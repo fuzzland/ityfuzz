@@ -139,22 +139,30 @@ impl SinglePostExecution {
     }
 
     fn get_interpreter(&self, bytecode: Arc<BytecodeLocked>) -> Interpreter {
+        let contract = Contract::new_with_context_analyzed(
+            self.input.clone(),
+            bytecode,
+            &self.get_call_ctx(),
+        );
+
+        let mut stack = Stack::new();
+        for v in &self.stack.data {
+            stack.push(v.clone());
+        }
+
+
         Interpreter {
             instruction_pointer: unsafe {
-                bytecode.as_ptr().add(self.program_counter)
+                contract.bytecode.as_ptr().add(self.program_counter)
             },
             instruction_result: self.instruction_result,
             gas: Gas::new(0),
             memory: self.memory.clone(),
-            stack: self.stack.clone(),
+            stack: stack,
             return_data_buffer: Bytes::new(),
             return_range: self.return_range.clone(),
             is_static: self.is_static,
-            contract: Contract::new_with_context_analyzed(
-                self.input.clone(),
-                bytecode,
-                &self.get_call_ctx(),
-            ),
+            contract,
         }
     }
 
@@ -712,7 +720,7 @@ where
             )
         );
 
-        println!("r.ret: {:?}", r.ret);
+        // println!("r.ret: {:?}", r.ret);
 
         unsafe {
             ExecutionResult {

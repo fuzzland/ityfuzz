@@ -486,7 +486,7 @@ where
         // todo: fix for delegatecall
         let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
 
-        if value_transfer > EVMU256::ZERO && call_target == interp.contract.caller {
+        if value_transfer > EVMU256::ZERO && s.has_caller(&call_target) {
             host.evmstate.flashloan_data.earned += EVMU512::from(value_transfer) * scale!();
         }
 
