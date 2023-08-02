@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,6 +9,7 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::prelude::Rand;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, HasRand, State};
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::ModuleId;
@@ -16,6 +18,7 @@ use move_vm_runtime::loader::Function;
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::values;
 use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
+use revm_primitives::HashSet;
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::input::VMInputT;
 use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
@@ -93,31 +96,52 @@ impl<'a> MoveCorpusInitializer<'a>
 
     pub fn initialize_glob(&mut self, dirs: Vec<String>) {
         let mut modules = vec![];
+        let mut modules_dependencies = vec![];
         for directory in dirs {
+            let deps = glob::glob(&format!("{}/*/bytecode_modules/dependencies/*/*.mv", directory)).unwrap();
+
+            for path in deps {
+                let module = std::fs::read(path.unwrap()).unwrap();
+                let module = CompiledModule::deserialize_no_check_bounds(&module).unwrap();
+                modules_dependencies.push(module);
+            }
+
             // find all directory named "bytecode_modules" in the current directory
             let paths = glob::glob(&format!("{}/*/bytecode_modules/*.mv", directory)).unwrap();
             for path in paths {
                 // read the file into a vector of bytes
                 let module = std::fs::read(path.unwrap()).unwrap();
                 // deserialize the vector of bytes into a CompiledModule
-                let module = CompiledModule::deserialize(&module).unwrap();
-                println!("deploying module: {:?}", module.self_id());
+                let module = CompiledModule::deserialize_no_check_bounds(&module).unwrap();
                 // add the module to the corpus
                 modules.push(module);
             }
+
         }
-        self.add_module(modules);
+        self.add_module(modules, modules_dependencies);
+    }
+
+
+    fn deployer(&mut self,
+                to_deploy: Vec<ModuleId>,
+                deployed: &mut HashSet<ModuleId>,
+                module_id_to_module: &HashMap<ModuleId, CompiledModule>) {
+        for mod_id in to_deploy {
+            if deployed.contains(&mod_id) {
+                continue;
+            }
+
+            let module = module_id_to_module.get(&mod_id).unwrap().clone();
+            let deps = module.immediate_dependencies();
+            self.deployer(deps, deployed, module_id_to_module);
+
+            self.executor.deploy(module, None, AccountAddress::random(), &mut self.state);
+            deployed.insert(mod_id);
+        }
 
     }
 
-    pub fn initialize_bytecode(&mut self, modules: Vec<Vec<u8>>) {
-        let cmods = modules.iter().map(|v| {
-            CompiledModule::deserialize(&v).unwrap()
-        }).collect_vec();
-        self.add_module(cmods);
-    }
-
-    fn add_module(&mut self, modules: Vec<CompiledModule>) {
+    fn add_module(&mut self, modules: Vec<CompiledModule>, modules_dependencies: Vec<CompiledModule>) {
         macro_rules! wrap_input {
             ($input: expr) => {{
                 let mut tc = Testcase::new($input);
@@ -125,13 +149,23 @@ impl<'a> MoveCorpusInitializer<'a>
                 tc
             }};
         }
-        for module in modules {
-            let module_id = module.self_id();
-            self.executor.deploy(module, None, AccountAddress::random(), &mut self.state)
-                .expect("failed to deploy module");
+        let mut module_id_to_module = HashMap::new();
+        for module in modules.iter().chain(modules_dependencies.iter()) {
+            module_id_to_module.insert(module.self_id(), module.clone());
         }
+        self.deployer(
+            modules.iter().map(|m| m.self_id()).collect_vec(),
+            &mut HashSet::new(),
+            &module_id_to_module
+        );
+
+        let mut module_id_to_fuzz = modules.iter().map(|m| m.self_id()).collect::<HashSet<_>>();
 
         for (module_id, funcs) in self.executor.functions.clone() {
+            if !module_id_to_fuzz.contains(&module_id) {
+                continue;
+            }
+
             for (_, func) in funcs {
                 let input = self.build_input(&module_id, func.clone());
                 match input {

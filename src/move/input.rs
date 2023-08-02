@@ -12,7 +12,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use move_vm_types::values::{Container, ContainerRef, IndexedRef, Value, ValueImpl};
 use primitive_types::U256;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -26,8 +25,9 @@ use std::sync::Arc;
 use itertools::Itertools;
 use libafl::impl_serdeany;
 use move_binary_format::file_format::AbilitySet;
-use move_vm_runtime::loader::{Function, Module};
+use move_vm_runtime::loader::Function;
 use move_vm_types::loaded_data::runtime_types::Type;
+use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
 use crate::evm::types::EVMU256;
 use crate::mutation_utils::byte_mutator;
 use crate::r#move::movevm::MoveVM;
@@ -141,15 +141,23 @@ pub struct ConciseMoveInput {
 
 impl ConciseSerde for ConciseMoveInput {
     fn serialize_concise(&self) -> Vec<u8> {
-        todo!()
+        serde_json::to_vec(self).expect("Failed to deserialize concise input")
     }
 
     fn deserialize_concise(data: &[u8]) -> Self {
-        todo!()
+        serde_json::from_slice(data)
+            .expect("Failed to deserialize concise input")
     }
 
     fn serialize_string(&self) -> String {
-        todo!()
+        format!("{:?} => {:?}<{:?}>({:?})", self.caller, self.module,
+                self.ty_args.iter().map(
+                    |ty| format!("{:?}", ty)
+                ).join(","),
+                self.args.iter().map(
+                    |arg| format!("{:?}", arg.value)
+                ).join(", ")
+        )
     }
 }
 
@@ -181,7 +189,7 @@ impl ConciseSerde for MoveFunctionInput {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CloneableValue {
     pub value: Value,
     // for mutator
@@ -194,24 +202,6 @@ impl Clone for CloneableValue {
             value: self.value.clone(),
             bytes: vec![],
         }
-    }
-}
-
-impl Serialize for CloneableValue {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        unreachable!()
-    }
-}
-
-impl<'de> Deserialize<'de> for CloneableValue {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        unreachable!()
     }
 }
 
@@ -665,7 +655,7 @@ impl MoveFunctionInput {
                             unreachable!("non mutable reference")
                         };
 
-                        let mut mutable_value = CloneableValue::from(Value((**inner_vec).borrow().get(index).unwrap().clone()));
+                        let mut mutable_value = CloneableValue::from(Value((*inner_vec).borrow().get(index).unwrap().clone()));
                         let res = Self::mutate_value_impl(
                             _state,
                             &mut mutable_value,
@@ -756,7 +746,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
     }
 
     fn fav_factor(&self) -> f64 {
-        todo!()
+        f64::MAX
     }
 
     #[cfg(feature = "evm")]
@@ -796,7 +786,6 @@ mod tests {
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::ModuleId;
     use move_core_types::u256;
-    use move_vm_types::values::{Container, Value, ValueImpl, values_impl};
     use crate::input::VMInputT;
     use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
     use crate::r#move::types::MoveFuzzState;

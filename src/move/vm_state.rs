@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::ops::Index;
 use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::HasRand;
+use move_core_types::identifier::IdentStr;
 use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
 use crate::r#move::input::StructAbilities;
@@ -312,18 +313,7 @@ impl DataStore for MoveVMState {
         unreachable!()
     }
 
-    fn publish_module(
-        &mut self,
-        _module_id: &ModuleId,
-        _blob: Vec<u8>,
-        _is_republishing: bool,
-    ) -> VMResult<()> {
-        unreachable!()
-    }
 
-    fn exists_module(&self, _module_id: &ModuleId) -> VMResult<bool> {
-        unreachable!()
-    }
 
     fn emit_event(
         &mut self,
@@ -336,6 +326,22 @@ impl DataStore for MoveVMState {
     }
 
     fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, Value)> {
+        unreachable!()
+    }
+
+    fn link_context(&self) -> AccountAddress {
+        AccountAddress::ZERO
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
+        Ok(module_id.clone())
+    }
+
+    fn defining_module(&self, module_id: &ModuleId, struct_: &IdentStr) -> PartialVMResult<ModuleId> {
+        Ok(module_id.clone())
+    }
+
+    fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
         unreachable!()
     }
 }

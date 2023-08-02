@@ -57,10 +57,14 @@ regex = "1"
 heimdall = { path = "./externals/heimdall-rs/heimdall" }
 
 # from https://github.com/aptos-labs/aptos-core/blob/main/Cargo.toml#L452
-move-binary-format = { path = "./externals/move/language/move-binary-format" }
-move-core-types = { path = "./externals/move/language/move-core/types", features = ["address32"] }
-move-stdlib = { path = "./externals/move/language/move-stdlib" }
-move-vm-runtime = { path = "./externals/move/language/move-vm/runtime", features = ["lazy_natives"] }
-move-vm-types = { path = "./externals/move/language/move-vm/types" }
+move-binary-format = { path = "./externals/sui/external-crates/move/move-binary-format" }
+move-core-types = { path = "./externals/sui/external-crates/move/move-core/types", features = ["address32"] }
+move-stdlib = { path = "./externals/sui/external-crates/move/move-stdlib" }
+move-vm-runtime = { path = "./externals/sui/external-crates/move/move-vm/runtime", features = ["lazy_natives"] }
+move-vm-types = { path = "./externals/sui/external-crates/move/move-vm/types" }
+sui-move-natives-latest = { path = "./externals/sui/sui-execution/latest/sui-move-natives" }
+sui-protocol-config = { path = "./externals/sui/crates/sui-protocol-config" }
+sui-types = { path = "./externals/sui/crates/sui-types" }
+
 retry = "2.0.0"
 serde_cbor = "0.11.2"

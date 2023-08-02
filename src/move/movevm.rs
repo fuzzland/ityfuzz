@@ -11,25 +11,38 @@ use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, TypeTag};
 
 use move_vm_runtime::interpreter::{CallStack, DummyTracer, ExitCode, Frame, Interpreter, ItyFuzzTracer, Stack};
 use move_vm_runtime::loader;
 use move_vm_runtime::loader::BinaryType::Module;
 use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
-use move_vm_runtime::native_functions::NativeFunctions;
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_runtime::native_functions::{NativeContext, NativeFunctions};
+use move_vm_types::gas::{GasMeter, UnmeteredGasMeter};
 use move_vm_types::values;
 use move_vm_types::values::{Locals, Reference, StructRef, Value, ValueImpl, VMValueCast};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
 use libafl::state::HasMetadata;
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::Bytecode;
 use move_core_types::u256;
+use move_stdlib::natives::all_natives;
+use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_types::data_store::DataStore;
+use move_vm_types::loaded_data::runtime_types::Type;
+use move_vm_types::natives::function::NativeResult;
+use sui_move_natives_latest::NativesCostTable;
+use sui_move_natives_latest::object_runtime::ObjectRuntime;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::error::SuiResult;
+use sui_types::metrics::LimitsMetrics;
+use sui_types::object::Object;
+use sui_types::storage::ChildObjectResolver;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -48,21 +61,17 @@ impl<I, S> MoveVM<I, S> {
         let functions = HashMap::new();
         Self {
             functions,
-            loader: Loader::new(NativeFunctions::new(vec![]).unwrap(), Default::default()),
+            loader: Loader::new(Self::get_natives(), Default::default()),
             _phantom: Default::default(),
         }
     }
 
-    pub fn get_natives(&self) -> NativeFunctions {
-        NativeFunctions {
-            0: Default::default(),
-        }
+    pub fn get_natives() -> NativeFunctions {
+        NativeFunctions::new(sui_move_natives_latest::all_natives(true)).expect("native functions")
     }
 }
 
-pub struct MoveVMTracer {
-
-}
+pub struct MoveVMTracer;
 
 impl ItyFuzzTracer for MoveVMTracer {
     fn on_step(&mut self, interpreter: &Interpreter, frame: &Frame, pc: u16, instruction: &Bytecode) {
@@ -243,6 +252,9 @@ impl ItyFuzzTracer for MoveVMTracer {
             _ => {}
         }
     }
+
+
+
 }
 
 
@@ -270,12 +282,14 @@ where
         _deployed_address: AccountAddress,
         _state: &mut S,
     ) -> Option<AccountAddress> {
+        println!("deploying module dep: {:?}", module.self_id());
         let func_off = self.loader.module_cache.read().functions.len();
         let module_name = module.name().to_owned();
         let deployed_module_idx = module.self_id();
-        self.loader.module_cache.write().insert(&self.get_natives(),
+        self.loader.module_cache.write().insert(&Self::get_natives(),
+                                                &MoveVMState::default(),
                                                 deployed_module_idx.clone(),
-                                                module).expect("internal deploy error");
+                                                &module).expect("internal deploy error");
         for f in &self.loader.module_cache.read().functions[func_off..] {
             println!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
             self.functions
@@ -284,10 +298,10 @@ where
                 .insert(f.name.to_owned(), f.clone());
         }
 
-        println!("deployed structs: {:?}", self.loader.module_cache.read().structs);
-        println!("module cache: {:?}  {:?}",
-                 self.loader.module_cache.read().modules.binaries,
-                 self.loader.module_cache.read().modules.id_map
+        // println!("deployed structs: {:?}", self.loader.module_cache.read().structs);
+        println!("module cache: {:?}",
+                 self.loader.module_cache.read().compiled_modules.id_map,
+                 // self.loader.module_cache.read().modules.id_map
         );
         Some(deployed_module_idx.address().clone())
     }
@@ -331,6 +345,7 @@ where
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             paranoid_type_checks: false,
+            runtime_limits_config: Default::default(),
         };
 
         let mut state = input.get_state().clone();
@@ -342,22 +357,24 @@ where
         let mut current_frame = {
             let mut locals = Locals::new(initial_function.local_count());
             for (i, value) in input.args().into_iter().enumerate() {
-                locals.store_loc(i, value.clone().value).unwrap();
+                locals.store_loc(i, value.clone().value, false).unwrap();
             }
             Frame {
                 pc: 0,
                 locals,
                 function: initial_function.clone(),
                 ty_args: vec![],
+                local_tys: vec![],
             }
         };
 
         let mut call_stack = vec![];
         let mut reverted = false;
+        let mut gas_meter = UnmeteredGasMeter {};
         loop {
-            let resolver = current_frame.resolver(&self.loader);
+            let resolver = current_frame.resolver(state.link_context(), &self.loader);
             let ret =
-                current_frame.execute_code(&resolver, &mut interp, &mut state, &mut UnmeteredGasMeter, &mut MoveVMTracer{});
+                current_frame.execute_code(&resolver, &mut interp, &mut state, &mut gas_meter, &mut MoveVMTracer{});
             // println!("{:?}", ret);
 
             if ret.is_err() {
@@ -378,16 +395,30 @@ where
                     }
                 }
                 ExitCode::Call(fh_idx) => {
+                    // todo: handle native here
                     let func = resolver.function_from_handle(fh_idx);
+
+                    if func.is_native() {
+                        if !Self::call_native(
+                            func,
+                            vec![],
+                            &mut interp,
+                            &mut state,
+                            &resolver,
+                            &mut gas_meter,
+                        ) {
+                            reverted = true;
+                            break;
+                        } else {
+                            current_frame.pc += 1;
+                        }
+                        continue;
+                    }
                     let argc = func.local_count();
                     let mut locals = Locals::new(argc);
-                    for i in 0..argc {
-                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap()).unwrap();
-                    }
                     println!("locals: {:?}", locals);
-                    // todo: handle native here
-                    if func.is_native() {
-                        todo!("native function call")
+                    for i in 0..argc {
+                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
                     call_stack.push(current_frame);
                     current_frame = Frame {
@@ -395,6 +426,7 @@ where
                         locals,
                         function: func.clone(),
                         ty_args: vec![],
+                        local_tys: vec![],
                     };
                 }
                 ExitCode::CallGeneric(fh_idx) => {
@@ -402,15 +434,28 @@ where
                         .instantiate_generic_function(fh_idx, &current_frame.ty_args).unwrap();
                     let func = resolver.function_from_instantiation(fh_idx);
 
+                    // todo: handle native here
+                    if func.is_native() {
+                        if !Self::call_native(
+                            func,
+                            ty_args,
+                            &mut interp,
+                            &mut state,
+                            &resolver,
+                            &mut gas_meter,
+                        ) {
+                            reverted = true;
+                            break;
+                        } else {
+                            current_frame.pc += 1;
+                        }
+                        continue;
+                    }
+
                     let argc = func.local_count();
                     let mut locals = Locals::new(argc);
                     for i in 0..argc {
-                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap()).unwrap();
-                    }
-
-                    // todo: handle native here
-                    if func.is_native() {
-                        todo!("native function call")
+                        locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
                     call_stack.push(current_frame);
                     current_frame = Frame {
@@ -418,12 +463,13 @@ where
                         locals,
                         function: func.clone(),
                         ty_args,
+                        local_tys: vec![],
                     };
                 }
             }
         }
 
-        let resolver = current_frame.resolver(&self.loader);
+        let resolver = current_frame.resolver(state.link_context(), &self.loader);
 
 
         let mut out: MoveOutput = MoveOutput { vars: vec![] };
@@ -436,7 +482,7 @@ where
                 .iter()
         ) {
             let abilities = resolver.loader.abilities(t).expect("unknown type");
-            state.add_new_value(v.clone(), t, abilities.has_drop());
+            state.add_new_value(v.copy_value().expect("failed to copy value"), t, abilities.has_drop());
 
             if !_state.has_metadata::<StructAbilities>() {
                 _state.metadata_mut().insert(StructAbilities::new());
@@ -479,6 +525,72 @@ where
     }
 }
 
+
+pub struct DummyChildObjectResolver;
+
+impl ChildObjectResolver for DummyChildObjectResolver {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID, child_version_upper_bound: SequenceNumber) -> SuiResult<Option<Object>> {
+        todo!()
+    }
+}
+
+impl<I, S> MoveVM<I, S> where
+    I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT,
+    S: HasMetadata,
+{
+    pub fn get_protocol_config() -> ProtocolConfig {
+        ProtocolConfig::get_for_max_version_UNSAFE()
+    }
+
+    pub fn get_extension<'a>() -> NativeContextExtensions<'a> {
+        let mut extensions = NativeContextExtensions::default();
+        extensions.add(ObjectRuntime::new(
+            &DummyChildObjectResolver{},
+            BTreeMap::new(),
+            false,
+            &Self::get_protocol_config(),
+            Arc::new(LimitsMetrics::new(&Default::default())),
+        ));
+        extensions.add(NativesCostTable::from_protocol_config(&Self::get_protocol_config()));
+        extensions
+    }
+
+    pub fn call_native(func: Arc<Function>,
+                       ty_args: Vec<Type>,
+                       interp: &mut Interpreter,
+                       state: &mut dyn DataStore, resolver: &Resolver, gas_meter: &mut impl GasMeter) -> bool {
+        let mut args = VecDeque::new();
+        let expected_args = func.parameters.len();
+        for _ in 0..expected_args {
+            args.push_front(interp.operand_stack.pop().expect("operand stack underflow"));
+        }
+
+        let mut ext = Self::get_extension();
+
+        let mut native_context = NativeContext::new(
+            interp,
+            state,
+            resolver,
+            &mut ext,
+            gas_meter.remaining_gas(),
+        );
+
+        let native_function = func.get_native().expect("native function not found");
+        let result: NativeResult = native_function(&mut native_context, ty_args, args).unwrap();
+        let return_values = match result.result {
+            Ok(values) => values,
+            _ => {
+                return false;
+            }
+        };
+        for value in return_values {
+            interp.operand_stack.push(value);
+        }
+        println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
+        true
+    }
+}
+
 mod tests {
     use std::borrow::Borrow;
     use std::cell::RefCell;
@@ -497,7 +609,7 @@ mod tests {
         func: &str,
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, ConciseMoveInput> {
         let module_bytecode = hex::decode(bytecode).unwrap();
-        let module = CompiledModule::deserialize(&module_bytecode).unwrap();
+        let module = CompiledModule::deserialize_no_check_bounds(&module_bytecode).unwrap();
         let module_idx = module.self_id();
         let mut mv = MoveVM::<
             MoveFunctionInput,
@@ -516,7 +628,7 @@ mod tests {
 
         let input = MoveFunctionInput {
             // take the first module
-            module: mv.loader.module_cache.read().modules.id_map.iter().next().unwrap().0.clone(),
+            module: mv.loader.module_cache.read().compiled_modules.id_map.iter().next().unwrap().0.clone(),
             function: Identifier::new(func).unwrap(),
             function_info: Default::default(),
             args,

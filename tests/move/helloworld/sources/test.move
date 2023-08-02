@@ -5,6 +5,7 @@
 /// https://github.com/sui-foundation/sui-move-intro-course
 ///
 module hello_world::hello_world {
+    use sui::event;
 
     // use std::string;
     // use sui::object::{Self, UID};
@@ -18,11 +19,17 @@ module hello_world::hello_world {
     //     text: string::String
     // }
 
+    struct DonutBought has copy, drop {
+        info: u32
+    }
+
+
 
     public entry fun mint(idx: u64) {
         if (idx == 0) {
-            return;
+            event::emit(DonutBought { info: 88 });
         } else {
+            event::emit(DonutBought { info: 123 });
         }
     }
 
