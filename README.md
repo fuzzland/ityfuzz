@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[中文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#building)
+[Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#building)
 
 ### Run ItyFuzz with UI
 
@@ -54,7 +54,6 @@ You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installati
 
 ```bash
 git clone https://github.com/fuzzland/ityfuzz.git && cd ityfuzz && git checkout stable
-# download move dependencies
 git submodule update --recursive --init
 cd cli/
 cargo build --release
@@ -69,9 +68,9 @@ You can enable certain debug gates in `Cargo.toml`
 Compile Smart Contracts:
 
 ```bash
-cd ./tests/multi-contract/
+cd ./tests/evm/multi-contract/
 # include the library from ./solidity_utils for example
-solc *.sol -o . --bin --abi --overwrite --base-path ../../
+solc *.sol -o . --bin --abi --overwrite --base-path ../../../
 ```
 
 Run Fuzzer:
@@ -79,7 +78,7 @@ Run Fuzzer:
 ```bash
 # after building, there should be a binary in ./cli/target/release/cli
 cd ./cli/
-./target/release/cli evm -t '../tests/multi-contract/*'
+./target/release/cli evm -t '../tests/evm/multi-contract/*'
 ```
 
 ### Demo
@@ -101,10 +100,10 @@ Exact Exploit:
 Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s):
 
 ```bash
-# build contracts in tests/verilog-2/
+# build contracts in tests/evm/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # run fuzzer
-./target/release/cli evm -f -t "./tests/verilog-2/*"
+./target/release/cli evm -f -t "./tests/evm/verilog-2/*"
 ```
 
 `-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
@@ -122,7 +121,7 @@ ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain w
 Specifically, the project directory should contain
 a few `[X].abi` and `[X].bin` files. For example, to fuzz a contract named `main.sol`, you should
 ensure `main.abi` and `main.bin` exist in the project directory.
-The fuzzer will automatically detect the contracts in directory, the correlation between them (see `tests/multi-contract`),
+The fuzzer will automatically detect the contracts in directory, the correlation between them (see `tests/evm/multi-contract`),
 and fuzz them.
 
 Optionally, if ItyFuzz fails to infer the correlation between contracts, you
@@ -183,13 +182,13 @@ When you run ItyFuzz using the CLI, you can include the `--constructor-args` fla
 The format is as follows:
 
 ```
-./target/release/cli evm -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 For example, if you have two contracts, `main` and `main2`, both having a `bytes32` and a `uint256` as constructor arguments, you would pass them in like this:
 
 ```bash
-./target/release/cli evm -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **Method 2: Server Forwarding**
@@ -227,7 +226,7 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 Finally, you can fetch the constructor arguments using the `--fetch-tx-data` flag:
 
 ```bash
-./target/release/cli evm -t 'tests/multi-contract/*' --fetch-tx-data
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
@@ -321,7 +320,7 @@ need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all thes
 
 Example:
 ```bash
-./target/release/cli evm -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
 ```
 
 You may add source map information to the targets to get more accurate coverage information and uncovered source code.
@@ -333,7 +332,7 @@ solc [Options Used During Building] --combined-json bin-runtime,srcmap-runtime
 
 Example:
 ```bash
-# build contracts in tests/verilog-2/
+# build contracts in tests/evm/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../ --combined-json bin-runtime,srcmap-runtime
 ```
 Rarely, ItyFuzz has trouble to figure out the source code location.
@@ -345,8 +344,8 @@ to ItyFuzz.
 
 Example:
 ```bash
-# note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/verilog-2/../../
-./target/release/cli evm -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
+# note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/evm/verilog-2/../../
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
 We do not track coverage of static calls (view, pure functions) by default!
