@@ -50,7 +50,7 @@ impl<I, S> SortedDroppingScheduler<I, S> {
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct Node {
+pub struct Node {
     parent: usize, // 0 for root node
     ref_count: usize,
     pending_delete: bool,
@@ -58,7 +58,7 @@ struct Node {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct DependencyTree {
+pub struct DependencyTree {
     nodes: HashMap<usize, Node>,
 }
 
@@ -124,7 +124,7 @@ impl DependencyTree {
 /// Metadata for [`SortedDroppingScheduler`] that is stored in the state
 /// Contains the votes and visits for each input (or VMState)
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct VoteData {
+pub struct VoteData {
     /// Map of input (or VMState) index to (votes, visits)
     pub votes_and_visits: HashMap<usize, (usize, usize)>,
     /// Sorted list of votes, cached for performance

@@ -79,7 +79,7 @@ Run Fuzzer:
 ```bash
 # after building, there should be a binary in ./cli/target/release/cli
 cd ./cli/
-./target/release/cli -t '../tests/multi-contract/*'
+./target/release/cli evm -t '../tests/multi-contract/*'
 ```
 
 ### Demo
@@ -104,7 +104,7 @@ Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s)
 # build contracts in tests/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # run fuzzer
-./cli -f -t "./tests/verilog-2/*"
+./target/release/cli evm -f -t "./tests/verilog-2/*"
 ```
 
 `-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
@@ -114,7 +114,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 You can fuzz a project by providing a path to the project directory.
 
 ```bash
-./cli -t '[DIR_PATH]/*'
+./target/release/cli evm -t '[DIR_PATH]/*'
 ```
 
 ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain with no other smart contracts.
@@ -147,20 +147,20 @@ cargo build --release
 You can fuzz a project by providing an address, a block, and a chain type.
 
 ```bash
-./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
+./target/release/cli evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 Example:
 Fuzzing WETH contract (`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`) on Ethereum mainnet at latest block.
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+./target/release/cli evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 Fuzzing with flashloan and oracles enabled:
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+./target/release/cli evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
@@ -183,13 +183,13 @@ When you run ItyFuzz using the CLI, you can include the `--constructor-args` fla
 The format is as follows:
 
 ```
-cli -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+./target/release/cli evm -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 For example, if you have two contracts, `main` and `main2`, both having a `bytes32` and a `uint256` as constructor arguments, you would pass them in like this:
 
 ```bash
-cli -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+./target/release/cli evm -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **Method 2: Server Forwarding**
@@ -227,7 +227,7 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 Finally, you can fetch the constructor arguments using the `--fetch-tx-data` flag:
 
 ```bash
-cli -t 'tests/multi-contract/*' --fetch-tx-data
+./target/release/cli evm -t 'tests/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
@@ -308,7 +308,7 @@ scribble test.sol --output-mode flat --output compiled.sol --no-assert
 Then compile with `solc` and run ItyFuzz:
 ```bash
 solc compiled.sol --bin --abi --overwrite -o build
-./cli -t "build/*" [More Arguments]
+./target/release/cli evm -t "build/*" [More Arguments]
 ```
 
 # Test Coverage
@@ -316,12 +316,12 @@ solc compiled.sol --bin --abi --overwrite -o build
 ItyFuzz can collect instruction and branch coverage information for all the contracts it fuzzes. You simply
 need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all these information.
 ```bash
-./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
+./target/release/cli evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
 ```
 
 Example:
 ```bash
-./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
+./target/release/cli evm -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
 ```
 
 You may add source map information to the targets to get more accurate coverage information and uncovered source code.
@@ -340,13 +340,13 @@ Rarely, ItyFuzz has trouble to figure out the source code location.
 You may supply the **absolute** path to the base location (what you passed to solc's --base-path or if you didn't pass anything, it is the building directory)
 to ItyFuzz.
 ```bash
-./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
+./target/release/cli evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
 ```
 
 Example:
 ```bash
 # note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/verilog-2/../../
-./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
+./target/release/cli evm -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
 We do not track coverage of static calls (view, pure functions) by default!

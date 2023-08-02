@@ -1,7 +1,7 @@
 /// Definition of ABI types and their encoding, decoding, mutating methods
 
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
-use crate::evm::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
+use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasItyState};
 use bytes::Bytes;
