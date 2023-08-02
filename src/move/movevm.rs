@@ -297,12 +297,6 @@ where
                 .or_insert_with(HashMap::new)
                 .insert(f.name.to_owned(), f.clone());
         }
-
-        // println!("deployed structs: {:?}", self.loader.module_cache.read().structs);
-        println!("module cache: {:?}",
-                 self.loader.module_cache.read().compiled_modules.id_map,
-                 // self.loader.module_cache.read().modules.id_map
-        );
         Some(deployed_module_idx.address().clone())
     }
 
@@ -416,7 +410,7 @@ where
                     }
                     let argc = func.local_count();
                     let mut locals = Locals::new(argc);
-                    println!("locals: {:?}", locals);
+                    // println!("locals: {:?}", locals);
                     for i in 0..argc {
                         locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
@@ -586,7 +580,7 @@ impl<I, S> MoveVM<I, S> where
         for value in return_values {
             interp.operand_stack.push(value);
         }
-        println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
+        // println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
         true
     }
 }

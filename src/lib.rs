@@ -15,7 +15,6 @@ pub mod fuzzers;
 pub mod generic_vm;
 pub mod indexed_corpus;
 pub mod input;
-pub mod r#move;
 pub mod oracle;
 pub mod scheduler;
 pub mod state;
@@ -23,3 +22,7 @@ pub mod state_input;
 pub mod telemetry;
 pub mod tracer;
 pub mod mutation_utils;
+
+
+#[cfg(feature = "move_support")]
+pub mod r#move;

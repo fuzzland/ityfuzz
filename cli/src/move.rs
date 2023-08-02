@@ -1,10 +1,9 @@
 use clap::Parser;
 use hex::{decode, encode};
-use ityfuzz::fuzzers::move_fuzzer::move_fuzzer;
+use ityfuzz::fuzzers::move_fuzzer::{MoveFuzzConfig, move_fuzzer};
 use ityfuzz::oracle::{Oracle, Producer};
 use ityfuzz::r#const;
 use ityfuzz::state::FuzzState;
-use ityfuzz::r#move::types::MoveFuzzState;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -12,7 +11,6 @@ use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use ityfuzz::r#move::config::MoveFuzzConfig;
 
 /// CLI for ItyFuzz for Move smart contracts
 #[derive(Parser, Debug)]
@@ -28,10 +26,10 @@ pub struct MoveArgs {
 }
 
 pub fn move_main(args: MoveArgs) {
-    let mut state: MoveFuzzState = FuzzState::new(args.seed);
     move_fuzzer(&MoveFuzzConfig {
         target: args.target,
         work_dir: "./work_dir".to_string(),
-    }, &mut state);
+        seed: args.seed,
+    });
 
 }

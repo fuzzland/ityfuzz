@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "flashloan_v2"]
+default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", ]
 evm = []
 cmp = []
 dataflow = []
@@ -28,6 +28,7 @@ full_trace = []
 force_cache = []
 use_presets = []
 print_logs = []
+move_support = ["dep:move-binary-format", "dep:move-core-types", "dep:move-stdlib", "dep:move-vm-runtime", "dep:move-vm-types", "dep:sui-move-natives-latest", "dep:sui-protocol-config", "dep:sui-types"]
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
@@ -57,14 +58,16 @@ regex = "1"
 heimdall = { path = "./externals/heimdall-rs/heimdall" }
 
 # from https://github.com/aptos-labs/aptos-core/blob/main/Cargo.toml#L452
-move-binary-format = { path = "./externals/sui/external-crates/move/move-binary-format" }
-move-core-types = { path = "./externals/sui/external-crates/move/move-core/types", features = ["address32"] }
-move-stdlib = { path = "./externals/sui/external-crates/move/move-stdlib" }
-move-vm-runtime = { path = "./externals/sui/external-crates/move/move-vm/runtime", features = ["lazy_natives"] }
-move-vm-types = { path = "./externals/sui/external-crates/move/move-vm/types" }
-sui-move-natives-latest = { path = "./externals/sui/sui-execution/latest/sui-move-natives" }
-sui-protocol-config = { path = "./externals/sui/crates/sui-protocol-config" }
-sui-types = { path = "./externals/sui/crates/sui-types" }
+move-binary-format = { path = "./externals/sui/external-crates/move/move-binary-format", optional = true }
+move-core-types = { path = "./externals/sui/external-crates/move/move-core/types", features = ["address32"], optional = true }
+move-stdlib = { path = "./externals/sui/external-crates/move/move-stdlib", optional = true }
+move-vm-runtime = { path = "./externals/sui/external-crates/move/move-vm/runtime", features = ["lazy_natives"], optional = true }
+move-vm-types = { path = "./externals/sui/external-crates/move/move-vm/types", optional = true }
+sui-move-natives-latest = { path = "./externals/sui/sui-execution/latest/sui-move-natives", optional = true }
+sui-protocol-config = { path = "./externals/sui/crates/sui-protocol-config", optional = true  }
+sui-types = { path = "./externals/sui/crates/sui-types", optional = true  }
+
+
 
 retry = "2.0.0"
 serde_cbor = "0.11.2"
