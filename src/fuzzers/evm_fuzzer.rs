@@ -194,6 +194,7 @@ pub fn evm_fuzzer(
         &mut scheduler,
         &infant_scheduler,
         state,
+        config.work_dir.clone()
     );
 
     #[cfg(feature = "use_presets")]

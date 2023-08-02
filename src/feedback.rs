@@ -499,6 +499,10 @@ where
                 != 0;
 
             if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
+                let hash = state.get_execution_result().new_state.state.get_hash();
+                if self.known_states.contains(&hash) {
+                    return Ok(false);
+                }
                 return Ok(true);
             }
         }

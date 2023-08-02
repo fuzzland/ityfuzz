@@ -250,6 +250,79 @@ pub static mut DUMP_FILE_COUNT: usize = 0;
 
 pub static mut REPLAY: bool = false;
 
+
+#[macro_export]
+macro_rules! dump_file {
+    ($state: expr, $corpus_path: expr, $print: expr) => {
+        {
+            if !unsafe {REPLAY} {
+                unsafe {
+                    DUMP_FILE_COUNT += 1;
+                }
+
+                let tx_trace = $state.get_execution_result().new_state.trace.clone();
+                let txn_text = tx_trace.to_string($state);
+                let txn_text_replayable = tx_trace.to_file_str($state);
+
+                let data = format!(
+                    "Reverted? {} \n Txn: {}",
+                    $state.get_execution_result().reverted,
+                    txn_text
+                );
+                if $print {
+                    println!("============= New Corpus Item =============");
+                    println!("{}", data);
+                    println!("==========================================");
+                }
+
+                // write to file
+                let path = Path::new($corpus_path.as_str());
+                if !path.exists() {
+                    std::fs::create_dir(path).unwrap();
+                }
+                let mut file =
+                    File::create(format!("{}/{}", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+                file.write_all(data.as_bytes()).unwrap();
+
+                let mut replayable_file =
+                    File::create(format!("{}/{}_replayable", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+                replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dump_txn {
+    ($corpus_path: expr, $input: expr) => {
+        {
+            if !unsafe {REPLAY} {
+                unsafe {
+                    DUMP_FILE_COUNT += 1;
+                }
+                // write to file
+                let path = Path::new($corpus_path.as_str());
+                if !path.exists() {
+                    std::fs::create_dir(path).unwrap();
+                }
+
+                let concise_input = ConciseEVMInput::from_input($input, &EVMExecutionResult::empty_result());
+
+                let txn_text = concise_input.serialize_string();
+                let txn_text_replayable = String::from_utf8(concise_input.serialize_concise()).unwrap();
+
+                let mut file =
+                    File::create(format!("{}/{}_seed", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+                file.write_all(txn_text.as_bytes()).unwrap();
+
+                let mut replayable_file =
+                    File::create(format!("{}/{}_seed_replayable", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+                replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+            }
+        }
+    };
+}
+
 // implement evaluator trait for ItyFuzzer
 impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI> Evaluator<E, EM, I, S>
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
@@ -361,37 +434,9 @@ where
 
                 // Debugging prints
                 #[cfg(feature = "print_txn_corpus")]
-                if !unsafe {REPLAY} {
-                    unsafe {
-                        DUMP_FILE_COUNT += 1;
-                    }
-
-                    let tx_trace = state.get_execution_result().new_state.trace.clone();
-                    let txn_text = tx_trace.to_string(state);
-                    let txn_text_replayable = tx_trace.to_file_str(state);
-
-                    let data = format!(
-                        "Reverted? {} \n Txn: {}",
-                        state.get_execution_result().reverted,
-                        txn_text
-                    );
-                    println!("============= New Corpus Item =============");
-                    println!("{}", data);
-                    println!("==========================================");
-
-                    // write to file
-                    let corpus_path = format!("{}/corpus", self.work_dir.as_str());
-                    let path = Path::new(corpus_path.as_str());
-                    if !path.exists() {
-                        std::fs::create_dir(path).unwrap();
-                    }
-                    let mut file =
-                        File::create(format!("{}/{}", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                    file.write_all(data.as_bytes()).unwrap();
-
-                    let mut replayable_file =
-                        File::create(format!("{}/{}_replayable", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                    replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+                {
+                    let corpus_dir = format!("{}/corpus", self.work_dir.as_str()).to_string();
+                    dump_file!(state, corpus_dir, true);
                 }
             }
         }
@@ -485,27 +530,8 @@ where
 
                 #[cfg(feature = "print_txn_corpus")]
                 {
-                    let mut file = OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(format!("{}/vulnerabilities", self.work_dir.as_str()))
-                        .unwrap();
-                    file.write_all(cur_report.as_bytes()).unwrap();
-                    unsafe {
-                        DUMP_FILE_COUNT += 1;
-                    }
-                    let corpus_path = format!("{}/corpus", self.work_dir.as_str());
-                    let mut replayable_file =
-                        File::create(format!("{}/vuln_{}", corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                    replayable_file.write_all(
-                        state
-                            .get_execution_result()
-                            .new_state
-                            .trace
-                            .clone()
-                            .to_file_str(state)
-                            .as_bytes()
-                    ).unwrap();
+                    let vulns_dir = format!("{}/vulnerabilities", self.work_dir.as_str());
+                    dump_file!(state, vulns_dir, false);
                 }
 
                 if !unsafe { RUN_FOREVER } {
