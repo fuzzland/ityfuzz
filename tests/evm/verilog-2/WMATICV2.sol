@@ -6,7 +6,7 @@ import {IWMATIC} from "./interfaces/IWMATIC.sol";
 import {IWMATICV2} from "./interfaces/IWMATICV2.sol";
 import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 import "./libraries/TransferHelper.sol";
-import "../../solidity_utils/lib.sol";
+import "../../../solidity_utils/lib.sol";
 
 /// @title The core logic for the WMATICV2 contract
 abstract contract ReentrancyGuard {

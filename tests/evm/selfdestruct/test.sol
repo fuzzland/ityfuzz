@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
 
-import "../../solidity_utils/lib.sol";
+import "../../../solidity_utils/lib.sol";
 
 contract main {
     address private owner;

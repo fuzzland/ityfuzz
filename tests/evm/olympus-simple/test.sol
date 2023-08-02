@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
 
-import "../../solidity_utils/lib.sol";
+import "../../../solidity_utils/lib.sol";
 
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);

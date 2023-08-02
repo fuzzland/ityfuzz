@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
-import "../../solidity_utils/lib.sol";
+import "../../../solidity_utils/lib.sol";
 
 contract Vault {
     IERC20 public immutable token;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8;
-import "../../solidity_utils/lib.sol";
+import "../../../solidity_utils/lib.sol";
 
 contract StakingRewards {
     IERC20 public immutable stakingToken;
