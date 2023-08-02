@@ -19,7 +19,9 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use revm_primitives::Bytecode;
-use crate::fuzzer::{REPLAY, DUMP_FILE_COUNT};
+use crate::fuzzer::REPLAY;
+#[cfg(feature = "print_txn_corpus")]
+use crate::fuzzer::DUMP_FILE_COUNT;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
