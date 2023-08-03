@@ -80,12 +80,11 @@ pub fn move_fuzzer(
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
-    let calibration: CalibrationStage<MoveFunctionInput, _, (StdMapObserver<u8>, ()), MoveFuzzState> = CalibrationStage::new(&feedback);
 
     let mutator = MoveFuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
-    let mut stages = tuple_list!(calibration, std_stage);
+    let mut stages = tuple_list!(std_stage);
 
     let mut executor = FuzzExecutor::new(vm_ref.clone(), tuple_list!(jmp_observer));
 

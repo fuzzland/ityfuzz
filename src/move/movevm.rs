@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -569,10 +570,15 @@ where
         if native_called {
             for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
                 println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
-                if st.name.as_str() == "__fuzzland_move_bug" {
-                    if let Value(ValueImpl::Container(Container::VecU8(data))) = v {
-                        let str = String::from_utf8((*data.borrow()).clone()).expect("invalid utf8");
-                        state.typed_bug.push(str);
+                if st.name.as_str() == "AAAA__fuzzland_move_bug" {
+                    if let Value(ValueImpl::Container(Container::Struct(data))) = v {
+                        let data = (**data).borrow();
+                        let item = data.get(0).clone().expect("invalid event data");
+                        if let ValueImpl::U64(data) = item {
+                            state.typed_bug.push(format!("bug{}", *data));
+                        } else {
+                            panic!("invalid event data");
+                        }
                     } else {
                         panic!("invalid event data");
                     }

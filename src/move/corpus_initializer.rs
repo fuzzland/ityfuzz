@@ -194,6 +194,12 @@ impl<'a> MoveCorpusInitializer<'a>
             Type::U8 => {
                 MoveInputStatus::Complete(Value::u8(0))
             }
+            Type::U16 => {
+                MoveInputStatus::Complete(Value::u16(0))
+            }
+            Type::U32 => {
+                MoveInputStatus::Complete(Value::u32(0))
+            }
             Type::U64 => {
                 MoveInputStatus::Complete(Value::u64(0))
             }

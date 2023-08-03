@@ -19,17 +19,15 @@ module hello_world::hello_world {
     //     text: string::String
     // }
 
-    struct DonutBought has copy, drop {
-        info: u32
+    struct AAAA__fuzzland_move_bug has drop, copy, store {
+        info: u64
     }
 
 
 
-    public entry fun mint(idx: u64) {
-        if (idx == 0) {
-            event::emit(DonutBought { info: 88 });
-        } else {
-            event::emit(DonutBought { info: 123 });
+    public entry fun mint(idx: u8) {
+        if (idx == 12) {
+            event::emit(AAAA__fuzzland_move_bug { info: 1 });
         }
     }
 
