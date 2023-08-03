@@ -20,7 +20,7 @@ use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunctions};
 use move_vm_types::gas::{GasMeter, UnmeteredGasMeter};
 use move_vm_types::values;
-use move_vm_types::values::{Locals, Reference, StructRef, Value, ValueImpl, VMValueCast};
+use move_vm_types::values::{Container, Locals, Reference, StructRef, Value, ValueImpl, VMValueCast};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -53,6 +53,8 @@ pub struct MoveVM<I, S> {
     // for comm with move_vm
     pub functions: HashMap<ModuleId, HashMap<Identifier, Arc<Function>>>,
     pub loader: Loader,
+    pub protocol_config: ProtocolConfig,
+    pub native_context: NativeContextExtensions<'static>,
     _phantom: std::marker::PhantomData<(I, S)>,
 }
 
@@ -62,12 +64,79 @@ impl<I, S> MoveVM<I, S> {
         Self {
             functions,
             loader: Loader::new(Self::get_natives(), Default::default()),
+            protocol_config: Self::get_protocol_config(),
+            native_context: Self::get_extension(),
             _phantom: Default::default(),
         }
     }
 
     pub fn get_natives() -> NativeFunctions {
         NativeFunctions::new(sui_move_natives_latest::all_natives(true)).expect("native functions")
+    }
+
+    pub fn get_protocol_config() -> ProtocolConfig {
+        ProtocolConfig::get_for_max_version_UNSAFE()
+    }
+
+    pub fn get_extension<'a>() -> NativeContextExtensions<'a> {
+        let mut extensions = NativeContextExtensions::default();
+        extensions.add(ObjectRuntime::new(
+            &DummyChildObjectResolver{},
+            BTreeMap::new(),
+            false,
+            &Self::get_protocol_config(),
+            Arc::new(LimitsMetrics::new(&Default::default())),
+        ));
+        extensions.add(NativesCostTable::from_protocol_config(&Self::get_protocol_config()));
+        extensions
+    }
+
+    pub fn clear_context(&mut self) {
+        let state = &mut self.native_context.get_mut::<ObjectRuntime>().state;
+        state.events.clear();
+        state.deleted_ids.clear();
+        state.new_ids.clear();
+        state.input_objects.clear();
+        state.transfers.clear();
+        state.total_events_size = 0;
+    }
+
+    pub fn call_native<'a>(func: Arc<Function>,
+                       ty_args: Vec<Type>,
+                       interp: &mut Interpreter,
+                       state: &mut dyn DataStore,
+                       resolver: &Resolver,
+                       gas_meter: &mut impl GasMeter,
+                       extension: &mut NativeContextExtensions<'a>,
+    ) -> bool {
+        let mut args = VecDeque::new();
+        let expected_args = func.parameters.len();
+        for _ in 0..expected_args {
+            args.push_front(interp.operand_stack.pop().expect("operand stack underflow"));
+        }
+
+
+        let mut native_context = NativeContext::new(
+            interp,
+            state,
+            resolver,
+            extension,
+            gas_meter.remaining_gas(),
+        );
+
+        let native_function = func.get_native().expect("native function not found");
+        let result: NativeResult = native_function(&mut native_context, ty_args, args).unwrap();
+        let return_values = match result.result {
+            Ok(values) => values,
+            _ => {
+                return false;
+            }
+        };
+        for value in return_values {
+            interp.operand_stack.push(value);
+        }
+        // println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
+        true
     }
 }
 
@@ -364,7 +433,9 @@ where
 
         let mut call_stack = vec![];
         let mut reverted = false;
+        let mut native_called = false;
         let mut gas_meter = UnmeteredGasMeter {};
+
         loop {
             let resolver = current_frame.resolver(state.link_context(), &self.loader);
             let ret =
@@ -393,6 +464,7 @@ where
                     let func = resolver.function_from_handle(fh_idx);
 
                     if func.is_native() {
+                        native_called = true;
                         if !Self::call_native(
                             func,
                             vec![],
@@ -400,6 +472,7 @@ where
                             &mut state,
                             &resolver,
                             &mut gas_meter,
+                            &mut self.native_context,
                         ) {
                             reverted = true;
                             break;
@@ -430,6 +503,7 @@ where
 
                     // todo: handle native here
                     if func.is_native() {
+                        native_called = true;
                         if !Self::call_native(
                             func,
                             ty_args,
@@ -437,6 +511,7 @@ where
                             &mut state,
                             &resolver,
                             &mut gas_meter,
+                            &mut self.native_context,
                         ) {
                             reverted = true;
                             break;
@@ -490,6 +565,22 @@ where
             out.vars.push((t.clone(), v.clone()));
             // println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
+
+        if native_called {
+            for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
+                println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
+                if st.name.as_str() == "__fuzzland_move_bug" {
+                    if let Value(ValueImpl::Container(Container::VecU8(data))) = v {
+                        let str = String::from_utf8((*data.borrow()).clone()).expect("invalid utf8");
+                        state.typed_bug.push(str);
+                    } else {
+                        panic!("invalid event data");
+                    }
+                }
+            }
+            self.clear_context();
+        }
+
         ExecutionResult {
             new_state: StagedVMState::new_with_state(state),
             output: out,
@@ -528,62 +619,6 @@ impl ChildObjectResolver for DummyChildObjectResolver {
     }
 }
 
-impl<I, S> MoveVM<I, S> where
-    I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT,
-    S: HasMetadata,
-{
-    pub fn get_protocol_config() -> ProtocolConfig {
-        ProtocolConfig::get_for_max_version_UNSAFE()
-    }
-
-    pub fn get_extension<'a>() -> NativeContextExtensions<'a> {
-        let mut extensions = NativeContextExtensions::default();
-        extensions.add(ObjectRuntime::new(
-            &DummyChildObjectResolver{},
-            BTreeMap::new(),
-            false,
-            &Self::get_protocol_config(),
-            Arc::new(LimitsMetrics::new(&Default::default())),
-        ));
-        extensions.add(NativesCostTable::from_protocol_config(&Self::get_protocol_config()));
-        extensions
-    }
-
-    pub fn call_native(func: Arc<Function>,
-                       ty_args: Vec<Type>,
-                       interp: &mut Interpreter,
-                       state: &mut dyn DataStore, resolver: &Resolver, gas_meter: &mut impl GasMeter) -> bool {
-        let mut args = VecDeque::new();
-        let expected_args = func.parameters.len();
-        for _ in 0..expected_args {
-            args.push_front(interp.operand_stack.pop().expect("operand stack underflow"));
-        }
-
-        let mut ext = Self::get_extension();
-
-        let mut native_context = NativeContext::new(
-            interp,
-            state,
-            resolver,
-            &mut ext,
-            gas_meter.remaining_gas(),
-        );
-
-        let native_function = func.get_native().expect("native function not found");
-        let result: NativeResult = native_function(&mut native_context, ty_args, args).unwrap();
-        let return_values = match result.result {
-            Ok(values) => values,
-            _ => {
-                return false;
-            }
-        };
-        for value in return_values {
-            interp.operand_stack.push(value);
-        }
-        // println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
-        true
-    }
-}
 
 mod tests {
     use std::borrow::Borrow;
@@ -634,6 +669,7 @@ mod tests {
                     _gv_slot: Default::default(),
                     value_to_drop: Default::default(),
                     useful_value: Default::default(),
+                    typed_bug: vec![],
                     ref_in_use: vec![],
                 },
                 stage: vec![],

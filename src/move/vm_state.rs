@@ -42,6 +42,8 @@ pub struct MoveVMState {
     pub value_to_drop: HashMap<Type, Vec<(Value, usize)>>,
     pub useful_value: HashMap<Type, Vec<(Value, usize)>>,
 
+    pub typed_bug: Vec<String>,
+
     pub ref_in_use: Vec<(Type, Value)>,
 }
 
@@ -74,6 +76,7 @@ impl MoveVMState {
             _gv_slot: HashMap::new(),
             value_to_drop: Default::default(),
             useful_value: Default::default(),
+            typed_bug: vec![],
             ref_in_use: vec![],
         }
     }
@@ -237,6 +240,7 @@ impl Clone for MoveVMState {
             _gv_slot: self._gv_slot.clone(),
             value_to_drop: self.value_to_drop.clone(),
             useful_value: self.useful_value.clone(),
+            typed_bug: self.typed_bug.clone(),
             ref_in_use: self.ref_in_use.clone(),
         }
     }
@@ -384,6 +388,7 @@ impl Default for MoveVMState {
             _gv_slot: HashMap::new(),
             value_to_drop: Default::default(),
             useful_value: Default::default(),
+            typed_bug: vec![],
             ref_in_use: vec![],
         }
     }

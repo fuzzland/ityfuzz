@@ -1,6 +1,5 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::dummy_precondition;
-use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
@@ -14,6 +13,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 use crate::evm::oracles::SELFDESTRUCT_BUG_IDX;
+use crate::fuzzer::ORACLE_OUTPUT;
 
 pub struct SelfdestructOracle;
 
