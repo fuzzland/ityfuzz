@@ -278,7 +278,7 @@ macro_rules! dump_file {
                 // write to file
                 let path = Path::new($corpus_path.as_str());
                 if !path.exists() {
-                    std::fs::create_dir(path).unwrap();
+                    std::fs::create_dir_all(path).unwrap();
                 }
                 let mut file =
                     File::create(format!("{}/{}", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
@@ -303,7 +303,7 @@ macro_rules! dump_txn {
                 // write to file
                 let path = Path::new($corpus_path.as_str());
                 if !path.exists() {
-                    std::fs::create_dir(path).unwrap();
+                    std::fs::create_dir_all(path).unwrap();
                 }
 
                 let concise_input = ConciseEVMInput::from_input($input, &EVMExecutionResult::empty_result());
