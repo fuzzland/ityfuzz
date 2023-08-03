@@ -25,6 +25,20 @@ pub struct ConstantPoolMetadata {
     pub constants: Vec<Vec<u8>>,
 }
 
+impl ConstantPoolMetadata {
+    /// Create a new [`ConstantPoolMetadata`]
+    pub fn new() -> Self {
+        Self {
+            constants: Vec::new(),
+        }
+    }
+
+    /// Add a constant to the pool
+    pub fn add_constant(&mut self, constant: Vec<u8>) {
+        self.constants.push(constant);
+    }
+}
+
 impl_serdeany!(ConstantPoolMetadata);
 
 /// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant in the contract

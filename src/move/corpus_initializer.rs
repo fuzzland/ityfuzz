@@ -11,6 +11,7 @@ use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, HasRand, State};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
+use move_binary_format::file_format::Bytecode;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::u256::U256;
@@ -21,6 +22,7 @@ use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
 use revm_primitives::HashSet;
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::input::VMInputT;
+use crate::mutation_utils::ConstantPoolMetadata;
 use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
 use crate::r#move::movevm;
 use crate::r#move::types::{MoveInfantStateState, MoveFuzzState, MoveStagedVMState};
@@ -75,6 +77,7 @@ impl<'a> MoveCorpusInitializer<'a>
 
         // add metadata
         self.state.metadata_mut().insert(StructAbilities::new());
+        self.state.metadata_mut().insert(ConstantPoolMetadata::new());
 
         // setup infant scheduler & corpus
         self.default_state = StagedVMState::new_with_state(
@@ -121,6 +124,49 @@ impl<'a> MoveCorpusInitializer<'a>
         self.add_module(modules, modules_dependencies);
     }
 
+    fn extract_constants(&mut self, module: &CompiledModule) {
+        let constant_pool = self.state.metadata_mut()
+            .get_mut::<ConstantPoolMetadata>()
+            .expect("failed to get constant pool metadata");
+
+        module.constant_pool.iter().for_each(
+            |constant| {
+                constant_pool.add_constant(constant.data.clone());
+            }
+        );
+
+        module.function_defs.iter().for_each(|defs| {
+            match defs.code {
+                Some(ref code) => {
+                    code.code.iter().for_each(|instr| {
+                        match instr {
+                            Bytecode::LdU16(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU64(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU8(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU32(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU128(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU256(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            _ => {}
+                        }
+                    })
+                },
+                None => {}
+            }
+        });
+    }
+
 
     fn deployer(&mut self,
                 to_deploy: Vec<ModuleId>,
@@ -132,9 +178,12 @@ impl<'a> MoveCorpusInitializer<'a>
             }
 
             let module = module_id_to_module.get(&mod_id).unwrap().clone();
+
+            // push constants of module to mutator's constant hinting pool
+            self.extract_constants(&module);
+
             let deps = module.immediate_dependencies();
             self.deployer(deps, deployed, module_id_to_module);
-
             self.executor.deploy(module, None, AccountAddress::random(), &mut self.state);
             deployed.insert(mod_id);
         }
@@ -205,6 +254,9 @@ impl<'a> MoveCorpusInitializer<'a>
             }
             Type::U128 => {
                 MoveInputStatus::Complete(Value::u128(0))
+            }
+            Type::U256 => {
+                MoveInputStatus::Complete(Value::u256(U256::zero()))
             }
             Type::Address => {
                 MoveInputStatus::Complete(Value::address(state.get_rand_address()))
