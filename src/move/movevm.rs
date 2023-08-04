@@ -277,6 +277,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                 }
             }
             Bytecode::MoveTo(sd_idx) => unsafe {
+                MOVE_STATE_CHANGED = true;
                 let addr_struct: StructRef = fast_peek_back!(interpreter, 2).clone().cast().unwrap();
                 let addr = addr_struct.borrow_field(0).unwrap()
                     .value_as::<Reference>().unwrap()
@@ -296,6 +297,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                 }
             }
             Bytecode::MoveToGeneric(sd_idx) => unsafe {
+                MOVE_STATE_CHANGED = true;
                 let addr_struct: StructRef = fast_peek_back!(interpreter, 2).clone().cast().unwrap();
                 let addr = addr_struct.borrow_field(0).unwrap()
                     .value_as::<Reference>().unwrap()
@@ -551,6 +553,7 @@ where
                 .return_types()
                 .iter()
         ) {
+            unsafe {MOVE_STATE_CHANGED = true;}
             let abilities = resolver.loader.abilities(t).expect("unknown type");
             state.add_new_value(v.copy_value().expect("failed to copy value"), t, abilities.has_drop());
 

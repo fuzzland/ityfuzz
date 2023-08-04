@@ -11,10 +11,12 @@ use move_core_types::value::MoveTypeLayout;
 
 use move_vm_types::data_store::DataStore;
 use move_vm_types::loaded_data::runtime_types::Type;
-use move_vm_types::values::{Container, GlobalValue, Value, ValueImpl};
+use move_vm_types::values::{Container, ContainerRef, GlobalValue, IndexedRef, Value, ValueImpl};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::HasRand;
@@ -116,9 +118,10 @@ impl MoveVMState {
             };
         }
 
-        if is_droppable {
+        if !is_droppable {
             add_new_v!(value_to_drop);
         } else {
+            println!("add_new_value(useful): {:?}", value);
             add_new_v!(useful_value);
         }
     }
@@ -208,7 +211,7 @@ impl MoveVMState {
             .get_ability(ty)
             .expect("StructAbilities of specific struct not inserted");
 
-        if struct_abilities.has_drop() {
+        if !struct_abilities.has_drop() {
             let it = self.value_to_drop.get_mut(ty).unwrap();
             match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
                 Some(offset) => {
@@ -350,9 +353,103 @@ impl DataStore for MoveVMState {
     }
 }
 
+pub fn value_to_hash(v: &ValueImpl, hasher: &mut DefaultHasher) {
+    macro_rules! hash_vec {
+        ($v: expr) => {
+            {
+                let _ = (**$v).borrow().iter().for_each(|inner| {
+                    inner.hash(hasher);
+                });
+            }
+        }
+    }
+
+    macro_rules! hash_container {
+        ($v: expr) => {
+            match $v {
+                Container::Locals(v) => {
+                    let _ = (**v).borrow().iter().for_each(|inner| {
+                        value_to_hash(inner, hasher);
+                    });
+                }
+                Container::Vec(v) => {
+                    let _ = (**v).borrow().iter().for_each(|inner| {
+                        value_to_hash(inner, hasher);
+                    });
+                }
+                Container::Struct(v) => {
+                    let _ = (**v).borrow().iter().for_each(|inner| {
+                        value_to_hash(inner, hasher);
+                    });
+                }
+                Container::VecU8(v) => hash_vec!(v),
+                Container::VecU64(v) => hash_vec!(v),
+                Container::VecU128(v) => hash_vec!(v),
+                Container::VecBool(v)  => hash_vec!(v),
+                Container::VecAddress(v) => hash_vec!(v),
+                Container::VecU16(v) => hash_vec!(v),
+                Container::VecU32(v) => hash_vec!(v),
+                Container::VecU256(v) => hash_vec!(v),
+            }
+        };
+    }
+
+    match v {
+        ValueImpl::U8(v) => {(*v).hash(hasher);}
+        ValueImpl::U16(v) => {(*v).hash(hasher);}
+        ValueImpl::U32(v) => {(*v).hash(hasher);}
+        ValueImpl::U64(v) => {(*v).hash(hasher);}
+        ValueImpl::U128(v) => {(*v).hash(hasher);}
+        ValueImpl::U256(v) => {(*v).hash(hasher);}
+        ValueImpl::Bool(v) => {(*v).hash(hasher);}
+        ValueImpl::Address(v) => {(*v).hash(hasher);}
+        ValueImpl::Container(v) => hash_container!(v),
+        ValueImpl::ContainerRef(v) => {
+            match v {
+                ContainerRef::Local(v) => hash_container!(v),
+                ContainerRef::Global { .. } => { unreachable!("not supported") }
+            }
+        }
+        ValueImpl::IndexedRef(v) => {
+            v.idx.hash(hasher);
+            match &v.container_ref {
+                ContainerRef::Local(v) => hash_container!(v),
+                ContainerRef::Global { .. } => { unreachable!("not supported") }
+            }
+        }
+        _ => {unreachable!("not supported")}
+    }
+}
+
 impl VMStateT for MoveVMState {
     fn get_hash(&self) -> u64 {
-        todo!()
+        let mut hasher = DefaultHasher::new();
+        self.resources
+            .iter()
+            .for_each(|(addr, ty)| {
+                addr.hash(&mut hasher);
+                ty.iter().for_each(|(t, v)| {
+                    t.hash(&mut hasher);
+                    value_to_hash(&v.0, &mut hasher);
+                });
+            });
+        self.useful_value.iter().for_each(|(t, v)| {
+            t.hash(&mut hasher);
+            v.iter().for_each(|(v, amt)| {
+                value_to_hash(&v.0, &mut hasher);
+                amt.hash(&mut hasher);
+            });
+        });
+
+        self.value_to_drop.iter().for_each(|(t,v)| {
+            t.hash(&mut hasher);
+            v.iter().for_each(|(v, amt)| {
+                value_to_hash(&v.0, &mut hasher);
+                amt.hash(&mut hasher);
+            });
+        });
+
+        hasher.finish()
     }
 
     fn has_post_execution(&self) -> bool {

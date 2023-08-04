@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT};
 use crate::r#move::types::{MoveAddress, MoveFuzzState, MoveInfantStateState, MoveLoc, MoveStagedVMState};
 use crate::r#move::vm_state::MoveVMState;
-use crate::scheduler::{SortedDroppingScheduler, VoteData};
+use crate::scheduler::{HasReportCorpus, HasVote, SortedDroppingScheduler, VoteData};
 use crate::state::InfantStateState;
 
 // A scheduler that ensures that all dependencies of a test case are available
@@ -30,6 +30,19 @@ pub struct MoveSchedulerMeta {
 
 impl_serdeany!(MoveSchedulerMeta);
 
+impl MoveSchedulerMeta {
+    pub fn new() -> Self {
+        Self {
+            current_idx: 0,
+            current_deps: HashSet::new(),
+            testcase_to_deps: HashMap::new(),
+            deps_state_idx: HashMap::new(),
+            state_idx_to_deps: HashMap::new(),
+            unavailable_types: HashSet::new(),
+        }
+    }
+}
+
 
 pub struct MoveTestcaseScheduler<SC> {
     pub inner: SC,
@@ -46,14 +59,38 @@ impl<SC> Scheduler<MoveFunctionInput, MoveFuzzState> for MoveTestcaseScheduler<S
     fn on_add(&self, _state: &mut MoveFuzzState, _idx: usize) -> Result<(), Error> {
         let tc = _state.corpus().get(_idx).expect("Missing testcase");
         let input = tc.borrow().input().clone().expect("Missing input");
-        let meta = _state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+        let meta = _state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+        if !input._resolved {
+            input._deps.iter().for_each(
+                |(ty, amount)| {
+                    meta.unavailable_types.insert(ty.clone());
+                }
+            )
+        }
         meta.testcase_to_deps.insert(_idx, input._deps.keys().cloned().collect::<HashSet<_>>());
         self.inner.on_add(_state, _idx)
     }
 
     fn next(&self, state: &mut MoveFuzzState) -> Result<usize, Error> {
-        let next_idx = self.inner.next(state)?;
-        let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+        let mut next_idx = self.inner.next(state)?;
+        loop {
+            let tc = state.corpus().get(next_idx).expect("Missing testcase");
+            let input = tc.borrow().input().clone().expect("Missing input");
+            {
+                let mut meta = state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+                if input._deps.iter().all(
+                    |(ty, amount)| {
+                        if meta.unavailable_types.contains(ty) {
+                            return false;
+                        }
+                        true
+                    }) {
+                    break;
+                }
+                next_idx = self.inner.next(state)?;
+            }
+        }
+        let mut meta = state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
         meta.current_idx = next_idx;
         meta.current_deps = meta.testcase_to_deps.get(&next_idx).expect("Missing deps").clone();
         Ok(next_idx)
@@ -63,6 +100,22 @@ impl<SC> Scheduler<MoveFunctionInput, MoveFuzzState> for MoveTestcaseScheduler<S
 
 pub struct MoveVMStateScheduler {
     pub inner: SortedDroppingScheduler<MoveStagedVMState, MoveInfantStateState>
+}
+
+impl HasVote<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler {
+    fn vote(&self, state: &mut MoveInfantStateState, idx: usize, amount: usize) {
+        self.inner.vote(state, idx, amount)
+    }
+}
+
+impl HasReportCorpus<MoveInfantStateState> for MoveVMStateScheduler {
+    fn report_corpus(&self, state: &mut MoveInfantStateState, state_idx: usize) {
+        self.inner.report_corpus(state, state_idx)
+    }
+
+    fn sponsor_state(&self, state: &mut MoveInfantStateState, state_idx: usize, amt: usize) {
+        self.inner.sponsor_state(state, state_idx, amt)
+    }
 }
 
 
@@ -114,6 +167,8 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
         let mut sample_idx = vec![];
         {
             let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+
+            println!("now we need to find a state with deps: {:?}", meta.current_deps);
             if meta.current_deps.len() == 0 {
                 return self.inner.next(state);
             }

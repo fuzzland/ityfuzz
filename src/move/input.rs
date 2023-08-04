@@ -57,9 +57,9 @@ pub trait MoveFunctionInputT {
     fn slash<S>(&mut self, state: &mut S)
         where S: HasMetadata + HasRand;
 
+    fn set_resolved(&mut self);
 
-    /// Does the input have all its dependencies resolved?
-    fn deps_resolved(&self) -> bool;
+    fn get_resolved(&self) -> bool;
 }
 
 pub struct FunctionDefaultable {
@@ -307,7 +307,11 @@ impl MoveFunctionInputT for MoveFunctionInput {
         }
     }
 
-    fn deps_resolved(&self) -> bool {
+    fn set_resolved(&mut self) {
+        self._resolved = true;
+    }
+
+    fn get_resolved(&self) -> bool {
         self._resolved
     }
 }
@@ -494,6 +498,7 @@ impl MoveFunctionInput {
                                vm_state: &mut MoveVMState,
                                is_ref: bool,
                                ty: &Type,
+                               is_resolved: bool,
     ) -> MutationResult
     where
         S: State
@@ -510,13 +515,16 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
-                vm_state.restock(
-                    ty,
-                    value.value,
-                    is_ref,
-                    _state
-                );
-
+                println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
+                // resolved structs shall be returned to the vm state
+                if is_resolved {
+                    vm_state.restock(
+                        ty,
+                        value.value,
+                        is_ref,
+                        _state
+                    );
+                }
                 if let Value(ValueImpl::Container(Container::Struct(new_struct))) = vm_state.sample_value(
                     _state,
                     ty,
@@ -545,6 +553,7 @@ impl MoveFunctionInput {
         ty: Type,
         vm_state: &mut MoveVMState,
         is_ref: bool,
+        is_resolved: bool,
     ) -> MutationResult
         where
             S: State
@@ -641,10 +650,13 @@ impl MoveFunctionInput {
                 mutate_by!( _state, value)
             }
             MutateType::Container(cont, inner_ty,is_ref) => {
-                Self::mutate_container(_state, cont,
+                Self::mutate_container(_state,
+                                       cont,
                                        vm_state,
                                        is_ref,
-                                       &inner_ty)
+                                       &inner_ty,
+                                       is_resolved
+                )
             }
             MutateType::Indexed(vec_container, index) => {
                 match vec_container {
@@ -661,7 +673,8 @@ impl MoveFunctionInput {
                             &mut mutable_value,
                             inner_ty,
                             vm_state,
-                            true
+                            true,
+                            is_resolved,
                         );
                         (**inner_vec).borrow_mut()[index] = mutable_value.value.0.clone();
                         res
@@ -690,7 +703,8 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             &mut self.args[nth],
             self.function_info.get_function().parameter_types[nth].clone(),
             &mut self.vm_state.state,
-            false
+            false,
+            self._resolved
         )
     }
 

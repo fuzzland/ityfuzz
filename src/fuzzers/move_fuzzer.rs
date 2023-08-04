@@ -36,6 +36,7 @@ use crate::r#move::movevm::MoveVM;
 use crate::r#move::mutator::MoveFuzzMutator;
 #[cfg(feature = "move_support")]
 use crate::r#move::oracles::typed_bug::TypedBugOracle;
+use crate::r#move::scheduler::{MoveTestcaseScheduler, MoveVMStateScheduler};
 #[cfg(feature = "move_support")]
 use crate::r#move::types::MoveFuzzState;
 #[cfg(feature = "move_support")]
@@ -59,8 +60,12 @@ pub fn move_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
-    let infant_scheduler = SortedDroppingScheduler::new();
-    let mut scheduler = QueueScheduler::new();
+    let infant_scheduler = MoveVMStateScheduler {
+        inner: SortedDroppingScheduler::new(),
+    };
+    let mut scheduler = MoveTestcaseScheduler {
+        inner: QueueScheduler::new(),
+    };
 
     {
         MoveCorpusInitializer::new(

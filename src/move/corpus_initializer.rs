@@ -25,6 +25,7 @@ use crate::input::VMInputT;
 use crate::mutation_utils::ConstantPoolMetadata;
 use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
 use crate::r#move::movevm;
+use crate::r#move::scheduler::MoveSchedulerMeta;
 use crate::r#move::types::{MoveInfantStateState, MoveFuzzState, MoveStagedVMState};
 use crate::r#move::vm_state::MoveVMState;
 use crate::state::HasCaller;
@@ -78,6 +79,7 @@ impl<'a> MoveCorpusInitializer<'a>
         // add metadata
         self.state.metadata_mut().insert(StructAbilities::new());
         self.state.metadata_mut().insert(ConstantPoolMetadata::new());
+        self.state.infant_states_state.metadata_mut().insert(MoveSchedulerMeta::new());
 
         // setup infant scheduler & corpus
         self.default_state = StagedVMState::new_with_state(
@@ -339,6 +341,8 @@ impl<'a> MoveCorpusInitializer<'a>
 
     fn build_input(&mut self, module_id: &ModuleId, function: Arc<Function>) -> Option<MoveFunctionInput> {
         let mut values = vec![];
+        let mut resolved = true;
+        let mut deps = HashMap::new();
 
         for parameter_type in &function.parameter_types {
             let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
@@ -347,8 +351,12 @@ impl<'a> MoveCorpusInitializer<'a>
                 MoveInputStatus::Complete(v) => {
                     values.push(CloneableValue::from(v));
                 }
-                MoveInputStatus::DependentOnStructs(_, _) => {
-                    todo!("structs")
+                MoveInputStatus::DependentOnStructs(_, tys) => {
+                    values.push(CloneableValue::from(Value(ValueImpl::Container(Container::Struct(Rc::new(RefCell::new(vec![])))))));
+                    tys.iter().for_each(|ty| {
+                        *deps.entry(ty.clone()).or_insert(0) += 1;
+                    });
+                    resolved = false;
                 }
             }
         }
@@ -363,8 +371,8 @@ impl<'a> MoveCorpusInitializer<'a>
             caller: self.state.get_rand_caller(),
             vm_state: StagedVMState::new_uninitialized(),
             vm_state_idx: 0,
-            _deps: Default::default(),
-            _resolved: true,
+            _deps: deps,
+            _resolved: resolved,
         };
         return Some(input);
     }
