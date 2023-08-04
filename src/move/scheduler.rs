@@ -15,19 +15,42 @@ use crate::state::InfantStateState;
 
 // A scheduler that ensures that all dependencies of a test case are available
 // before executing it.
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct TypeWithAmount {
+    pub ty: Type,
+    pub amount: usize,
+}
+
+impl TypeWithAmount {
+    pub fn new(ty: Type, amount: usize) -> Self {
+        Self { ty, amount }
+    }
+
+    pub fn satisfied_by(&self, other: &TypeWithAmount) -> bool {
+        self.amount <= other.amount
+    }
+
+    pub fn max(&mut self, other: &TypeWithAmount) {
+        self.amount = std::cmp::max(self.amount, other.amount);
+    }
+
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MoveSchedulerMeta {
     // managed by MoveTestcaseScheduler
     pub current_idx: usize,
-    pub current_deps: HashSet<Type>,
-    pub testcase_to_deps: HashMap<usize, HashSet<Type>>,
+    pub current_working_states: HashSet<usize>,
+    pub testcase_to_deps: HashMap<usize, HashSet<TypeWithAmount>>,
 
     // managed by MoveVMStateScheduler
-    pub deps_state_idx: HashMap<Type, HashSet<usize>>,
-    pub state_idx_to_deps: HashMap<usize, HashSet<Type>>,
-    pub unavailable_types: HashSet<Type>,
+
+    pub state_to_deps: HashMap<usize, HashSet<TypeWithAmount>>,
+    // type -> [amount, [idx]]
+    pub available_types: HashMap<Type, Vec<(usize, HashSet<usize>)>>,
+    pub all_states: HashSet<usize>
 }
+
 
 impl_serdeany!(MoveSchedulerMeta);
 
@@ -35,12 +58,61 @@ impl MoveSchedulerMeta {
     pub fn new() -> Self {
         Self {
             current_idx: 0,
-            current_deps: HashSet::new(),
+            current_working_states: HashSet::new(),
             testcase_to_deps: HashMap::new(),
-            deps_state_idx: HashMap::new(),
-            state_idx_to_deps: HashMap::new(),
-            unavailable_types: HashSet::new(),
+            state_to_deps: Default::default(),
+            available_types: Default::default(),
+            all_states: Default::default(),
         }
+    }
+
+    pub fn add_type(&mut self, new_ta: TypeWithAmount, idx: usize) {
+        let entry = self.available_types.entry(new_ta.ty).or_insert(vec![]);
+        for (amount, idxs) in entry.iter_mut() {
+            if *amount == new_ta.amount {
+                idxs.insert(idx);
+                return;
+            }
+        }
+        entry.push((new_ta.amount, HashSet::from([idx])));
+    }
+
+    pub fn remove_type(&mut self, idx: usize) {
+        for ta in self.state_to_deps.get(&idx).expect("Missing state").iter() {
+            let entry = self.available_types.get_mut(&ta.ty).expect("Missing type");
+            for (amount, idxs) in entry {
+                if *amount == ta.amount {
+                    idxs.remove(&idx);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Check whether a set of (type, amount) can be satisitied, return idxs of states
+    pub fn satisfying_states(&self, tas: &Vec<TypeWithAmount>) -> HashSet<usize> {
+        let mut idx_to_intersect = vec![];
+        for ta in tas {
+            let entry = match self.available_types.get(&ta.ty) {
+                Some(entry) => entry,
+                None => return HashSet::new(),
+            };
+
+            let mut all_idxs = HashSet::new();
+            for (amount, idxs) in entry {
+                if *amount >= ta.amount {
+                    all_idxs.extend(idxs);
+                }
+            }
+            idx_to_intersect.push(all_idxs);
+        }
+
+        // now, intersect all idxs
+        let mut idxs = idx_to_intersect[0].clone();
+        for idx in idx_to_intersect.iter().skip(1) {
+            idxs = idxs.intersection(idx).map(|x| *x).collect();
+        }
+        idxs
     }
 }
 
@@ -61,14 +133,14 @@ impl<SC> Scheduler<MoveFunctionInput, MoveFuzzState> for MoveTestcaseScheduler<S
         let tc = _state.corpus().get(_idx).expect("Missing testcase");
         let input = tc.borrow().input().clone().expect("Missing input");
         let meta = _state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-        if !input._resolved {
-            input._deps.iter().for_each(
-                |(ty, amount)| {
-                    meta.unavailable_types.insert(ty.clone());
-                }
-            )
-        }
-        meta.testcase_to_deps.insert(_idx, input._deps.keys().cloned().collect::<HashSet<_>>());
+        meta.testcase_to_deps
+            .insert(
+                _idx,
+                input._deps
+                    .iter()
+                    .map(|(ty, amount)| TypeWithAmount::new(ty.clone(), *amount))
+                    .collect::<HashSet<_>>()
+            );
         self.inner.on_add(_state, _idx)
     }
 
@@ -77,23 +149,30 @@ impl<SC> Scheduler<MoveFunctionInput, MoveFuzzState> for MoveTestcaseScheduler<S
         loop {
             let tc = state.corpus().get(next_idx).expect("Missing testcase");
             let input = tc.borrow().input().clone().expect("Missing input");
-            {
-                let mut meta = state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-                if input._deps.iter().all(
-                    |(ty, amount)| {
-                        if meta.unavailable_types.contains(ty) {
-                            return false;
-                        }
-                        true
-                    }) {
+            let mut meta = state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+            if input._deps.len() == 0 {
+                meta.current_working_states = meta.all_states.clone();
+                break;
+            } else {
+                let tas = input._deps
+                    .iter()
+                    .map(|(ty, amount)| TypeWithAmount::new(ty.clone(), *amount))
+                    .collect::<Vec<_>>();
+
+                let satisfying_states = meta.satisfying_states(&tas);
+                if satisfying_states.len() > 0 {
+                    meta.current_working_states = satisfying_states;
                     break;
                 }
                 next_idx = self.inner.next(state)?;
             }
         }
-        let mut meta = state.infant_states_state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+        let mut meta = state
+            .infant_states_state
+            .metadata_mut()
+            .get_mut::<MoveSchedulerMeta>()
+            .expect("Missing metadata");
         meta.current_idx = next_idx;
-        meta.current_deps = meta.testcase_to_deps.get(&next_idx).expect("Missing deps").clone();
         Ok(next_idx)
     }
 }
@@ -129,22 +208,23 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
             .expect("Missing input")
             .state
             .values
-            .keys()
-            .cloned()
+            .iter()
+            .map(|(ty, amount)| TypeWithAmount::new(ty.clone(), amount.iter().map(|(_, amt)| amt).sum::<usize>()))
             .collect_vec();
         let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-        interesting_types.iter().for_each(
-            |v| {
-                meta.deps_state_idx.entry(v.clone()).or_insert(Default::default()).insert(idx);
-                meta.unavailable_types.remove(v);
-            }
-        );
-        let entry = meta.state_idx_to_deps.entry(idx).or_insert(Default::default());
+        meta.all_states.insert(idx);
+        let entry = meta.state_to_deps.entry(idx).or_insert(Default::default());
         interesting_types.iter().for_each(
             |v| {
                 entry.insert(v.clone());
             }
         );
+
+        for ta in interesting_types{
+            meta.add_type(ta, idx);
+        }
+
+
         let res = self.inner.on_add(state, idx);
         {
             let votes_meta = state.metadata_mut().get_mut::<VoteData>().expect("Missing metadata");
@@ -161,36 +241,19 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
 
     fn on_remove(&self, state: &mut MoveInfantStateState, idx: usize, _testcase: &Option<Testcase<MoveStagedVMState>>) -> Result<(), Error> {
         let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-        // println!("Removing state: {:?}", idx);
-        meta.state_idx_to_deps.get(&idx).expect("Missing state idx").iter().for_each(
-            |v| {
-                let all_idx = meta.deps_state_idx.get_mut(v).expect("Missing deps");
-                all_idx.remove(&idx);
-                if all_idx.is_empty() {
-                    meta.unavailable_types.insert(v.clone());
-                }
-            }
-        );
-        meta.state_idx_to_deps.remove(&idx);
-        // self.inner.on_remove(state, idx, _testcase)
+        meta.remove_type(idx);
+        meta.state_to_deps.remove(&idx);
+        meta.all_states.remove(&idx);
+        meta.current_working_states.remove(&idx);
+
         Ok(())
     }
 
     fn next(&self, state: &mut MoveInfantStateState) -> Result<usize, Error> {
-
-        let mut sample_idx = vec![];
+        let mut sample_idx = HashSet::new();
         {
             let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-
-            // println!("now we need to find a state with deps: {:?}", meta.current_deps);
-            if meta.current_deps.len() == 0 {
-                return self.inner.next(state);
-            }
-            for (idx, tys) in &meta.state_idx_to_deps {
-                if tys.is_superset(&meta.current_deps) {
-                    sample_idx.push(*idx);
-                }
-            }
+            sample_idx = meta.current_working_states.clone();
         }
 
         let mut total_votes = 0;
@@ -198,13 +261,11 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
         {
             let mut sampling_meta = state.metadata().get::<VoteData>().unwrap();
             for idx in sample_idx {
-                // println!("idx: {}", idx);
                 let (votes, visits) = sampling_meta.votes_and_visits.get(&idx).unwrap();
                 sample_list.push((idx, (*votes, *visits)));
                 total_votes += *votes;
             }
         }
-
 
         let mut s: f64 = 0.0; // sum of votes so far
         let mut idx = usize::MAX;
