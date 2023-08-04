@@ -25,9 +25,10 @@ use move_core_types::identifier::IdentStr;
 use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
 use crate::r#move::input::StructAbilities;
+use crate::r#move::movevm::TypeTagInfoMeta;
 
 pub trait MoveVMStateT {
-    fn values(&self) -> (&HashMap<Type, Vec<(Value, usize)>>);
+    fn values(&self) -> (&HashMap<Type, Vec<(GatedValue, usize)>>);
 
     /// Called after each time the function is called, we should return all values that are borrowed
     /// as reference / mutable reference from the vm_state.
@@ -35,6 +36,46 @@ pub trait MoveVMStateT {
         where S: HasMetadata;
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum Gate {
+    Ref = 0,
+    MutRef = 1,
+    Own = 2
+}
+
+impl Gate {
+    pub fn satisfied_by(&self, other: &Self) -> bool {
+        match self {
+            Gate::Ref => {
+                true
+            }
+            Gate::MutRef => {
+                *other == Gate::Own || *other == Gate::MutRef
+            }
+            Gate::Own => {
+                *other == Gate::Own
+            }
+        }
+    }
+
+    pub fn is_ref(&self) -> bool {
+        *self == Gate::Ref || *self == Gate::MutRef
+    }
+
+}
+
+
+#[derive(Debug, Clone)]
+pub struct GatedValue {
+    pub v: Value,
+    pub gate: Gate,
+}
+
+impl GatedValue {
+    pub fn equals(&self, other: &Self) -> PartialVMResult<bool> {
+        Ok(self.v.equals(&other.v)? && self.gate == other.gate)
+    }
+}
 
 #[derive(Debug)]
 pub struct MoveVMState {
@@ -42,15 +83,15 @@ pub struct MoveVMState {
     pub _gv_slot: HashMap<(AccountAddress, Type), GlobalValue>,
     pub _hot_potato: usize,
 
-    pub values: HashMap<Type, Vec<(Value, usize)>>,
+    pub values: HashMap<Type, Vec<(GatedValue, usize)>>,
 
     pub typed_bug: Vec<String>,
 
-    pub ref_in_use: Vec<(Type, Value)>,
+    pub ref_in_use: Vec<(Type, GatedValue)>,
 }
 
 impl MoveVMStateT for MoveVMState {
-    fn values(&self) -> (&HashMap<Type, Vec<(Value, usize)>>) {
+    fn values(&self) -> (&HashMap<Type, Vec<(GatedValue, usize)>>) {
         &self.values
     }
 
@@ -60,7 +101,7 @@ impl MoveVMStateT for MoveVMState {
     where S: HasMetadata {
         for (t, v) in self.ref_in_use.clone() {
             // we'll clear the ref_in_use vector to save CPU time
-            self.restock(&t, v, false, state);
+            self.restock_args(&t, v, false, state);
         }
         self.ref_in_use.clear();
     }
@@ -83,7 +124,7 @@ impl MoveVMState {
     ///
     /// Checks if the value is already in the state, if it is, it will not be added
     /// but the amount of the value will be increased.
-    pub fn add_new_value(&mut self, value: Value, ty: &Type, abilities: &AbilitySet) {
+    pub fn add_new_value(&mut self, value: GatedValue, ty: &Type, abilities: &AbilitySet) {
         let it = match self.values.get_mut(ty) {
             Some(it) => it,
             None => {
@@ -121,7 +162,7 @@ impl MoveVMState {
     /// If the value is a reference, it will be added to the ref_in_use vector
     ///
     /// When a value is sampled, it will be removed from the state.
-    pub fn sample_value<S>(&mut self, state: &mut S, ty: &Type, is_ref: bool) -> Value
+    pub fn sample_value<S>(&mut self, state: &mut S, ty: &Type, minimum_gate: &Gate) -> Value
     where S: HasRand + HasMetadata {
         match self.values.get_mut(ty) {
             None => None,
@@ -129,7 +170,16 @@ impl MoveVMState {
                 if it.len() == 0 {
                     None
                 } else {
-                    let offset = (state.rand_mut().next() as usize % it.len()) as usize;
+                    let mut offset = (state.rand_mut().next() as usize % it.len()) as usize;
+
+                    loop {
+                        if minimum_gate.satisfied_by(&it[offset].0.gate) {
+                            break;
+                        } else {
+                            offset = (state.rand_mut().next() as usize % it.len()) as usize;
+                        }
+                    }
+
                     let (val, val_count) = it[offset].clone();
 
                     // remove from vec
@@ -144,7 +194,7 @@ impl MoveVMState {
                     }
 
                     // add to ref_in_use
-                    if is_ref {
+                    if minimum_gate.is_ref() {
                         self.ref_in_use.push((ty.clone(), val.clone()));
                     } else {
                         let struct_abilities = state
@@ -157,7 +207,7 @@ impl MoveVMState {
                             self._hot_potato -= 1;
                         }
                     }
-                    Some(val)
+                    Some(val.v)
                 }
             }
         }.expect("Cannot sample value from state")
@@ -167,8 +217,12 @@ impl MoveVMState {
     ///
     /// If the value is a reference, it will be removed from the ref_in_use vector.
     /// Used by mutator when trying to mutate a struct.
-    pub fn restock<S>(&mut self, ty: &Type, value: Value, is_ref: bool, _state: &mut S)
+    pub fn restock_args<S>(&mut self, ty: &Type, value: GatedValue, is_ref: bool, state: &mut S)
     where S: HasMetadata {
+        if state.metadata().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
+            return;
+        }
+
         if is_ref {
             let offset = self.ref_in_use
                 .iter()
@@ -176,7 +230,7 @@ impl MoveVMState {
                 .expect("Cannot find value in ref_in_use, is this struct not a reference?");
             self.ref_in_use.remove(offset);
         }
-        let struct_abilities = _state
+        let struct_abilities = state
             .metadata()
             .get::<StructAbilities>()
             .expect("StructAbilities not found")
@@ -194,6 +248,46 @@ impl MoveVMState {
             }
             None => {
                 it.push((value.clone(), 1));
+            }
+        }
+    }
+
+    pub fn restock_struct<S>(&mut self, ty: &Type, value: Value, ret_ty: &Gate, state: &mut S)
+        where S: HasMetadata {
+        if state.metadata().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
+            return;
+        }
+
+        let value = GatedValue {
+            v: value,
+            gate: ret_ty.clone(),
+        };
+
+        if ret_ty.is_ref() {
+            let offset = self.ref_in_use
+                .iter()
+                .position(|(t, v)| v.equals(&value).unwrap())
+                .expect("Cannot find value in ref_in_use, is this struct not a reference?");
+            self.ref_in_use.remove(offset);
+        }
+        let struct_abilities = state
+            .metadata()
+            .get::<StructAbilities>()
+            .expect("StructAbilities not found")
+            .get_ability(ty)
+            .expect("StructAbilities of specific struct not inserted");
+
+        if !struct_abilities.has_drop() && !ret_ty.is_ref() {
+            self._hot_potato += 1;
+        }
+
+        let it = self.values.get_mut(ty).unwrap();
+        match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
+            Some(offset) => {
+                it[offset].1 += 1;
+            }
+            None => {
+                it.push((value, 1));
             }
         }
     }
@@ -270,6 +364,7 @@ impl DataStore for MoveVMState {
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
+        unreachable!("Sui doesn't support load_resource");
         let data = self.resources.get(&addr).unwrap().get(ty).unwrap();
 
         self._gv_slot.insert(
@@ -281,7 +376,7 @@ impl DataStore for MoveVMState {
     }
 
     fn load_module(&self, _module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        unreachable!()
+        unreachable!("Sui doesn't support load_module");
     }
 
 
@@ -313,7 +408,7 @@ impl DataStore for MoveVMState {
     }
 
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
-        unreachable!()
+        unreachable!("ItyFuzz does not support publishing modules")
     }
 }
 
@@ -400,7 +495,8 @@ impl VMStateT for MoveVMState {
         self.values.iter().for_each(|(t, v)| {
             t.hash(&mut hasher);
             v.iter().for_each(|(v, amt)| {
-                value_to_hash(&v.0, &mut hasher);
+                value_to_hash(&v.v.0, &mut hasher);
+                v.gate.hash(&mut hasher);
                 amt.hash(&mut hasher);
             });
         });

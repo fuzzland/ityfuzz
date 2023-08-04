@@ -1,10 +1,11 @@
+use std::any::Any;
 use std::borrow::Borrow;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
 use crate::r#move::types::MoveOutput;
-use crate::r#move::vm_state::MoveVMState;
+use crate::r#move::vm_state::{Gate, GatedValue, MoveVMState};
 use crate::state_input::StagedVMState;
 
 use move_binary_format::access::ModuleAccess;
@@ -12,23 +13,24 @@ use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 
 use move_vm_runtime::interpreter::{CallStack, DummyTracer, ExitCode, Frame, Interpreter, ItyFuzzTracer, Stack};
 use move_vm_runtime::loader;
 use move_vm_runtime::loader::BinaryType::Module;
-use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver};
+use move_vm_runtime::loader::{Function, Loader, ModuleCache, Resolver, StructTagType};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunctions};
 use move_vm_types::gas::{GasMeter, UnmeteredGasMeter};
 use move_vm_types::values;
 use move_vm_types::values::{Container, Locals, Reference, StructRef, Value, ValueImpl, VMValueCast};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
+use libafl::impl_serdeany;
 use libafl::state::HasMetadata;
-use move_binary_format::errors::VMResult;
+use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_binary_format::file_format::Bytecode;
 use move_core_types::u256;
 use move_stdlib::natives::all_natives;
@@ -36,6 +38,7 @@ use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::data_store::DataStore;
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::natives::function::NativeResult;
+use revm_primitives::HashSet;
 use sui_move_natives_latest::NativesCostTable;
 use sui_move_natives_latest::object_runtime::ObjectRuntime;
 use sui_protocol_config::ProtocolConfig;
@@ -44,6 +47,7 @@ use sui_types::error::SuiResult;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::Object;
 use sui_types::storage::ChildObjectResolver;
+use crate::r#move::corpus_initializer::is_tx_context;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -57,6 +61,73 @@ pub struct MoveVM<I, S> {
     pub protocol_config: ProtocolConfig,
     pub native_context: NativeContextExtensions<'static>,
     _phantom: std::marker::PhantomData<(I, S)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeTagInfoMeta {
+    pub type_to_type_tag: HashMap<Type, StructTag>,
+    pub tx_context: HashSet<Type>,
+}
+
+impl_serdeany!(TypeTagInfoMeta);
+
+impl TypeTagInfoMeta {
+    pub fn new() -> Self {
+        Self {
+            type_to_type_tag: HashMap::new(),
+            tx_context: HashSet::new(),
+        }
+    }
+    pub fn register_type_tag(&mut self, ty: Type, loader: &Loader) {
+        let tag = self.find_type(&ty, loader);
+        if let TypeTag::Struct(struct_tag) = tag {
+            if is_tx_context(&*struct_tag) {
+                self.tx_context.insert(ty.clone());
+            }
+            self.type_to_type_tag.insert(ty, *struct_tag);
+        }
+    }
+    pub fn is_tx_context(&self, ty: &Type) -> bool {
+        self.tx_context.contains(ty)
+    }
+    pub fn get_type_tag(&self, ty: &Type) -> Option<&StructTag> {
+        self.type_to_type_tag.get(ty)
+    }
+    pub fn find_type(&mut self, ty: &Type, loader: &Loader) -> TypeTag {
+        match ty {
+            Type::Bool => TypeTag::Bool,
+            Type::U8 => TypeTag::U8,
+            Type::U16 => TypeTag::U16,
+            Type::U32 => TypeTag::U32,
+            Type::U64 => TypeTag::U64,
+            Type::U128 => TypeTag::U128,
+            Type::U256 => TypeTag::U256,
+            Type::Address => TypeTag::Address,
+            Type::Signer => TypeTag::Signer,
+            Type::Vector(ty) => {
+                TypeTag::Vector(Box::new(self.find_type(&(**ty), loader)))
+            }
+            Type::Struct(gidx) => TypeTag::Struct(Box::new(loader.struct_gidx_to_type_tag(
+                *gidx,
+                &[],
+                StructTagType::Defining,
+            ).expect("struct tag"))),
+            Type::StructInstantiation(gidx, ty_args) => {
+                match loader.struct_gidx_to_type_tag(*gidx, ty_args.as_slice(), StructTagType::Defining) {
+                    Ok(v) => {
+                        TypeTag::Struct(Box::new(v))
+                    }
+                    Err(_) => {
+                        TypeTag::Bool
+                    }
+                }
+            },
+            Type::Reference(v) | Type::MutableReference(v) => {
+                self.find_type(&(**v), loader)
+            }
+            _ => TypeTag::Bool,
+        }
+    }
 }
 
 impl<I, S> MoveVM<I, S> {
@@ -352,9 +423,16 @@ where
         module: CompiledModule,
         _constructor_args: Option<MoveFunctionInput>,
         _deployed_address: AccountAddress,
-        _state: &mut S,
+        state: &mut S,
     ) -> Option<AccountAddress> {
         println!("deploying module dep: {:?}", module.self_id());
+
+        if !state.metadata_mut().contains::<TypeTagInfoMeta>() {
+            state.metadata_mut().insert(TypeTagInfoMeta::new());
+        }
+
+        let meta = state.metadata_mut().get_mut::<TypeTagInfoMeta>().unwrap();
+
         let func_off = self.loader.module_cache.read().functions.len();
         let module_name = module.name().to_owned();
         let deployed_module_idx = module.self_id();
@@ -368,6 +446,10 @@ where
                 .entry(deployed_module_idx.clone())
                 .or_insert_with(HashMap::new)
                 .insert(f.name.to_owned(), f.clone());
+
+            for ty in &f.parameter_types {
+                meta.register_type_tag(ty.clone(), &self.loader);
+            }
         }
         Some(deployed_module_idx.address().clone())
     }
@@ -439,6 +521,9 @@ where
         let mut native_called = false;
         let mut gas_meter = UnmeteredGasMeter {};
 
+        // println!("running {:?} with args {:?}", initial_function.name.as_str(), input.args());
+
+
         loop {
             let resolver = current_frame.resolver(state.link_context(), &self.loader);
             let ret =
@@ -446,6 +531,7 @@ where
             // println!("{:?}", ret);
 
             if ret.is_err() {
+                // println!("reverted {:?}", ret);
                 reverted = true;
                 break;
             }
@@ -484,12 +570,13 @@ where
                         }
                         continue;
                     }
-                    let argc = func.local_count();
-                    let mut locals = Locals::new(argc);
-                    // println!("locals: {:?}", locals);
+                    let argc = func.parameters.len();
+                    let mut locals = Locals::new(func.local_count());
+                    // println!("function: {:?} with {} args ({})", func.name, func.local_count(), func.parameters.len());
                     for i in 0..argc {
                         locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
+                    // println!("locals: {:?}", locals);
                     call_stack.push(current_frame);
                     current_frame = Frame {
                         pc: 0,
@@ -524,8 +611,8 @@ where
                         continue;
                     }
 
-                    let argc = func.local_count();
-                    let mut locals = Locals::new(argc);
+                    let argc = func.parameters.len();
+                    let mut locals = Locals::new(func.local_count());
                     for i in 0..argc {
                         locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
@@ -555,7 +642,10 @@ where
         ) {
             unsafe {MOVE_STATE_CHANGED = true;}
             let abilities = resolver.loader.abilities(t).expect("unknown type");
-            state.add_new_value(v.copy_value().expect("failed to copy value"), t, &abilities);
+            state.add_new_value(GatedValue {
+                v: v.clone(),
+                gate: Gate::Own,
+            }, t, &abilities);
 
             if !_state.has_metadata::<StructAbilities>() {
                 _state.metadata_mut().insert(StructAbilities::new());
@@ -571,6 +661,10 @@ where
         }
 
         if native_called {
+            for t in &self.native_context.get::<ObjectRuntime>().state.transfers {
+                println!("transfer: {:?}", t);
+            }
+
             for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
                 // println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
                 if st.name.as_str() == "AAAA__fuzzland_move_bug" {

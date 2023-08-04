@@ -1,7 +1,7 @@
 use crate::evm::abi::BoxedABI;
 use crate::input::{ConciseSerde, VMInputT};
 use crate::r#move::types::MoveStagedVMState;
-use crate::r#move::vm_state::{MoveVMState, MoveVMStateT};
+use crate::r#move::vm_state::{Gate, MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
 
 use libafl::inputs::Input;
@@ -30,7 +30,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
 use crate::evm::types::EVMU256;
 use crate::mutation_utils::byte_mutator;
-use crate::r#move::movevm::MoveVM;
+use crate::r#move::movevm::{MoveVM, TypeTagInfoMeta};
 use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub trait MoveFunctionInputT {
@@ -290,11 +290,15 @@ impl MoveFunctionInputT for MoveFunctionInput {
                 }
                 // resample all the structs in the input
                 Type::Struct(_) => {
-                    let new_struct = self.vm_state.state.sample_value(state, ty, false);
+                    let new_struct = self.vm_state.state.sample_value(state, ty, &Gate::Own);
                     arg.value = new_struct;
                 }
-                Type::Reference(inner_ty) | Type::MutableReference(inner_ty) => {
-                    let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), true);
+                Type::Reference(inner_ty) => {
+                    let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), &Gate::Ref);
+                    arg.value = new_struct;
+                }
+                Type::MutableReference(inner_ty) => {
+                    let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), &Gate::MutRef);
                     arg.value = new_struct;
                 }
                 Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
@@ -493,7 +497,7 @@ impl MoveFunctionInput {
                                _state: &mut S,
                                container: &mut Container,
                                vm_state: &mut MoveVMState,
-                               is_ref: bool,
+                               ref_ty: &Gate,
                                ty: &Type,
                                is_resolved: bool,
     ) -> MutationResult
@@ -515,17 +519,17 @@ impl MoveFunctionInput {
                 // println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
                 // resolved structs shall be returned to the vm state
                 if is_resolved {
-                    vm_state.restock(
+                    vm_state.restock_struct(
                         ty,
                         value.value,
-                        is_ref,
+                        ref_ty,
                         _state
                     );
                 }
                 if let Value(ValueImpl::Container(Container::Struct(new_struct))) = vm_state.sample_value(
                     _state,
                     ty,
-                    is_ref,
+                    ref_ty,
                 ) {
                     *v.borrow_mut() = new_struct.clone();
                     return MutationResult::Mutated
@@ -549,7 +553,7 @@ impl MoveFunctionInput {
         value: &mut CloneableValue,
         ty: Type,
         vm_state: &mut MoveVMState,
-        is_ref: bool,
+        ref_ty: &Gate,
         is_resolved: bool,
     ) -> MutationResult
         where
@@ -575,7 +579,7 @@ impl MoveFunctionInput {
         enum MutateType<'a> {
             U128,
             U256,
-            Container(&'a mut Container, Type, bool),
+            Container(&'a mut Container, Type, Gate),
             Indexed(&'a mut Container, usize),
         }
 
@@ -613,17 +617,21 @@ impl MoveFunctionInput {
                 // return mutate_by!(_state, value);
             }
             ValueImpl::Container(ref mut cont) => {
-                MutateType::Container(cont, ty.clone(), false)
+                MutateType::Container(cont, ty.clone(), Gate::Own)
             }
             ValueImpl::ContainerRef(ref mut cont) => {
                 match cont {
                     ContainerRef::Local(v) => {
+                        let mut gate = Gate::Ref;
                         let inner_ty = if let Type::Reference(inner_ty) = ty.clone() {
                             *inner_ty
+                        } else if let Type::MutableReference(inner_ty) = ty.clone() {
+                            gate = Gate::MutRef;
+                            *inner_ty
                         } else {
-                            unreachable!("non mutable reference")
+                            unreachable!("not a reference")
                         };
-                        MutateType::Container(v, inner_ty, true)
+                        MutateType::Container(v, inner_ty, gate)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
                 }
@@ -646,11 +654,11 @@ impl MoveFunctionInput {
             MutateType::U256 => {
                 mutate_by!( _state, value)
             }
-            MutateType::Container(cont, inner_ty,is_ref) => {
+            MutateType::Container(cont, inner_ty,ref_ty) => {
                 Self::mutate_container(_state,
                                        cont,
                                        vm_state,
-                                       is_ref,
+                                       &ref_ty,
                                        &inner_ty,
                                        is_resolved
                 )
@@ -670,7 +678,7 @@ impl MoveFunctionInput {
                             &mut mutable_value,
                             inner_ty,
                             vm_state,
-                            true,
+                            &Gate::MutRef,
                             is_resolved,
                         );
                         (**inner_vec).borrow_mut()[index] = mutable_value.value.0.clone();
@@ -695,12 +703,17 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             + HasCaller<AccountAddress> + HasMetadata,
     {
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
+        let ty = self.function_info.get_function().parameter_types[nth].clone();
+        if _state.metadata().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
+            return MutationResult::Skipped;
+        }
+
         Self::mutate_value_impl(
             _state,
             &mut self.args[nth],
-            self.function_info.get_function().parameter_types[nth].clone(),
+            ty,
             &mut self.vm_state.state,
-            false,
+            &Gate::Own,
             self._resolved
         )
     }
