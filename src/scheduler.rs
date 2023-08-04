@@ -135,6 +135,8 @@ pub struct VoteData {
     pub votes_total: usize,
     /// Garbage collection: Dependencies Graph
     pub deps: DependencyTree,
+    /// To remove, for Move schedulers
+    pub to_remove: Vec<usize>,
 }
 
 pub trait HasReportCorpus<S>
@@ -183,6 +185,7 @@ where
                 visits_total: 1,
                 votes_total: 1,
                 deps: DependencyTree::new(),
+                to_remove: vec![],
             });
         }
 
@@ -241,6 +244,7 @@ where
                         state.corpus_mut().remove(*x).expect("failed to remove");
                     }
                 });
+                state.metadata_mut().get_mut::<VoteData>().unwrap().to_remove = to_remove;
                 #[cfg(feature = "full_trace")]
                 {
                     for idx in state.metadata_mut().get_mut::<VoteData>().unwrap().deps.garbage_collection() {

@@ -144,11 +144,23 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
                 entry.insert(v.clone());
             }
         );
-        self.inner.on_add(state, idx)
+        let res = self.inner.on_add(state, idx);
+        {
+            let votes_meta = state.metadata_mut().get_mut::<VoteData>().expect("Missing metadata");
+            if votes_meta.to_remove.len() > 0 {
+                let to_remove = votes_meta.to_remove.clone();
+                votes_meta.to_remove.clear();
+                for idx in to_remove {
+                    self.on_remove(state, idx, &None).expect("Failed to remove");
+                }
+            }
+        }
+        res
     }
 
     fn on_remove(&self, state: &mut MoveInfantStateState, idx: usize, _testcase: &Option<Testcase<MoveStagedVMState>>) -> Result<(), Error> {
         let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
+        println!("Removing state: {:?}", idx);
         meta.state_idx_to_deps.get(&idx).expect("Missing state idx").iter().for_each(
             |v| {
                 let all_idx = meta.deps_state_idx.get_mut(v).expect("Missing deps");
@@ -159,7 +171,8 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
             }
         );
         meta.state_idx_to_deps.remove(&idx);
-        self.inner.on_remove(state, idx, _testcase)
+        // self.inner.on_remove(state, idx, _testcase)
+        Ok(())
     }
 
     fn next(&self, state: &mut MoveInfantStateState) -> Result<usize, Error> {
@@ -184,6 +197,7 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
         {
             let mut sampling_meta = state.metadata().get::<VoteData>().unwrap();
             for idx in sample_idx {
+                println!("idx: {}", idx);
                 let (votes, visits) = sampling_meta.votes_and_visits.get(&idx).unwrap();
                 sample_list.push((idx, (*votes, *visits)));
                 total_votes += *votes;
