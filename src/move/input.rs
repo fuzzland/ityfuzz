@@ -515,7 +515,7 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
-                println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
+                // println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
                 // resolved structs shall be returned to the vm state
                 if is_resolved {
                     vm_state.restock(

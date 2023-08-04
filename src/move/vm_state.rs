@@ -121,7 +121,7 @@ impl MoveVMState {
         if !is_droppable {
             add_new_v!(value_to_drop);
         } else {
-            println!("add_new_value(useful): {:?}", value);
+            // println!("add_new_value(useful): {:?}", value);
             add_new_v!(useful_value);
         }
     }

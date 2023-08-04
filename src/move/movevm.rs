@@ -572,7 +572,7 @@ where
 
         if native_called {
             for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
-                println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
+                // println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
                 if st.name.as_str() == "AAAA__fuzzland_move_bug" {
                     if let Value(ValueImpl::Container(Container::Struct(data))) = v {
                         let data = (**data).borrow();

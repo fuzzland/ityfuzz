@@ -89,7 +89,7 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
                     MutationResult::Mutated
                 }
                 _ => {
-                    println!("mutating input");
+                    // println!("mutating input");
                     if input.get_resolved() {
                         input.mutate(state)
                     } else {

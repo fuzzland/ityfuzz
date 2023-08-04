@@ -160,7 +160,7 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
 
     fn on_remove(&self, state: &mut MoveInfantStateState, idx: usize, _testcase: &Option<Testcase<MoveStagedVMState>>) -> Result<(), Error> {
         let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
-        println!("Removing state: {:?}", idx);
+        // println!("Removing state: {:?}", idx);
         meta.state_idx_to_deps.get(&idx).expect("Missing state idx").iter().for_each(
             |v| {
                 let all_idx = meta.deps_state_idx.get_mut(v).expect("Missing deps");
@@ -181,7 +181,7 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
         {
             let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
 
-            println!("now we need to find a state with deps: {:?}", meta.current_deps);
+            // println!("now we need to find a state with deps: {:?}", meta.current_deps);
             if meta.current_deps.len() == 0 {
                 return self.inner.next(state);
             }
@@ -197,7 +197,7 @@ impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler
         {
             let mut sampling_meta = state.metadata().get::<VoteData>().unwrap();
             for idx in sample_idx {
-                println!("idx: {}", idx);
+                // println!("idx: {}", idx);
                 let (votes, visits) = sampling_meta.votes_and_visits.get(&idx).unwrap();
                 sample_list.push((idx, (*votes, *visits)));
                 total_votes += *votes;
