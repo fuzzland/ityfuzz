@@ -26,20 +26,20 @@ use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::oracle::Oracle;
 
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::corpus_initializer::MoveCorpusInitializer;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::input::MoveFunctionInput;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::movevm::MoveVM;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::mutator::MoveFuzzMutator;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::oracles::typed_bug::TypedBugOracle;
 use crate::r#move::scheduler::{MoveTestcaseScheduler, MoveVMStateScheduler};
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::types::MoveFuzzState;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::FuzzState;
 
@@ -51,7 +51,7 @@ pub struct MoveFuzzConfig {
 
 pub static mut MOVE_ENABLED: bool = cfg!(feature = "move_support");
 
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 pub fn move_fuzzer(
     config: &MoveFuzzConfig,
 ) {
@@ -120,7 +120,7 @@ pub fn move_fuzzer(
 }
 
 
-#[cfg(not(feature = "move_support"))]
+#[cfg(not(feature = "sui_support"))]
 pub fn move_fuzzer(
     _config: &MoveFuzzConfig,
 ) {
