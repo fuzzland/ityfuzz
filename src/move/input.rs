@@ -250,10 +250,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
     fn ensure_deps<VS>(&self, vm_state: &VS) -> bool
         where VS: MoveVMStateT {
         for (ty, amount) in &self._deps {
-            let counts = match vm_state.get_value_to_drop().get(ty) {
-                Some(v) => v.len(),
-                None => 0
-            } + match vm_state.get_useful_value().get(ty) {
+            let counts = match vm_state.values().get(ty) {
                 Some(v) => v.len(),
                 None => 0
             };

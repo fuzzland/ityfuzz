@@ -555,7 +555,7 @@ where
         ) {
             unsafe {MOVE_STATE_CHANGED = true;}
             let abilities = resolver.loader.abilities(t).expect("unknown type");
-            state.add_new_value(v.copy_value().expect("failed to copy value"), t, abilities.has_drop());
+            state.add_new_value(v.copy_value().expect("failed to copy value"), t, &abilities);
 
             if !_state.has_metadata::<StructAbilities>() {
                 _state.metadata_mut().insert(StructAbilities::new());
@@ -676,8 +676,8 @@ mod tests {
                 state: MoveVMState {
                     resources: Default::default(),
                     _gv_slot: Default::default(),
-                    value_to_drop: Default::default(),
-                    useful_value: Default::default(),
+                    _hot_potato: 0,
+                    values: Default::default(),
                     typed_bug: vec![],
                     ref_in_use: vec![],
                 },

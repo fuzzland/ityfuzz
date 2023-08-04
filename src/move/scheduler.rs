@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use itertools::Itertools;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::{Error, impl_serdeany};
 use libafl::inputs::Input;
@@ -121,16 +122,16 @@ impl HasReportCorpus<MoveInfantStateState> for MoveVMStateScheduler {
 
 impl Scheduler<MoveStagedVMState, MoveInfantStateState> for MoveVMStateScheduler {
     fn on_add(&self, state: &mut MoveInfantStateState, idx: usize) -> Result<(), Error> {
-        let interesting_types = {
-            let infant_state = state.corpus().get(idx).expect("Missing infant state")
-                .borrow()
-                .input()
-                .clone()
-                .expect("Missing input");
-            infant_state.state.value_to_drop.keys().chain(
-                infant_state.state.useful_value.keys()
-            ).cloned().collect::<Vec<_>>()
-        };
+        let interesting_types = state.corpus().get(idx).expect("Missing infant state")
+            .borrow()
+            .input()
+            .clone()
+            .expect("Missing input")
+            .state
+            .values
+            .keys()
+            .cloned()
+            .collect_vec();
         let mut meta = state.metadata_mut().get_mut::<MoveSchedulerMeta>().expect("Missing metadata");
         interesting_types.iter().for_each(
             |v| {
