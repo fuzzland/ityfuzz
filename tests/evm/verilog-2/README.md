@@ -28,14 +28,14 @@ derivative assets to convert into WMATICV2 token. <br />
 
 Besides, our team designed a bounty insurance contract to monitor the <br /> safety of the WMATICV2. If you can crack it, bounty is yours!
 
-Find your way to hack around ! But I am sure its really safe.
+Find your way to hack around! But I am sure it's really safe.
 
 ## Explanation
 
 - WMATICV2 contract
 
   ```solidity
-  // contract safety is purely depends on these 2 variables
+  // contract safety purely depends on these 2 variables
   interface IWMATICV2 {
 
     // minted token balance
