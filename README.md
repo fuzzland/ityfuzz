@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[中文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README_CN.md) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#building)
+[Research Paper](https://scf.so/ityfuzz.pdf) / [Fuzzing EVM Contracts](#building-evm) / [Fuzzing Move Contracts](#building-with-move-sui-support)
 
 ### Run ItyFuzz with UI
 
@@ -46,7 +46,7 @@ Test Coverage:
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
 
-# Building
+# Building (EVM)
 
 You first need to install Rust through https://rustup.rs/
 
@@ -54,7 +54,6 @@ You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installati
 
 ```bash
 git clone https://github.com/fuzzland/ityfuzz.git && cd ityfuzz && git checkout stable
-# download move dependencies
 git submodule update --recursive --init
 cd cli/
 cargo build --release
@@ -64,14 +63,14 @@ You can enable certain debug gates in `Cargo.toml`
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
 
-# Run
+# Run (EVM)
 
 Compile Smart Contracts:
 
 ```bash
-cd ./tests/multi-contract/
+cd ./tests/evm/multi-contract/
 # include the library from ./solidity_utils for example
-solc *.sol -o . --bin --abi --overwrite --base-path ../../
+solc *.sol -o . --bin --abi --overwrite --base-path ../../../
 ```
 
 Run Fuzzer:
@@ -79,7 +78,7 @@ Run Fuzzer:
 ```bash
 # after building, there should be a binary in ./cli/target/release/cli
 cd ./cli/
-./target/release/cli -t '../tests/multi-contract/*'
+./target/release/cli evm -t '../tests/evm/multi-contract/*'
 ```
 
 ### Demo
@@ -101,10 +100,10 @@ Exact Exploit:
 Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s):
 
 ```bash
-# build contracts in tests/verilog-2/
+# build contracts in tests/evm/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # run fuzzer
-./cli -f -t "./tests/verilog-2/*"
+./target/release/cli evm -f -t "./tests/evm/verilog-2/*"
 ```
 
 `-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
@@ -114,7 +113,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 You can fuzz a project by providing a path to the project directory.
 
 ```bash
-./cli -t '[DIR_PATH]/*'
+./target/release/cli evm -t '[DIR_PATH]/*'
 ```
 
 ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain with no other smart contracts.
@@ -122,7 +121,7 @@ ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain w
 Specifically, the project directory should contain
 a few `[X].abi` and `[X].bin` files. For example, to fuzz a contract named `main.sol`, you should
 ensure `main.abi` and `main.bin` exist in the project directory.
-The fuzzer will automatically detect the contracts in directory, the correlation between them (see `tests/multi-contract`),
+The fuzzer will automatically detect the contracts in directory, the correlation between them (see `tests/evm/multi-contract`),
 and fuzz them.
 
 Optionally, if ItyFuzz fails to infer the correlation between contracts, you
@@ -139,7 +138,7 @@ Caveats:
 Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result.
 
 ```bash
-sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
+python3 -c 'content=open("Cargo.toml").read().replace("default = [", "default = [\"flashloan_v2\",");open("Cargo.toml","w").write(content);'
 cd ./cli/
 cargo build --release
 ```
@@ -147,20 +146,20 @@ cargo build --release
 You can fuzz a project by providing an address, a block, and a chain type.
 
 ```bash
-./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
+./target/release/cli evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 Example:
 Fuzzing WETH contract (`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`) on Ethereum mainnet at latest block.
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+./target/release/cli evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 Fuzzing with flashloan and oracles enabled:
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+./target/release/cli evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
@@ -183,13 +182,13 @@ When you run ItyFuzz using the CLI, you can include the `--constructor-args` fla
 The format is as follows:
 
 ```
-cli -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 For example, if you have two contracts, `main` and `main2`, both having a `bytes32` and a `uint256` as constructor arguments, you would pass them in like this:
 
 ```bash
-cli -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **Method 2: Server Forwarding**
@@ -227,12 +226,12 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 Finally, you can fetch the constructor arguments using the `--fetch-tx-data` flag:
 
 ```bash
-cli -t 'tests/multi-contract/*' --fetch-tx-data
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
 
-# Finding Custom Bugs
+# Finding Custom Bugs (EVM)
 
 You can simply insert `bug()` or `typed_bug(string message)` in your contract to report a condition when bug is found.
 
@@ -308,7 +307,7 @@ scribble test.sol --output-mode flat --output compiled.sol --no-assert
 Then compile with `solc` and run ItyFuzz:
 ```bash
 solc compiled.sol --bin --abi --overwrite -o build
-./cli -t "build/*" [More Arguments]
+./target/release/cli evm -t "build/*" [More Arguments]
 ```
 
 # Test Coverage
@@ -316,12 +315,12 @@ solc compiled.sol --bin --abi --overwrite -o build
 ItyFuzz can collect instruction and branch coverage information for all the contracts it fuzzes. You simply
 need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all these information.
 ```bash
-./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
+./target/release/cli evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
 ```
 
 Example:
 ```bash
-./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
 ```
 
 You may add source map information to the targets to get more accurate coverage information and uncovered source code.
@@ -333,23 +332,68 @@ solc [Options Used During Building] --combined-json bin-runtime,srcmap-runtime
 
 Example:
 ```bash
-# build contracts in tests/verilog-2/
+# build contracts in tests/evm/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../ --combined-json bin-runtime,srcmap-runtime
 ```
 Rarely, ItyFuzz has trouble to figure out the source code location.
 You may supply the **absolute** path to the base location (what you passed to solc's --base-path or if you didn't pass anything, it is the building directory)
 to ItyFuzz.
 ```bash
-./cli -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
+./target/release/cli evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
 ```
 
 Example:
 ```bash
-# note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/verilog-2/../../
-./cli -t 'tests/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
+# note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/evm/verilog-2/../../
+./target/release/cli evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
 We do not track coverage of static calls (view, pure functions) by default!
+
+# Building With Move (Sui) Support
+Build with feature `sui_support` in `./Cargo.toml` to enable Move support.
+
+```bash
+# add sui_support feature to Cargo.toml
+python3 -c 'content=open("Cargo.toml").read().replace("default = [", "default = [\"sui_support\",");open("Cargo.toml","w").write(content);'
+
+# build ItyFuzz with sui_support feature
+cd cli/
+cargo build --release
+```
+
+You may also want to install `sui-cli` to build Move contracts.
+
+# Run (Move)
+Compile the contracts with `sui move build` and run ItyFuzz:
+```bash
+# build example contract that contains a bug
+cd ./tests/move/share_object
+sui move build
+
+# get back to ItyFuzz CLI and run fuzzing on the built contract
+cd ../../../cli/
+./target/release/cli move -t "./tests/move/share_object/build"
+```
+
+# Reporting Bugs (Move)
+You can emit a event of `` in your contract to report a condition when bug is found.
+```move
+// define the event struct
+use sui::event;
+
+struct AAAA__fuzzland_move_bug has drop, copy, store {
+    info: u64
+}
+
+... 
+    // inside function
+    event::emit(AAAA__fuzzland_move_bug { info: 1 });
+...
+```
+
+An example contract that report a bug can be found in `tests/move/share_object/sources/test.move`.
+
 
 # Troubleshooting
 ### Z3 Installation

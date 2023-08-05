@@ -14,6 +14,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use crate::evm::oracles::ERC20_BUG_IDX;
 use crate::evm::producers::erc20::ERC20Producer;
+use crate::fuzzer::ORACLE_OUTPUT;
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
@@ -56,8 +57,6 @@ impl IERC20OracleFlashloan {
         self.known_pair_reserve_slot.insert(pair, slot);
     }
 }
-
-pub static mut ORACLE_OUTPUT: String = String::new();
 
 impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for IERC20OracleFlashloan

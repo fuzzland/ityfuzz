@@ -23,10 +23,10 @@ use libafl::{
 use glob::glob;
 use itertools::Itertools;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, WRITE_RELATIONSHIPS};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
-use crate::feedback::{CmpFeedback, OracleFeedback};
+use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, HasCaller, HasExecutionResult};
@@ -34,7 +34,7 @@ use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
@@ -46,6 +46,7 @@ use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
+use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::coverage::Coverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
@@ -53,7 +54,7 @@ use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
-use crate::input::ConciseSerde;
+use crate::input::{ConciseSerde, VMInputT};
 
 struct ABIConfig {
     abi: String,
@@ -83,6 +84,8 @@ pub fn evm_fuzzer(
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
+    let reads = unsafe { &mut READ_MAP };
+    let writes = unsafe { &mut WRITE_MAP };
     let jmp_observer = StdMapObserver::new("jmp", jmps);
 
     let deployer = fixed_address(FIX_DEPLOYER);
@@ -191,6 +194,7 @@ pub fn evm_fuzzer(
         &mut scheduler,
         &infant_scheduler,
         state,
+        config.work_dir.clone()
     );
 
     #[cfg(feature = "use_presets")]
@@ -231,6 +235,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
     let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
+    let infant_result_feedback = DataflowFeedback::new(reads, writes);
 
     let mut oracles = config.oracle;
 
@@ -283,6 +288,7 @@ pub fn evm_fuzzer(
         &infant_scheduler,
         wrapped_feedback,
         infant_feedback,
+        infant_result_feedback,
         objective,
         config.work_dir,
     );

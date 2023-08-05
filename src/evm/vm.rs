@@ -55,7 +55,7 @@ use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
 
-const MAX_POST_EXECUTION: usize = 3;
+const MAX_POST_EXECUTION: usize = 10;
 
 /// Get the token context from the flashloan middleware,
 /// which contains uniswap pairs of that token

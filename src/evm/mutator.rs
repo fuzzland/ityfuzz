@@ -150,7 +150,10 @@ impl<'a, VS, Loc, Addr, SC, CI> FuzzMutator<'a, VS, Loc, Addr, SC, CI>
                     input.set_contract_and_abi(target, abi);
                 }
                 Constraint::NoLiquidation => {
-                    input.set_liquidation_percent(0);
+                    #[cfg(feature = "flashloan_v2")]
+                    {
+                        input.set_liquidation_percent(0);
+                    }
                 }
             }
         }

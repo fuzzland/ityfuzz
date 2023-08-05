@@ -50,7 +50,7 @@ impl<I, S> SortedDroppingScheduler<I, S> {
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct Node {
+pub struct Node {
     parent: usize, // 0 for root node
     ref_count: usize,
     pending_delete: bool,
@@ -58,7 +58,7 @@ struct Node {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct DependencyTree {
+pub struct DependencyTree {
     nodes: HashMap<usize, Node>,
 }
 
@@ -124,7 +124,7 @@ impl DependencyTree {
 /// Metadata for [`SortedDroppingScheduler`] that is stored in the state
 /// Contains the votes and visits for each input (or VMState)
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct VoteData {
+pub struct VoteData {
     /// Map of input (or VMState) index to (votes, visits)
     pub votes_and_visits: HashMap<usize, (usize, usize)>,
     /// Sorted list of votes, cached for performance
@@ -135,11 +135,14 @@ struct VoteData {
     pub votes_total: usize,
     /// Garbage collection: Dependencies Graph
     pub deps: DependencyTree,
+    /// To remove, for Move schedulers
+    pub to_remove: Vec<usize>,
 }
 
 pub trait HasReportCorpus<S>
     where S: HasMetadata {
     fn report_corpus(&self, state: &mut S, state_idx: usize);
+    fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize);
 }
 
 impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
@@ -151,6 +154,10 @@ impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
         self.vote(state, state_idx, 3);
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         data.deps.mark_never_delete(state_idx);
+    }
+
+    fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize) {
+        self.vote(state, state_idx, amt);
     }
 }
 
@@ -178,6 +185,7 @@ where
                 visits_total: 1,
                 votes_total: 1,
                 deps: DependencyTree::new(),
+                to_remove: vec![],
             });
         }
 
@@ -236,6 +244,7 @@ where
                         state.corpus_mut().remove(*x).expect("failed to remove");
                     }
                 });
+                state.metadata_mut().get_mut::<VoteData>().unwrap().to_remove = to_remove;
                 #[cfg(feature = "full_trace")]
                 {
                     for idx in state.metadata_mut().get_mut::<VoteData>().unwrap().deps.garbage_collection() {

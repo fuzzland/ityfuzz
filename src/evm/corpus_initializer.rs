@@ -19,7 +19,9 @@ use libafl::corpus::{Corpus, Testcase};
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use revm_primitives::Bytecode;
-
+use crate::fuzzer::REPLAY;
+#[cfg(feature = "print_txn_corpus")]
+use crate::fuzzer::DUMP_FILE_COUNT;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -35,6 +37,13 @@ use crypto::sha3::Sha3Mode::Keccak256;
 use libafl::impl_serdeany;
 use libafl::prelude::HasMetadata;
 use serde::{Deserialize, Serialize};
+use crate::{dump_file, dump_txn};
+use std::fs::File;
+use std::path::Path;
+use crate::input::ConciseSerde;
+use std::io::Write;
+use crate::generic_vm::vm_executor::ExecutionResult;
+use crate::evm::types::EVMExecutionResult;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 
 pub struct EVMCorpusInitializer<'a> {
@@ -44,6 +53,7 @@ pub struct EVMCorpusInitializer<'a> {
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
     presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>,
+    work_dir: String,
 }
 
 pub struct EVMInitializationArtifacts {
@@ -126,6 +136,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
         infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
         state: &'a mut EVMFuzzState,
+        work_dir: String,
     ) -> Self {
         Self {
             executor,
@@ -134,6 +145,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             state,
             #[cfg(feature = "use_presets")]
             presets: vec![],
+            work_dir,
         }
     }
 
@@ -377,7 +389,11 @@ impl<'a> EVMCorpusInitializer<'a> {
             repeat: 1,
         };
         add_input_to_corpus!(self.state, scheduler, input.clone());
-
+        #[cfg(feature = "print_txn_corpus")]
+        {
+            let corpus_dir = format!("{}/corpus", self.work_dir.as_str()).to_string();
+            dump_txn!(corpus_dir, &input)
+        }
         #[cfg(feature = "use_presets")]
         {
             let presets = self.presets.clone();
