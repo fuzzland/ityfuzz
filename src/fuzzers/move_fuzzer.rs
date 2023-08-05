@@ -36,6 +36,7 @@ use crate::r#move::movevm::MoveVM;
 use crate::r#move::mutator::MoveFuzzMutator;
 #[cfg(feature = "sui_support")]
 use crate::r#move::oracles::typed_bug::TypedBugOracle;
+#[cfg(feature = "sui_support")]
 use crate::r#move::scheduler::{MoveTestcaseScheduler, MoveVMStateScheduler};
 #[cfg(feature = "sui_support")]
 use crate::r#move::types::MoveFuzzState;
