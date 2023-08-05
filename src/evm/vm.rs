@@ -868,8 +868,6 @@ where
             }
             EVMInputTy::ABI => self.execute_abi(input, state),
             EVMInputTy::ArbitraryCallBoundedAddr => {
-                assert!(input.is_step() == false);
-                assert!(input.get_state().has_post_execution() == true);
                 self.execute_abi(input, state)
             },
         }

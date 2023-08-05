@@ -24,11 +24,11 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
+use std::sync::Arc;
 use itertools::Itertools;
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Solver};
-use crate::evm::concolic::concolic_exe_host::SymbolicMemory;
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -311,7 +311,7 @@ impl<'a> SymbolicTy<'a> {
             _ => panic!("expected bv"),
         }
     }
-    
+
     pub fn expect_bool(self) -> Bool<'a> {
         match self {
             SymbolicTy::Bool(b) => b,
@@ -424,8 +424,9 @@ impl<'a> Solving<'a> {
             ConcolicOp::GT => comparisons1!(bv.lhs, bv.rhs, bvugt),
             ConcolicOp::SGT => comparisons1!(bv.lhs, bv.rhs, bvsgt),
             ConcolicOp::SELECT(idx) => {
-                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
-                lhs.expect_bv().extract(*idx, *idx)
+                // let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                // lhs.expect_bv().extract(*idx, *idx)
+                todo!("SELECT")
             },
 
         }
@@ -547,52 +548,41 @@ impl<'a> Solving<'a> {
 
 // Q: Why do we need to make persistent memory symbolic?
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SymbolicMemory {
     pub memory: Vec<Option<Box<Expr>>>
 }
 
 impl SymbolicMemory {
-    pub fn insert_256(&mut self, idx: EVMU256, val: Box<Expr>) {
-        let idx = idx.as_limbs()[0] as usize;
-        for i in 0..32 {
-            self.memory[idx*32 + i] = Some(Box::new(
-                Expr {
-                    lhs: Some(val.clone()),
-                    rhs: None,
-                    op: ConcolicOp::SELECT(i as u32),
-                }
-            ));
+    pub fn new() -> Self {
+        Self {
+            memory: vec![]
         }
     }
 
-    pub fn insert_8(&mut self, idx: EVMU256, val: Box<Expr>) {
+    pub fn insert_256(&mut self, idx: EVMU256, val: Box<Expr>) {
         let idx = idx.as_limbs()[0] as usize;
-        self.memory[idx] = Some(Box::new(Expr {
-            lhs: Some(val),
-            rhs: None,
-            op: ConcolicOp::SELECT(0),
-        }));
+        if idx >= self.memory.len() {
+            self.memory.resize(idx + 1, None);
+        }
+        self.memory[idx] = Some(val);
+    }
+
+    pub fn insert_8(&mut self, idx: EVMU256, val: Box<Expr>) {
+        // TODO: use SELECT instead of concrete value
+        let idx = idx.as_limbs()[0] as usize;
+        if idx >= self.memory.len() {
+            self.memory.resize(idx + 1, None);
+        }
+        self.memory[idx] = None;
     }
 
     pub fn get_256(&self, idx: EVMU256) -> Option<Box<Expr>> {
         let idx = idx.as_limbs()[0] as usize;
-        let mut res = None;
-        for i in 0..32 {
-            match self.memory[idx*32 + i].clone() {
-                Some(bv) => {
-                    res = Some(Box::new(
-                        Expr {
-                            lhs: Some(bv),
-                            rhs: None,
-                            op: ConcolicOp::SELECT(i as u32),
-                        }
-                    ));
-                }
-                None => {}
-            }
+        if idx >= self.memory.len() {
+            return None;
         }
-        res
+        self.memory[idx].clone()
     }
 }
 
@@ -603,21 +593,21 @@ pub struct ConcolicHost<I, VS> {
     pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
-    pub bytes: u32,
     pub caller: EVMAddress,
+    pub testcase_ref: Arc<EVMInput>,
     pub phantom: PhantomData<(I, VS)>,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(bytes: u32, vm_input: BoxedABI, caller: EVMAddress) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
             symbolic_state: Default::default(),
-            input_bytes: Self::construct_input_from_abi(vm_input),
+            input_bytes: Self::construct_input_from_abi(testcase_ref.get_data_abi().expect("data abi not found")),
             constraints: vec![],
-            bytes,
-            caller,
+            caller: testcase_ref.caller,
+            testcase_ref,
             phantom: Default::default(),
         }
     }
@@ -1037,26 +1027,26 @@ where
             0x51 => {
                 println!("[concolic] MLOAD: {:?}", self.symbolic_stack);
                 let offset = fast_peek!(0).expect("[Concolic] MLOAD stack error at 0");
-                let idx = offset.as_limbs()[0] as usize;
                 self.symbolic_stack.pop();
-                vec![match self.symbolic_memory.get(idx) {
-                    Some(v) => v.clone(),
-                    None => None,
-                }]
+                vec![self.symbolic_memory.get_256(offset)]
             }
             // MSTORE
             0x52 => {
                 let offset = fast_peek!(0).expect("[Concolic] MSTORE stack error at 1");
-                let idx = offset.as_limbs()[0] as usize;
                 let value = stack_bv!(1);
-                self.symbolic_memory[idx] = Some(value);
+                self.symbolic_memory.insert_256(offset, value);
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![]
             }
             // MSTORE8
             0x53 => {
-                concrete_eval!(2, 0)
+                let offset = fast_peek!(0).expect("[Concolic] MSTORE8 stack error at 1");
+                let value = stack_bv!(1);
+                self.symbolic_memory.insert_8(offset, value);
+                self.symbolic_stack.pop();
+                self.symbolic_stack.pop();
+                vec![]
             }
             // SLOAD
             0x54 => {
@@ -1085,7 +1075,7 @@ where
                 // println!("{:?}", interp.stack);
                 // println!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
-                let jmp_dest = if is_zero(fast_peek!(1)
+                let jmp_dest = if !is_zero(fast_peek!(1)
                     .expect("[Concolic] JUMPI stack error at 1"))
                 {
                     1

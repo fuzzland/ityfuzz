@@ -332,6 +332,13 @@ where
             .remove(&ty);
     }
 
+    pub fn remove_middlewares_by_ty(&mut self, ty: &MiddlewareType) {
+        self.middlewares
+            .deref()
+            .borrow_mut()
+            .remove(ty);
+    }
+
     pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<VS, I, S>) {
         self.flashloan_middleware = Some(Rc::new(RefCell::new(middlware)));
     }
