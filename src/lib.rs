@@ -24,5 +24,5 @@ pub mod tracer;
 pub mod mutation_utils;
 
 
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 pub mod r#move;

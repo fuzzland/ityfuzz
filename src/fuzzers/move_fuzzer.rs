@@ -26,19 +26,21 @@ use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::oracle::Oracle;
 
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::corpus_initializer::MoveCorpusInitializer;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::input::MoveFunctionInput;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::movevm::MoveVM;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::mutator::MoveFuzzMutator;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::r#move::oracles::typed_bug::TypedBugOracle;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
+use crate::r#move::scheduler::{MoveTestcaseScheduler, MoveVMStateScheduler};
+#[cfg(feature = "sui_support")]
 use crate::r#move::types::MoveFuzzState;
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::FuzzState;
 
@@ -50,7 +52,7 @@ pub struct MoveFuzzConfig {
 
 pub static mut MOVE_ENABLED: bool = cfg!(feature = "move_support");
 
-#[cfg(feature = "move_support")]
+#[cfg(feature = "sui_support")]
 pub fn move_fuzzer(
     config: &MoveFuzzConfig,
 ) {
@@ -59,8 +61,12 @@ pub fn move_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
-    let infant_scheduler = SortedDroppingScheduler::new();
-    let mut scheduler = QueueScheduler::new();
+    let infant_scheduler = MoveVMStateScheduler {
+        inner: SortedDroppingScheduler::new(),
+    };
+    let mut scheduler = MoveTestcaseScheduler {
+        inner: QueueScheduler::new(),
+    };
 
     {
         MoveCorpusInitializer::new(
@@ -80,12 +86,11 @@ pub fn move_fuzzer(
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
-    let calibration: CalibrationStage<MoveFunctionInput, _, (StdMapObserver<u8>, ()), MoveFuzzState> = CalibrationStage::new(&feedback);
 
     let mutator = MoveFuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
-    let mut stages = tuple_list!(calibration, std_stage);
+    let mut stages = tuple_list!(std_stage);
 
     let mut executor = FuzzExecutor::new(vm_ref.clone(), tuple_list!(jmp_observer));
 
@@ -116,7 +121,7 @@ pub fn move_fuzzer(
 }
 
 
-#[cfg(not(feature = "move_support"))]
+#[cfg(not(feature = "sui_support"))]
 pub fn move_fuzzer(
     _config: &MoveFuzzConfig,
 ) {

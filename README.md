@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[Research Paper](https://scf.so/ityfuzz.pdf) / [Development Info](#building)
+[Research Paper](https://scf.so/ityfuzz.pdf) / [Fuzzing EVM Contracts](#building-evm) / [Fuzzing Move Contracts](#building-with-move-sui-support)
 
 ### Run ItyFuzz with UI
 
@@ -46,7 +46,7 @@ Test Coverage:
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
 
-# Building
+# Building (EVM)
 
 You first need to install Rust through https://rustup.rs/
 
@@ -63,7 +63,7 @@ You can enable certain debug gates in `Cargo.toml`
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
 
-# Run
+# Run (EVM)
 
 Compile Smart Contracts:
 
@@ -138,7 +138,7 @@ Caveats:
 Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result.
 
 ```bash
-sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
+python3 -c 'content=open("Cargo.toml").read().replace("default = [", "default = [\"flashloan_v2\",");open("Cargo.toml","w").write(content);'
 cd ./cli/
 cargo build --release
 ```
@@ -231,7 +231,7 @@ Finally, you can fetch the constructor arguments using the `--fetch-tx-data` fla
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
 
-# Finding Custom Bugs
+# Finding Custom Bugs (EVM)
 
 You can simply insert `bug()` or `typed_bug(string message)` in your contract to report a condition when bug is found.
 
@@ -349,6 +349,51 @@ Example:
 ```
 
 We do not track coverage of static calls (view, pure functions) by default!
+
+# Building With Move (Sui) Support
+Build with feature `sui_support` in `./Cargo.toml` to enable Move support.
+
+```bash
+# add sui_support feature to Cargo.toml
+python3 -c 'content=open("Cargo.toml").read().replace("default = [", "default = [\"sui_support\",");open("Cargo.toml","w").write(content);'
+
+# build ItyFuzz with sui_support feature
+cd cli/
+cargo build --release
+```
+
+You may also want to install `sui-cli` to build Move contracts.
+
+# Run (Move)
+Compile the contracts with `sui move build` and run ItyFuzz:
+```bash
+# build example contract that contains a bug
+cd ./tests/move/share_object
+sui move build
+
+# get back to ItyFuzz CLI and run fuzzing on the built contract
+cd ../../../cli/
+./target/release/cli move -t "./tests/move/share_object/build"
+```
+
+# Reporting Bugs (Move)
+You can emit a event of `` in your contract to report a condition when bug is found.
+```move
+// define the event struct
+use sui::event;
+
+struct AAAA__fuzzland_move_bug has drop, copy, store {
+    info: u64
+}
+
+... 
+    // inside function
+    event::emit(AAAA__fuzzland_move_bug { info: 1 });
+...
+```
+
+An example contract that report a bug can be found in `tests/move/share_object/sources/test.move`.
+
 
 # Troubleshooting
 ### Z3 Installation

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::evm::oracles::{ECHIDNA_BUG_IDX, FUNCTION_BUG_IDX};
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
@@ -8,6 +7,7 @@ use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::Bytecode;
+use crate::fuzzer::ORACLE_OUTPUT;
 
 pub struct EchidnaOracle {
     pub batch_call_txs: Vec<(EVMAddress, Bytes)>,

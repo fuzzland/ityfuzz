@@ -11,18 +11,24 @@ use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, HasRand, State};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
+use move_binary_format::file_format::Bytecode;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::u256::U256;
 use move_vm_runtime::loader::Function;
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::values;
-use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
+use move_vm_types::values::{Container, ContainerRef, IndexedRef, Value, ValueImpl};
 use revm_primitives::HashSet;
+use sui_types::base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::input::VMInputT;
+use crate::mutation_utils::ConstantPoolMetadata;
 use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities};
 use crate::r#move::movevm;
+use crate::r#move::movevm::TypeTagInfoMeta;
+use crate::r#move::scheduler::MoveSchedulerMeta;
 use crate::r#move::types::{MoveInfantStateState, MoveFuzzState, MoveStagedVMState};
 use crate::r#move::vm_state::MoveVMState;
 use crate::state::HasCaller;
@@ -40,6 +46,13 @@ pub struct MoveCorpusInitializer<'a> {
     pub scheduler: &'a dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
     pub infant_scheduler: &'a dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
     pub default_state: MoveStagedVMState,
+}
+
+pub fn is_tx_context(struct_tag: &StructTag) -> bool {
+    struct_tag.address == AccountAddress::new(
+        hex::decode("0000000000000000000000000000000000000000000000000000000000000002").unwrap()
+            .try_into().unwrap()
+    ) && struct_tag.module == TX_CONTEXT_MODULE_NAME.into() && struct_tag.name == TX_CONTEXT_STRUCT_NAME.into()
 }
 
 impl<'a> MoveCorpusInitializer<'a>
@@ -75,6 +88,8 @@ impl<'a> MoveCorpusInitializer<'a>
 
         // add metadata
         self.state.metadata_mut().insert(StructAbilities::new());
+        self.state.metadata_mut().insert(ConstantPoolMetadata::new());
+        self.state.infant_states_state.metadata_mut().insert(MoveSchedulerMeta::new());
 
         // setup infant scheduler & corpus
         self.default_state = StagedVMState::new_with_state(
@@ -121,6 +136,49 @@ impl<'a> MoveCorpusInitializer<'a>
         self.add_module(modules, modules_dependencies);
     }
 
+    fn extract_constants(&mut self, module: &CompiledModule) {
+        let constant_pool = self.state.metadata_mut()
+            .get_mut::<ConstantPoolMetadata>()
+            .expect("failed to get constant pool metadata");
+
+        module.constant_pool.iter().for_each(
+            |constant| {
+                constant_pool.add_constant(constant.data.clone());
+            }
+        );
+
+        module.function_defs.iter().for_each(|defs| {
+            match defs.code {
+                Some(ref code) => {
+                    code.code.iter().for_each(|instr| {
+                        match instr {
+                            Bytecode::LdU16(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU64(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU8(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU32(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU128(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            Bytecode::LdU256(x) => {
+                                constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                            },
+                            _ => {}
+                        }
+                    })
+                },
+                None => {}
+            }
+        });
+    }
+
 
     fn deployer(&mut self,
                 to_deploy: Vec<ModuleId>,
@@ -132,9 +190,12 @@ impl<'a> MoveCorpusInitializer<'a>
             }
 
             let module = module_id_to_module.get(&mod_id).unwrap().clone();
+
+            // push constants of module to mutator's constant hinting pool
+            self.extract_constants(&module);
+
             let deps = module.immediate_dependencies();
             self.deployer(deps, deployed, module_id_to_module);
-
             self.executor.deploy(module, None, AccountAddress::random(), &mut self.state);
             deployed.insert(mod_id);
         }
@@ -194,11 +255,20 @@ impl<'a> MoveCorpusInitializer<'a>
             Type::U8 => {
                 MoveInputStatus::Complete(Value::u8(0))
             }
+            Type::U16 => {
+                MoveInputStatus::Complete(Value::u16(0))
+            }
+            Type::U32 => {
+                MoveInputStatus::Complete(Value::u32(0))
+            }
             Type::U64 => {
                 MoveInputStatus::Complete(Value::u64(0))
             }
             Type::U128 => {
                 MoveInputStatus::Complete(Value::u128(0))
+            }
+            Type::U256 => {
+                MoveInputStatus::Complete(Value::u256(U256::zero()))
             }
             Type::Address => {
                 MoveInputStatus::Complete(Value::address(state.get_rand_address()))
@@ -256,8 +326,57 @@ impl<'a> MoveCorpusInitializer<'a>
                     vec![*ty]
                 )
             }
-            Type::Reference(ty) | Type::MutableReference(ty)  => {
-                todo!("reference")
+            Type::Reference(ty) => {
+                let default_inner = Self::gen_default_value(state, ty);
+                if let MoveInputStatus::Complete(Value(inner)) = default_inner {
+                    if let ValueImpl::Container(inner_v) = inner {
+                        MoveInputStatus::Complete(Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(inner_v)
+                        )))
+                    } else {
+                        MoveInputStatus::Complete(Value(ValueImpl::IndexedRef(
+                            IndexedRef {
+                                idx: 0,
+                                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![inner]))))
+                            }
+                        )))
+                    }
+                } else if let MoveInputStatus::DependentOnStructs(Value(ValueImpl::Container(cont)), deps) = default_inner {
+                    MoveInputStatus::DependentOnStructs(
+                        Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(cont)
+                        )),
+                        deps
+                    )
+                } else {
+                    unreachable!()
+                }
+            }
+            Type::MutableReference(ty)  => {
+                let default_inner = Self::gen_default_value(state, ty);
+                if let MoveInputStatus::Complete(Value(inner)) = default_inner {
+                    if let ValueImpl::Container(inner_v) = inner {
+                        MoveInputStatus::Complete(Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(inner_v)
+                        )))
+                    } else {
+                        MoveInputStatus::Complete(Value(ValueImpl::IndexedRef(
+                            IndexedRef {
+                                idx: 0,
+                                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![inner]))))
+                            }
+                        )))
+                    }
+                } else if let MoveInputStatus::DependentOnStructs(Value(ValueImpl::Container(cont)), deps) = default_inner {
+                    MoveInputStatus::DependentOnStructs(
+                        Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(cont)
+                        )),
+                        deps
+                    )
+                } else {
+                    unreachable!()
+                }
             }
             _ => unreachable!()
         }
@@ -279,18 +398,70 @@ impl<'a> MoveCorpusInitializer<'a>
         }
     }
 
+    fn gen_tx_context(&mut self, ty: Type) -> Value {
+        if let Type::MutableReference(ty) = ty {
+            if let Type::Struct(struct_tag) = *ty {
+                // struct TxContext has drop {
+                //     /// The address of the user that signed the current transaction
+                //     sender: address,
+                //     /// Hash of the current transaction
+                //     tx_hash: vector<u8>,
+                //     /// The current epoch number
+                //     epoch: u64,
+                //     /// Timestamp that the epoch started at
+                //     epoch_timestamp_ms: u64,
+                //     /// Counter recording the number of fresh id's created while executing
+                //     /// this transaction. Always 0 at the start of a transaction
+                //     ids_created: u64
+                // }
+                let inner = Container::Struct(Rc::new(RefCell::new(vec![
+                        ValueImpl::Address(self.state.get_rand_caller()),
+                        ValueImpl::Container(
+                            Container::VecU8(Rc::new(RefCell::new(vec![6;32])))
+                        ),
+                        ValueImpl::U64(123213),
+                        ValueImpl::U64(2130127412),
+                        ValueImpl::U64(0),
+                    ])));
+
+                return Value(ValueImpl::ContainerRef(
+                    ContainerRef::Local(
+                        inner
+                    )
+                ))
+            }
+        }
+        unreachable!()
+
+    }
+
     fn build_input(&mut self, module_id: &ModuleId, function: Arc<Function>) -> Option<MoveFunctionInput> {
         let mut values = vec![];
-
+        let mut resolved = true;
+        let mut deps = HashMap::new();
+        let type_tag_info = self.state
+            .metadata()
+            .get::<TypeTagInfoMeta>()
+            .expect("type tag info not found")
+            .clone();
         for parameter_type in &function.parameter_types {
-            let default_val = Self::gen_default_value(self.state, Box::new(parameter_type.clone()));
+            let tag = type_tag_info.get_type_tag(&parameter_type);
+            let default_val = if let Some(tag) = tag && is_tx_context(&tag) {
+                MoveInputStatus::Complete(self.gen_tx_context(parameter_type.clone()))
+            } else {
+                Self::gen_default_value(self.state, Box::new(parameter_type.clone()))
+            };
 
             match default_val {
                 MoveInputStatus::Complete(v) => {
                     values.push(CloneableValue::from(v));
                 }
-                MoveInputStatus::DependentOnStructs(_, _) => {
-                    todo!("structs")
+                MoveInputStatus::DependentOnStructs(vals, tys) => {
+                    values.push(CloneableValue::from(vals));
+                    tys.iter().for_each(|ty| {
+                        *deps.entry(ty.clone()).or_insert(0) += 1;
+                    });
+                    resolved = false;
                 }
             }
         }
@@ -305,9 +476,11 @@ impl<'a> MoveCorpusInitializer<'a>
             caller: self.state.get_rand_caller(),
             vm_state: StagedVMState::new_uninitialized(),
             vm_state_idx: 0,
-            _deps: Default::default(),
-            _resolved: true,
+            _deps: deps,
+            _resolved: resolved,
         };
+
+        // println!("input: {:?}", input);
         return Some(input);
     }
 }

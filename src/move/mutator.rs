@@ -85,9 +85,17 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
                     input.set_staged_state(new_state, idx);
                     // slash all structs in input right now and replace with those inside new state
                     input.slash(state);
+                    input.set_resolved();
                     MutationResult::Mutated
                 }
-                _ => input.mutate(state),
+                _ => {
+                    // println!("mutating input");
+                    if input.get_resolved() {
+                        input.mutate(state)
+                    } else {
+                        MutationResult::Skipped
+                    }
+                },
             }
         };
 

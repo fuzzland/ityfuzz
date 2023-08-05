@@ -15,7 +15,6 @@ use std::path::Path;
 use std::process::exit;
 use std::{marker::PhantomData, time::Duration};
 
-use crate::evm::oracles::erc20::ORACLE_OUTPUT;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::HasExecutionResult;
@@ -47,6 +46,7 @@ use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
+pub static mut ORACLE_OUTPUT: String = String::new();
 
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait

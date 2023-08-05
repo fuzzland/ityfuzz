@@ -12,8 +12,9 @@ use std::rc::Rc;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
-use crate::evm::oracles::TYPED_BUG_BUG_IDX;
+use crate::fuzzer::ORACLE_OUTPUT;
 use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput};
+use crate::r#move::oracles::TYPED_BUG_BUG_IDX;
 
 use crate::r#move::types::{MoveAddress, MoveFuzzState, MoveOracleCtx, MoveOutput, MoveSlotTy};
 use crate::r#move::vm_state::MoveVMState;
@@ -39,6 +40,21 @@ for TypedBugOracle {
         ctx: &mut MoveOracleCtx<'_>,
         stage: u64,
     ) -> Vec<u64> {
-        vec![]
+        if ctx.post_state.typed_bug.len() > 0 {
+            unsafe {
+                ORACLE_OUTPUT += format!(
+                    "[typed_bug] {:?} hit at module {:?}\n",
+                    ctx.post_state.typed_bug,
+                    ctx.input.module
+                ).as_str();
+            }
+            ctx.post_state.typed_bug.iter().map(|bug_id| {
+                let mut hasher = DefaultHasher::new();
+                bug_id.hash(&mut hasher);
+                (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX
+            }).collect_vec()
+        } else {
+            vec![]
+        }
     }
 }

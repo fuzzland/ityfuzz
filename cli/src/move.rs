@@ -21,7 +21,7 @@ pub struct MoveArgs {
     target: String,
 
     /// Seed for the RNG
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "0")]
     seed: u64,
 }
 
