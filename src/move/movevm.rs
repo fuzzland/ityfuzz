@@ -426,7 +426,7 @@ where
         _deployed_address: AccountAddress,
         state: &mut S,
     ) -> Option<AccountAddress> {
-        println!("deploying module dep: {:?}", module.self_id());
+        // println!("deploying module dep: {:?}", module.self_id());
 
         if !state.metadata_mut().contains::<TypeTagInfoMeta>() {
             state.metadata_mut().insert(TypeTagInfoMeta::new());
