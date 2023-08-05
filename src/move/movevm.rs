@@ -4,7 +4,7 @@ use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::r#move::input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
-use crate::r#move::types::MoveOutput;
+use crate::r#move::types::{MoveAddress, MoveOutput};
 use crate::r#move::vm_state::{Gate, GatedValue, MoveVMState};
 use crate::state_input::StagedVMState;
 
@@ -45,9 +45,10 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::error::SuiResult;
 use sui_types::metrics::LimitsMetrics;
-use sui_types::object::Object;
+use sui_types::object::{Object, Owner};
 use sui_types::storage::ChildObjectResolver;
 use crate::r#move::corpus_initializer::is_tx_context;
+use crate::state::HasCaller;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -416,7 +417,7 @@ impl<I, S>
     > for MoveVM<I, S>
 where
     I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT,
-    S: HasMetadata,
+    S: HasMetadata + HasCaller<MoveAddress>,
 {
     fn deploy(
         &mut self,
@@ -441,7 +442,7 @@ where
                                                 deployed_module_idx.clone(),
                                                 &module).expect("internal deploy error");
         for f in &self.loader.module_cache.read().functions[func_off..] {
-            println!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
+            // println!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
             self.functions
                 .entry(deployed_module_idx.clone())
                 .or_insert_with(HashMap::new)
@@ -473,7 +474,7 @@ where
     fn execute(
         &mut self,
         input: &I,
-        _state: &mut S,
+        state: &mut S,
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, ConciseMoveInput>
     where
         MoveVMState: VMStateT,
@@ -484,6 +485,8 @@ where
             .unwrap()
             .get(input.function_name())
             .unwrap();
+
+        // println!("running input: {:?}", input.function_name());
 
         // println!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
 
@@ -496,7 +499,7 @@ where
             runtime_limits_config: Default::default(),
         };
 
-        let mut state = input.get_state().clone();
+        let mut vm_state = input.get_state().clone();
         unsafe {
             MOVE_STATE_CHANGED = false;
         }
@@ -525,9 +528,9 @@ where
 
 
         loop {
-            let resolver = current_frame.resolver(state.link_context(), &self.loader);
+            let resolver = current_frame.resolver(vm_state.link_context(), &self.loader);
             let ret =
-                current_frame.execute_code(&resolver, &mut interp, &mut state, &mut gas_meter, &mut MoveVMTracer{});
+                current_frame.execute_code(&resolver, &mut interp, &mut vm_state, &mut gas_meter, &mut MoveVMTracer{});
             // println!("{:?}", ret);
 
             if ret.is_err() {
@@ -553,12 +556,13 @@ where
                     let func = resolver.function_from_handle(fh_idx);
 
                     if func.is_native() {
+                        // println!("calling native function: {:?}", func.name.as_str());
                         native_called = true;
                         if !Self::call_native(
                             func,
                             vec![],
                             &mut interp,
-                            &mut state,
+                            &mut vm_state,
                             &resolver,
                             &mut gas_meter,
                             &mut self.native_context,
@@ -598,7 +602,7 @@ where
                             func,
                             ty_args,
                             &mut interp,
-                            &mut state,
+                            &mut vm_state,
                             &resolver,
                             &mut gas_meter,
                             &mut self.native_context,
@@ -628,41 +632,63 @@ where
             }
         }
 
-        let resolver = current_frame.resolver(state.link_context(), &self.loader);
+        let resolver = current_frame.resolver(vm_state.link_context(), &self.loader);
 
 
         let mut out: MoveOutput = MoveOutput { vars: vec![] };
 
         // println!("{:?}", interp.operand_stack.value);
 
+        macro_rules! add_value {
+            ($v: expr, $t: expr, $gate: expr) => {
+                {
+                    let res = vm_state.add_new_value(GatedValue {
+                        v: $v.clone(),
+                        gate: $gate,
+                    }, $t, &resolver, state);
+
+                    if res {
+                        unsafe { MOVE_STATE_CHANGED = true; }
+                    }
+                }
+            };
+        }
         for (v, t) in interp.operand_stack.value.iter().zip(
             initial_function
                 .return_types()
                 .iter()
         ) {
-            unsafe {MOVE_STATE_CHANGED = true;}
-            let abilities = resolver.loader.abilities(t).expect("unknown type");
-            state.add_new_value(GatedValue {
-                v: v.clone(),
-                gate: Gate::Own,
-            }, t, &abilities);
-
-            if !_state.has_metadata::<StructAbilities>() {
-                _state.metadata_mut().insert(StructAbilities::new());
-            }
-
-            _state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
-                t.clone(),
-                abilities,
-            );
-
+            add_value!(v, t, Gate::Own);
+            // println!("adding as own: {:?}", v);
             out.vars.push((t.clone(), v.clone()));
             // println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
 
         if native_called {
-            for t in &self.native_context.get::<ObjectRuntime>().state.transfers {
-                println!("transfer: {:?}", t);
+            for (uid, (owner, ty, value)) in &self.native_context.get::<ObjectRuntime>().state.transfers {
+                let gate = match owner {
+                    Owner::AddressOwner(addr) => {
+                        if state.has_caller(&MoveAddress::new(addr.to_vec().try_into().unwrap())) {
+                            Gate::MutRef
+                        } else {
+                            continue;
+                        }
+                    }
+                    Owner::ObjectOwner(addr) => {
+                        continue;
+                    }
+                    Owner::Shared { .. } => {
+                        Gate::MutRef
+                    }
+                    Owner::Immutable => {
+                        Gate::Ref
+                    }
+                };
+
+                // println!("adding as {:?}: {:?}", gate, value);
+
+                add_value!(value, ty, gate);
+                // println!("transfer: {:?}", t);
             }
 
             for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
@@ -672,7 +698,7 @@ where
                         let data = (**data).borrow();
                         let item = data.get(0).clone().expect("invalid event data");
                         if let ValueImpl::U64(data) = item {
-                            state.typed_bug.push(format!("bug{}", *data));
+                            vm_state.typed_bug.push(format!("bug{}", *data));
                         } else {
                             panic!("invalid event data");
                         }
@@ -685,7 +711,7 @@ where
         }
 
         ExecutionResult {
-            new_state: StagedVMState::new_with_state(state),
+            new_state: StagedVMState::new_with_state(vm_state),
             output: out,
             reverted,
             additional_info: None

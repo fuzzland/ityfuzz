@@ -27,7 +27,7 @@ use libafl::impl_serdeany;
 use move_binary_format::file_format::AbilitySet;
 use move_vm_runtime::loader::Function;
 use move_vm_types::loaded_data::runtime_types::Type;
-use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl};
+use move_vm_types::values::{Container, ContainerRef, IndexedRef, Value, ValueImpl};
 use crate::evm::types::EVMU256;
 use crate::mutation_utils::byte_mutator;
 use crate::r#move::movevm::{MoveVM, TypeTagInfoMeta};
@@ -150,7 +150,7 @@ impl ConciseSerde for ConciseMoveInput {
     }
 
     fn serialize_string(&self) -> String {
-        format!("{:?} => {:?}<{:?}>({:?})", self.caller, self.module,
+        format!("{:?} => {}::{}<{}>({})", self.caller, self.module, self.function,
                 self.ty_args.iter().map(
                     |ty| format!("{:?}", ty)
                 ).join(","),
@@ -219,6 +219,22 @@ impl CloneableValue {
     }
 }
 
+
+pub fn convert_ref(value: Value) -> Value {
+    match value.0 {
+        ValueImpl::Invalid => unreachable!("Invalid value"),
+        ValueImpl::Container(container) => {
+            Value(ValueImpl::ContainerRef(ContainerRef::Local(container)))
+        }
+        _ => {
+            Value(ValueImpl::IndexedRef(IndexedRef {
+                idx: 0,
+                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![value.0])))),
+            }))
+        }
+    }
+}
+
 impl MoveFunctionInputT for MoveFunctionInput {
     fn module_id(&self) -> &ModuleId {
         &self.module
@@ -269,6 +285,12 @@ impl MoveFunctionInputT for MoveFunctionInput {
     {
         for (arg, ty) in self.args.iter_mut()
             .zip(self.function_info.get_function().parameter_types.iter()) {
+
+            if state.metadata().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
+                continue;
+            }
+
+            // println!("Slash arg {:?} with type {:?}", arg, ty);
             match ty {
 
                 // If the final vector inner type is a struct, we need to slash it (clear all)
@@ -295,11 +317,11 @@ impl MoveFunctionInputT for MoveFunctionInput {
                 }
                 Type::Reference(inner_ty) => {
                     let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), &Gate::Ref);
-                    arg.value = new_struct;
+                    arg.value = convert_ref(new_struct);
                 }
                 Type::MutableReference(inner_ty) => {
                     let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), &Gate::MutRef);
-                    arg.value = new_struct;
+                    arg.value = convert_ref(new_struct);
                 }
                 Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
                 _ => {}
@@ -519,6 +541,7 @@ impl MoveFunctionInput {
                 // println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
                 // resolved structs shall be returned to the vm state
                 if is_resolved {
+                    // println!("returing resolved struct to vm state {:?} for {:?}", value, ref_ty);
                     vm_state.restock_struct(
                         ty,
                         value.value,
@@ -617,7 +640,7 @@ impl MoveFunctionInput {
                 // return mutate_by!(_state, value);
             }
             ValueImpl::Container(ref mut cont) => {
-                MutateType::Container(cont, ty.clone(), Gate::Own)
+                MutateType::Container(cont, ty.clone(), ref_ty.clone())
             }
             ValueImpl::ContainerRef(ref mut cont) => {
                 match cont {
@@ -631,6 +654,7 @@ impl MoveFunctionInput {
                         } else {
                             unreachable!("not a reference")
                         };
+                        // println!("mutating container ref {:?} {:?} {:?}", v, inner_ty, gate);
                         MutateType::Container(v, inner_ty, gate)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
@@ -702,20 +726,27 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             + HasItyState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>
             + HasCaller<AccountAddress> + HasMetadata,
     {
+        if self.function_info.get_function().parameter_types.is_empty() {
+            return MutationResult::Skipped;
+        }
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
         let ty = self.function_info.get_function().parameter_types[nth].clone();
         if _state.metadata().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
             return MutationResult::Skipped;
         }
 
-        Self::mutate_value_impl(
+        // println!("mutating arg!!!! {:?} {:?}", self.args[nth], ty.clone());
+        let res = Self::mutate_value_impl(
             _state,
             &mut self.args[nth],
             ty,
             &mut self.vm_state.state,
             &Gate::Own,
             self._resolved
-        )
+        );
+
+        // println!("after mutating arg!!!! {:?}", self.args[nth]);
+        res
     }
 
     fn get_caller_mut(&mut self) -> &mut AccountAddress {

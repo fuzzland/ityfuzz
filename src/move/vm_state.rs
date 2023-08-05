@@ -22,6 +22,7 @@ use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::HasRand;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::identifier::IdentStr;
+use move_vm_runtime::loader::Resolver;
 use serde_json::ser::State;
 use crate::evm::onchain::endpoints::Chain::POLYGON;
 use crate::r#move::input::StructAbilities;
@@ -124,7 +125,41 @@ impl MoveVMState {
     ///
     /// Checks if the value is already in the state, if it is, it will not be added
     /// but the amount of the value will be increased.
-    pub fn add_new_value(&mut self, value: GatedValue, ty: &Type, abilities: &AbilitySet) {
+    pub fn add_new_value<S: HasMetadata>(&mut self, value: GatedValue, ty: &Type, resolver: &Resolver, state: &mut S) -> bool {
+        let gate = value.gate.clone();
+        match ty {
+            Type::Vector(inner_ty) => {
+                if let Value(ValueImpl::Container(Container::Vec(inner_v))) = &value.v {
+                    let mut added = false;
+                    for v in (**inner_v).borrow().iter() {
+                        added |= self.add_new_value(
+                            GatedValue {
+                                v: Value(v.clone()),
+                                gate: gate.clone()
+                            }, &**inner_ty, resolver, state)
+                    }
+                    return added;
+                } else if let Value(ValueImpl::Container(Container::Locals(inner_v))) = &value.v {
+                    let mut added = false;
+                    for v in (**inner_v).borrow().iter() {
+                        added |= self.add_new_value(
+                            GatedValue {
+                                v: Value(v.clone()),
+                                gate: gate.clone()
+                            }, &**inner_ty, resolver, state)
+                    }
+                    return added;
+                }
+                unreachable!("Should not be a vector");
+            }
+            Type::Struct(_) => {}
+            Type::Reference(_) | Type::MutableReference(_) => unreachable!("Should not be a reference"),
+            _ => {
+                return false;
+            }
+        }
+
+        let abilities = resolver.loader.abilities(ty).expect("unknown type");
         let it = match self.values.get_mut(ty) {
             Some(it) => it,
             None => {
@@ -134,7 +169,6 @@ impl MoveVMState {
         };
         let mut exists = false;
         let mut allow_clone = abilities.has_copy();
-        let mut has_drop = abilities.has_drop();
         for (v, amt) in it {
             if (*v).equals(&value).unwrap() {
                 exists = true;
@@ -151,9 +185,20 @@ impl MoveVMState {
             self.values.get_mut(ty).unwrap().push((value, 1));
         }
 
-        if !has_drop {
+        if !gate.is_ref() && !abilities.has_drop() && !abilities.has_store() {
             self._hot_potato += 1;
         }
+
+        if !state.has_metadata::<StructAbilities>() {
+            state.metadata_mut().insert(StructAbilities::new());
+        }
+
+        state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
+            ty.clone(),
+            abilities,
+        );
+
+        true
     }
 
 
@@ -203,7 +248,7 @@ impl MoveVMState {
                             .expect("StructAbilities not found")
                             .get_ability(ty)
                             .expect("StructAbilities of specific struct not inserted");
-                        if !struct_abilities.has_drop() {
+                        if !struct_abilities.has_drop() && !struct_abilities.has_store() {
                             self._hot_potato -= 1;
                         }
                     }
@@ -237,7 +282,7 @@ impl MoveVMState {
             .get_ability(ty)
             .expect("StructAbilities of specific struct not inserted");
 
-        if !struct_abilities.has_drop() && !is_ref {
+        if !struct_abilities.has_drop() && !struct_abilities.has_store() && !is_ref {
             self._hot_potato += 1;
         }
 
@@ -270,15 +315,20 @@ impl MoveVMState {
                 .expect("Cannot find value in ref_in_use, is this struct not a reference?");
             self.ref_in_use.remove(offset);
         }
-        let struct_abilities = state
-            .metadata()
-            .get::<StructAbilities>()
-            .expect("StructAbilities not found")
-            .get_ability(ty)
-            .expect("StructAbilities of specific struct not inserted");
 
-        if !struct_abilities.has_drop() && !ret_ty.is_ref() {
-            self._hot_potato += 1;
+
+        if !ret_ty.is_ref() {
+            println!("looking for struct abilities for {:?} {:?}", value, ty);
+            let struct_abilities = state
+                .metadata()
+                .get::<StructAbilities>()
+                .expect("StructAbilities not found")
+                .get_ability(ty)
+                .expect("StructAbilities of specific struct not inserted");
+
+            if !struct_abilities.has_drop() && !struct_abilities.has_store() {
+                self._hot_potato += 1;
+            }
         }
 
         let it = self.values.get_mut(ty).unwrap();

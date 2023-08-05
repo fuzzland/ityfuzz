@@ -326,8 +326,57 @@ impl<'a> MoveCorpusInitializer<'a>
                     vec![*ty]
                 )
             }
-            Type::Reference(ty) | Type::MutableReference(ty)  => {
-                todo!("reference")
+            Type::Reference(ty) => {
+                let default_inner = Self::gen_default_value(state, ty);
+                if let MoveInputStatus::Complete(Value(inner)) = default_inner {
+                    if let ValueImpl::Container(inner_v) = inner {
+                        MoveInputStatus::Complete(Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(inner_v)
+                        )))
+                    } else {
+                        MoveInputStatus::Complete(Value(ValueImpl::IndexedRef(
+                            IndexedRef {
+                                idx: 0,
+                                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![inner]))))
+                            }
+                        )))
+                    }
+                } else if let MoveInputStatus::DependentOnStructs(Value(ValueImpl::Container(cont)), deps) = default_inner {
+                    MoveInputStatus::DependentOnStructs(
+                        Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(cont)
+                        )),
+                        deps
+                    )
+                } else {
+                    unreachable!()
+                }
+            }
+            Type::MutableReference(ty)  => {
+                let default_inner = Self::gen_default_value(state, ty);
+                if let MoveInputStatus::Complete(Value(inner)) = default_inner {
+                    if let ValueImpl::Container(inner_v) = inner {
+                        MoveInputStatus::Complete(Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(inner_v)
+                        )))
+                    } else {
+                        MoveInputStatus::Complete(Value(ValueImpl::IndexedRef(
+                            IndexedRef {
+                                idx: 0,
+                                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![inner]))))
+                            }
+                        )))
+                    }
+                } else if let MoveInputStatus::DependentOnStructs(Value(ValueImpl::Container(cont)), deps) = default_inner {
+                    MoveInputStatus::DependentOnStructs(
+                        Value(ValueImpl::ContainerRef(
+                            ContainerRef::Local(cont)
+                        )),
+                        deps
+                    )
+                } else {
+                    unreachable!()
+                }
             }
             _ => unreachable!()
         }
@@ -407,8 +456,8 @@ impl<'a> MoveCorpusInitializer<'a>
                 MoveInputStatus::Complete(v) => {
                     values.push(CloneableValue::from(v));
                 }
-                MoveInputStatus::DependentOnStructs(_, tys) => {
-                    values.push(CloneableValue::from(Value(ValueImpl::Container(Container::Struct(Rc::new(RefCell::new(vec![])))))));
+                MoveInputStatus::DependentOnStructs(vals, tys) => {
+                    values.push(CloneableValue::from(vals));
                     tys.iter().for_each(|ty| {
                         *deps.entry(ty.clone()).or_insert(0) += 1;
                     });
@@ -430,6 +479,8 @@ impl<'a> MoveCorpusInitializer<'a>
             _deps: deps,
             _resolved: resolved,
         };
+
+        // println!("input: {:?}", input);
         return Some(input);
     }
 }
