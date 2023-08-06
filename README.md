@@ -231,6 +231,18 @@ Finally, you can fetch the constructor arguments using the `--fetch-tx-data` fla
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
 
+### Concolic Execution Support (Experimental)
+
+Concolic execution can be performed on certain testcases on the fly during fuzzing. It is particularly useful for fuzzing code with complex
+if-conditions. You can add `--concolic` to args to make fuzzer conduct concolic execution. You can also add `--concolic-caller` to args to make fuzzer solve for callers.
+
+Example:
+```
+cd tests/evm/concolic-1/ && solc *.sol -o . --bin --abi --overwrite --base-path ../../../ && ../../../
+./cli/target/release/cli evm -t 'tests/evm/concolic-1/*' --concolic --concolic-caller
+```
+
+
 # Finding Custom Bugs (EVM)
 
 You can simply insert `bug()` or `typed_bug(string message)` in your contract to report a condition when bug is found.
