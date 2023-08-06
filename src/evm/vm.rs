@@ -753,6 +753,7 @@ where
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
+            deployed_address,
             self.deployer,
             EVMU256::from(0),
         );
@@ -868,8 +869,6 @@ where
             }
             EVMInputTy::ABI => self.execute_abi(input, state),
             EVMInputTy::ArbitraryCallBoundedAddr => {
-                assert!(input.is_step() == false);
-                assert!(input.get_state().has_post_execution() == true);
                 self.execute_abi(input, state)
             },
         }

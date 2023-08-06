@@ -47,6 +47,7 @@ use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
 use crate::evm::concolic::concolic_host::ConcolicHost;
+use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::coverage::Coverage;
 use crate::evm::middlewares::branch_coverage::BranchCoverage;
@@ -222,11 +223,16 @@ pub fn evm_fuzzer(
     feedback
         .init_state(state)
         .expect("Failed to init state");
-    let calibration = CalibrationStage::new(&feedback);
+    // let calibration = CalibrationStage::new(&feedback);
+    let concolic_stage = ConcolicStage::new(
+        config.concolic,
+        config.concolic_caller,
+        evm_executor_ref.clone()
+    );
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
-    let mut stages = tuple_list!(calibration, std_stage);
+    let mut stages = tuple_list!(std_stage, concolic_stage);
 
 
 
@@ -276,12 +282,12 @@ pub fn evm_fuzzer(
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
-    let wrapped_feedback = Sha3WrappedFeedback::new(
+    let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,
         sha3_taint,
         evm_executor_ref.clone(),
         config.sha3_bypass
-    );
+    ));
 
     let mut fuzzer = ItyFuzzer::new(
         scheduler,

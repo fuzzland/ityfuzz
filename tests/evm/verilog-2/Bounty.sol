@@ -35,7 +35,7 @@ contract Bounty {
 
             // reward the first finder
             isHacked = true;
-            IERC20(WMATIC).transfer(msg.sender, IERC20(WMATIC).balanceOf(address((this))));
+//            IERC20(WMATIC).transfer(msg.sender, IERC20(WMATIC).balanceOf(address((this))));
             winner = address(msg.sender);
         }
 

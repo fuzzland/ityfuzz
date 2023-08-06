@@ -147,6 +147,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "false")]
     concolic: bool,
 
+    /// Support Treating Caller as Symbolically
+    #[arg(long, default_value = "false")]
+    concolic_caller: bool,
+
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
@@ -431,6 +435,7 @@ pub fn evm_main(args: EvmArgs) {
         },
         onchain,
         concolic: args.concolic,
+        concolic_caller: args.concolic_caller,
         oracle: oracles,
         producers,
         flashloan: args.flashloan,

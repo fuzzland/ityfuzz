@@ -317,6 +317,13 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::InstructionCoverage
     }
+
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {}
 }
 
 

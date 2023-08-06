@@ -600,6 +600,7 @@ impl ABI for A256 {
             let mut ptr = bytes.as_mut_ptr();
             ptr = ptr.add(32 - data_len);
             for i in 0..data_len {
+                println!("[concolic] AAAAAAAA {}_A256_{}", counter, i);
                 *ptr.add(i) = Expr::sym_byte(format!("{}_A256_{}", counter, i));
             }
         }
@@ -926,10 +927,11 @@ impl ABI for AArray {
                     CONCOLIC_COUNTER += 1;
                     for j in 0..head_data[i].len() {
                         bytes[offset + j] = Expr::sym_byte(format!(
-                            "{}_{}_{}",
+                            "{}_{}_{}_{}",
                             counter,
                             self.data[i].get_type_str(),
-                            i
+                            i,
+                            j
                         ));
                     }
                 }
@@ -952,10 +954,11 @@ impl ABI for AArray {
                     CONCOLIC_COUNTER += 1;
                     for j in 0..tail_data[i].len() {
                         bytes[offset + j] = Expr::sym_byte(format!(
-                            "{}_{}_{}",
+                            "{}_{}_{}_{}",
                             counter,
                             self.data[i].get_type_str(),
-                            i
+                            i,
+                            j
                         ));
                     }
                 }

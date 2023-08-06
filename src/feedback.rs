@@ -479,12 +479,15 @@ where
 
         // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
+            println!("Voted for {} because of CMP", input.get_state_idx());
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
         // if coverage has increased, vote for the state
         if cov_interesting {
+            println!("Voted for {} because of COV", input.get_state_idx());
+
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
