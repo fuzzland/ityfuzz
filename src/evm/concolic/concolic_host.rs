@@ -28,7 +28,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use z3::ast::{Bool, BV};
-use z3::{ast::Ast, Config, Context, Solver};
+use z3::{ast::Ast, Config, Context, Params, Solver};
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
@@ -534,11 +534,18 @@ impl<'a> Solving<'a> {
                         continue;
                     },
                 },
-                _ => panic!("{:?} not implemented for constraint solving", cons.op),
+                _ => {
+                    #[cfg(feature = "z3_debug")]
+                    println!("Unsupported constraint: {:?}", cons);
+                    continue;
+                }
             });
         }
 
         // println!("Solver: {:?}", solver);
+        let mut p = Params::new(&context);
+        p.set_u32("timeout", 1000);
+        solver.set_params(&p);
         let result = solver.check();
         match result {
             z3::SatResult::Sat => {
@@ -565,7 +572,7 @@ impl<'a> Solving<'a> {
                 }]
             }
             z3::SatResult::Unsat => vec![],
-            z3::SatResult::Unknown => todo!(),
+            z3::SatResult::Unknown => vec![],
         }
     }
 }
