@@ -389,7 +389,7 @@ cd ../../../cli/
 ```
 
 # Reporting Bugs (Move)
-You can emit a event of `` in your contract to report a condition when bug is found.
+You can emit an event of `` in your contract to report a condition when bug is found.
 ```move
 // define the event struct
 use sui::event;
@@ -469,5 +469,5 @@ sponsors.
 Grants:
 | Grants | Description |
 |:----:|:-----------:|
-| <img src=https://ityfuzz.assets.fuzz.land/sui.jpg width=100px/> | Grants from Sui Foundation for building Move and chain-specfic support |
+| <img src=https://ityfuzz.assets.fuzz.land/sui.jpg width=100px/> | Grants from Sui Foundation for building Move and chain-specific support |
 | <img src=https://ityfuzz.assets.fuzz.land/web3.png width=100px/> | Grants from Web3 Foundation for building Substrate pallets and Ink! support |
