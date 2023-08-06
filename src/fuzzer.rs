@@ -450,7 +450,6 @@ where
                         state.corpus_mut().remove(old_testcase_idx)?;
 
                         let mut testcase = Testcase::new(input.clone());
-                        self.feedback.append_metadata(state, &mut testcase)?;
                         let new_testcase_idx = state.corpus_mut().add(testcase)?;
                         self.infant_scheduler.report_corpus(
                             state.get_infant_state_state(),

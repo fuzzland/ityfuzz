@@ -46,6 +46,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub onchain_storage_fetching: Option<StorageFetchingMode>,
     pub flashloan: bool,
     pub concolic: bool,
+    pub concolic_caller: bool,
     pub fuzzer_type: FuzzerTypes,
     pub contract_loader: ContractLoader,
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
