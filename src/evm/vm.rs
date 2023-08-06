@@ -753,6 +753,7 @@ where
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
+            deployed_address,
             self.deployer,
             EVMU256::from(0),
         );

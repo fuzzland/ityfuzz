@@ -699,6 +699,38 @@ macro_rules! u256_to_u8 {
 }
 
 
+macro_rules! invoke_middlewares {
+    ($host: expr, $interp: expr, $state: expr, $invoke: ident) => {
+        if $host.middlewares_enabled {
+            match $host.flashloan_middleware.clone() {
+                Some(m) => {
+                    let mut middleware = m.deref().borrow_mut();
+                    middleware.$invoke($interp, $host, $state);
+                }
+                _ => {}
+            }
+            if $host.setcode_data.len() > 0 {
+                $host.clear_codedata();
+            }
+            for (_, middleware) in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut()
+            {
+                middleware
+                    .deref()
+                    .deref()
+                    .borrow_mut()
+                    .$invoke($interp, $host, $state);
+            }
+
+
+            if $host.setcode_data.len() > 0 {
+                for (address, code) in &$host.setcode_data.clone() {
+                    $host.set_code(address.clone(), code.clone(), $state);
+                }
+            }
+        }
+    };
+}
+
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
     S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> + HasMetadata + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput> +  'static,
@@ -707,34 +739,7 @@ where
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         unsafe {
-            if self.middlewares_enabled {
-                match self.flashloan_middleware.clone() {
-                    Some(m) => {
-                        let mut middleware = m.deref().borrow_mut();
-                        middleware.on_step(interp, self, state);
-                    }
-                    _ => {}
-                }
-                if self.setcode_data.len() > 0 {
-                    self.clear_codedata();
-                }
-                for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
-                {
-                    middleware
-                        .deref()
-                        .deref()
-                        .borrow_mut()
-                        .on_step(interp, self, state);
-                }
-
-
-                if self.setcode_data.len() > 0 {
-                    for (address, code) in &self.setcode_data.clone() {
-                        self.set_code(address.clone(), code.clone(), state);
-                    }
-                }
-            }
-
+            invoke_middlewares!(self, interp, state, on_step);
             if IS_FAST_CALL_STATIC {
                 return Continue;
             }
@@ -1139,15 +1144,20 @@ where
         }
     }
 
-    fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
-        if is_precompile(input.contract, self.precompiles.len()) {
-            return self.call_precompile(input, state);
-        }
-
-        if unsafe { IS_FAST_CALL_STATIC } {
-            self.call_forbid_control_leak(input, state)
+    fn call(&mut self, input: &mut CallInputs, interp: &mut Interpreter, output_info: (usize, usize), state: &mut S) -> (InstructionResult, Gas, Bytes) {
+        let res = if is_precompile(input.contract, self.precompiles.len()) {
+            self.call_precompile(input, state)
         } else {
-            self.call_allow_control_leak(input, state)
+            if unsafe { IS_FAST_CALL_STATIC } {
+                self.call_forbid_control_leak(input, state)
+            } else {
+                self.call_allow_control_leak(input, state)
+            }
+        };
+
+        unsafe {
+            invoke_middlewares!(self, interp, state, on_return);
         }
+        res
     }
 }

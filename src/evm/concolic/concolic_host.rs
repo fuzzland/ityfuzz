@@ -666,14 +666,22 @@ impl SymbolicMemory {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ConcolicCallCtx {
+    pub symbolic_stack: Vec<Option<Box<Expr>>>,
+    pub symbolic_memory: SymbolicMemory,
+    pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConcolicHost<I, VS> {
     pub symbolic_stack: Vec<Option<Box<Expr>>>,
     pub symbolic_memory: SymbolicMemory,
     pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
-    pub caller: EVMAddress,
     pub testcase_ref: Arc<EVMInput>,
+
+    pub ctxs: Vec<ConcolicCallCtx>,
     pub phantom: PhantomData<(I, VS)>,
 }
 
@@ -685,10 +693,33 @@ impl<I, VS> ConcolicHost<I, VS> {
             symbolic_state: Default::default(),
             input_bytes: Self::construct_input_from_abi(testcase_ref.get_data_abi().expect("data abi not found")),
             constraints: vec![],
-            caller: testcase_ref.caller,
             testcase_ref,
             phantom: Default::default(),
+            ctxs: vec![],
         }
+    }
+
+    pub fn pop_ctx(&mut self) {
+        let ctx = self.ctxs.pop();
+        if let Some(ctx) = ctx {
+            self.symbolic_stack = ctx.symbolic_stack;
+            self.symbolic_memory = ctx.symbolic_memory;
+            self.symbolic_state = ctx.symbolic_state;
+        }
+
+    }
+
+    pub fn push_ctx(&mut self) {
+        let ctx = ConcolicCallCtx {
+            symbolic_stack: self.symbolic_stack.clone(),
+            symbolic_memory: self.symbolic_memory.clone(),
+            symbolic_state: self.symbolic_state.clone(),
+        };
+        self.ctxs.push(ctx);
+
+        self.symbolic_stack = vec![];
+        self.symbolic_memory = SymbolicMemory::new();
+        self.symbolic_state = Default::default();
     }
 
     fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
@@ -783,6 +814,22 @@ where
                         self.symbolic_stack.pop();
                     }
                     vec![None; $out_cnt]
+                }
+            };
+        }
+
+        macro_rules! concrete_eval_with_action {
+            ($in_cnt: expr, $out_cnt: expr, $pp: ident) => {
+                {
+                    // println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
+                    for _ in 0..$in_cnt {
+                        self.symbolic_stack.pop();
+                    }
+                    for _ in 0..$out_cnt {
+                        self.symbolic_stack.push(None);
+                    }
+                    self.$pp();
+                    vec![]
                 }
             };
         }
@@ -1005,11 +1052,22 @@ where
             // CALLER
             0x33 => {
                 // println!("CALLER @ pc : {:x}", interp.program_counter());
-                vec![Some(Expr::new_caller())]
+                if self.ctxs.len() > 0 {
+                    // use concrete caller when inside a call
+                    vec![None]
+                } else {
+                    vec![Some(Expr::new_caller())]
+                }
             }
             // CALLVALUE
             0x34 => {
-                vec![Some(Expr::new_callvalue())]
+
+                if self.ctxs.len() > 0 {
+                    // use concrete caller when inside a call
+                    vec![None]
+                } else {
+                    vec![Some(Expr::new_callvalue())]
+                }
             }
             // CALLDATALOAD
             0x35 => {
@@ -1234,19 +1292,20 @@ where
             }
             // CALL
             0xf1 => {
-                concrete_eval!(7, 1)
+                concrete_eval_with_action!(7, 1, push_ctx)
             }
             // CALLCODE
             0xf2 => {
-                concrete_eval!(7, 1)
+                concrete_eval_with_action!(7, 1, push_ctx)
             }
             // RETURN
             0xf3 => {
-                concrete_eval!(2, 0)
+                self.pop_ctx();
+                vec![]
             }
             // DELEGATECALL
             0xf4 => {
-                concrete_eval!(6, 1)
+                concrete_eval_with_action!(6, 1, push_ctx)
             }
             // CREATE2
             0xf5 => {
@@ -1254,7 +1313,7 @@ where
             }
             // STATICCALL
             0xfa => {
-                concrete_eval!(6, 1)
+                concrete_eval_with_action!(6, 1, push_ctx)
             }
             // REVERT
             0xfd => {
@@ -1298,6 +1357,15 @@ where
             }
         }
 
+    }
+
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
+        self.pop_ctx();
     }
 
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
