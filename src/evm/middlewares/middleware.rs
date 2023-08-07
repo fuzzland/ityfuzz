@@ -101,123 +101,124 @@ where
                 interp.stack.data()[interp.stack.len() - 1 - $idx]
             };
         }
+        unsafe {
+            match *interp.instruction_pointer {
+                0x57 => { // JUMPI
+                    let br = fast_peek!(1);
+                    let jump_dest = if br.is_zero() {
+                        1
+                    } else {
+                        fast_peek!(0).as_u64()
+                    };
+                    let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
+                    if JMP_MAP[idx] == 0 {
+                        *host.coverage_changed = true;
+                    }
+                    if JMP_MAP[idx] < 255 {
+                        JMP_MAP[idx] += 1;
+                    }
 
-        match *interp.instruction_pointer {
-            0x57 => { // JUMPI
-                let br = fast_peek!(1);
-                let jump_dest = if br.is_zero() {
-                    1
-                } else {
-                    fast_peek!(0).as_u64()
-                };
-                let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
-                if JMP_MAP[idx] == 0 {
-                    *host.coverage_changed = true;
+                    #[cfg(feature = "cmp")]
+                    {
+                        let idx = (interp.program_counter()) % MAP_SIZE;
+                        CMP_MAP[idx] = br;
+                    }
                 }
-                if JMP_MAP[idx] < 255 {
-                    JMP_MAP[idx] += 1;
+
+                #[cfg(any(feature = "dataflow", feature = "cmp", feature = "reentrancy"))]
+                0x55 => { // SSTORE
+                    #[cfg(feature = "dataflow")]
+                    let value = fast_peek!(1);
+                    {
+                        let mut key = fast_peek!(0);
+                        let v = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = v;
+                    }
+                    let res = host.sload(interp.contract.address, fast_peek!(0));
+                    let value_changed = res.expect("sload failed").0 != value;
+
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    JMP_MAP[idx] = if value_changed { 1 } else { 0 };
+
+                    STATE_CHANGE |= value_changed;
+
+                    WRITTEN = true;
+                }
+
+                #[cfg(feature = "dataflow")]
+                0x54 => { // SLOAD
+                    let mut key = fast_peek!(0);
+                    READ_MAP[process_rw_key!(key)] = true;
                 }
 
                 #[cfg(feature = "cmp")]
-                {
-                    let idx = (interp.program_counter()) % MAP_SIZE;
-                    CMP_MAP[idx] = br;
-                }
-            }
-
-            #[cfg(any(feature = "dataflow", feature = "cmp", feature = "reentrancy"))]
-            0x55 => { // SSTORE
-                #[cfg(feature = "dataflow")]
-                let value = fast_peek!(1);
-                {
-                    let mut key = fast_peek!(0);
-                    let v = u256_to_u8!(value) + 1;
-                    WRITE_MAP[process_rw_key!(key)] = v;
-                }
-                let res = host.sload(interp.contract.address, fast_peek!(0));
-                let value_changed = res.expect("sload failed").0 != value;
-
-                let idx = interp.program_counter() % MAP_SIZE;
-                JMP_MAP[idx] = if value_changed { 1 } else { 0 };
-
-                STATE_CHANGE |= value_changed;
-
-                WRITTEN = true;
-            }
-
-            #[cfg(feature = "dataflow")]
-            0x54 => { // SLOAD
-                let mut key = fast_peek!(0);
-                READ_MAP[process_rw_key!(key)] = true;
-            }
-
-            #[cfg(feature = "cmp")]
-            0x10 | 0x12 => { // LT | SLT
-                let v1 = fast_peek!(0);
-                let v2 = fast_peek!(1);
-                let abs_diff = if v1 >= v2 {
-                    if v1 - v2 != U256::zero() {
-                        v1 - v2
+                0x10 | 0x12 => { // LT | SLT
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 >= v2 {
+                        if v1 - v2 != U256::zero() {
+                            v1 - v2
+                        } else {
+                            U256::from(1)
+                        }
                     } else {
-                        U256::from(1)
+                        U256::zero()
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
                     }
-                } else {
-                    U256::zero()
-                };
-                let idx = interp.program_counter() % MAP_SIZE;
-                if abs_diff < CMP_MAP[idx] {
-                    CMP_MAP[idx] = abs_diff;
                 }
-            }
 
-            #[cfg(feature = "cmp")]
-            0x11 | 0x13 => { // GT | SGT
-                let v1 = fast_peek!(0);
-                let v2 = fast_peek!(1);
-                let abs_diff = if v1 <= v2 {
-                    if v2 - v1 != U256::zero() {
-                        v2 - v1
+                #[cfg(feature = "cmp")]
+                0x11 | 0x13 => { // GT | SGT
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 <= v2 {
+                        if v2 - v1 != U256::zero() {
+                            v2 - v1
+                        } else {
+                            U256::from(1)
+                        }
                     } else {
-                        U256::from(1)
+                        U256::zero()
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
                     }
-                } else {
-                    U256::zero()
-                };
-                let idx = interp.program_counter() % MAP_SIZE;
-                if abs_diff < CMP_MAP[idx] {
-                    CMP_MAP[idx] = abs_diff;
                 }
-            }
 
-            #[cfg(feature = "cmp")]
-            0x14 => { // EQ
-                let v1 = fast_peek!(0);
-                let v2 = fast_peek!(1);
-                let abs_diff = if v1 < v2 {
-                    (v2 - v1) % (U256::max_value() - 1) + 1
-                } else {
-                    (v1 - v2) % (U256::max_value() - 1) + 1
-                };
-                let idx = interp.program_counter() % MAP_SIZE;
-                if abs_diff < CMP_MAP[idx] {
-                    CMP_MAP[idx] = abs_diff;
+                #[cfg(feature = "cmp")]
+                0x14 => { // EQ
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 < v2 {
+                        (v2 - v1) % (U256::max_value() - 1) + 1
+                    } else {
+                        (v1 - v2) % (U256::max_value() - 1) + 1
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
                 }
-            }
 
-            0xf1 | 0xf2 | 0xf4 | 0xfa => { // CALL | CALLCODE | DELEGATECALL | STATICCALL
-                let offset_of_ret_size: usize = match *interp.instruction_pointer {
-                    0xf1 | 0xf2 => 6,
-                    0xf4 | 0xfa => 5,
-                    _ => unreachable!(),
-                };
-                unsafe {
-                    RET_OFFSET = fast_peek!(offset_of_ret_size - 1).as_usize();
-                    RET_SIZE = fast_peek!(offset_of_ret_size).as_usize();
+                0xf1 | 0xf2 | 0xf4 | 0xfa => { // CALL | CALLCODE | DELEGATECALL | STATICCALL
+                    let offset_of_ret_size: usize = match *interp.instruction_pointer {
+                        0xf1 | 0xf2 => 6,
+                        0xf4 | 0xfa => 5,
+                        _ => unreachable!(),
+                    };
+                    unsafe {
+                        RET_OFFSET = fast_peek!(offset_of_ret_size - 1).as_usize();
+                        RET_SIZE = fast_peek!(offset_of_ret_size).as_usize();
+                    }
+                    *host._pc = interp.program_counter();
                 }
-                *host._pc = interp.program_counter();
-            }
 
-            _ => {}
+                _ => {}
+            }
         }
     }
 
