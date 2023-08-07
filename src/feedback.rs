@@ -438,6 +438,16 @@ where
     {
         let mut cmp_interesting = false;
         let cov_interesting = false;
+        let mut reentrancy_interesting = false;
+
+        // checking for reentrancy
+        let written = self.vm.deref().borrow_mut().get_written();
+        let new_state = _state.get_execution_result().new_state.state;
+        while new_state.has_post_execution() {
+            // now execute again, checking for writes to EVM memory.
+            self.vm.deref().borrow_mut().execute(_input, _state);
+        }
+        reentrancy_interesting = written;
 
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
@@ -461,6 +471,12 @@ where
 
         // if coverage has increased, vote for the state
         if cov_interesting {
+            self.scheduler
+                .vote(state.get_infant_state_state(), input.get_state_idx());
+        }
+
+        // if reentrancy has occurred, vote for the state (tentative)
+        if reentrancy_interesting {
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx());
         }
@@ -494,10 +510,12 @@ where
                 for i in 0..MAP_SIZE {
                     cur_write_map[i] = 0;
                 }
-                if df_interesting || pc_interesting {
+                if df_interesting || pc_interesting { // || reentrancy_interesting {
                     self.known_states.insert(hash);
                     return Ok(true);
                 }
+
+
             }
         }
         Ok(false)
@@ -516,39 +534,67 @@ where
     }
 }
 
-#[cfg(feature = "reentrancy")]
-pub struct ReentrancyFeedback<VS, Loc, Addr, Out> {
-    /// write map of the current execution
+//////////////////////////////////////////////////////////////////////////////
+
+// #[cfg(feature = "reentrancy")]
+pub struct ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy>
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+{
+    /// write status of the current execution
     written: bool,
+    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
     phantom: PhantomData<(VS, Loc, Addr, Out)>,
 }
 
-#[cfg(feature = "reentrancy")]
-impl<VS, Loc, Addr, Out> Debug for ReentrancyFeedback<VS, Loc, Addr, Out> {
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out> Debug for ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ReentrancyFeedback").finish()
     }
 }
 
-#[cfg(feature = "reentrancy")]
-impl<VS, Loc, Addr, Out> Named for ReentrancyFeedback<VS, Loc, Addr, Out> {
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out> Named for ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+{
     fn name(&self) -> &str {
         "ReentrancyFeedback"
     }
 }
 
-#[cfg(feature = "reentrancy")]
-impl<VS, Loc, Addr, Out> ReentrancyFeedback<VS, Loc, Addr, Out> {
-    pub fn new(written: bool) -> Self {
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out> ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+where
+    I: VMInputT<VS, Loc, Addr>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+{
+    pub fn new(written: bool, executor: &EVMExecutor<I, S, VS>) -> Self {
         Self {
             written,
-            phantom: PhantomData,
+            executor,
+            phantom: Default::default(),
         }
     }
 }
 
-#[cfg(feature = "reentrancy")]
-impl<VS, Loc, Addr, I, S, Out> Feedback<I, S> for ReentrancyFeedback<VS, Loc, Addr, Out>
+// #[cfg(feature = "reentrancy")]
+impl<VS, Loc, Addr, I, S, Out> Feedback<I, S> for ReentrancyFeedback<I, S, VS, Loc, Addr, Out>
 where
     S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out>,
     I: VMInputT<VS, Loc, Addr>,
@@ -574,9 +620,20 @@ where
         EMI: EventFirer<I>,
         OT: ObserversTuple<I, S>,
     {
-        let mut interesting = self.written;
         self.written = false;
-        Ok(interesting)
+
+        // state after executing. should have been executed before is_interesting was called.
+        let new_state = _state.get_execution_result().new_state.state;
+        
+        // if there is a post execution context, there has been a new control leak.
+        while new_state.has_post_execution() {
+            // now execute again, checking for writes to EVM memory.
+            self.executor.deref().borrow().execute(_input, _state);
+            if self.written {
+                Ok(true)
+            }
+        }  
+        Ok(false)
     }
 
     fn append_metadata(
@@ -591,4 +648,6 @@ where
         Ok(())
     }
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 

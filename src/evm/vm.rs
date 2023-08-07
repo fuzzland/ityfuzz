@@ -794,6 +794,10 @@ where
         unsafe { &mut CMP_MAP }
     }
 
+    fn get_written(&self) -> &'static mut bool {
+        unsafe { &mut WRITTEN }
+    }
+
     fn state_changed(&self) -> bool {
         unsafe { STATE_CHANGE }
     }

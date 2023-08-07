@@ -68,5 +68,6 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S> {
     fn get_read(&self) -> &'static mut [bool; MAP_SIZE];
     fn get_write(&self) -> &'static mut [u8; MAP_SIZE];
     fn get_cmp(&self) -> &'static mut [SlotTy; MAP_SIZE];
+    fn get_written(&self) -> &'static mut bool;
     fn state_changed(&self) -> bool;
 }
