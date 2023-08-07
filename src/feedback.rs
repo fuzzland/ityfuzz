@@ -504,11 +504,14 @@ where
 
         // if reentrancy has occurred, vote for the state (tentative)
         if reentrancy_interesting {
+            println!("Voted for {} because of REENTRANCY", input.get_state_idx());
             self.scheduler
-                .vote(state.get_infant_state_state(), input.get_state_idx());
+                .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
         unsafe {
+            let cur_read_map = self.vm.deref().borrow_mut().get_read();
+            let cur_write_map = self.vm.deref().borrow_mut().get_write();
             // hack to account for saving reentrancy without dataflow
             let pc_interesting = state
                 .get_execution_result()
@@ -559,26 +562,28 @@ where
 //////////////////////////////////////////////////////////////////////////////
 
 // #[cfg(feature = "reentrancy")]
-pub struct ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy>
+pub struct ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI>
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// write status of the current execution
     written: bool,
-    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S>>>,
+    vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     phantom: PhantomData<(VS, Loc, Addr, Out)>,
 }
 
 // #[cfg(feature = "reentrancy")]
-impl<I, S, VS, Loc, Addr, Out> Debug for ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Debug for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ReentrancyFeedback").finish()
@@ -586,12 +591,13 @@ where
 }
 
 // #[cfg(feature = "reentrancy")]
-impl<I, S, VS, Loc, Addr, Out> Named for ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Named for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn name(&self) -> &str {
         "ReentrancyFeedback"
@@ -599,31 +605,33 @@ where
 }
 
 // #[cfg(feature = "reentrancy")]
-impl<I, S, VS, Loc, Addr, Out> ReentrancyFeedback<I, S, VS, Loc, Addr, Out> 
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
 where
-    I: VMInputT<VS, Loc, Addr>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    pub fn new(written: bool, executor: &EVMExecutor<I, S, VS>) -> Self {
+    pub fn new(written: bool, vm: &GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>) -> Self {
         Self {
             written,
-            executor,
+            vm,
             phantom: Default::default(),
         }
     }
 }
 
 // #[cfg(feature = "reentrancy")]
-impl<VS, Loc, Addr, I, S, Out> Feedback<I, S> for ReentrancyFeedback<I, S, VS, Loc, Addr, Out>
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Feedback<I, S> for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out>,
-    I: VMInputT<VS, Loc, Addr>,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI>,
+    I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -650,7 +658,7 @@ where
         // if there is a post execution context, there has been a new control leak.
         while new_state.has_post_execution() {
             // now execute again, checking for writes to EVM memory.
-            self.executor.deref().borrow().execute(_input, _state);
+            self.vm.deref().borrow().execute(_input, _state);
             if self.written {
                 Ok(true)
             }
