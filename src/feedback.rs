@@ -471,13 +471,12 @@ where
         let mut reentrancy_interesting = false;
 
         // checking for reentrancy
-        let written = self.vm.deref().borrow_mut().get_written();
         let new_state = _state.get_execution_result().new_state.state;
         while new_state.has_post_execution() {
             // now execute again, checking for writes to EVM memory.
             self.vm.deref().borrow_mut().execute(_input, _state);
         }
-        reentrancy_interesting = written;
+        reentrancy_interesting = *self.vm.deref().borrow_mut().get_written();
 
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
@@ -613,7 +612,9 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    pub fn new(written: bool, vm: &dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>) -> Self {
+    pub fn new(
+        written: bool, 
+        vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>) -> Self {
         Self {
             written,
             vm,
@@ -660,10 +661,10 @@ where
             // now execute again, checking for writes to EVM memory.
             self.vm.deref().borrow().execute(_input, _state);
             if self.written {
-                Ok(true)
+                return Ok(true);
             }
         }  
-        Ok(false)
+        return Ok(false);
     }
 
     fn append_metadata(

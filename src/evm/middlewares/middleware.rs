@@ -1,10 +1,12 @@
 use crate::evm::host::{FuzzHost, JMP_MAP, READ_MAP, WRITE_MAP, CMP_MAP, STATE_CHANGE, 
     WRITTEN, RET_SIZE, RET_OFFSET};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
+use crate::evm::types::{as_u64, bytes_to_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
+use crate::evm::host::FuzzHost;
 
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
@@ -19,7 +21,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 
 use std::time::Duration;
-use revm_interpreter::Interpreter;
+use revm_interpreter::{Host, Interpreter};
 use revm_primitives::Bytecode;
 use crate::evm::types::{EVMAddress, EVMU256};
 
@@ -96,6 +98,11 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
+        macro_rules! u256_to_u8 {
+            ($key:ident) => {
+                (as_u64($key >> 4) % 254) as u8
+            };
+        }
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.data()[interp.stack.len() - 1 - $idx]
@@ -105,10 +112,10 @@ where
             match *interp.instruction_pointer {
                 0x57 => { // JUMPI
                     let br = fast_peek!(1);
-                    let jump_dest = if br.is_zero() {
+                    let jump_dest = if is_zero(br) {
                         1
                     } else {
-                        fast_peek!(0).as_u64()
+                        as_u64(fast_peek!(0))
                     };
                     let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
@@ -134,7 +141,10 @@ where
                         let v = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = v;
                     }
-                    let res = host.sload(interp.contract.address, fast_peek!(0));
+                    let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
+                        host,
+                        interp.contract.address, 
+                        fast_peek!(0));
                     let value_changed = res.expect("sload failed").0 != value;
 
                     let idx = interp.program_counter() % MAP_SIZE;
@@ -156,13 +166,13 @@ where
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 >= v2 {
-                        if v1 - v2 != U256::zero() {
+                        if v1 - v2 != EVMU256::ZERO {
                             v1 - v2
                         } else {
-                            U256::from(1)
+                            EVMU256::from(1)
                         }
                     } else {
-                        U256::zero()
+                        EVMU256::ZERO
                     };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
@@ -175,13 +185,13 @@ where
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
                     let abs_diff = if v1 <= v2 {
-                        if v2 - v1 != U256::zero() {
+                        if v2 - v1 != EVMU256::ZERO {
                             v2 - v1
                         } else {
                             U256::from(1)
                         }
                     } else {
-                        U256::zero()
+                        EVMU256::ZERO
                     };
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
@@ -193,11 +203,8 @@ where
                 0x14 => { // EQ
                     let v1 = fast_peek!(0);
                     let v2 = fast_peek!(1);
-                    let abs_diff = if v1 < v2 {
-                        (v2 - v1) % (U256::max_value() - 1) + 1
-                    } else {
-                        (v1 - v2) % (U256::max_value() - 1) + 1
-                    };
+                    let abs_diff = 
+                        (if v1 < v2 {v2 - v1} else {v1 - v2}) % (EVMU256::MAX - EVMU256::from(1)) + 1;
                     let idx = interp.program_counter() % MAP_SIZE;
                     if abs_diff < CMP_MAP[idx] {
                         CMP_MAP[idx] = abs_diff;
@@ -211,10 +218,14 @@ where
                         _ => unreachable!(),
                     };
                     unsafe {
-                        RET_OFFSET = fast_peek!(offset_of_ret_size - 1).as_usize();
-                        RET_SIZE = fast_peek!(offset_of_ret_size).as_usize();
+                        RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1)) as usize;
+                        RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as usize;
                     }
-                    *host._pc = interp.program_counter();
+                    host._pc = interp.program_counter();
+                }
+
+                0xf0 | 0xf5 => { // CREATE, CREATE2
+                    host._pc = interp.program_counter();
                 }
 
                 _ => {}
