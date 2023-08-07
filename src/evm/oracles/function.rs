@@ -1,21 +1,20 @@
-use crate::evm::input::EVMInput;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::dummy_precondition;
-use crate::evm::types::{EVMFuzzState, EVMOracleCtx};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
-use primitive_types::{H160, U256};
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 
 pub struct FunctionHarnessOracle {
-    pub address: H160,
+    pub address: EVMAddress,
     harness_func: Vec<u8>,
     precondition: fn(ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64,
 }
 
 impl FunctionHarnessOracle {
     pub fn new(
-        address: H160,
+        address: EVMAddress,
         harness_func: Vec<u8>,
         precondition: fn(ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64,
     ) -> Self {
@@ -26,7 +25,7 @@ impl FunctionHarnessOracle {
         }
     }
 
-    pub fn new_no_condition(address: H160, harness_func: Vec<u8>) -> Self {
+    pub fn new_no_condition(address: EVMAddress, harness_func: Vec<u8>) -> Self {
         Self {
             address,
             precondition: dummy_precondition,
@@ -35,7 +34,7 @@ impl FunctionHarnessOracle {
     }
 }
 
-impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
@@ -46,18 +45,18 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
         &self,
         _ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
         stage: u64,
-    ) -> bool {
-        if stage == 99 {
+    ) -> Vec<u64> {
             let _harness_txn = Bytes::from(self.harness_func.clone());
             // let res = ctx
             //     .call_post(
@@ -71,9 +70,6 @@ impl Oracle<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMF
             //     )
             //     .output;
             // !res.iter().map(|x| *x == 0).all(|x| x)
-            false
-        } else {
-            false
-        }
+            unimplemented!()
     }
 }

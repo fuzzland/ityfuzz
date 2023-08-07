@@ -9,29 +9,32 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::tracer::TxnTrace;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use crate::input::ConciseSerde;
 
 
 /// StagedVMState is a wrapper around a VMState that can be stored in a corpus.
 /// It also has stage field that is used to store the stage of the oracle execution on such a VMState.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct StagedVMState<Loc, Addr, VS>
+pub struct StagedVMState<Loc, Addr, VS, CI>
 where
     VS: Default + VMStateT,
     Addr: Debug,
     Loc: Debug,
-{
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
     #[serde(deserialize_with = "VS::deserialize")]
     pub state: VS,  // VM state
     pub stage: Vec<u64>,  // Stages of each oracle execution
     pub initialized: bool,  // Whether the VMState is initialized, uninitialized VMState will be initialized during mutation
-    pub trace: TxnTrace<Loc, Addr>,  // Trace building up such a VMState
+    #[serde(deserialize_with = "TxnTrace::deserialize")]
+    pub trace: TxnTrace<Loc, Addr, CI>,  // Trace building up such a VMState
 }
 
-impl<Loc, Addr, VS> StagedVMState<Loc, Addr, VS>
+impl<Loc, Addr, VS, CI> StagedVMState<Loc, Addr, VS, CI>
 where
     VS: Default + VMStateT,
     Addr: Debug,
     Loc: Debug,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     /// Create a new StagedVMState with a given VMState
     pub fn new_with_state(state: VS) -> Self {
@@ -54,11 +57,13 @@ where
     }
 }
 
-impl<Loc, Addr, VS> Input for StagedVMState<Loc, Addr, VS>
+impl<Loc, Addr, VS, CI> Input for StagedVMState<Loc, Addr, VS, CI>
 where
     VS: Default + VMStateT,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Debug + Serialize + DeserializeOwned + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+
 {
     fn generate_name(&self, idx: usize) -> String {
         format!("input-{}.state", idx)

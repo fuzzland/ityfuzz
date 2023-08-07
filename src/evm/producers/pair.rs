@@ -1,15 +1,14 @@
-use crate::evm::input::EVMInput;
-use crate::evm::types::EVMFuzzState;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{OracleCtx, Producer};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
-use primitive_types::{H160, U256};
-use revm::Bytecode;
+use revm_primitives::Bytecode;
 use std::collections::HashMap;
 
 pub struct PairProducer {
-    pub reserves: HashMap<H160, (U256, U256)>,
+    pub reserves: HashMap<EVMAddress, (EVMU256, EVMU256)>,
     pub fetch_reserve: Bytes,
 }
 
@@ -22,21 +21,22 @@ impl PairProducer {
     }
 }
 
-impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EVMFuzzState>
+impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for PairProducer
 {
     fn produce(
         &mut self,
         ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
     ) {
         #[cfg(feature = "flashloan_v2")]
@@ -53,14 +53,14 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
                 |pair_address| {
                     (*pair_address, self.fetch_reserve.clone())
                 }
-            ).collect::<Vec<(H160, Bytes)>>();
+            ).collect::<Vec<(EVMAddress, Bytes)>>();
 
             ctx.call_post_batch(&query_reserves_batch).iter().zip(
                 reserves.iter()
             ).for_each(
                 |(output, pair_address)| {
-                    let reserve0 = U256::from_big_endian(&output[0..32]);
-                    let reserve1 = U256::from_big_endian(&output[32..64]);
+                    let reserve0 = EVMU256::try_from_be_slice(&output[0..32]).unwrap();
+                    let reserve1 = EVMU256::try_from_be_slice(&output[32..64]).unwrap();
                     self.reserves.insert(*pair_address, (reserve0, reserve1));
                 }
             );
@@ -71,14 +71,15 @@ impl Producer<EVMState, H160, Bytecode, Bytes, H160, U256, Vec<u8>, EVMInput, EV
         &mut self,
         ctx: &mut OracleCtx<
             EVMState,
-            H160,
+            EVMAddress,
             Bytecode,
             Bytes,
-            H160,
-            U256,
+            EVMAddress,
+            EVMU256,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
+            ConciseEVMInput
         >,
     ) {
         self.reserves.clear();

@@ -1,9 +1,9 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::mutation_utils::byte_mutator;
+use crate::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::EVMStagedVMState;
+use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
-use crate::input::VMInputT;
+use crate::input::{ConciseSerde, VMInputT};
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 
@@ -11,9 +11,8 @@ use libafl::bolts::HasLen;
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
-use primitive_types::{H160, U256, U512};
-use revm::Env;
-
+use primitive_types::U512;
+use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use bytes::Bytes;
@@ -21,6 +20,8 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::generic_vm::vm_executor::ExecutionResult;
+use crate::generic_vm::vm_state::VMStateT;
 
 
 /// EVM Input Types
@@ -30,12 +31,26 @@ pub enum EVMInputTy {
     ABI,
     /// A flashloan transaction
     Borrow,
+    /// An arbitrary external call with same address tx
+    ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
 }
 
+impl Default for EVMInputTy {
+    fn default() -> Self {
+        EVMInputTy::ABI
+    }
+}
+
 /// EVM Input Trait
 pub trait EVMInputT {
+    /// Set the contract and ABI
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>);
+
+    /// Set the caller
+    fn set_caller_evm(&mut self, caller: EVMAddress);
+
     /// Get the ABI encoded input
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -49,10 +64,10 @@ pub trait EVMInputT {
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
 
     /// Get the transaction value in wei
-    fn get_txn_value(&self) -> Option<U256>;
+    fn get_txn_value(&self) -> Option<EVMU256>;
 
     /// Set the transaction value in wei
-    fn set_txn_value(&mut self, v: U256);
+    fn set_txn_value(&mut self, v: EVMU256);
 
     /// Get input type
     #[cfg(feature = "flashloan_v2")]
@@ -84,22 +99,24 @@ pub struct EVMInput {
     pub input_type: EVMInputTy,
 
     /// Caller address
-    pub caller: H160,
+    pub caller: EVMAddress,
 
     /// Contract address
-    pub contract: H160,
+    pub contract: EVMAddress,
 
     /// Input data in ABI format
     pub data: Option<BoxedABI>,
 
     /// Staged VM state
-    pub sstate: StagedVMState<H160, H160, EVMState>,
+    #[serde(skip_deserializing)]
+    pub sstate: StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
 
     /// Staged VM state index in the corpus
+    #[serde(skip_deserializing)]
     pub sstate_idx: usize,
 
     /// Transaction value in wei
-    pub txn_value: Option<U256>,
+    pub txn_value: Option<EVMU256>,
 
     /// Whether to resume execution from the last control leak
     pub step: bool,
@@ -108,6 +125,7 @@ pub struct EVMInput {
     pub env: Env,
 
     /// Access pattern
+    #[serde(skip_deserializing)]
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     /// Percentage of the token amount in all callers' account to liquidate
@@ -123,6 +141,145 @@ pub struct EVMInput {
     /// Execute the transaction multiple times
     pub repeat: usize,
 }
+
+/// EVM Input Minimum for Deserializing
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ConciseEVMInput {
+    /// Input type
+    #[cfg(feature = "flashloan_v2")]
+    pub input_type: EVMInputTy,
+
+    /// Caller address
+    pub caller: EVMAddress,
+
+    /// Contract address
+    pub contract: EVMAddress,
+
+    /// Input data in ABI format
+    pub data: Option<BoxedABI>,
+
+    /// Transaction value in wei
+    pub txn_value: Option<EVMU256>,
+
+    /// Whether to resume execution from the last control leak
+    pub step: bool,
+
+    /// Environment (block, timestamp, etc.)
+    pub env: Env,
+
+    /// Percentage of the token amount in all callers' account to liquidate
+    #[cfg(feature = "flashloan_v2")]
+    pub liquidation_percent: u8,
+
+    /// Additional random bytes for mutator
+    pub randomness: Vec<u8>,
+
+    /// Execute the transaction multiple times
+    pub repeat: usize,
+
+    /// How many post execution steps to take
+    pub layer: usize,
+
+    /// When to control leak, after `call_leak` number of calls
+    pub call_leak: u32,
+}
+
+
+impl ConciseEVMInput {
+    pub fn from_input<I, Out>(input: &I, execution_result: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> Self
+    where I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    Out: Default
+    {
+        Self {
+            #[cfg(feature = "flashloan_v2")]
+            input_type: input.get_input_type(),
+            caller: input.get_caller(),
+            contract: input.get_contract(),
+            data: input.get_data_abi(),
+            txn_value: input.get_txn_value(),
+            step: input.is_step(),
+            env: input.get_vm_env().clone(),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: input.get_liquidation_percent(),
+            randomness: input.get_randomness(),
+            repeat: input.get_repeat(),
+            layer: input.get_state().get_post_execution_len(),
+            call_leak: match execution_result.additional_info {
+                Some(ref info) => info[0] as u32,
+                None => u32::MAX
+            }
+        }
+    }
+
+    pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
+        (
+            EVMInput {
+                #[cfg(feature = "flashloan_v2")]
+                input_type: self.input_type.clone(),
+                caller: self.caller,
+                contract: self.contract,
+                data: self.data.clone(),
+                sstate,
+                sstate_idx: 0,
+                txn_value: self.txn_value,
+                step: self.step,
+                env: self.env.clone(),
+                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                #[cfg(feature = "flashloan_v2")]
+                liquidation_percent: self.liquidation_percent,
+                direct_data: Bytes::new(),
+                randomness: self.randomness.clone(),
+                repeat: self.repeat,
+            }, self.call_leak
+        )
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn pretty_txn(&self) -> Option<String> {
+        let liq = self.liquidation_percent;
+        match self.data {
+            Some(ref d) => Some(format!(
+                "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
+                self.caller, self.contract,
+                d.to_string(),
+                self.txn_value.unwrap_or(EVMU256::ZERO),
+                hex::encode(d.get_bytes()),
+                liq
+            )),
+            None => match self.input_type {
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
+                    "{:?} => {:?} with {:?} ETH, liq percent: {}",
+                    self.caller, self.contract,
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Borrow => Some(format!(
+                    "{:?} borrow token {:?} with {:?} ETH, liq percent: {}",
+                    self.caller, self.contract,
+                    self.txn_value, liq
+                )),
+                EVMInputTy::Liquidate => None,
+            },
+        }
+    }
+
+    #[cfg(not(feature = "flashloan_v2"))]
+    fn pretty_txn(&self) -> Option<String> {
+        match self.data {
+            Some(ref d) => Some(format!(
+                "{:?} => {:?} {} with {} ETH ({})",
+                self.caller, self.contract,
+                d.to_string(),
+                self.txn_value.unwrap_or(EVMU256::ZERO),
+                hex::encode(d.get_bytes())
+            )),
+            None => Some(format!("{:?} => {:?} transfer {} ETH",
+                                 self.caller, self.contract,
+                                 self.txn_value.unwrap_or(EVMU256::ZERO),
+            )),
+        }
+    }
+}
+
 
 impl HasLen for EVMInput {
     /// Get the length of the ABI encoded input
@@ -149,6 +306,16 @@ impl std::fmt::Debug for EVMInput {
 }
 
 impl EVMInputT for EVMInput {
+    fn set_contract_and_abi(&mut self, contract: EVMAddress, abi: Option<BoxedABI>) {
+        self.contract = contract;
+        self.access_pattern = Rc::new(RefCell::new(AccessPattern::new()));
+        self.data = abi;
+    }
+
+    fn set_caller_evm(&mut self, caller: EVMAddress) {
+        self.caller = caller;
+    }
+
     fn to_bytes(&self) -> Vec<u8> {
         match self.data {
             Some(ref d) => d.get_bytes(),
@@ -168,11 +335,11 @@ impl EVMInputT for EVMInput {
         &self.access_pattern
     }
 
-    fn get_txn_value(&self) -> Option<U256> {
+    fn get_txn_value(&self) -> Option<EVMU256> {
         self.txn_value
     }
 
-    fn set_txn_value(&mut self, v: U256) {
+    fn set_txn_value(&mut self, v: EVMU256) {
         self.txn_value = Some(v);
     }
 
@@ -210,22 +377,21 @@ macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
         where
-            S: State + HasCaller<H160> + HasRand + HasMetadata,
+            S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
         {
             let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
                 Some(s.clone())
             } else {
                 None
             };
-            let mut input_by = [0; 32];
-            input.get_vm_env().$loc.$item.to_big_endian(&mut input_by);
+            let mut input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
             let mut input_vec = input_by.to_vec();
             let mut wrapper = MutatorInput::new(&mut input_vec);
             let res = byte_mutator(state_, &mut wrapper, vm_slots);
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item = U256::from_big_endian(&input_vec.as_slice());
+            input.get_vm_env_mut().$loc.$item = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
             res
         }
     };
@@ -235,7 +401,7 @@ macro_rules! impl_env_mutator_h160 {
     ($item: ident, $loc: ident) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
         where
-            S: State + HasCaller<H160> + HasRand,
+            S: State + HasCaller<EVMAddress> + HasRand,
         {
             let addr = state_.get_rand_caller();
             if addr == input.get_caller() {
@@ -248,7 +414,7 @@ macro_rules! impl_env_mutator_h160 {
     };
 }
 
-// Wrapper for U256 so that it represents a mutable Input in LibAFL
+// Wrapper for EVMU256 so that it represents a mutable Input in LibAFL
 #[derive(Serialize)]
 struct MutatorInput<'a> {
     #[serde(skip_serializing)]
@@ -310,7 +476,7 @@ impl EVMInput {
 
     pub fn prevrandao<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -319,7 +485,7 @@ impl EVMInput {
 
     pub fn gas_price<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -328,7 +494,7 @@ impl EVMInput {
 
     pub fn balance<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         // not supported yet
         // unreachable!();
@@ -337,7 +503,7 @@ impl EVMInput {
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
@@ -350,18 +516,17 @@ impl EVMInput {
 
     pub fn call_value<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let vm_slots = if let Some(s) = input.get_state().get(&input.get_contract()) {
             Some(s.clone())
         } else {
             None
         };
-        let mut input_by = [0; 32];
-        input
+        let mut input_by: [u8; 32] = input
             .get_txn_value()
-            .unwrap_or(U256::zero())
-            .to_big_endian(&mut input_by);
+            .unwrap_or(EVMU256::ZERO)
+            .to_be_bytes();
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
         let res = byte_mutator(state_, &mut wrapper, vm_slots);
@@ -372,13 +537,13 @@ impl EVMInput {
         for i in 0..16 {
             input_vec[i] = 0;
         }
-        input.set_txn_value(U256::from_big_endian(&input_vec.as_slice()));
+        input.set_txn_value(EVMU256::try_from_be_slice(input_vec.as_slice()).unwrap());
         res
     }
 
     pub fn mutate_env_with_access_pattern<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State + HasCaller<H160> + HasRand + HasMetadata,
+        S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let ap = self.get_access_pattern().deref().borrow().clone();
         let mut mutators = vec![];
@@ -421,14 +586,38 @@ impl EVMInput {
     }
 }
 
-impl VMInputT<EVMState, H160, H160> for EVMInput {
+impl ConciseSerde for ConciseEVMInput {
+    fn serialize_concise(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("Failed to deserialize concise input")
+    }
+
+    fn deserialize_concise(data: &[u8]) -> Self {
+        serde_json::from_slice(data)
+            .expect("Failed to deserialize concise input")
+    }
+
+    fn serialize_string(&self) -> String {
+        let mut s = String::new();
+        for _ in 0..self.layer {
+            s.push_str("==");
+        }
+        if self.layer > 0 {
+            s.push_str(" ");
+        }
+
+        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+        s
+    }
+}
+
+impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
         S: State
             + HasRand
             + HasMaxSize
-            + HasItyState<H160, H160, EVMState>
-            + HasCaller<H160>
+            + HasItyState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>
+            + HasCaller<EVMAddress>
             + HasMetadata,
     {
         if state.rand_mut().next() % 100 > 87 || self.data.is_none() {
@@ -445,19 +634,19 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         }
     }
 
-    fn get_caller_mut(&mut self) -> &mut H160 {
+    fn get_caller_mut(&mut self) -> &mut EVMAddress {
         &mut self.caller
     }
 
-    fn get_caller(&self) -> H160 {
+    fn get_caller(&self) -> EVMAddress {
         self.caller.clone()
     }
 
-    fn set_caller(&mut self, caller: H160) {
+    fn set_caller(&mut self, caller: EVMAddress) {
         self.caller = caller;
     }
 
-    fn get_contract(&self) -> H160 {
+    fn get_contract(&self) -> EVMAddress {
         self.contract.clone()
     }
 
@@ -498,44 +687,6 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         self.step = gate;
     }
 
-    #[cfg(feature = "flashloan_v2")]
-    fn pretty_txn(&self) -> Option<String> {
-        let liq = self.liquidation_percent;
-        match self.data {
-            Some(ref d) => Some(format!(
-                "{} with {:?} ETH ({}), liq percent: {}",
-                d.to_string(),
-                self.txn_value,
-                hex::encode(d.get_bytes()),
-                liq
-            )),
-            None => match self.input_type {
-                EVMInputTy::ABI => Some(format!(
-                    "ABI with {:?} ETH, liq percent: {}",
-                    self.txn_value, liq
-                )),
-                EVMInputTy::Borrow => Some(format!(
-                    "Borrow with {:?} ETH, liq percent: {}",
-                    self.txn_value, liq
-                )),
-                EVMInputTy::Liquidate => None,
-            },
-        }
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn pretty_txn(&self) -> Option<String> {
-        match self.data {
-            Some(ref d) => Some(format!(
-                "{} with {:?} ETH ({})",
-                d.to_string(),
-                self.txn_value,
-                hex::encode(d.get_bytes())
-            )),
-            None => Some(format!("ABI with {:?} ETH", self.txn_value)),
-        }
-    }
-
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -547,14 +698,14 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
         let owed_amount =
             self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
-        if owed_amount == U512::zero() {
+        if owed_amount == EVMU512::ZERO {
             return f64::MAX;
         }
 
         // hacky convert from U512 -> f64
         let mut res = 0.0;
         for idx in 0..8 {
-            res += owed_amount.0[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
+            res += owed_amount.as_limbs()[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
         }
         res
     }
@@ -574,8 +725,12 @@ impl VMInputT<EVMState, H160, H160> for EVMInput {
     }
 
     #[cfg(feature = "evm")]
-    fn get_txn_value_temp(&self) -> Option<U256> {
+    fn get_txn_value_temp(&self) -> Option<EVMU256> {
         self.txn_value
+    }
+
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> ConciseEVMInput {
+        ConciseEVMInput::from_input(self, exec_res)
     }
 }
 

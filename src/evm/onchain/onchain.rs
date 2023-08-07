@@ -1,8 +1,8 @@
-use crate::evm::abi::get_abi_type_boxed;
+use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
-use crate::evm::contract_utils::{ABIConfig, ContractLoader};
-use crate::evm::input::{EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::contract_utils::{ABIConfig, ContractLoader, extract_sig_from_contract};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
 use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
@@ -15,16 +15,13 @@ use crate::handle_contract_insertion;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
-use crate::types::convert_u256_to_h160;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 use libafl::corpus::Corpus;
 use libafl::prelude::{HasCorpus, HasMetadata, Input};
 
-use libafl::state::State;
+use libafl::state::{HasRand, State};
 
-use primitive_types::{H160, U256};
-use revm::{Bytecode, Interpreter};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -35,33 +32,39 @@ use crate::evm::onchain::flashloan::register_borrow_txn;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use bytes::Bytes;
+use itertools::Itertools;
+use revm_interpreter::Interpreter;
+use revm_primitives::Bytecode;
+use crate::evm::corpus_initializer::ABIMap;
+use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 
-pub static mut BLACKLIST_ADDR: Option<HashSet<H160>> = None;
+pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160, H160>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
-    pub loaded_data: HashSet<(H160, U256)>,
-    pub loaded_code: HashSet<H160>,
-    pub loaded_abi: HashSet<H160>,
-    pub calls: HashMap<(H160, usize), HashSet<H160>>,
-    pub locs: HashMap<(H160, usize), HashSet<U256>>,
+    pub loaded_data: HashSet<(EVMAddress, EVMU256)>,
+    pub loaded_code: HashSet<EVMAddress>,
+    pub loaded_abi: HashSet<EVMAddress>,
+    pub calls: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
+    pub locs: HashMap<(EVMAddress, usize), HashSet<EVMU256>>,
     pub endpoint: OnChainConfig,
-    pub blacklist: HashSet<H160>,
+    pub blacklist: HashSet<EVMAddress>,
     pub storage_fetching: StorageFetchingMode,
-    pub storage_all: HashMap<H160, Arc<HashMap<String, U256>>>,
-    pub storage_dump: HashMap<H160, Arc<HashMap<U256, U256>>>,
+    pub storage_all: HashMap<EVMAddress, Arc<HashMap<String, EVMU256>>>,
+    pub storage_dump: HashMap<EVMAddress, Arc<HashMap<EVMU256, EVMU256>>>,
     pub phantom: std::marker::PhantomData<(I, S, VS)>,
 }
 
 impl<VS, I, S> Debug for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160, H160>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
@@ -76,24 +79,24 @@ where
 
 impl<VS, I, S> OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160, H160>,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
     S: State,
     VS: VMStateT + Default,
 {
     pub fn new(endpoint: OnChainConfig, storage_fetching: StorageFetchingMode) -> Self {
         unsafe {
             BLACKLIST_ADDR = Some(HashSet::from([
-                H160::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(),
-                H160::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
-                H160::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
-                H160::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap(),
-                H160::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
+                EVMAddress::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(),
+                EVMAddress::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
+                EVMAddress::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
+                EVMAddress::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap(),
+                EVMAddress::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
                 // uniswap router
-                H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-                H160::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
+                EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+                EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
-                H160::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
-                H160::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+                EVMAddress::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
+                EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             ]));
         }
         Self {
@@ -104,16 +107,17 @@ where
             locs: Default::default(),
             endpoint,
             blacklist: HashSet::from([
-                H160::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(),
-                H160::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
-                H160::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
-                H160::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap(),
-                H160::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
+                EVMAddress::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(),
+                EVMAddress::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
+                EVMAddress::from_str("0x5a58505a96d1dbf8df91cb21b54419fc36e93fde").unwrap(),
+                EVMAddress::from_str("0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640").unwrap(),
+                EVMAddress::from_str("0xa40cac1b04d7491bdfb42ccac97dff25e0efb09e").unwrap(),
                 // uniswap router
-                H160::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-                H160::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
+                EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+                EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
                 // pancake router
-                H160::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
+                EVMAddress::from_str("0x6CD71A07E72C514f5d511651F6808c6395353968").unwrap(),
+                EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),
@@ -122,7 +126,7 @@ where
         }
     }
 
-    pub fn add_blacklist(&mut self, address: H160) {
+    pub fn add_blacklist(&mut self, address: EVMAddress) {
         unsafe {
             BLACKLIST_ADDR.as_mut().unwrap().insert(address);
         }
@@ -130,11 +134,10 @@ where
     }
 }
 
-pub fn keccak_hex(data: U256) -> String {
+pub fn keccak_hex(data: EVMU256) -> String {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let mut input = [0u8; 32];
-    data.to_big_endian(&mut input);
+    let mut input: [u8; 32] = data.to_be_bytes();
     hasher.input(input.as_ref());
     hasher.result(&mut output);
     hex::encode(&output).to_string()
@@ -142,12 +145,13 @@ pub fn keccak_hex(data: U256) -> String {
 
 impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
+        +HasRand
         + Debug
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + Clone
         + 'static,
@@ -159,7 +163,7 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        let _pc = interp.program_counter();
+        let pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {
@@ -200,7 +204,7 @@ where
                             }
                         }
                         match self.$stor.get(&address) {
-                            Some(v) => v.get(&$key).unwrap_or(&U256::zero()).clone(),
+                            Some(v) => v.get(&$key).unwrap_or(&EVMU256::ZERO).clone(),
                             None => self.endpoint.get_contract_slot(
                                 address,
                                 slot_idx,
@@ -268,7 +272,9 @@ where
                 }
                 if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
-                    host.set_code(address_h160, contract_code.clone(), state);
+                    host.set_codedata(address_h160, contract_code.clone());
+                    println!("fetching code from {:?} due to call by {:?}",
+                             address_h160, caller);
                 }
                 if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
                     *interp.instruction_pointer == 0x3b ||
@@ -286,10 +292,44 @@ where
                 println!("fetching abi {:?}", address_h160);
                 let abi = self.endpoint.fetch_abi(address_h160);
 
-                let parsed_abi = match abi {
-                    Some(ref abi_ins) => ContractLoader::parse_abi_str(abi_ins),
-                    None => fetch_abi_heimdall(hex::encode(contract_code.bytes())),
-                };
+                let mut parsed_abi = vec![];
+                match abi {
+                    Some(ref abi_ins) => {
+                        parsed_abi = ContractLoader::parse_abi_str(abi_ins)
+                    }
+                    None => {
+                        // 1. Extract abi from bytecode, and see do we have any function sig available in state
+                        // 2. Use Heimdall to extract abi
+                        // 3. Reconfirm on failures of heimdall
+                        println!("Contract {:?} has no abi", address_h160);
+                        let contract_code_str = hex::encode(contract_code.bytes());
+                        let sigs = extract_sig_from_contract(&contract_code_str);
+                        let mut unknown_sigs: usize = 0;
+                        for sig in &sigs {
+                            if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                                parsed_abi.push(abi.clone());
+                            } else {
+                                unknown_sigs += 1;
+                            }
+                        }
+
+                        if unknown_sigs >= sigs.len() / 30 {
+                            println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", address_h160);
+                            let abis = fetch_abi_heimdall(contract_code_str)
+                                .iter()
+                                .map(|abi| {
+                                    if let Some(known_abi) = state.metadata().get::<ABIMap>().unwrap().get(&abi.function) {
+                                        known_abi
+                                    } else {
+                                        abi
+                                    }
+                                })
+                                .cloned()
+                                .collect_vec();
+                            parsed_abi = abis;
+                        }
+                    }
+                }
 
                 // set up host
                 let mut abi_hashes_to_add = HashSet::new();
@@ -314,6 +354,7 @@ where
                                  .collect::<Vec<_>>(),
                              caller
                     );
+
                 } else {
                     abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
                     host.add_hashes(
@@ -351,6 +392,8 @@ where
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
                         abi_instance
                             .set_func_with_name(abi.function, abi.function_name.clone());
+                        register_abi_instance(target, abi_instance.clone(), state);
+
                         let input = EVMInput {
                             caller: state.get_rand_caller(),
                             contract: target,
@@ -358,7 +401,7 @@ where
                             sstate: StagedVMState::new_uninitialized(),
                             sstate_idx: 0,
                             txn_value: if abi.is_payable {
-                                Some(U256::zero())
+                                Some(EVMU256::ZERO)
                             } else {
                                 None
                             },
@@ -371,7 +414,7 @@ where
                             #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
                             direct_data: Default::default(),
-                            randomness: vec![],
+                            randomness: vec![0],
                             repeat: 1,
                         };
                         add_corpus(host, state, &input);
@@ -382,9 +425,16 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: H160, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
+
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {}
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::OnChain

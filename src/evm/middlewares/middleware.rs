@@ -1,6 +1,6 @@
 use crate::evm::host::{FuzzHost, JMP_MAP, READ_MAP, WRITE_MAP, CMP_MAP, STATE_CHANGE, 
     WRITTEN, RET_SIZE, RET_OFFSET};
-use crate::evm::input::{EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -19,13 +19,20 @@ use std::clone::Clone;
 use std::fmt::Debug;
 
 use std::time::Duration;
+use revm_interpreter::Interpreter;
+use revm_primitives::Bytecode;
+use crate::evm::types::{EVMAddress, EVMU256};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
     OnChain,
     Concolic,
     Flashloan,
-    InstructionCoverage
+    Selfdestruct,
+    InstructionCoverage,
+    BranchCoverage,
+    Sha3Bypass,
+    Sha3TaintAnalysis
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -44,12 +51,12 @@ pub enum CallMiddlewareReturn {
 
 #[derive(Clone, Debug)]
 pub enum MiddlewareOp {
-    UpdateSlot(MiddlewareType, H160, U256, U256),
-    UpdateCode(MiddlewareType, H160, Bytecode),
-    AddCorpus(MiddlewareType, String, H160),
-    AddCaller(MiddlewareType, H160),
-    AddAddress(MiddlewareType, H160),
-    AddBlacklist(MiddlewareType, H160),
+    UpdateSlot(MiddlewareType, EVMAddress, EVMU256, EVMU256),
+    UpdateCode(MiddlewareType, EVMAddress, Bytecode),
+    AddCorpus(MiddlewareType, String, EVMAddress),
+    AddCaller(MiddlewareType, EVMAddress),
+    AddAddress(MiddlewareType, EVMAddress),
+    AddBlacklist(MiddlewareType, EVMAddress),
     Owed(MiddlewareType, U512),
     Earned(MiddlewareType, U512),
     MakeSubsequentCallSuccess(Bytes),
@@ -57,12 +64,12 @@ pub enum MiddlewareOp {
 
 pub fn add_corpus<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, input: &EVMInput)
 where
-    I: Input + VMInputT<VS, H160, H160> + EVMInputT + 'static,
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasCorpus<I>
-        + HasItyState<H160, H160, VS>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
-        + HasCaller<H160>
+        + HasCaller<EVMAddress>
         + Clone
         + Debug
         + 'static,
@@ -78,8 +85,8 @@ where
 
 pub trait Middleware<VS, I, S>: Debug
 where
-    S: State + HasCaller<H160> + Clone + Debug,
-    I: VMInputT<VS, H160, H160> + EVMInputT,
+    S: State + HasCaller<EVMAddress> + Clone + Debug,
+    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
 {
     // called on every instruction
@@ -214,9 +221,16 @@ where
         }
     }
 
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    );
+
     unsafe fn on_insert(&mut self,
                         bytecode: &mut Bytecode,
-                        address: H160,
+                        address: EVMAddress,
                         host: &mut FuzzHost<VS, I, S>,
                         state: &mut S);
     fn get_type(&self) -> MiddlewareType;

@@ -2,6 +2,7 @@
 
 pub use reqwest;
 use std::env;
+use std::fmt::format;
 use serde_json::json;
 
 pub static mut TELEMETRY_ENABLED: bool = true;
@@ -26,7 +27,7 @@ pub fn report_campaign(is_onchain: bool, contracts: String) {
 /// sends a ping to the telemetry server when vulnerability is found
 pub fn report_vulnerability(vuln: String) {
     if unsafe {TELEMETRY_ENABLED} {
-        reqwest::blocking::get(TELEMETRY_HOST.to_owned() + "vuln/" + vuln.as_str())
+        reqwest::blocking::get(TELEMETRY_HOST.to_owned() + format!("vuln/{}",vuln.len()).as_str())
             .unwrap();
     }
 }
