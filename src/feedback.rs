@@ -613,7 +613,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    pub fn new(written: bool, vm: &GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>) -> Self {
+    pub fn new(written: bool, vm: &dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>) -> Self {
         Self {
             written,
             vm,
