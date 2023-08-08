@@ -350,6 +350,7 @@ where
             if v.is_some() {
                 let (votes, _visits) = v.expect("scheduler metadata malformed");
                 *votes += increment;
+                #[cfg(feature = "debug")]
                 println!("Voted for {}", idx);
             } else {
                 println!("scheduler metadata malformed");

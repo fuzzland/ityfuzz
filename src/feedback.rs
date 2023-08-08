@@ -302,11 +302,9 @@ where
         OT: ObserversTuple<I, S>,
     {
         let mut interesting = false;
-        let mut seq: usize = 0;
         for i in 0..MAP_SIZE {
             // if the global read map slot is true, and that slot in write map is also true
             if self.read_map[i] && self.write_map[i] != 0 {
-                seq += i;
 
                 // bucketing
                 let category = if self.write_map[i] < (2 << 2) {
@@ -319,10 +317,10 @@ where
                     3
                 };
                 // update the global write map, if the current write map is not set, then it is interesting
-                if !self.global_write_map[seq % MAP_SIZE][category] {
+                if !self.global_write_map[i % MAP_SIZE][category] {
                     // println!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
                     interesting = true;
-                    self.global_write_map[seq % MAP_SIZE][category] = true;
+                    self.global_write_map[i % MAP_SIZE][category] = true;
                 }
             }
         }
@@ -479,6 +477,7 @@ where
 
         // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
+            #[cfg(feature = "debug")]
             println!("Voted for {} because of CMP", input.get_state_idx());
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
@@ -486,6 +485,7 @@ where
 
         // if coverage has increased, vote for the state
         if cov_interesting {
+            #[cfg(feature = "debug")]
             println!("Voted for {} because of COV", input.get_state_idx());
 
             self.scheduler

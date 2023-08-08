@@ -153,6 +153,10 @@ where
     pub spec_id: SpecId,
     /// Precompiles
     pub precompiles: Precompiles,
+
+    /// All SSTORE PCs that are for mapping (i.e., writing to multiple storage slots)
+    pub mapping_sstore_pcs: HashSet<(EVMAddress, usize)>,
+    pub mapping_sstore_pcs_to_slot: HashMap<(EVMAddress, usize), HashSet<EVMU256>>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -221,6 +225,8 @@ where
             work_dir: self.work_dir.clone(),
             spec_id: self.spec_id.clone(),
             precompiles: Precompiles::default(),
+            mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
+            mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
         }
     }
 }
@@ -274,6 +280,8 @@ where
             work_dir: workdir.clone(),
             spec_id: SpecId::LATEST,
             precompiles: Default::default(),
+            mapping_sstore_pcs: Default::default(),
+            mapping_sstore_pcs_to_slot: Default::default(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -803,24 +811,33 @@ where
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
                 0x55 => {
                     // SSTORE
-                    #[cfg(feature = "dataflow")]
-                    let value = fast_peek!(1);
-                    {
+                    let pc = interp.program_counter();
+                    if !self.mapping_sstore_pcs.contains(&(interp.contract.address, pc)) {
                         let mut key = fast_peek!(0);
-                        let v = u256_to_u8!(value) + 1;
-                        WRITE_MAP[process_rw_key!(key)] = v;
+                        let slots = self.mapping_sstore_pcs_to_slot.entry((interp.contract.address, pc)).or_default();
+                        slots.insert(key);
+                        if slots.len() > 10 {
+                            self.mapping_sstore_pcs.insert((interp.contract.address, pc));
+                        }
+
+                        let value = fast_peek!(1);
+                        let compressed_value = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = compressed_value;
+
+                        let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
+                            self,
+                            interp.contract.address,
+                            fast_peek!(0),
+                        );
+                        let value_changed = res.expect("sload failed").0 != value;
+
+                        let idx = interp.program_counter() % MAP_SIZE;
+                        JMP_MAP[idx] = if value_changed { 1 } else { 0 };
+
+                        STATE_CHANGE |= value_changed;
                     }
-                    let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
-                        self,
-                        interp.contract.address,
-                        fast_peek!(0),
-                    );
-                    let value_changed = res.expect("sload failed").0 != value;
 
-                    let idx = interp.program_counter() % MAP_SIZE;
-                    JMP_MAP[idx] = if value_changed { 1 } else { 0 };
 
-                    STATE_CHANGE |= value_changed;
                 }
 
                 #[cfg(feature = "dataflow")]

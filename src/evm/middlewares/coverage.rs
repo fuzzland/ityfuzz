@@ -106,7 +106,7 @@ impl CoverageReport {
     pub fn to_string(&self) -> String {
         let mut s = String::new();
         for (addr, cov) in &self.coverage {
-            s.push_str(&format!("Contract: {:?}\n", addr));
+            s.push_str(&format!("Contract: {}\n", addr));
             s.push_str(&format!(
                 "Instruction Coverage: {}/{} ({:.2}%) \n",
                 cov.instruction_coverage,
@@ -156,7 +156,6 @@ impl CoverageReport {
     }
 
     pub fn summarize(&self) {
-
         println!("============= Coverage Summary =============");
         for (addr, cov) in &self.coverage {
             println!(
