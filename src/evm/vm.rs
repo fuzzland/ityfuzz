@@ -32,13 +32,15 @@ use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm_interpreter::{CallContext, CallScheme, Contract, InstructionResult, Interpreter};
+use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory, Stack};
 use revm_interpreter::InstructionResult::ControlLeak;
 use revm_primitives::{Bytecode, LatestSpec};
 
+use core::ops::Range;
+
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
-    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, GLOBAL_CALL_CONTEXT, JMP_MAP, READ_MAP,
+    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP,
     RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
 };
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
@@ -90,43 +92,105 @@ pub enum Constraint {
 /// (i.e., don't need to continue execution from the post execution context
 /// but we execute the input directly
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PostExecutionCtx {
-    /// Stack snapshot of VM
-    pub stack: Vec<EVMU256>,
-    /// Memory snapshot of VM
-    pub memory: Vec<u8>,
-
-    /// Program counter
-    pub pc: usize,
-    /// Current offset of the output buffer
-    pub output_offset: usize,
-    /// Length of the output buffer
-    pub output_len: usize,
-
-    /// Call data of the current call
-    pub call_data: Bytes,
-
-    /// Call context of the current call
-    pub address: EVMAddress,
-    pub caller: EVMAddress,
+pub struct SinglePostExecution {
+    /// All continuation info
+    /// Instruction pointer.
+    pub program_counter: usize,
+    /// Return is main control flag, it tell us if we should continue interpreter or break from it
+    pub instruction_result: InstructionResult,
+    /// Memory.
+    pub memory: Memory,
+    /// Stack.
+    pub stack: Stack,
+    /// Return value.
+    pub return_range: Range<usize>,
+    /// Is interpreter call static.
+    pub is_static: bool,
+    /// Contract information and invoking data
+    pub input: Bytes,
+    /// Bytecode contains contract code, size of original code, analysis with gas block and jump table.
+    /// Note that current code is extended with push padding and STOP at end.
     pub code_address: EVMAddress,
-    pub apparent_value: EVMU256,
+    /// Contract address
+    pub address: EVMAddress,
+    /// Caller of the EVM.
+    pub caller: EVMAddress,
+    /// Value send to contract.
+    pub value: EVMU256,
 
-    pub must_step: bool,
-    pub constraints: Vec<Constraint>,
+
+    /// Post execution related information
+    /// Output Length
+    pub output_len: usize,
+    /// Output Offset
+    pub output_offset: usize,
 }
 
-impl PostExecutionCtx {
+impl SinglePostExecution {
     /// Convert the post execution context to revm [`CallContext`]
     fn get_call_ctx(&self) -> CallContext {
         CallContext {
             address: self.address,
             caller: self.caller,
-            apparent_value: self.apparent_value,
+            apparent_value: self.value,
             code_address: self.code_address,
             scheme: CallScheme::Call,
         }
     }
+
+    fn get_interpreter(&self, bytecode: Arc<BytecodeLocked>) -> Interpreter {
+        let contract = Contract::new_with_context_analyzed(
+            self.input.clone(),
+            bytecode,
+            &self.get_call_ctx(),
+        );
+
+        let mut stack = Stack::new();
+        for v in &self.stack.data {
+            stack.push(v.clone());
+        }
+
+
+        Interpreter {
+            instruction_pointer: unsafe {
+                contract.bytecode.as_ptr().add(self.program_counter)
+            },
+            instruction_result: self.instruction_result,
+            gas: Gas::new(0),
+            memory: self.memory.clone(),
+            stack: stack,
+            return_data_buffer: Bytes::new(),
+            return_range: self.return_range.clone(),
+            is_static: self.is_static,
+            contract,
+        }
+    }
+
+    pub fn from_interp(interp: &Interpreter, (out_offset, out_len): (usize, usize)) -> Self {
+        Self {
+            program_counter: interp.program_counter(),
+            instruction_result: interp.instruction_result,
+            memory: interp.memory.clone(),
+            stack: interp.stack.clone(),
+            return_range: interp.return_range.clone(),
+            is_static: interp.is_static,
+            input: interp.contract.input.clone(),
+            code_address: interp.contract.code_address,
+            address: interp.contract.address,
+            caller: interp.contract.caller,
+            value: interp.contract.value,
+            output_len: out_len,
+            output_offset: out_offset,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PostExecutionCtx {
+    pub constraints: Vec<Constraint>,
+    pub pes: Vec<SinglePostExecution>,
+
+    pub must_step: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -187,19 +251,7 @@ impl Default for EVMState {
 impl VMStateT for EVMState {
     /// Calculate the hash of the VM state
     fn get_hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        for i in self.post_execution.iter() {
-            i.pc.hash(&mut s);
-            i.stack.hash(&mut s);
-        }
-        for i in self.state.iter().sorted_by_key(|k| k.0) {
-            i.0 .0.hash(&mut s);
-            for j in i.1.iter() {
-                j.0.hash(&mut s);
-                j.1.hash(&mut s);
-            }
-        }
-        s.finish()
+        unreachable!("deprecated")
     }
 
     /// Check whether current state has post execution context
@@ -211,13 +263,13 @@ impl VMStateT for EVMState {
 
     /// Get length needed for return data length of the call that leads to control leak
     fn get_post_execution_needed_len(&self) -> usize {
-        self.post_execution.last().unwrap().output_len
+        self.post_execution.last().unwrap().pes.first().unwrap().output_len
     }
 
     /// Get the PC of last post execution context
     fn get_post_execution_pc(&self) -> usize {
         match self.post_execution.last() {
-            Some(i) => i.pc,
+            Some(i) => i.pes.first().unwrap().program_counter,
             None => 0,
         }
     }
@@ -294,6 +346,15 @@ where
     phandom: PhantomData<(I, S, VS, CI)>,
 }
 
+
+pub fn is_reverted_or_control_leak(ret: &InstructionResult) -> bool {
+    match *ret {
+        InstructionResult::Return | InstructionResult::Stop
+        | InstructionResult::SelfDestruct => false,
+        _ => true,
+    }
+}
+
 /// Execution result that may have control leaked
 /// Contains raw information of revm output and execution
 #[derive(Clone, Debug)]
@@ -357,7 +418,7 @@ where
         vm_state: &EVMState,
         data: Bytes,
         input: &I,
-        post_exec: Option<PostExecutionCtx>,
+        post_exec: Option<SinglePostExecution>,
         mut state: &mut S,
         cleanup: bool
     ) -> IntermediateExecutionResult {
@@ -379,10 +440,6 @@ where
         self.host.call_count = 0;
         self.host.randomness = input.get_randomness();
         let mut repeats = input.get_repeat();
-        // Ensure that the call context is correct
-        unsafe {
-            GLOBAL_CALL_CONTEXT = Some(call_ctx.clone());
-        }
 
         // Get the bytecode
         let mut bytecode = match self
@@ -410,33 +467,18 @@ where
             repeats = 1;
             unsafe {
                 // setup the pc, memory, and stack as the post execution context
-                let new_pc = post_exec_ctx.pc;
-                let call = Contract::new_with_context_analyzed(
-                    post_exec_ctx.call_data.clone(),
-                    bytecode,
-                    call_ctx,
-                );
-                let new_ip = call.bytecode.as_ptr().add(new_pc);
-                let mut interp = Interpreter::new(call, 1e10 as u64, false);
-                for v in post_exec_ctx.stack.clone() {
-                    interp.stack.push(v);
-                }
-                interp.instruction_pointer = new_ip;
-                interp.memory.resize(max(
-                    post_exec_ctx.output_offset + post_exec_ctx.output_len,
-                    post_exec_ctx.memory.len(),
-                ));
-                interp.memory.set(0, &post_exec_ctx.memory);
-                interp.memory.set(
-                    post_exec_ctx.output_offset,
-                    &data[4..min(post_exec_ctx.output_len + 4, data.len())],
-                );
+                let mut interp = post_exec_ctx.get_interpreter(bytecode);
                 // set return buffer as the input
                 // we remove the first 4 bytes because the first 4 bytes is the function hash (00000000 here)
                 interp.return_data_buffer = data.slice(4..);
+                let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
+                interp
+                    .memory
+                    .set(post_exec_ctx.output_offset, &interp.return_data_buffer[..target_len]);
                 interp
             }
         } else {
+
             // if there is no post execution context, then we create the interpreter from the
             // beginning
             let call = Contract::new_with_context_analyzed(data, bytecode, call_ctx);
@@ -584,24 +626,31 @@ where
             // Execute the transaction
             let exec_res = if is_step {
                 let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
-                self.host.origin = post_exec.caller;
-                // we need push the output of CALL instruction
-                post_exec.stack.push(EVMU256::from(1));
-                // post_exec.pc += 1;
-                self.execute_from_pc(
-                    &post_exec.get_call_ctx(),
-                    &vm_state,
-                    data,
-                    input,
-                    Some(post_exec),
-                    state,
-                    cleanup
-                )
+                let mut local_res = None;
+                for mut pe in post_exec.pes {
+                    // we need push the output of CALL instruction
+                    pe.stack.push(EVMU256::from(1));
+                    let res = self.execute_from_pc(
+                        &pe.get_call_ctx(),
+                        &vm_state,
+                        data,
+                        input,
+                        Some(pe),
+                        state,
+                        cleanup
+                    );
+                    data = Bytes::from([vec![0; 4], res.output.to_vec()].concat());
+                    local_res = Some(res);
+                    if is_reverted_or_control_leak(&local_res.as_ref().unwrap().ret) {
+                        break;
+                    }
+                    cleanup = false;
+                }
+                local_res.unwrap()
             } else {
                 let caller = input.get_caller();
                 let value = input.get_txn_value().unwrap_or(EVMU256::ZERO);
                 let contract_address = input.get_contract();
-                self.host.origin = caller;
                 self.execute_from_pc(
                     &CallContext {
                         address: contract_address,
@@ -632,9 +681,6 @@ where
         let mut r = r.unwrap();
         match r.ret {
             ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => unsafe {
-                let global_ctx = GLOBAL_CALL_CONTEXT
-                    .clone()
-                    .expect("global call context should be set");
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -643,23 +689,10 @@ where
                         additional_info: None,
                     };
                 }
+                let leak_ctx = self.host.leak_ctx
+                    .clone();
                 r.new_state.post_execution.push(PostExecutionCtx {
-                    stack: r.stack,
-                    pc: r.pc,
-                    output_offset: RET_OFFSET,
-                    output_len: RET_SIZE,
-
-                    call_data: Default::default(),
-
-                    address: global_ctx.address,
-                    caller: global_ctx.caller,
-                    code_address: global_ctx.code_address,
-                    apparent_value: global_ctx.apparent_value,
-
-                    memory: r.memory,
-
-                    // must step only when arbitrary external call because the caller
-                    // can only call the function once
+                    pes: leak_ctx,
                     must_step: match r.ret {
                         ControlLeak => false,
                         InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => true,
@@ -673,6 +706,7 @@ where
                         }
                         _ => unreachable!(),
                     },
+
                 });
             },
             _ => {}
@@ -685,6 +719,8 @@ where
                 self.host.current_typed_bug.iter().cloned()
             )
         );
+
+        // println!("r.ret: {:?}", r.ret);
 
         unsafe {
             ExecutionResult {
