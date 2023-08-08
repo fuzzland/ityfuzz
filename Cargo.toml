@@ -30,6 +30,7 @@ use_presets = []
 print_logs = []
 z3_debug = []
 sui_support = ["dep:move-binary-format", "dep:move-core-types", "dep:move-stdlib", "dep:move-vm-runtime", "dep:move-vm-types", "dep:sui-move-natives-latest", "dep:sui-protocol-config", "dep:sui-types"]
+debug = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

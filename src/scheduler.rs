@@ -228,7 +228,9 @@ where
                 });
 
                 for i in sorted.iter().take(PRUNE_AMT) {
-                    to_remove.push(*i.0);
+                    if *i.0 >= 3 {
+                        to_remove.push(*i.0);
+                    }
                 }
 
                 // Remove inputs (or VMState) from metadata and corpus

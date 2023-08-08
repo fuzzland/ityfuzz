@@ -493,15 +493,7 @@ where
         }
 
         unsafe {
-            // hack to account for saving reentrancy without dataflow
-            let pc_interesting = state
-                .get_execution_result()
-                .new_state
-                .state
-                .get_post_execution_pc()
-                != 0;
-
-            if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
+            if self.vm.deref().borrow_mut().state_changed() {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
