@@ -5,9 +5,31 @@ use itertools::Itertools;
 use serde_json;
 use revm;
 use revm_primitives::Bytecode;
+use serde::Serialize;
 use crate::evm::types::{EVMAddress, ProjectSourceMapTy};
 
 pub static mut BASE_PATH: String = String::new();
+
+
+#[derive(Debug,Clone, Serialize, Hash, PartialEq, Eq)]
+pub struct SourceMapWithCode {
+    pub file: String,
+    pub line_start: usize,
+    pub line_end: usize,
+    pub code: String,
+}
+
+impl SourceMapWithCode {
+    pub fn to_string(&self) -> String {
+        format!(
+            "@ {} ({}-{}):\n{}",
+            self.file,
+            self.line_start,
+            self.line_end,
+            self.code
+        )
+    }
+}
 
 #[derive(Debug,Clone)]
 pub struct SourceMapLocation {
@@ -37,20 +59,25 @@ impl Default for SourceMapLocation {
 }
 
 pub enum SourceMapAvailability {
-    Available(String),
+    Available(SourceMapWithCode),
     Unavailable,
     Unknown,
 }
 
-fn read_source_code(loc: &SourceMapLocation) -> String {
-    let file = loc.file.clone().unwrap();
+fn read_source_code(loc: &SourceMapLocation) -> SourceMapWithCode {
+    let file_name = loc.file.clone().unwrap();
     let offset = loc.offset;
     let length = loc.length;
 
-    let mut file = match File::open(unsafe {BASE_PATH.clone()} + file.as_str()) {
+    let mut file = match File::open(unsafe {BASE_PATH.clone()} + file_name.as_str()) {
         Ok(f) => f,
         Err(e) => {
-            return format!("{:?}:{:?}", offset, length);
+            return SourceMapWithCode {
+                file: file_name,
+                line_start: 0,
+                line_end: 0,
+                code: "code not available".to_string(),
+            };
         }
     };
 
@@ -80,7 +107,12 @@ fn read_source_code(loc: &SourceMapLocation) -> String {
         .take(end_line - start_line + 1)
         .join("\n");
 
-    format!("\n{}", lines_in_range)
+    return SourceMapWithCode {
+        file: file_name,
+        line_start: start_line,
+        line_end: end_line,
+        code: lines_in_range,
+    };
 }
 
 pub fn pretty_print_source_map(pc: usize, addr: &EVMAddress, data: &ProjectSourceMapTy) -> SourceMapAvailability {
@@ -90,7 +122,7 @@ pub fn pretty_print_source_map(pc: usize, addr: &EVMAddress, data: &ProjectSourc
                 Some(info) => {
                     match info.file {
                         Some(ref file) => {
-                            SourceMapAvailability::Available(format!("{}:{}", file, read_source_code(info)))
+                            SourceMapAvailability::Available(read_source_code(info))
                         }
                         None => SourceMapAvailability::Unknown
                     }

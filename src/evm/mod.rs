@@ -18,3 +18,4 @@ pub mod types;
 pub mod uniswap;
 pub mod vm;
 pub mod feedbacks;
+pub mod cov_stage;

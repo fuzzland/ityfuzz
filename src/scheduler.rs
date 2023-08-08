@@ -153,6 +153,8 @@ impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
         self.vote(state, state_idx, 3);
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+
+        #[cfg(feature = "full_trace")]
         data.deps.mark_never_delete(state_idx);
     }
 

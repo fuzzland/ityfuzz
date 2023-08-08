@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
+use crate::{invoke_middlewares};
 
 const MAX_POST_EXECUTION: usize = 10;
 
@@ -495,13 +496,6 @@ where
                 EVMU512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
         }
 
-        // remove all concolic hosts
-        self.host
-            .middlewares
-            .deref()
-            .borrow_mut()
-            .retain(|k, _| *k != MiddlewareType::Concolic);
-
         result
     }
 
@@ -776,8 +770,11 @@ where
             hex::encode(self.deployer),
             hex::encode(interp.return_value())
         );
-        let contract_code = Bytecode::new_raw(interp.return_value());
+        let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
+        unsafe {
+            invoke_middlewares!(&mut contract_code, deployed_address, &mut self.host, state, on_insert);
+        }
         self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
     }
