@@ -191,6 +191,13 @@ impl<I, VS, S> Middleware<VS, I, S> for BranchCoverage
         self.total_jumpi_branch.insert(address, total.1);
     }
 
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {}
+
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::BranchCoverage
     }

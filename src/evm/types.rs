@@ -15,6 +15,7 @@ use revm_primitives::{B160, Bytecode, U256};
 use libafl::prelude::Rand;
 use revm_primitives::ruint::aliases::U512;
 use crate::evm::srcmap::parser::SourceMapLocation;
+use crate::executor::FuzzExecutor;
 use crate::generic_vm::vm_executor::ExecutionResult;
 
 pub type EVMAddress = B160;
@@ -42,6 +43,8 @@ pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState, Conc
 pub type EVMExecutionResult = ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
 
 pub type ProjectSourceMapTy = HashMap<EVMAddress, Option<HashMap<usize, SourceMapLocation>>>;
+
+pub type EVMFuzzExecutor<OT> = FuzzExecutor<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, OT, ConciseEVMInput>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_H160(v: [u8; 20]) -> H160 {

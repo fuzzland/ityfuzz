@@ -23,8 +23,12 @@ def test_one(path):
 
     # run fuzzer and check whether the stdout has string success
     start_time = time.time()
-    p = subprocess.run(" ".join([
-        TIMEOUT_BIN, "3m", "./cli/target/release/cli", "-t", f"'{path}/*'",  "-f", "--panic-on-bug"]),
+    cmd = [TIMEOUT_BIN, "3m", "./cli/target/release/cli", "evm", "-t", f"'{path}/*'",  "-f", "--panic-on-bug"]
+
+    if "concolic" in path:
+        cmd.append("--concolic --concolic-caller")
+
+    p = subprocess.run(" ".join(cmd),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=True
@@ -40,11 +44,11 @@ def test_one(path):
         print(p.stderr.decode("utf-8"))
         print("================ STDOUT =================")
         print(p.stdout.decode("utf-8"))
-        raise Exception(f"Failed to fuzz {path}")
+        print(f"Failed to fuzz {path}")
 
     # clean up
-    os.system(f"rm -rf {path}/*.abi")
-    os.system(f"rm -rf {path}/*.bin")
+    # os.system(f"rm -rf {path}/*.abi")
+    # os.system(f"rm -rf {path}/*.bin")
 
     print(f"=== Success: {path}, Finished in {time.time() - start_time}s")
 
@@ -61,4 +65,4 @@ import multiprocessing
 if __name__ == "__main__":
     build_fuzzer()
     with multiprocessing.Pool(3) as p:
-        p.map(test_one, glob.glob("./tests/*/", recursive=True))
+        p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))

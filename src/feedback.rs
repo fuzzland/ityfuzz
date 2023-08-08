@@ -479,12 +479,15 @@ where
 
         // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
+            println!("Voted for {} because of CMP", input.get_state_idx());
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
         // if coverage has increased, vote for the state
         if cov_interesting {
+            println!("Voted for {} because of COV", input.get_state_idx());
+
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
@@ -499,6 +502,10 @@ where
                 != 0;
 
             if self.vm.deref().borrow_mut().state_changed() || pc_interesting {
+                let hash = state.get_execution_result().new_state.state.get_hash();
+                if self.known_states.contains(&hash) {
+                    return Ok(false);
+                }
                 return Ok(true);
             }
         }

@@ -1,5 +1,5 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::mutation_utils::byte_mutator;
+use crate::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;

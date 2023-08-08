@@ -260,6 +260,10 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
         }
     }
 
+    unsafe fn on_return(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+        
+    }
+
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
     }
 
@@ -312,6 +316,13 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3Bypass
     }
+
+    unsafe fn on_return(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {}
 }
 
 
