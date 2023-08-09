@@ -67,6 +67,9 @@ pub static mut STATE_CHANGE: bool = false;
 pub const RW_SKIPPER_PERCT_IDX: usize = 100;
 pub const RW_SKIPPER_AMT: usize = MAP_SIZE - RW_SKIPPER_PERCT_IDX;
 
+// reentrancy
+pub static mut WRITTEN: bool = false;
+
 // How mant iterations the coverage is the same
 pub static mut COVERAGE_NOT_CHANGED: u32 = 0;
 pub static mut RET_SIZE: usize = 0;
@@ -806,6 +809,9 @@ where
                     JMP_MAP[idx] = if value_changed { 1 } else { 0 };
 
                     STATE_CHANGE |= value_changed;
+
+                    #[cfg(feature = "reentrancy")]
+                    WRITTEN = true;
                 }
 
                 #[cfg(feature = "dataflow")]

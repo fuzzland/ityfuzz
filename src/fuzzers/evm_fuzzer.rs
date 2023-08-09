@@ -23,7 +23,7 @@ use libafl::{
 use glob::glob;
 use itertools::Itertools;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS};
+use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, WRITTEN, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS};
 use crate::evm::host::{CALL_UNTIL};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
@@ -55,6 +55,7 @@ use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
+
 use crate::input::{ConciseSerde, VMInputT};
 
 struct ABIConfig {
@@ -85,6 +86,7 @@ pub fn evm_fuzzer(
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
+    let written = unsafe { &mut WRITTEN }; // for reentrancy
     let reads = unsafe { &mut READ_MAP };
     let writes = unsafe { &mut WRITE_MAP };
     let jmp_observer = StdMapObserver::new("jmp", jmps);
@@ -178,7 +180,6 @@ pub fn evm_fuzzer(
     if config.sha3_bypass {
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
-
     let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
         EVMExecutor::new(fuzz_host, deployer);
 
@@ -233,8 +234,6 @@ pub fn evm_fuzzer(
 
     let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(std_stage, concolic_stage);
-
-
 
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 

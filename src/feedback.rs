@@ -468,6 +468,15 @@ where
     {
         let mut cmp_interesting = false;
         let mut cov_interesting = false;
+        let mut reentrancy_interesting = false;
+
+        // checking for reentrancy
+        let new_state = _state.get_execution_result().new_state.state;
+        while new_state.has_post_execution() {
+            // now execute again, checking for writes to EVM memory.
+            self.vm.deref().borrow_mut().execute(_input, _state);
+        }
+        reentrancy_interesting = *self.vm.deref().borrow_mut().get_written();
 
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
@@ -492,7 +501,16 @@ where
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
+        // if reentrancy has occurred, vote for the state (tentative)
+        if reentrancy_interesting {
+            println!("Voted for {} because of REENTRANCY", input.get_state_idx());
+            self.scheduler
+                .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
+        }
+
         unsafe {
+            let cur_read_map = self.vm.deref().borrow_mut().get_read();
+            let cur_write_map = self.vm.deref().borrow_mut().get_write();
             // hack to account for saving reentrancy without dataflow
             let pc_interesting = state
                 .get_execution_result()
@@ -506,7 +524,22 @@ where
                 if self.known_states.contains(&hash) {
                     return Ok(false);
                 }
-                return Ok(true);
+
+                // ensure dataflow / coverage-wise is interesting for new encountered VM state
+                let mut df_interesting = false;
+                for i in 0..MAP_SIZE {
+                    if cur_read_map[i] && cur_write_map[i] != 0 {
+                        df_interesting = true;
+                        break;
+                    }
+                }
+                for i in 0..MAP_SIZE {
+                    cur_write_map[i] = 0;
+                }
+                if df_interesting || pc_interesting { // || reentrancy_interesting {
+                    self.known_states.insert(hash);
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
@@ -524,3 +557,128 @@ where
         Ok(())
     }
 }
+
+//////////////////////////////////////////////////////////////////////////////
+
+// #[cfg(feature = "reentrancy")]
+pub struct ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI>
+where
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    /// write status of the current execution
+    written: bool,
+    vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+    phantom: PhantomData<(VS, Loc, Addr, Out)>,
+}
+
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Debug for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
+where
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReentrancyFeedback").finish()
+    }
+}
+
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Named for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
+where
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn name(&self) -> &str {
+        "ReentrancyFeedback"
+    }
+}
+
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> 
+where
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    pub fn new(
+        written: bool, 
+        vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>) -> Self {
+        Self {
+            written,
+            vm,
+            phantom: Default::default(),
+        }
+    }
+}
+
+// #[cfg(feature = "reentrancy")]
+impl<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI> Feedback<I, S> for ReentrancyFeedback<I, S, VS, Loc, Addr, Out, Code, By, SlotTy, CI>
+where
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI>,
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
+        Ok(())
+    }
+
+    // simply returns true if written is true, i.e. there has been a write after a control leak.
+    fn is_interesting<EMI, OT>(
+        &mut self,
+        _state: &mut S,
+        _manager: &mut EMI,
+        _input: &I,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
+    ) -> Result<bool, Error>
+    where
+        EMI: EventFirer<I>,
+        OT: ObserversTuple<I, S>,
+    {
+        self.written = false;
+
+        // state after executing. should have been executed before is_interesting was called.
+        let new_state = _state.get_execution_result().new_state.state;
+        
+        // if there is a post execution context, there has been a new control leak.
+        while new_state.has_post_execution() {
+            // now execute again, checking for writes to EVM memory.
+            self.vm.deref().borrow().execute(_input, _state);
+            if self.written {
+                return Ok(true);
+            }
+        }  
+        return Ok(false);
+    }
+
+    fn append_metadata(
+        &mut self,
+        _state: &mut S,
+        _testcase: &mut Testcase<I>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
