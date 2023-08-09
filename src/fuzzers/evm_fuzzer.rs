@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -38,7 +39,7 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
-use crate::evm::onchain::onchain::OnChain;
+use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
 use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
@@ -48,9 +49,10 @@ use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
 use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
+use crate::evm::cov_stage::CoverageStage;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
-use crate::evm::middlewares::coverage::Coverage;
-use crate::evm::middlewares::branch_coverage::BranchCoverage;
+use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
+use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
@@ -76,8 +78,6 @@ pub fn evm_fuzzer(
         std::fs::create_dir(path).unwrap();
     }
 
-    let cov_middleware = Rc::new(RefCell::new(Coverage::new()));
-
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
@@ -91,7 +91,6 @@ pub fn evm_fuzzer(
 
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
-    fuzz_host.set_concolic_enabled(config.concolic);
     fuzz_host.set_spec_id(config.spec_id);
 
     if config.selfdestruct_oracle {
@@ -146,6 +145,12 @@ pub fn evm_fuzzer(
         PANIC_ON_BUG = config.panic_on_bug;
     }
 
+    if config.only_fuzz.len() > 0 {
+        unsafe {
+            WHITELIST_ADDR = Some(config.only_fuzz);
+        }
+    }
+
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing flashloan
         // to contract as well for on chain env
@@ -184,7 +189,6 @@ pub fn evm_fuzzer(
 
     if config.replay_file.is_some() {
         // add coverage middleware for replay
-        evm_executor.host.add_middlewares(cov_middleware.clone());
         unsafe {
             REPLAY = true;
         }
@@ -201,7 +205,7 @@ pub fn evm_fuzzer(
     #[cfg(feature = "use_presets")]
     corpus_initializer.register_preset(&PairPreset {});
 
-    let artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
+    let mut artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     let mut instance_map = ABIAddressToInstanceMap::new();
     artifacts.address_to_abi_object.iter().for_each(
@@ -209,6 +213,15 @@ pub fn evm_fuzzer(
             instance_map.map.insert(addr.clone(), abi.clone());
         }
     );
+
+    let cov_middleware = Rc::new(RefCell::new(Coverage::new(
+        artifacts.address_to_sourcemap.clone(),
+        artifacts.address_to_name.clone(),
+        config.work_dir.clone(),
+    )));
+
+    evm_executor.host.add_middlewares(cov_middleware.clone());
+
     state.add_metadata(
         instance_map
     );
@@ -218,6 +231,19 @@ pub fn evm_fuzzer(
     // now evm executor is ready, we can clone it
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
+
+
+    for (addr, bytecode) in &mut artifacts.address_to_bytecode {
+        unsafe {
+            cov_middleware.deref().borrow_mut().on_insert(
+                bytecode,
+                *addr,
+                &mut evm_executor_ref.deref().borrow_mut().host,
+                state
+            );
+        }
+    }
+
 
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     feedback
@@ -232,7 +258,13 @@ pub fn evm_fuzzer(
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
-    let mut stages = tuple_list!(std_stage, concolic_stage);
+
+    let coverage_obs_stage = CoverageStage::new(
+        evm_executor_ref.clone(),
+        cov_middleware.clone(),
+    );
+
+    let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
 
 
 
@@ -305,6 +337,10 @@ pub fn evm_fuzzer(
                 .expect("Fuzzing failed");
         }
         Some(files) => {
+            unsafe {
+                EVAL_COVERAGE = true;
+            }
+
             let initial_vm_state = artifacts.initial_state.clone();
             for file in glob(files.as_str()).expect("Failed to read glob pattern") {
                 let mut f = File::open(file.expect("glob issue")).expect("Failed to open file");
@@ -357,7 +393,7 @@ pub fn evm_fuzzer(
             }
 
             // dump coverage:
-            cov_middleware.borrow_mut().record_instruction_coverage(&artifacts.address_to_sourcemap);
+            cov_middleware.borrow_mut().record_instruction_coverage();
         }
     }
 }

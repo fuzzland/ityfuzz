@@ -5,7 +5,9 @@ use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 use crate::evm::oracles::erc20::IERC20OracleFlashloan;
 use crate::oracle::{Oracle, Producer};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
+use crate::evm::types::EVMAddress;
 
 pub enum FuzzerTypes {
     CMP,
@@ -63,4 +65,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub echidna_oracle: bool,
     pub panic_on_bug: bool,
     pub spec_id: String,
+    pub only_fuzz: HashSet<EVMAddress>,
 }

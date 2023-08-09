@@ -378,7 +378,7 @@ impl ContractLoader {
                 vec![]
             };
             contracts.push(ContractInfo {
-                name: addr.to_string(),
+                name: format!("{:?}", addr),
                 code: contract_code.bytes().to_vec(),
                 abi: abi_parsed.clone(),
                 is_code_deployed: true,

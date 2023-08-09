@@ -56,6 +56,7 @@ use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
+use crate::{invoke_middlewares};
 
 const MAX_POST_EXECUTION: usize = 10;
 
@@ -126,7 +127,23 @@ pub struct SinglePostExecution {
     pub output_offset: usize,
 }
 
+
 impl SinglePostExecution {
+    pub fn hash(&self, hasher: &mut impl Hasher) {
+        self.program_counter.hash(hasher);
+        self.memory.data.hash(hasher);
+        self.stack.data.hash(hasher);
+        self.return_range.hash(hasher);
+        self.is_static.hash(hasher);
+        self.input.hash(hasher);
+        self.code_address.hash(hasher);
+        self.address.hash(hasher);
+        self.caller.hash(hasher);
+        self.value.hash(hasher);
+        self.output_len.hash(hasher);
+        self.output_offset.hash(hasher);
+    }
+
     /// Convert the post execution context to revm [`CallContext`]
     fn get_call_ctx(&self) -> CallContext {
         CallContext {
@@ -193,6 +210,14 @@ pub struct PostExecutionCtx {
     pub must_step: bool,
 }
 
+impl PostExecutionCtx {
+    pub fn hash(&self, hasher: &mut impl Hasher) {
+        for pe in &self.pes {
+            pe.hash(hasher);
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EVMState {
     /// State of the EVM, which is mapping of EVMU256 slot to EVMU256 value for each contract
@@ -251,7 +276,18 @@ impl Default for EVMState {
 impl VMStateT for EVMState {
     /// Calculate the hash of the VM state
     fn get_hash(&self) -> u64 {
-        unreachable!("deprecated")
+        let mut s = DefaultHasher::new();
+        for i in self.post_execution.iter() {
+            i.hash(&mut s);
+        }
+        for i in self.state.iter().sorted_by_key(|k| k.0) {
+            i.0 .0.hash(&mut s);
+            for j in i.1.iter() {
+                j.0.hash(&mut s);
+                j.1.hash(&mut s);
+            }
+        }
+        s.finish()
     }
 
     /// Check whether current state has post execution context
@@ -537,13 +573,6 @@ where
                 EVMU512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
         }
 
-        // remove all concolic hosts
-        self.host
-            .middlewares
-            .deref()
-            .borrow_mut()
-            .retain(|k, _| *k != MiddlewareType::Concolic);
-
         result
     }
 
@@ -812,8 +841,11 @@ where
             hex::encode(self.deployer),
             hex::encode(interp.return_value())
         );
-        let contract_code = Bytecode::new_raw(interp.return_value());
+        let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
+        unsafe {
+            invoke_middlewares!(&mut contract_code, deployed_address, &mut self.host, state, on_insert);
+        }
         self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
     }

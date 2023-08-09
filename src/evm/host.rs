@@ -111,9 +111,8 @@ where
     pub pc_to_addresses: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
     pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
     pub pc_to_call_hash: HashMap<(EVMAddress, usize), HashSet<Vec<u8>>>,
-    pub concolic_enabled: bool,
     pub middlewares_enabled: bool,
-    pub middlewares: Rc<RefCell<HashMap<MiddlewareType, Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
+    pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
 
     pub coverage_changed: bool,
 
@@ -151,6 +150,10 @@ where
     /// Precompiles
     pub precompiles: Precompiles,
 
+    /// All SSTORE PCs that are for mapping (i.e., writing to multiple storage slots)
+    pub mapping_sstore_pcs: HashSet<(EVMAddress, usize)>,
+    pub mapping_sstore_pcs_to_slot: HashMap<(EVMAddress, usize), HashSet<EVMU256>>,
+
     /// For future continue executing when control leak happens
     pub leak_ctx: Vec<SinglePostExecution>,
 }
@@ -170,7 +173,6 @@ where
             .field("_pc", &self._pc)
             .field("pc_to_addresses", &self.pc_to_addresses)
             .field("pc_to_call_hash", &self.pc_to_call_hash)
-            .field("concolic_enabled", &self.concolic_enabled)
             .field("middlewares_enabled", &self.middlewares_enabled)
             .field("middlewares", &self.middlewares)
             .field(
@@ -199,9 +201,8 @@ where
             pc_to_addresses: self.pc_to_addresses.clone(),
             pc_to_create: self.pc_to_create.clone(),
             pc_to_call_hash: self.pc_to_call_hash.clone(),
-            concolic_enabled: false,
             middlewares_enabled: false,
-            middlewares: Rc::new(RefCell::new(HashMap::new())),
+            middlewares: Rc::new(RefCell::new(Default::default())),
             coverage_changed: false,
             flashloan_middleware: None,
             middlewares_latent_call_actions: vec![],
@@ -222,6 +223,8 @@ where
             spec_id: self.spec_id.clone(),
             precompiles: Precompiles::default(),
             leak_ctx: self.leak_ctx.clone(),
+            mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
+            mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
         }
     }
 }
@@ -253,9 +256,8 @@ where
             pc_to_addresses: HashMap::new(),
             pc_to_create: HashMap::new(),
             pc_to_call_hash: HashMap::new(),
-            concolic_enabled: false,
             middlewares_enabled: false,
-            middlewares: Rc::new(RefCell::new(HashMap::new())),
+            middlewares: Rc::new(RefCell::new(Default::default())),
             coverage_changed: false,
             flashloan_middleware: None,
             middlewares_latent_call_actions: vec![],
@@ -275,7 +277,9 @@ where
             work_dir: workdir.clone(),
             spec_id: SpecId::LATEST,
             precompiles: Default::default(),
-            leak_ctx: vec![]
+            leak_ctx: vec![],
+            mapping_sstore_pcs: Default::default(),
+            mapping_sstore_pcs_to_slot: Default::default(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -319,7 +323,7 @@ where
         self.middlewares
             .deref()
             .borrow_mut()
-            .insert(ty, middlewares);
+            .push(middlewares);
     }
 
     pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
@@ -327,22 +331,18 @@ where
         self.middlewares
             .deref()
             .borrow_mut()
-            .remove(&ty);
+            .retain(|x| x.deref().borrow().get_type() != ty);
     }
 
     pub fn remove_middlewares_by_ty(&mut self, ty: &MiddlewareType) {
         self.middlewares
             .deref()
             .borrow_mut()
-            .remove(ty);
+            .retain(|x| x.deref().borrow().get_type() != *ty);
     }
 
     pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<VS, I, S>) {
         self.flashloan_middleware = Some(Rc::new(RefCell::new(middlware)));
-    }
-
-    pub fn set_concolic_enabled(&mut self, enabled: bool) {
-        self.concolic_enabled = enabled;
     }
 
     pub fn initialize(&mut self, state: &S)
@@ -419,7 +419,7 @@ where
                     }
                     _ => {}
                 }
-                for (_, middleware) in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
+                for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
                 {
                     middleware
                         .deref()
@@ -708,6 +708,7 @@ macro_rules! u256_to_u8 {
 }
 
 
+#[macro_export]
 macro_rules! invoke_middlewares {
     ($host: expr, $interp: expr, $state: expr, $invoke: ident) => {
         if $host.middlewares_enabled {
@@ -721,13 +722,44 @@ macro_rules! invoke_middlewares {
             if $host.setcode_data.len() > 0 {
                 $host.clear_codedata();
             }
-            for (_, middleware) in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut()
+            for middleware in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut()
             {
                 middleware
                     .deref()
                     .deref()
                     .borrow_mut()
                     .$invoke($interp, $host, $state);
+            }
+
+
+            if $host.setcode_data.len() > 0 {
+                for (address, code) in &$host.setcode_data.clone() {
+                    $host.set_code(address.clone(), code.clone(), $state);
+                }
+            }
+        }
+    };
+
+    ($code: expr, $addr: expr, $host: expr, $state: expr, $invoke: ident) => {
+        if $host.middlewares_enabled {
+            match $host.flashloan_middleware.clone() {
+                Some(m) => {
+                    let mut middleware = m.deref().borrow_mut();
+                    middleware.$invoke($code, $addr, $host, $state);
+
+                }
+                _ => {}
+            }
+            if $host.setcode_data.len() > 0 {
+                $host.clear_codedata();
+            }
+            for middleware in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut()
+            {
+                middleware
+                    .deref()
+                    .deref()
+                    .borrow_mut()
+                    .$invoke($code, $addr, $host, $state);
             }
 
 
@@ -788,24 +820,33 @@ where
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
                 0x55 => {
                     // SSTORE
-                    #[cfg(feature = "dataflow")]
-                    let value = fast_peek!(1);
-                    {
+                    let pc = interp.program_counter();
+                    if !self.mapping_sstore_pcs.contains(&(interp.contract.address, pc)) {
                         let mut key = fast_peek!(0);
-                        let v = u256_to_u8!(value) + 1;
-                        WRITE_MAP[process_rw_key!(key)] = v;
+                        let slots = self.mapping_sstore_pcs_to_slot.entry((interp.contract.address, pc)).or_default();
+                        slots.insert(key);
+                        if slots.len() > 10 {
+                            self.mapping_sstore_pcs.insert((interp.contract.address, pc));
+                        }
+
+                        let value = fast_peek!(1);
+                        let compressed_value = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = compressed_value;
+
+                        let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
+                            self,
+                            interp.contract.address,
+                            fast_peek!(0),
+                        );
+                        let value_changed = res.expect("sload failed").0 != value;
+
+                        let idx = interp.program_counter() % MAP_SIZE;
+                        JMP_MAP[idx] = if value_changed { 1 } else { 0 };
+
+                        STATE_CHANGE |= value_changed;
                     }
-                    let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
-                        self,
-                        interp.contract.address,
-                        fast_peek!(0),
-                    );
-                    let value_changed = res.expect("sload failed").0 != value;
 
-                    let idx = interp.program_counter() % MAP_SIZE;
-                    JMP_MAP[idx] = if value_changed { 1 } else { 0 };
 
-                    STATE_CHANGE |= value_changed;
                 }
 
                 #[cfg(feature = "dataflow")]

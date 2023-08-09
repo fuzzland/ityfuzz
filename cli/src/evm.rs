@@ -143,11 +143,11 @@ pub struct EvmArgs {
     #[arg(long, default_value = "onebyone")]
     onchain_storage_fetching: String,
 
-    /// Enable Concolic
+    /// Enable Concolic (Experimental)
     #[arg(long, default_value = "false")]
     concolic: bool,
 
-    /// Support Treating Caller as Symbolically
+    /// Support Treating Caller as Symbolically  (Experimental)
     #[arg(long, default_value = "false")]
     concolic_caller: bool,
 
@@ -200,9 +200,13 @@ pub struct EvmArgs {
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
 
-    /// Whether bypass all SHA3 comparisons, this may break original logic of contracts
+    /// Whether bypass all SHA3 comparisons, this may break original logic of contracts  (Experimental)
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
+
+    /// Only fuzz contracts with the addresses, separated by comma
+    #[arg(long, default_value = "")]
+    only_fuzz: String,
 
     /// Only needed when using combined.json (source map info).
     /// This is the base path when running solc compile (--base-path passed to solc).
@@ -432,6 +436,11 @@ pub fn evm_main(args: EvmArgs) {
                     HashSet::from_iter(addresses),
                 )
             }
+        },
+        only_fuzz: if args.only_fuzz.len() > 0 {
+            args.only_fuzz.split(",").map(|s| EVMAddress::from_str(s).expect("failed to parse only fuzz")).collect()
+        } else {
+            HashSet::new()
         },
         onchain,
         concolic: args.concolic,
