@@ -39,7 +39,7 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
-use crate::evm::onchain::onchain::OnChain;
+use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
 use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
@@ -143,6 +143,12 @@ pub fn evm_fuzzer(
 
     unsafe {
         PANIC_ON_BUG = config.panic_on_bug;
+    }
+
+    if config.only_fuzz.len() > 0 {
+        unsafe {
+            WHITELIST_ADDR = Some(config.only_fuzz);
+        }
     }
 
     if config.flashloan {

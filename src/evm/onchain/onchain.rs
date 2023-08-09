@@ -40,6 +40,7 @@ use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
+pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
@@ -379,6 +380,18 @@ where
                     );
                 }
                 // add abi to corpus
+
+                unsafe {
+                    match WHITELIST_ADDR.as_ref() {
+                        Some(whitelist) => {
+                            if !whitelist.contains(&target) {
+                                return;
+                            }
+                        }
+                        None => {}
+                    }
+                }
+
                 parsed_abi
                     .iter()
                     .filter(|v| !v.is_constructor)
