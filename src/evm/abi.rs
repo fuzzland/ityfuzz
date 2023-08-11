@@ -19,10 +19,10 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Write};
 use std::ops::{Deref, DerefMut};
 use libafl::impl_serdeany;
+use crate::evm::concolic::expr::Expr;
 use crate::evm::types::{EVMAddress, EVMU256};
 use crate::input::ConciseSerde;
 
-use super::concolic::concolic_host::Expr;
 
 
 /// Mapping from known signature to function name

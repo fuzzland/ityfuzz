@@ -21,254 +21,21 @@ use revm_primitives::{Bytecode, HashMap};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use itertools::Itertools;
 
 use z3::ast::{Bool, BV};
 use z3::{ast::Ast, Config, Context, Params, Solver};
+use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
+use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-enum ConcolicOp {
-    EVMU256(EVMU256),
-    ADD,
-    DIV,
-    MUL,
-    SUB,
-    SDIV,
-    SMOD,
-    UREM,
-    SREM,
-    AND,
-    OR,
-    XOR,
-    NOT,
-    SHL,
-    SHR,
-    SAR,
-    SLICEDINPUT(EVMU256),
-    BALANCE,
-    CALLVALUE,
-    CALLER,
-    // symbolic byte
-    SYMBYTE(String),
-    // helper OP for input slicing (not in EVM)
-    CONSTBYTE(u8),
-    // (start, end) in bytes, end is not included
-    FINEGRAINEDINPUT(u32, u32),
-    // constraint OP here
-    EQ,
-    LT,
-    SLT,
-    GT,
-    SGT,
-    LNOT,
-
-    SELECT(u32),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Expr {
-    lhs: Option<Box<Expr>>,
-    rhs: Option<Box<Expr>>,
-    // concrete should be used in constant folding
-    // concrete: Option<EVMU256>,
-    op: ConcolicOp,
-}
-
-// pub struct Constraint {
-//     pub lhs: Box<Expr>,
-//     pub rhs: Box<Expr>,
-//     pub op: ConstraintOp,
-// }
-
-// TODO: if both operands are concrete we can do constant folding somewhere
-macro_rules! box_bv {
-    ($lhs:expr, $rhs:expr, $op:expr) => {
-        Box::new(Expr {
-            lhs: Some(Box::new($lhs)),
-            rhs: Some($rhs),
-            op: $op,
-        })
-    };
-}
-
-macro_rules! bv_from_u256 {
-    ($val:expr, $ctx:expr) => {{
-        let u64x4 = $val.as_limbs();
-        let bv = BV::from_u64(&$ctx, u64x4[3], 64);
-        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[2], 64));
-        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[1], 64));
-        let bv = bv.concat(&BV::from_u64(&$ctx, u64x4[0], 64));
-        bv
-    }};
-}
-
-impl Expr {
-    pub fn new_sliced_input(idx: EVMU256) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::SLICEDINPUT(idx),
-        })
-    }
-
-    pub fn new_balance() -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::BALANCE,
-        })
-    }
-
-    pub fn new_callvalue() -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::CALLVALUE,
-        })
-    }
-
-    pub fn new_caller() -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::CALLER,
-        })
-    }
-
-    pub fn sliced_input(start: u32, end: u32) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::FINEGRAINEDINPUT(start, end),
-        })
-    }
-
-    pub fn div(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::DIV)
-    }
-    pub fn mul(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::MUL)
-    }
-    pub fn add(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::ADD)
-    }
-    pub fn sub(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SUB)
-    }
-    pub fn bvsdiv(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SDIV)
-    }
-    pub fn bvsmod(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SMOD)
-    }
-    pub fn bvurem(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::UREM)
-    }
-    pub fn bvsrem(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SREM)
-    }
-    pub fn bvand(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::AND)
-    }
-    pub fn bvor(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::OR)
-    }
-    pub fn bvxor(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::XOR)
-    }
-    pub fn bvnot(self) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: Some(Box::new(self)),
-            rhs: None,
-            op: ConcolicOp::NOT,
-        })
-    }
-    pub fn bvshl(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SHL)
-    }
-    pub fn bvlshr(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SHR)
-    }
-    pub fn bvsar(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SAR)
-    }
-
-    pub fn bvult(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::LT)
-    }
-
-    pub fn bvugt(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::GT)
-    }
-
-    pub fn bvslt(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SLT)
-    }
-
-    pub fn bvsgt(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SGT)
-    }
-
-    pub fn eq(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::EQ)
-    }
-
-    pub fn sym_byte(s: String) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::SYMBYTE(s),
-        })
-    }
-
-    pub fn const_byte(b: u8) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: None,
-            rhs: None,
-            op: ConcolicOp::CONSTBYTE(b),
-        })
-    }
-
-    // logical not
-    pub fn lnot(self) -> Box<Expr> {
-        Box::new(Expr {
-            lhs: Some(Box::new(self)),
-            rhs: None,
-            op: ConcolicOp::LNOT,
-        })
-    }
-
-    pub fn is_concrete(&self) -> bool {
-        match (&self.lhs, &self.rhs) {
-            (Some(l), Some(r)) => {
-                l.is_concrete() && r.is_concrete()
-            },
-            (None, None) => {
-                match self.op {
-                    ConcolicOp::EVMU256(_) => true,
-                    ConcolicOp::SLICEDINPUT(_) => false,
-                    ConcolicOp::BALANCE => false,
-                    ConcolicOp::CALLVALUE => false,
-                    ConcolicOp::SYMBYTE(_) => false,
-                    ConcolicOp::CONSTBYTE(_) => true,
-                    ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
-                    ConcolicOp::CALLER => false,
-                    _ => unreachable!()
-                }
-            }
-            (Some(l), None) => l.is_concrete(),
-            _ => unreachable!()
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
@@ -476,12 +243,26 @@ impl<'a> Solving<'a> {
             ConcolicOp::SLT => comparisons1!(bv.lhs, bv.rhs, bvslt),
             ConcolicOp::GT => comparisons1!(bv.lhs, bv.rhs, bvugt),
             ConcolicOp::SGT => comparisons1!(bv.lhs, bv.rhs, bvsgt),
-            ConcolicOp::SELECT(idx) => {
-                // let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
-                // lhs.expect_bv().extract(*idx, *idx)
-                todo!("SELECT")
+            ConcolicOp::SELECT(high, low) => {
+                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                match lhs {
+                    Some(SymbolicTy::BV(lhs)) => {
+                        Some(SymbolicTy::BV(lhs.extract(*high, *low)))
+                    },
+                    _ => None,
+                }
             },
 
+            ConcolicOp::CONCAT => {
+                let lhs = self.generate_z3_bv(bv.lhs.as_ref().unwrap(), ctx);
+                let rhs = self.generate_z3_bv(bv.rhs.as_ref().unwrap(), ctx);
+                match (lhs, rhs) {
+                    (Some(SymbolicTy::BV(lhs)), Some(SymbolicTy::BV(rhs))) => {
+                        Some(SymbolicTy::BV(lhs.concat(&rhs)))
+                    },
+                    _ => None,
+                }
+            }
         }
     }
 
@@ -563,7 +344,7 @@ impl<'a> Solving<'a> {
                 let callvalue = model.eval(self.calldatavalue, true).unwrap().to_string();
                 let callvalue_int = EVMU256::from_str_radix(&callvalue.trim_start_matches("#x"), 16).unwrap();
                 let caller = model.eval(self.caller, true).unwrap().to_string();
-                let caller_addr = EVMAddress::from_slice(&hex::decode(caller.trim_start_matches("#x000000000000000000000000")).unwrap());
+                let caller_addr = EVMAddress::from_slice(&hex::decode(caller.as_str()[26..66].to_string()).unwrap());
                 vec![Solution {
                     input: input_bytes,
                     caller: caller_addr,
@@ -636,22 +417,38 @@ impl<'a> Solving<'a> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SymbolicMemory {
-    pub memory: Vec<Option<Box<Expr>>>
+    /// Memory is a vector of bytes, each byte is a symbolic value
+    pub memory: Vec<Option<Box<Expr>>>,
+    // pub memory_32: Vec<Option<Box<Expr>>>,
 }
 
 impl SymbolicMemory {
     pub fn new() -> Self {
         Self {
-            memory: vec![]
+            memory: vec![],
+            // memory_32: vec![],
         }
     }
 
     pub fn insert_256(&mut self, idx: EVMU256, val: Box<Expr>) {
         let idx = idx.as_limbs()[0] as usize;
-        if idx >= self.memory.len() {
-            self.memory.resize(idx + 1, None);
+        if idx + 32 >= self.memory.len() {
+            self.memory.resize(idx + 32 + 1, None);
+            // self.memory_32.resize(idx / 32 + 1, None);
         }
-        self.memory[idx] = Some(val);
+
+        // if idx % 32 == 0 {
+        //     self.memory_32[idx / 32] = Some(val.clone());
+        // }
+
+        for i in 0..32 {
+            let i_u32 = i as u32;
+            self.memory[idx + i] = Some(Box::new(Expr {
+                lhs: Some(val.clone()),
+                rhs: None,
+                op: ConcolicOp::SELECT(256 - i_u32*8 - 1, 256 - i_u32*8 - 7 - 1),
+            }));
+        }
     }
 
     pub fn insert_8(&mut self, idx: EVMU256, val: Box<Expr>) {
@@ -660,7 +457,14 @@ impl SymbolicMemory {
         if idx >= self.memory.len() {
             self.memory.resize(idx + 1, None);
         }
-        self.memory[idx] = None;
+
+        println!("insert_8: idx: {}, val: {:?}", idx, val);
+        todo!("insert_8");
+        // self.memory[idx] = Some(Box::new(Expr {
+        //     lhs: Some(val.clone()),
+        //     rhs: None,
+        //     op: ConcolicOp::SELECT(31 - i_u32*8, 24 - i_u32*8),
+        // }));
     }
 
     pub fn get_256(&self, idx: EVMU256) -> Option<Box<Expr>> {
@@ -668,7 +472,74 @@ impl SymbolicMemory {
         if idx >= self.memory.len() {
             return None;
         }
-        self.memory[idx].clone()
+
+        // if idx % 32 == 0 {
+        //     return self.memory_32[idx / 32].clone();
+        // }
+
+        let mut all_bytes = if let Some(by) = self.memory[idx].clone() {
+            by
+        } else {
+            Box::new(
+                Expr {
+                    lhs: None,
+                    rhs: None,
+                    op: ConcolicOp::CONSTBYTE(0),
+                }
+            )
+        };
+        for i in 1..32 {
+            all_bytes = Box::new(
+                Expr {
+                    lhs: Some(all_bytes),
+                    rhs: if let Some(by) = self.memory[idx + i].clone() {
+                        Some(by)
+                    } else {
+                        Some(Box::new(Expr {
+                            lhs: None,
+                            rhs: None,
+                            op: ConcolicOp::CONSTBYTE(0),
+                        }))
+                    },
+                    op: ConcolicOp::CONCAT,
+                }
+            );
+        }
+
+
+        Some(simplify(all_bytes))
+    }
+
+    pub fn get_slice(&mut self, idx: EVMU256, len: EVMU256) -> Vec<Box<Expr>> {
+        let idx = idx.as_limbs()[0] as usize;
+        let len = len.as_limbs()[0] as usize;
+
+        if idx + len >= self.memory.len() {
+            self.memory.resize(idx + len + 1, None);
+        }
+
+        let mut result = vec![];
+
+        for i in idx..(idx + len) {
+            if i >= self.memory.len() {
+                result.push(Box::new(Expr {
+                    lhs: None,
+                    rhs: None,
+                    op: ConcolicOp::CONSTBYTE(0),
+                }));
+            } else {
+                result.push(if let Some(by) = self.memory[i].clone() {
+                    by
+                } else {
+                    Box::new(Expr {
+                        lhs: None,
+                        rhs: None,
+                        op: ConcolicOp::CONSTBYTE(0),
+                    })
+                });
+            }
+        }
+        result
     }
 }
 
@@ -677,6 +548,9 @@ pub struct ConcolicCallCtx {
     pub symbolic_stack: Vec<Option<Box<Expr>>>,
     pub symbolic_memory: SymbolicMemory,
     pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
+
+    // seperated by 32 bytes
+    pub input_bytes: Vec<Box<Expr>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -712,15 +586,47 @@ impl<I, VS> ConcolicHost<I, VS> {
             self.symbolic_stack = ctx.symbolic_stack;
             self.symbolic_memory = ctx.symbolic_memory;
             self.symbolic_state = ctx.symbolic_state;
+        } else {
+            panic!("pop_ctx: ctx is empty");
         }
 
     }
 
-    pub fn push_ctx(&mut self) {
+    pub fn push_ctx(&mut self, interp: &mut Interpreter) {
+        // interp.stack.data()[interp.stack.len() - 1 - $idx]
+        let (arg_offset, arg_len) = match unsafe { *interp.instruction_pointer } {
+            0xf1 | 0xf2 => {
+                (
+                    interp.stack.peek(3).unwrap(),
+                    interp.stack.peek(4).unwrap(),
+                )
+            }
+            0xf4 | 0xfa => {
+                (
+                    interp.stack.peek(2).unwrap(),
+                    interp.stack.peek(3).unwrap(),
+                )
+            }
+            _ => {
+                panic!("not supported opcode");
+            }
+        };
+
         let ctx = ConcolicCallCtx {
             symbolic_stack: self.symbolic_stack.clone(),
             symbolic_memory: self.symbolic_memory.clone(),
             symbolic_state: self.symbolic_state.clone(),
+            input_bytes: {
+                let by = self.symbolic_memory.get_slice(arg_offset, arg_len);
+                #[cfg(feature = "z3_debug")]
+                {
+                    println!("input_bytes = {} {}", arg_offset, arg_len);
+                    by.iter().for_each(|b| {
+                        b.pretty_print();
+                    });
+                }
+                by
+            },
         };
         self.ctxs.push(ctx);
 
@@ -751,6 +657,19 @@ impl<I, VS> ConcolicHost<I, VS> {
 
         let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &caller, &self.constraints);
         solving.solve()
+    }
+
+    pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
+        let mut data = self.ctxs.last().expect("no ctx").input_bytes.clone();
+        let mut bytes = data[idx].clone();
+        for i in idx + 1..idx + length {
+            if i >= data.len() {
+                bytes = bytes.concat(Expr::const_byte(0));
+            } else {
+                bytes = bytes.concat(data[i].clone());
+            }
+        }
+        simplify(bytes)
     }
 }
 
@@ -835,7 +754,7 @@ where
                     for _ in 0..$out_cnt {
                         self.symbolic_stack.push(None);
                     }
-                    self.$pp();
+                    self.$pp(interp);
                     vec![]
                 }
             };
@@ -844,9 +763,31 @@ where
 
         let mut solutions = vec![];
 
+        // if self.ctxs.len() > 0 {
+        //     return;
+        // }
+
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
+        // println!("[concolic] on_step @ {:x}: {:x}", interp.program_counter(), *interp.instruction_pointer);
+        // println!("[concolic] stack: {:?}", interp.stack.len());
+        // println!("[concolic] symbolic_stack: {:?}", self.symbolic_stack.len());
+
+        // let mut max_depth = 0;
+        // let mut max_ref = None;
+        // for s in &self.symbolic_stack {
+        //     if let Some(bv) = s {
+        //         let depth = bv.depth();
+        //         if depth > max_depth {
+        //             max_depth = depth;
+        //             max_ref = Some(bv);
+        //         }
+        //     }
+        // }
+        //
+        // println!("max_depth: {} for {:?}", max_depth, max_ref.map(|x| x.pretty_print_str()));
+        // println!("max_depth simpl: {:?} for {:?}", max_ref.map(|x| simplify(x.clone()).depth()), max_ref.map(|x| simplify(x.clone()).pretty_print_str()));
         #[cfg(feature = "z3_debug")]
         {
             println!("[concolic] on_step @ {:x}: {:x}", interp.program_counter(), *interp.instruction_pointer);
@@ -971,14 +912,14 @@ where
             }
             // EQ
             0x14 => {
-                let res = Some(stack_bv!(0).eq(stack_bv!(1)));
+                let res = Some(stack_bv!(0).equal(stack_bv!(1)));
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
                 vec![res]
             }
             // ISZERO
             0x15 => {
-                let res = Some(stack_bv!(0).eq(Box::new(Expr {
+                let res = Some(stack_bv!(0).equal(Box::new(Expr {
                     lhs: None,
                     rhs: None,
                     op: ConcolicOp::EVMU256(EVMU256::from(0)),
@@ -1078,8 +1019,19 @@ where
             }
             // CALLDATALOAD
             0x35 => {
+                let offset = interp.stack.peek(0).unwrap();
                 self.symbolic_stack.pop();
-                vec![Some(Expr::new_sliced_input(interp.stack.peek(0).unwrap()))]
+                if self.ctxs.len() > 0 {
+                    let offset_usize = as_u64(offset) as usize;
+                    #[cfg(feature = "z3_debug")]
+                    {
+                        println!("CALLDATALOAD: {:?}", self.get_input_slice_from_ctx(offset_usize, 32));
+                        self.get_input_slice_from_ctx(offset_usize, 32).pretty_print();
+                    }
+                    vec![Some(self.get_input_slice_from_ctx(offset_usize, 32))]
+                } else {
+                    vec![Some(Expr::new_sliced_input(offset))]
+                }
             }
             // CALLDATASIZE
             0x36 => {
@@ -1233,7 +1185,7 @@ where
                 if JMP_MAP[idx] == 0 && !real_path_constraint.is_concrete() {
                     let intended_path_constraint = real_path_constraint.clone().lnot();
                     #[cfg(feature = "z3_debug")]
-                    println!("[concolic] to solve {:?}", intended_path_constraint);
+                    println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
                     self.constraints.push(intended_path_constraint);
 
                     solutions.extend(self.solve());
@@ -1307,7 +1259,6 @@ where
             }
             // RETURN
             0xf3 => {
-                self.pop_ctx();
                 vec![]
             }
             // DELEGATECALL
@@ -1345,7 +1296,11 @@ where
         };
         // println!("[concolic] adding bv to stack {:?}", bv);
         for v in bv {
-            self.symbolic_stack.push(v);
+            if v.is_some() && v.as_ref().unwrap().is_concrete() {
+                self.symbolic_stack.push(None);
+            } else {
+                self.symbolic_stack.push(v);
+            }
         }
 
         // let input = state
