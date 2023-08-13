@@ -578,6 +578,14 @@ impl VMStateT for MoveVMState {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+
+    fn is_subset_of(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 impl Default for MoveVMState {
