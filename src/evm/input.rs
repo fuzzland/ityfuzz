@@ -159,7 +159,7 @@ pub struct ConciseEVMInput {
     #[cfg(not(feature = "debug"))]
     pub data: Option<BoxedABI>,
     #[cfg(feature = "debug")]
-    pub direct_data: Vec<u8>,
+    pub direct_data: String,
 
     /// Transaction value in wei
     pub txn_value: Option<EVMU256>,
@@ -202,8 +202,8 @@ impl ConciseEVMInput {
             data: input.get_data_abi(),
             #[cfg(feature = "debug")]
             direct_data: match &input.get_data_abi() {
-                Some(v) => v.get_bytes(),
-                None => vec![],
+                Some(v) => hex::encode(v.get_bytes()),
+                None => "".to_string()
             },
             txn_value: input.get_txn_value(),
             step: input.is_step(),
@@ -242,7 +242,9 @@ impl ConciseEVMInput {
                 #[cfg(not(feature = "debug"))]
                 direct_data: Bytes::new(),
                 #[cfg(feature = "debug")]
-                direct_data: Bytes::from(self.direct_data.clone()),
+                direct_data: Bytes::from(
+                    hex::decode(&self.direct_data).unwrap_or_default()
+                ),
                 randomness: self.randomness.clone(),
                 repeat: self.repeat,
             }, self.call_leak

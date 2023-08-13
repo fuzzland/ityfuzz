@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -61,9 +62,11 @@ where S: State + HasRand
         if self.enabled {
             match self.inner_feedback.is_interesting(state, manager, input, observers, exit_kind) {
                 Ok(true) => {
-                    {
+                    if !input.is_step() {
                         // reexecute with sha3 taint analysis
-                        (*self.evm_executor.borrow_mut()).reexecute_with_middleware(
+                        self.sha3_taints.deref().borrow_mut().cleanup();
+
+                        (self.evm_executor.deref().borrow_mut()).reexecute_with_middleware(
                             input,
                             state,
                             self.sha3_taints.clone(),

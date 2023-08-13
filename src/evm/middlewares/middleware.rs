@@ -29,7 +29,8 @@ pub enum MiddlewareType {
     InstructionCoverage,
     BranchCoverage,
     Sha3Bypass,
-    Sha3TaintAnalysis
+    Sha3TaintAnalysis,
+    CallPrinter,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
