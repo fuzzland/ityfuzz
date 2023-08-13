@@ -233,13 +233,17 @@ pub struct EVMState {
 
     /// Flashloan information
     /// (e.g., how much flashloan is taken, and how much tokens are liquidated)
+    #[serde(skip)]
     pub flashloan_data: FlashloanData,
 
     /// Is bug() call in Solidity hit?
+    #[serde(skip)]
     pub bug_hit: bool,
     /// selftdestruct() call in Solidity hit?
+    #[serde(skip)]
     pub selfdestruct_hit: bool,
     /// bug type call in solidity type
+    #[serde(skip)]
     pub typed_bug: HashSet<String>,
 }
 
@@ -326,6 +330,10 @@ impl VMStateT for EVMState {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn eq(&self, other: &Self) -> bool {
+        self.state == other.state
     }
 }
 

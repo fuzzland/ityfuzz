@@ -55,6 +55,7 @@ use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
+use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
@@ -308,6 +309,21 @@ pub fn evm_fuzzer(
                 ).flatten().collect::<HashMap<Vec<u8>, String>>(),
         );
         oracles.push(Rc::new(RefCell::new(echidna_oracle)));
+    }
+
+    if let Some(path) = config.state_comp_oracle {
+        let mut file = File::open(path.clone()).expect("Failed to open state comp oracle file");
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).expect("Failed to read state comp oracle file");
+
+        let evm_state = serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state comp oracle file");
+
+        let oracle = Rc::new(RefCell::new(
+            StateCompOracle::new(
+                evm_state
+            )
+        ));
+        oracles.push(oracle);
     }
 
 

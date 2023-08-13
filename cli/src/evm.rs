@@ -180,6 +180,11 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     typed_bug_oracle: bool,
 
+    /// Setting any string here will enable state comparison oracle.
+    /// This arg holds file path pointing to state comparison oracle's desired state
+    #[arg(long, default_value = "")]
+    state_comp_oracle: String,
+
     /// Replay?
     #[arg(long)]
     replay_file: Option<String>,
@@ -465,6 +470,11 @@ pub fn evm_main(args: EvmArgs) {
         replay_file: args.replay_file,
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
+        state_comp_oracle: if args.state_comp_oracle.len() > 0 {
+            Some(args.state_comp_oracle)
+        } else {
+            None
+        },
         work_dir: args.work_dir,
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
