@@ -19,13 +19,34 @@ use crate::evm::oracles::{STATE_COMP_BUG_IDX};
 use crate::fuzzer::ORACLE_OUTPUT;
 use crate::generic_vm::vm_state::VMStateT;
 
+pub enum StateCompMatching {
+    Exact,
+    DesiredContain,
+    StateContain,
+}
+
+impl StateCompMatching {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "Exact" => Some(StateCompMatching::Exact),
+            "DesiredContain" => Some(StateCompMatching::DesiredContain),
+            "StateContain" => Some(StateCompMatching::StateContain),
+            _ => None,
+        }
+    }
+}
+
 pub struct StateCompOracle {
     pub desired_state: EVMState,
+    pub matching_style: StateCompMatching,
 }
 
 impl StateCompOracle {
-    pub fn new(desired_state: EVMState) -> Self {
-        Self { desired_state }
+    pub fn new(desired_state: EVMState, matching_style: String) -> Self {
+        Self {
+            desired_state,
+            matching_style: StateCompMatching::from_str(matching_style.as_str()).expect("invalid state comp matching style"),
+        }
     }
 }
 
@@ -52,8 +73,17 @@ for StateCompOracle
         >,
         stage: u64,
     ) -> Vec<u64> {
+
+        let comp = |state1: &EVMState, state2: &EVMState| -> bool {
+            match self.matching_style {
+                StateCompMatching::Exact => state1.eq(state2),
+                StateCompMatching::DesiredContain => state1.is_subset_of(state2),
+                StateCompMatching::StateContain => state2.is_subset_of(state1),
+            }
+        };
+
         unsafe {
-            if STATE_CHANGE && ctx.post_state.eq(&self.desired_state) {
+            if STATE_CHANGE && comp(&ctx.post_state, &self.desired_state) {
                 ORACLE_OUTPUT += "[state_comp] found equivalent state\n";
                 vec![STATE_COMP_BUG_IDX]
             } else {

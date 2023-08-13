@@ -335,6 +335,16 @@ impl VMStateT for EVMState {
     fn eq(&self, other: &Self) -> bool {
         self.state == other.state
     }
+
+    fn is_subset_of(&self, other: &Self) -> bool {
+        self.state.iter().all(|(k, v)| {
+            other.state.get(k).map_or(false, |v2| {
+                v.iter().all(|(k, v)| {
+                    v2.get(k).map_or(false, |v2| v == v2)
+                })
+            })
+        })
+    }
 }
 
 impl EVMState {

@@ -12,4 +12,5 @@ pub trait VMStateT: Clone + Debug + Default + Serialize + DeserializeOwned {
     fn get_flashloan(&self) -> String;
     fn as_any(&self) -> &dyn std::any::Any;
     fn eq(&self, other: &Self) -> bool;
+    fn is_subset_of(&self, other: &Self) -> bool;
 }

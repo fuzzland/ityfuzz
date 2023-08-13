@@ -185,6 +185,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     state_comp_oracle: String,
 
+    /// Matching style for state comparison oracle (Select from "Exact", "DesiredContain", "StateContain")
+    #[arg(long, default_value = "Exact")]
+    state_comp_matching: String,
+
     /// Replay?
     #[arg(long)]
     replay_file: Option<String>,
@@ -470,6 +474,11 @@ pub fn evm_main(args: EvmArgs) {
         replay_file: args.replay_file,
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
+        state_comp_matching: if args.state_comp_oracle.len() > 0 {
+            Some(args.state_comp_matching)
+        } else {
+            None
+        },
         state_comp_oracle: if args.state_comp_oracle.len() > 0 {
             Some(args.state_comp_oracle)
         } else {

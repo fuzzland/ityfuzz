@@ -320,7 +320,8 @@ pub fn evm_fuzzer(
 
         let oracle = Rc::new(RefCell::new(
             StateCompOracle::new(
-                evm_state
+                evm_state,
+                    config.state_comp_matching.unwrap(),
             )
         ));
         oracles.push(oracle);
