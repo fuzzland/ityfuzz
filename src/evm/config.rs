@@ -6,6 +6,7 @@ use crate::evm::oracles::erc20::IERC20OracleFlashloan;
 use crate::oracle::{Oracle, Producer};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::fs::File;
 use std::rc::Rc;
 use crate::evm::types::EVMAddress;
 
@@ -57,6 +58,8 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub replay_file: Option<String>,
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     pub selfdestruct_oracle: bool,
+    pub state_comp_oracle: Option<String>,
+    pub state_comp_matching: Option<String>,
     pub work_dir: String,
     pub write_relationship: bool,
     pub run_forever: bool,

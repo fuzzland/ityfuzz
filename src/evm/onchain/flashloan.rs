@@ -516,7 +516,7 @@ where
 }
 
 #[cfg(not(feature = "flashloan_v2"))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct FlashloanData {
     pub owed: EVMU512,
     pub earned: EVMU512,
@@ -535,7 +535,7 @@ impl FlashloanData {
 impl_serdeany!(FlashloanData);
 
 #[cfg(feature = "flashloan_v2")]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct FlashloanData {
     pub oracle_recheck_reserve: HashSet<EVMAddress>,
     pub oracle_recheck_balance: HashSet<EVMAddress>,
