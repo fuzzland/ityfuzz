@@ -198,11 +198,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
             0x01..=0x7 => { pop_push!(2, 1) },
             0x08..=0x09 => { pop_push!(3, 1) },
             0xa | 0x0b | 0x10..=0x14 => { pop_push!(2, 1); }
-            0x15 => {
-                // ISZERO
-                self.dirty_stack.pop();
-                self.dirty_stack.push(false);
-            }
+            0x15 => { pop_push!(1, 1); }
             0x16..=0x18 => { pop_push!(2, 1); }
             0x19 => { pop_push!(1, 1); }
             0x1a..=0x1d => { pop_push!(2, 1); }
