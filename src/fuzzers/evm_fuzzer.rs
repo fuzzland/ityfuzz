@@ -51,6 +51,7 @@ use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
+use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
@@ -358,6 +359,9 @@ pub fn evm_fuzzer(
                 EVAL_COVERAGE = true;
             }
 
+            let printer = Rc::new(RefCell::new(CallPrinter::new()));
+            evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
+
             let initial_vm_state = artifacts.initial_state.clone();
             for file in glob(files.as_str()).expect("Failed to read glob pattern") {
                 let mut f = File::open(file.expect("glob issue")).expect("Failed to open file");
@@ -379,6 +383,8 @@ pub fn evm_fuzzer(
                     // [is_step] [caller] [target] [input] [value]
                     let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())
                         .to_input(vm_state.clone());
+                    printer.borrow_mut().register_input(&inp);
+
                     unsafe {CALL_UNTIL = call_until;}
 
                     fuzzer
@@ -391,18 +397,18 @@ pub fn evm_fuzzer(
                         state.get_execution_result().clone().reverted
                     );
                     println!(
-                        "trace: {:?}",
-                        state.get_execution_result().clone().new_state.trace
+                        "call trace:\n{}",
+                        printer.deref().borrow().get_trace()
                     );
                     println!(
                         "output: {:?}",
                         hex::encode(state.get_execution_result().clone().output)
                     );
 
-                    println!(
-                        "new_state: {:?}",
-                        state.get_execution_result().clone().new_state.state
-                    );
+                    // println!(
+                    //     "new_state: {:?}",
+                    //     state.get_execution_result().clone().new_state.state
+                    // );
                     println!("================================================");
 
                     vm_state = state.get_execution_result().new_state.clone();

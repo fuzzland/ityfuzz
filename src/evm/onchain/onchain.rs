@@ -315,7 +315,7 @@ where
                         }
 
                         if unknown_sigs >= sigs.len() / 30 {
-                            println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", address_h160);
+                            println!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
                             let abis = fetch_abi_heimdall(contract_code_str)
                                 .iter()
                                 .map(|abi| {
