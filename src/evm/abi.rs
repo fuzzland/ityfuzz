@@ -126,6 +126,12 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn get_size(&self) -> usize;
 }
 
+impl Default for Box<dyn ABI> {
+    fn default() -> Self {
+        Box::new(AEmpty {})
+    }
+}
+
 impl Debug for dyn ABI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ABI")
@@ -150,7 +156,7 @@ where
 }
 
 /// ABI wrapper + function hash, to support serde serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BoxedABI {
     /// ABI wrapper
     #[serde(with = "serde_traitobject")]
@@ -589,7 +595,7 @@ impl ABI for A256 {
     }
 
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.data = bytes;
+        self.data = bytes[..32].to_vec();
     }
 
     fn to_string(&self) -> String {
@@ -680,10 +686,7 @@ impl ABI for ADynamic {
             self.data = Vec::new();
             return;
         }
-        println!("ADynamic set bytes: {:?}", hex::encode(bytes.clone()));
-        let length = get_size(&bytes);
-        println!("length {:?}", length);
-        self.data = bytes[32..32 + length].to_vec();
+        self.data = bytes[32..32 + get_size(&bytes)].to_vec();
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -825,117 +828,37 @@ impl ABI for AArray {
 
     // Input: packed concrete bytes produced by get_concolic
     // Set the bytes in self.data accordingly
-    fn set_bytes(&mut self, b: Vec<u8>) {
-        println!(
-            "\n\n============\n\nwill set bytes: {:?}",
-            hex::encode(b.clone())
-        );
-        let bytes;
-        let array_size = if self.dynamic_size {
-            bytes = b[32..].to_vec();
-            let array_size = get_size(&b);
+    fn set_bytes(&mut self, bytes: Vec<u8>) {
+        let base_offset = if self.dynamic_size {
+            let array_size = get_size(&bytes);
             while self.data.len() < array_size {
                 if self.data.is_empty() {
-                    self.data.push(BoxedABI::new(Box::new(AEmpty {})));
+                    self.data.push(BoxedABI::default());
                 } else {
                     self.data.push(self.data[0].clone());
                 }
             }
             self.data.truncate(array_size);
-            array_size
+            32
         } else {
-            bytes = b;
-            self.data.len()
+            0
         };
-        println!("self dynamic: {}", self.dynamic_size);
-        println!("array_size: {}", array_size);
-        println!("bytes: \n{:?}", hex::encode(bytes.clone()));
 
         let mut offset: usize = 0;
 
-        for i in 0..array_size {
-            println!("global offset: {}", offset);
-            let t = self.data[i].get_type_str();
-            println!("\ni: {}, {t}", i);
-
-            match self.data[i].get_type() {
-                T256 => {
-                    let item_offset = offset;
-                    println!("item_offset: {}", item_offset);
-                    let data = bytes[item_offset..item_offset + 32].to_vec();
-                    println!("data: {:?}", hex::encode(data.clone()));
-                    self.data[i].b.set_bytes(data);
-                    offset += 32;
-                }
-                TArray => {
-                    let is_static = self.data[i].is_static();
-                    println!("TArray is_static: {}", is_static);
-                    let aarray = self.data[i]
-                        .b
-                        .deref_mut()
-                        .as_any()
-                        .downcast_mut::<AArray>()
-                        .unwrap();
-                    let dynamic_size = aarray.dynamic_size;
-                    println!("TArray dynamic:{dynamic_size}");
-                    if dynamic_size && is_static {
-                        unreachable!();
-                        println!("case1");
-                        let item_offset = get_size(&bytes[offset..]);
-                        println!("aarray item_offset: {} * 32", item_offset / 32);
-                        let data = bytes[item_offset..].to_vec();
-                        println!("data: {:?}", hex::encode(data.clone()));
-                        self.data[i].b.set_bytes(data);
-                        offset += 32;
-                    } else if dynamic_size && !is_static {
-                        println!("case2");
-                        let item_offset = get_size(&bytes[offset..]);
-                        println!("aarray item_offset: {} * 32", item_offset / 32);
-                        let data = bytes[item_offset..].to_vec();
-                        println!("data: {:?}", hex::encode(data.clone()));
-                        self.data[i].b.set_bytes(data);
-                        offset += 32;
-                    } else if !dynamic_size && is_static {
-                        println!("case3");
-                        let item_offset = offset;
-                        println!("aarray item_offset: {} * 32", item_offset / 32);
-                        let data = bytes[item_offset..].to_vec();
-                        println!("data: {:?}", hex::encode(data.clone()));
-                        self.data[i].b.set_bytes(data);
-                        offset += self.data[i].b.get_size();
-                    } else if !dynamic_size && !is_static {
-                        println!("case4");
-                        println!("offset {offset}");
-                        println!("bytes: {:?}", hex::encode(&bytes[offset..]));
-                        let item_offset = get_size(&bytes[offset..]);
-                        println!("aarray item_offset: {} * 32", item_offset / 32);
-                        let data = bytes[item_offset..].to_vec();
-                        println!("data: {:?}", hex::encode(data.clone()));
-                        self.data[i].b.set_bytes(data);
-                        offset += 32;
-                    } else {
-                        unreachable!()
-                    };
-                }
-                TDynamic => {
-                    println!("{:?}", hex::encode(&bytes[offset..]));
-                    let item_offset = get_size(&bytes[offset..]);
-                    println!("item_offset: {}", item_offset);
-                    let size = get_size(&bytes[item_offset..]);
-                    println!("size: {}", size);
-                    // offset += 32;
-                    let data = bytes[item_offset..].to_vec();
-                    println!("data: {:?}", hex::encode(data.clone()));
-                    self.data[i].b.set_bytes(data);
-                    offset += 32;
-                }
-                TEmpty => {
-                    self.data[i].b.set_bytes(Vec::new());
-                }
+        for item in self.data.iter_mut() {
+            let (item_offset, size) = match item.get_type() {
+                T256 => (offset, 32),
+                TArray if item.is_static() => (offset, item.b.get_size()),
+                TArray | TDynamic => (get_size(&bytes[offset + base_offset..]), 32),
+                TEmpty => (0, 0),
                 TUnknown => {
-                    todo!()
+                    unreachable!()
                 }
             };
+            item.b
+                .set_bytes(bytes[item_offset + base_offset..].to_vec());
+            offset += size;
         }
     }
 
