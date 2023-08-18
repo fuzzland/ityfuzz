@@ -1,32 +1,27 @@
 /// Definition of ABI types and their encoding, decoding, mutating methods
-
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
-use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
+use crate::evm::concolic::expr::Expr;
+use crate::evm::types::{EVMAddress, EVMU256};
 use crate::generic_vm::vm_state::VMStateT;
+use crate::input::ConciseSerde;
+use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::{HasCaller, HasItyState};
-use bytes::Bytes;
 use itertools::Itertools;
+use libafl::impl_serdeany;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMetadata, Mutator, Rand};
+use libafl::prelude::{HasMetadata, Rand};
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
-use rand::random;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use libafl::impl_serdeany;
-use crate::evm::concolic::expr::Expr;
-use crate::evm::types::{EVMAddress, EVMU256};
-use crate::input::ConciseSerde;
-
-
 
 /// Mapping from known signature to function name
-static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(|| HashMap::new());
+static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(HashMap::new);
 
 /// todo: remove this
 static mut CONCOLIC_COUNTER: u64 = 0;
@@ -60,17 +55,17 @@ fn set_size(bytes: *mut u8, len: usize) {
     }
 }
 
-fn get_size(bytes: &Vec<u8>) -> usize {
+fn get_size(bytes: &[u8]) -> usize {
     let mut size: usize = 0;
-    for i in 0..32 {
+    (0..32).for_each(|i| {
         size <<= 8;
         size += bytes[i] as usize;
-    }
+    });
     size
 }
 
 /// ABI instance map from address
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ABIAddressToInstanceMap {
     /// Mapping from address to ABI instance
     pub map: HashMap<EVMAddress, Vec<BoxedABI>>,
@@ -80,26 +75,21 @@ impl_serdeany!(ABIAddressToInstanceMap);
 
 impl ABIAddressToInstanceMap {
     pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Add an ABI instance to the map
     pub fn add(&mut self, address: EVMAddress, abi: BoxedABI) {
-        if !self.map.contains_key(&address) {
-            self.map.insert(address, Vec::new());
-        }
+        self.map.entry(address).or_insert_with(Vec::new);
         self.map.get_mut(&address).unwrap().push(abi);
     }
 }
 
-pub fn register_abi_instance<S: HasMetadata>(
-    address: EVMAddress,
-    abi: BoxedABI,
-    state: &mut S
-) {
-    let mut abi_map = state.metadata_mut().get_mut::<ABIAddressToInstanceMap>().expect("ABIAddressToInstanceMap not found");
+pub fn register_abi_instance<S: HasMetadata>(address: EVMAddress, abi: BoxedABI, state: &mut S) {
+    let abi_map = state
+        .metadata_mut()
+        .get_mut::<ABIAddressToInstanceMap>()
+        .expect("ABIAddressToInstanceMap not found");
     abi_map.add(address, abi);
 }
 
@@ -136,6 +126,12 @@ pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Dese
     fn get_size(&self) -> usize;
 }
 
+impl Default for Box<dyn ABI> {
+    fn default() -> Self {
+        Box::new(AEmpty {})
+    }
+}
+
 impl Debug for dyn ABI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ABI")
@@ -160,7 +156,7 @@ where
 }
 
 /// ABI wrapper + function hash, to support serde serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BoxedABI {
     /// ABI wrapper
     #[serde(with = "serde_traitobject")]
@@ -168,6 +164,26 @@ pub struct BoxedABI {
     /// Function hash, if it is 0x00000000, it means the function hash is not set or
     /// this is to resume execution from a previous control leak
     pub function: [u8; 4],
+}
+
+impl Display for BoxedABI {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.function == [0; 4] {
+            write!(
+                f,
+                "Stepping with return: {}",
+                hex::encode(self.b.to_string())
+            )
+        } else {
+            let function_name = unsafe {
+                FUNCTION_SIG
+                    .get(&self.function)
+                    .unwrap_or(&hex::encode(self.function))
+                    .clone()
+            };
+            write!(f, "{}{}", function_name, self.b.to_string())
+        }
+    }
 }
 
 impl BoxedABI {
@@ -180,8 +196,8 @@ impl BoxedABI {
     }
 
     /// Get the args in ABI form (unencoded)
-    pub fn get(&self) -> &Box<dyn ABI> {
-        &self.b
+    pub fn get(&self) -> &dyn ABI {
+        self.b.deref()
     }
 
     /// Get the args in ABI form (unencoded) mutably
@@ -235,19 +251,19 @@ impl BoxedABI {
     }
 
     /// Convert function hash and args to string (for debugging)
-    pub fn to_string(&self) -> String {
-        if self.function == [0; 4] {
-            format!("Stepping with return: {}", hex::encode(self.b.to_string()))
-        } else {
-            let function_name = unsafe {
-                FUNCTION_SIG
-                    .get(&self.function)
-                    .unwrap_or(&hex::encode(self.function))
-                    .clone()
-            };
-            format!("{}{}", function_name, self.b.to_string())
-        }
-    }
+    // pub fn to_string(&self) -> String {
+    //     if self.function == [0; 4] {
+    //         format!("Stepping with return: {}", hex::encode(self.b.to_string()))
+    //     } else {
+    //         let function_name = unsafe {
+    //             FUNCTION_SIG
+    //                 .get(&self.function)
+    //                 .unwrap_or(&hex::encode(self.function))
+    //                 .clone()
+    //         };
+    //         format!("{}{}", function_name, self.b.to_string())
+    //     }
+    // }
 
     /// todo: remove this
     pub fn get_concolic(self) -> Vec<Box<Expr>> {
@@ -267,7 +283,6 @@ impl BoxedABI {
     }
 }
 
-
 /// Randomly sample an args with any type with size `size`
 fn sample_abi<Loc, Addr, VS, S, CI>(state: &mut S, size: usize) -> BoxedABI
 where
@@ -275,7 +290,7 @@ where
     VS: VMStateT + Default,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     // TODO(@shou): use a better sampling strategy
     if size == 32 {
@@ -342,7 +357,7 @@ impl BoxedABI {
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
     {
         self.mutate_with_vm_slots(state, None)
     }
@@ -365,7 +380,7 @@ impl BoxedABI {
         VS: VMStateT + Default,
         Loc: Clone + Debug + Serialize + DeserializeOwned,
         Addr: Clone + Debug + Serialize + DeserializeOwned,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
     {
         match self.get_type() {
             // no need to mutate empty args
@@ -431,7 +446,7 @@ impl BoxedABI {
                         }
                         91..=100 => {
                             // decrease size
-                            if aarray.data.len() < 1 {
+                            if aarray.data.is_empty() {
                                 return MutationResult::Skipped;
                             }
                             let index: usize = state.rand_mut().next() as usize % data_len;
@@ -455,19 +470,15 @@ impl BoxedABI {
                     .as_any()
                     .downcast_mut::<AUnknown>()
                     .unwrap();
-                unsafe {
-                    if a_unknown.size == 0 {
-                        a_unknown.concrete = BoxedABI::new(Box::new(AEmpty {}));
-                        return MutationResult::Skipped;
-                    }
-                    if (state.rand_mut().below(100)) < 80 {
-                        a_unknown
-                            .concrete
-                            .mutate_with_vm_slots(state, vm_slots)
-                    } else {
-                        a_unknown.concrete = sample_abi(state, a_unknown.size);
-                        MutationResult::Mutated
-                    }
+                if a_unknown.size == 0 {
+                    a_unknown.concrete = BoxedABI::new(Box::new(AEmpty {}));
+                    return MutationResult::Skipped;
+                }
+                if (state.rand_mut().below(100)) < 80 {
+                    a_unknown.concrete.mutate_with_vm_slots(state, vm_slots)
+                } else {
+                    a_unknown.concrete = sample_abi(state, a_unknown.size);
+                    MutationResult::Mutated
                 }
             }
         }
@@ -504,7 +515,7 @@ impl ABI for AEmpty {
     }
 
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        assert!(bytes.len() == 0);
+        assert!(bytes.is_empty());
     }
 
     fn to_string(&self) -> String {
@@ -584,7 +595,7 @@ impl ABI for A256 {
     }
 
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.data = bytes;
+        self.data = bytes[..32].to_vec();
     }
 
     fn to_string(&self) -> String {
@@ -592,7 +603,7 @@ impl ABI for A256 {
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
-        let mut bytes = vec![Expr::const_byte(0 as u8); 32];
+        let mut bytes = vec![Expr::const_byte(0u8); 32];
         let data_len = self.data.len();
         unsafe {
             let counter = CONCOLIC_COUNTER;
@@ -611,7 +622,6 @@ impl ABI for A256 {
         32
     }
 }
-
 
 /// [`ADynamic`] is used to represent dynamic args
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -672,12 +682,16 @@ impl ABI for ADynamic {
     }
 
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.data = bytes;
+        if bytes.is_empty() {
+            self.data = Vec::new();
+            return;
+        }
+        self.data = bytes[32..32 + get_size(&bytes)].to_vec();
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
         let new_len: usize = roundup(self.data.len(), self.multiplier);
-        let mut bytes = vec![Expr::const_byte(0 as u8); new_len + 32];
+        let mut bytes = vec![Expr::const_byte(0u8); new_len + 32];
         unsafe {
             let counter = CONCOLIC_COUNTER;
             CONCOLIC_COUNTER += 1;
@@ -702,7 +716,6 @@ impl ABI for ADynamic {
     }
 }
 
-
 /// [`AArray`] is used to represent array or tuple
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AArray {
@@ -717,7 +730,6 @@ impl Input for AArray {
         format!("AArray_{}", idx)
     }
 }
-
 
 fn set_size_concolic(bytes: *mut Box<Expr>, len: usize) {
     let mut rem: usize = len;
@@ -762,13 +774,13 @@ impl ABI for AArray {
         tails_offset.push(0);
         let mut head_data_size: usize = 0;
         let mut tail_data_size: usize = 0;
-        if tail_data.len() > 0 {
-            for i in 0..tail_data.len() - 1 {
+        if !tail_data.is_empty() {
+            (0..tail_data.len() - 1).for_each(|i| {
                 content_size += tail_data[i].len();
                 tails_offset.push(content_size);
-            }
+            });
             for i in 0..tails_offset.len() {
-                if head[i].len() == 0 {
+                if head[i].is_empty() {
                     head_data.push(vec![0; 32]);
                     head_data_size += 32;
                     set_size(head_data[i].as_mut_ptr(), tails_offset[i] + head_size);
@@ -817,55 +829,36 @@ impl ABI for AArray {
     // Input: packed concrete bytes produced by get_concolic
     // Set the bytes in self.data accordingly
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        // TODO: here we need to able to perform
-        // the inverse of get_bytes
-
-        if self.dynamic_size {
-            // to usize
-            let size: usize = bytes[0..32]
-                .iter()
-                .fold(0, |acc, x| (acc << 8) + *x as usize);
-            if size != self.data.len() {
-                unreachable!("Array size mismatch");
-            }
-        }
-
-        let mut offset = if self.dynamic_size { 32 } else { 0 };
-        //let mut heads_offset: Vec<usize> = Vec::new();
-        let mut tails_offset: Vec<usize> = Vec::new();
-        let mut head_size: usize = offset;
-        let mut index = 0;
-
-        // get old data size
-        for i in 0..self.data.len() {
-            if !self.data[i].is_static() {
-                let tail_offset = get_size(&bytes[head_size..head_size + 32].to_vec());
-                tails_offset.push(tail_offset);
-                head_size += 32;
-            }
-        }
-
-        for mut item in self.data.iter_mut() {
-            if item.is_static() {
-                let len = item.b.get_size();
-                let mut new_bytes = vec![0; len];
-                new_bytes.copy_from_slice(&bytes[offset..offset + len]);
-                //println!("static {} set: {}", item.get_type_str(), hex::encode(new_bytes.clone()));
-                item.b.set_bytes(new_bytes);
-                offset += len;
-            } else {
-                let tail_offset = tails_offset[index]+offset;
-                let tail_size = if index == tails_offset.len() - 1 {
-                    bytes.len() - tail_offset
+        let base_offset = if self.dynamic_size {
+            let array_size = get_size(&bytes);
+            while self.data.len() < array_size {
+                if self.data.is_empty() {
+                    self.data.push(BoxedABI::default());
                 } else {
-                    tails_offset[index + 1] - tail_offset+offset
-                };
-                index += 1;
-                let mut new_bytes = vec![0; tail_size];
-                new_bytes.copy_from_slice(&bytes[tail_offset..tail_offset+tail_size]);
-                //println!("dynamic {} set: {}", item.get_type_str(), hex::encode(new_bytes.clone()));
-                item.b.set_bytes(new_bytes);
+                    self.data.push(self.data[0].clone());
+                }
             }
+            self.data.truncate(array_size);
+            32
+        } else {
+            0
+        };
+
+        let mut offset: usize = 0;
+
+        for item in self.data.iter_mut() {
+            let (item_offset, size) = match item.get_type() {
+                T256 => (offset, 32),
+                TArray if item.is_static() => (offset, item.b.get_size()),
+                TArray | TDynamic => (get_size(&bytes[offset + base_offset..]), 32),
+                TEmpty => (0, 0),
+                TUnknown => {
+                    unreachable!()
+                }
+            };
+            item.b
+                .set_bytes(bytes[item_offset + base_offset..].to_vec());
+            offset += size;
         }
     }
 
@@ -892,13 +885,13 @@ impl ABI for AArray {
         tails_offset.push(0);
         let mut head_data_size: usize = 0;
         let mut tail_data_size: usize = 0;
-        if tail_data.len() > 0 {
-            for i in 0..tail_data.len() - 1 {
+        if !tail_data.is_empty() {
+            (0..tail_data.len() - 1).for_each(|i| {
                 content_size += tail_data[i].len();
                 tails_offset.push(content_size);
-            }
+            });
             for i in 0..tails_offset.len() {
-                if head[i].len() == 0 {
+                if head[i].is_empty() {
                     head_data.push(vec![0; 32]);
                     head_data_size += 32;
                     set_size(head_data[i].as_mut_ptr(), tails_offset[i] + head_size);
@@ -946,8 +939,8 @@ impl ABI for AArray {
             }
             offset += head_data[i].len();
         }
-        for i in 0..tail_data.len() {
-            if tail_data[i].len() > 0 {
+        (0..tail_data.len()).for_each(|i| {
+            if !tail_data[i].is_empty() {
                 unsafe {
                     let counter = CONCOLIC_COUNTER;
 
@@ -964,7 +957,7 @@ impl ABI for AArray {
                 }
                 offset += tail_data[i].len();
             }
-        }
+        });
         bytes
     }
 
@@ -1028,7 +1021,7 @@ impl ABI for AUnknown {
 }
 
 /// Create a [`BoxedABI`] with default arg given the ABI type in string
-pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
+pub fn get_abi_type_boxed(abi_name: &str) -> BoxedABI {
     return BoxedABI {
         b: get_abi_type(abi_name, &None),
         function: [0; 4],
@@ -1037,7 +1030,7 @@ pub fn get_abi_type_boxed(abi_name: &String) -> BoxedABI {
 
 /// Create a [`BoxedABI`] with default arg given the ABI type in string and address
 /// todo: remove this function
-pub fn get_abi_type_boxed_with_address(abi_name: &String, address: Vec<u8>) -> BoxedABI {
+pub fn get_abi_type_boxed_with_address(abi_name: &str, address: Vec<u8>) -> BoxedABI {
     return BoxedABI {
         b: get_abi_type(abi_name, &Some(address)),
         function: [0; 4],
@@ -1074,7 +1067,6 @@ pub fn split_with_parenthesis(s: &str) -> Vec<String> {
     result
 }
 
-
 /// Get the arg with default value given the ABI type in string
 ///
 /// # Example
@@ -1083,13 +1075,13 @@ pub fn split_with_parenthesis(s: &str) -> Vec<String> {
 /// let result = get_abi_type(&"uint256".to_string(), &None);
 /// // result is a A256 with default value 0
 /// ```
-pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
-    let abi_name_str = abi_name.as_str();
+pub fn get_abi_type(abi_name: &str, with_address: &Option<Vec<u8>>) -> Box<dyn ABI> {
+    let abi_name_str = abi_name;
     // tuple
     if abi_name_str == "()" {
         return Box::new(AEmpty {});
     }
-    if abi_name_str.starts_with("(") && abi_name_str.ends_with(")") {
+    if abi_name_str.starts_with('(') && abi_name_str.ends_with(')') {
         return Box::new(AArray {
             data: split_with_parenthesis(&abi_name_str[1..abi_name_str.len() - 1])
                 .iter()
@@ -1105,17 +1097,14 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
         return Box::new(AArray {
             data: vec![
                 BoxedABI {
-                    b: get_abi_type(
-                        &abi_name[..abi_name_str.len() - 2].to_string(),
-                        with_address
-                    ),
+                    b: get_abi_type(&abi_name[..abi_name_str.len() - 2], with_address),
                     function: [0; 4]
                 };
                 1
             ],
             dynamic_size: true,
         });
-    } else if abi_name_str.ends_with("]") && abi_name_str.contains("[") {
+    } else if abi_name_str.ends_with(']') && abi_name_str.contains('[') {
         let split = abi_name_str.rsplit_once('[').unwrap();
         let name = split.0;
         let len = split
@@ -1136,7 +1125,7 @@ pub fn get_abi_type(abi_name: &String, with_address: &Option<Vec<u8>>) -> Box<dy
             dynamic_size: false,
         });
     }
-    get_abi_type_basic(abi_name.as_str(), 32, with_address)
+    get_abi_type_basic(abi_name, 32, with_address)
 }
 
 /// Get the arg with default value given the ABI type in string.
@@ -1171,12 +1160,12 @@ fn get_abi_type_basic(
             multiplier: 32,
         }),
         _ => {
-            if abi_name.starts_with("uint") {
-                let len = abi_name[4..].parse::<usize>().unwrap();
+            if let Some(stripped) = abi_name.strip_prefix("uint") {
+                let len = stripped.parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
                 return get_abi_type_basic("uint", len / 8, with_address);
-            } else if abi_name.starts_with("int") {
-                let len = abi_name[3..].parse::<usize>().unwrap();
+            } else if let Some(stripped) = abi_name.strip_prefix("int") {
+                let len = stripped.parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
                 return get_abi_type_basic("int", len / 8, with_address);
             } else if abi_name == "unknown" {
@@ -1187,15 +1176,14 @@ fn get_abi_type_basic(
                     },
                     size: 1,
                 });
-            } else if abi_name.starts_with("bytes") {
-                let len = abi_name[5..].parse::<usize>().unwrap();
+            } else if let Some(stripped) = abi_name.strip_prefix("bytes") {
+                let len = stripped.parse::<usize>().unwrap();
                 return Box::new(A256 {
                     data: vec![0; len],
                     is_address: false,
                     dont_mutate: false,
                 });
-                
-            } else if abi_name.len() == 0 {
+            } else if abi_name.is_empty() {
                 return Box::new(AEmpty {});
             } else {
                 panic!("unknown abi type {}", abi_name);
@@ -1204,19 +1192,23 @@ fn get_abi_type_basic(
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::evm::input::ConciseEVMInput;
     use crate::evm::types::EVMFuzzState;
     use crate::evm::vm::EVMState;
     use crate::state::FuzzState;
     use hex;
-    use crate::evm::input::ConciseEVMInput;
 
     #[test]
     fn test_int() {
         let mut abi = get_abi_type_boxed(&String::from("int8"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1228,7 +1220,10 @@ mod tests {
     fn test_int256() {
         let mut abi = get_abi_type_boxed(&String::from("int256"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1240,7 +1235,10 @@ mod tests {
     fn test_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("string"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         println!(
             "result: {:?} abi: {:?}",
             mutation_result,
@@ -1252,7 +1250,10 @@ mod tests {
     fn test_tuple_static() {
         let mut abi = get_abi_type_boxed(&String::from("(uint256,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1266,7 +1267,10 @@ mod tests {
     fn test_tuple_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("(string)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1280,7 +1284,10 @@ mod tests {
     fn test_tuple_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("(string,uint256)"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1294,7 +1301,10 @@ mod tests {
     fn test_array_static() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1308,7 +1318,10 @@ mod tests {
     fn test_array_dynamic() {
         let mut abi = get_abi_type_boxed(&String::from("bytes[2]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1322,7 +1335,10 @@ mod tests {
     fn test_array_mixed() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[2][3]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1336,7 +1352,10 @@ mod tests {
     fn test_array_dyn() {
         let mut abi = get_abi_type_boxed(&String::from("uint256[][]"));
         let mut test_state = FuzzState::new(0);
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1351,7 +1370,10 @@ mod tests {
         let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
         let mut test_state = FuzzState::new(0);
         test_state.addresses_pool.push(EVMAddress::zero());
-        let mutation_result = abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
         println!(
@@ -1359,5 +1381,40 @@ mod tests {
             mutation_result,
             hex::encode(abibytes)
         );
+    }
+
+    #[test]
+    fn test_complex() {
+        let mut abi = get_abi_type_boxed(&String::from("((bytes[3],uint256)[],string)[]"));
+
+        let mut test_state = FuzzState::new(0);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
+        let abibytes = abi.get_bytes();
+
+        println!("abibytes: {:?}", hex::encode(abibytes.clone()));
+
+        abi.set_bytes(abibytes.clone());
+
+        let newbytes = abi.get_bytes();
+        if newbytes != abibytes {
+            println!("oldbytes: {:?}", hex::encode(abibytes));
+            println!("newbytes: {:?}", hex::encode(newbytes));
+            panic!("bytes mismatch");
+        }
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abibytes)
+        );
+    }
+
+    #[test]
+    fn test_100_times() {
+        for _ in 0..100 {
+            test_complex();
+        }
     }
 }
