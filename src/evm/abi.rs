@@ -676,7 +676,14 @@ impl ABI for ADynamic {
     }
 
     fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.data = bytes;
+        if bytes.is_empty() {
+            self.data = Vec::new();
+            return;
+        }
+        println!("ADynamic set bytes: {:?}", hex::encode(bytes.clone()));
+        let length = get_size(&bytes);
+        println!("length {:?}", length);
+        self.data = bytes[32..32 + length].to_vec();
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -818,56 +825,117 @@ impl ABI for AArray {
 
     // Input: packed concrete bytes produced by get_concolic
     // Set the bytes in self.data accordingly
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
-        // TODO: here we need to able to perform
-        // the inverse of get_bytes
-
-        if self.dynamic_size {
-            // to usize
-            let size: usize = bytes[0..32]
-                .iter()
-                .fold(0, |acc, x| (acc << 8) + *x as usize);
-            if size != self.data.len() {
-                unreachable!("Array size mismatch");
-            }
-        }
-
-        let mut offset = if self.dynamic_size { 32 } else { 0 };
-        //let mut heads_offset: Vec<usize> = Vec::new();
-        let mut tails_offset: Vec<usize> = Vec::new();
-        let mut head_size: usize = offset;
-        let mut index = 0;
-
-        // get old data size
-        for i in 0..self.data.len() {
-            if !self.data[i].is_static() {
-                let tail_offset = get_size(&bytes[head_size..head_size + 32]);
-                tails_offset.push(tail_offset);
-                head_size += 32;
-            }
-        }
-
-        for item in self.data.iter_mut() {
-            if item.is_static() {
-                let len = item.b.get_size();
-                let mut new_bytes = vec![0; len];
-                new_bytes.copy_from_slice(&bytes[offset..offset + len]);
-                //println!("static {} set: {}", item.get_type_str(), hex::encode(new_bytes.clone()));
-                item.b.set_bytes(new_bytes);
-                offset += len;
-            } else {
-                let tail_offset = tails_offset[index] + offset;
-                let tail_size = if index == tails_offset.len() - 1 {
-                    bytes.len() - tail_offset
+    fn set_bytes(&mut self, b: Vec<u8>) {
+        println!(
+            "\n\n============\n\nwill set bytes: {:?}",
+            hex::encode(b.clone())
+        );
+        let bytes;
+        let array_size = if self.dynamic_size {
+            bytes = b[32..].to_vec();
+            let array_size = get_size(&b);
+            while self.data.len() < array_size {
+                if self.data.is_empty() {
+                    self.data.push(BoxedABI::new(Box::new(AEmpty {})));
                 } else {
-                    tails_offset[index + 1] - tail_offset + offset
-                };
-                index += 1;
-                let mut new_bytes = vec![0; tail_size];
-                new_bytes.copy_from_slice(&bytes[tail_offset..tail_offset + tail_size]);
-                //println!("dynamic {} set: {}", item.get_type_str(), hex::encode(new_bytes.clone()));
-                item.b.set_bytes(new_bytes);
+                    self.data.push(self.data[0].clone());
+                }
             }
+            self.data.truncate(array_size);
+            array_size
+        } else {
+            bytes = b;
+            self.data.len()
+        };
+        println!("self dynamic: {}", self.dynamic_size);
+        println!("array_size: {}", array_size);
+        println!("bytes: \n{:?}", hex::encode(bytes.clone()));
+
+        let mut offset: usize = 0;
+
+        for i in 0..array_size {
+            println!("global offset: {}", offset);
+            let t = self.data[i].get_type_str();
+            println!("\ni: {}, {t}", i);
+
+            match self.data[i].get_type() {
+                T256 => {
+                    let item_offset = offset;
+                    println!("item_offset: {}", item_offset);
+                    let data = bytes[item_offset..item_offset + 32].to_vec();
+                    println!("data: {:?}", hex::encode(data.clone()));
+                    self.data[i].b.set_bytes(data);
+                    offset += 32;
+                }
+                TArray => {
+                    let is_static = self.data[i].is_static();
+                    println!("TArray is_static: {}", is_static);
+                    let aarray = self.data[i]
+                        .b
+                        .deref_mut()
+                        .as_any()
+                        .downcast_mut::<AArray>()
+                        .unwrap();
+                    let dynamic_size = aarray.dynamic_size;
+                    println!("TArray dynamic:{dynamic_size}");
+                    if dynamic_size && is_static {
+                        unreachable!();
+                        println!("case1");
+                        let item_offset = get_size(&bytes[offset..]);
+                        println!("aarray item_offset: {} * 32", item_offset / 32);
+                        let data = bytes[item_offset..].to_vec();
+                        println!("data: {:?}", hex::encode(data.clone()));
+                        self.data[i].b.set_bytes(data);
+                        offset += 32;
+                    } else if dynamic_size && !is_static {
+                        println!("case2");
+                        let item_offset = get_size(&bytes[offset..]);
+                        println!("aarray item_offset: {} * 32", item_offset / 32);
+                        let data = bytes[item_offset..].to_vec();
+                        println!("data: {:?}", hex::encode(data.clone()));
+                        self.data[i].b.set_bytes(data);
+                        offset += 32;
+                    } else if !dynamic_size && is_static {
+                        println!("case3");
+                        let item_offset = offset;
+                        println!("aarray item_offset: {} * 32", item_offset / 32);
+                        let data = bytes[item_offset..].to_vec();
+                        println!("data: {:?}", hex::encode(data.clone()));
+                        self.data[i].b.set_bytes(data);
+                        offset += self.data[i].b.get_size();
+                    } else if !dynamic_size && !is_static {
+                        println!("case4");
+                        println!("offset {offset}");
+                        println!("bytes: {:?}", hex::encode(&bytes[offset..]));
+                        let item_offset = get_size(&bytes[offset..]);
+                        println!("aarray item_offset: {} * 32", item_offset / 32);
+                        let data = bytes[item_offset..].to_vec();
+                        println!("data: {:?}", hex::encode(data.clone()));
+                        self.data[i].b.set_bytes(data);
+                        offset += 32;
+                    } else {
+                        unreachable!()
+                    };
+                }
+                TDynamic => {
+                    println!("{:?}", hex::encode(&bytes[offset..]));
+                    let item_offset = get_size(&bytes[offset..]);
+                    println!("item_offset: {}", item_offset);
+                    let size = get_size(&bytes[item_offset..]);
+                    println!("size: {}", size);
+                    // offset += 32;
+                    let data = bytes[item_offset..].to_vec();
+                    println!("data: {:?}", hex::encode(data.clone()));
+                    self.data[i].b.set_bytes(data);
+                    offset += 32;
+                }
+                TEmpty => {
+                    self.data[i].b.set_bytes(Vec::new());
+                }
+                TUnknown => {
+                    todo!()
+                }
+            };
         }
     }
 
@@ -1390,5 +1458,40 @@ mod tests {
             mutation_result,
             hex::encode(abibytes)
         );
+    }
+
+    #[test]
+    fn test_complex() {
+        let mut abi = get_abi_type_boxed(&String::from("((bytes[3],uint256)[],string)[]"));
+
+        let mut test_state = FuzzState::new(0);
+        let mutation_result = abi
+            .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
+                &mut test_state,
+            );
+        let abibytes = abi.get_bytes();
+
+        println!("abibytes: {:?}", hex::encode(abibytes.clone()));
+
+        abi.set_bytes(abibytes.clone());
+
+        let newbytes = abi.get_bytes();
+        if newbytes != abibytes {
+            println!("oldbytes: {:?}", hex::encode(abibytes));
+            println!("newbytes: {:?}", hex::encode(newbytes));
+            panic!("bytes mismatch");
+        }
+        println!(
+            "result: {:?} abi: {:?}",
+            mutation_result,
+            hex::encode(abibytes)
+        );
+    }
+
+    #[test]
+    fn test_100_times() {
+        for _ in 0..100 {
+            test_complex();
+        }
     }
 }
