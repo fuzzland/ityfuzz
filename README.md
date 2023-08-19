@@ -101,9 +101,12 @@ Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s)
 
 ```bash
 # build contracts in tests/evm/verilog-2/
-solc *.sol -o . --bin --abi --overwrite --base-path ../../
-# run fuzzer
-./target/release/cli evm -f -t "./tests/evm/verilog-2/*"
+solc *.sol -o . --bin --abi --overwrite --base-path ../../../
+# after building, there should be a binary in ./cli/target/release/cli
+
+# run fuzzer 
+cd ./cli/
+./target/release/cli evm -f -t "../tests/evm/verilog-2/*"
 ```
 
 `-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
