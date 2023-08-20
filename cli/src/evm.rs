@@ -1,16 +1,11 @@
 use clap::Parser;
 use ethers::types::Transaction;
-use hex::{decode, encode};
 use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
-use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
-use ityfuzz::evm::host::PANIC_ON_BUG;
+use ityfuzz::evm::contract_utils::ContractLoader;
 use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
-use ityfuzz::evm::middlewares::middleware::Middleware;
 use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
-use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracles::echidna::EchidnaOracle;
+use ityfuzz::evm::onchain::flashloan::DummyPriceOracle;
 use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
-use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
 use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
 use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
 use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
@@ -20,21 +15,18 @@ use ityfuzz::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use ityfuzz::evm::vm::EVMState;
 use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
 use ityfuzz::oracle::{Oracle, Producer};
-use ityfuzz::r#const;
 use ityfuzz::state::FuzzState;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
 
-    if input.len() == 0 {
+    if input.is_empty() {
         return map;
     }
 
@@ -50,6 +42,7 @@ pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<Strin
     map
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct Data {
     body: RPCCall,
@@ -62,29 +55,32 @@ struct RPCCall {
     params: Option<serde_json::Value>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct Response {
     data: ResponseData,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ResponseData {
     id: u16,
     result: TXResult,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct TXResult {
     input: String,
 }
 
 /// CLI for ItyFuzz for EVM smart contracts
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(author, version, about, long_about = None)]
 pub struct EvmArgs {
     /// Glob pattern / address to find contracts
     #[arg(short, long)]
-    target: String,
+    pub(crate) target: String,
 
     #[arg(long, default_value = "false")]
     fetch_tx_data: bool,
@@ -226,7 +222,6 @@ pub struct EvmArgs {
     ///spec id
     #[arg(long, default_value = "Latest")]
     spec_id: String,
-
 }
 
 enum EVMTargetType {
@@ -288,7 +283,7 @@ pub fn evm_main(args: EvmArgs) {
     let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new({
+    let flashloan_oracle = Rc::new(RefCell::new({
         IERC20OracleFlashloan::new(pair_producer.clone(), erc20_producer.clone())
     }));
 
@@ -297,7 +292,7 @@ pub fn evm_main(args: EvmArgs) {
     // set_hash(harness_code, &mut harness_hash);
     // let mut function_oracle =
     //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(), Vec::from(harness_hash));
-
+    #[allow(clippy::type_complexity)]
     let mut oracles: Vec<
         Rc<
             RefCell<
@@ -311,12 +306,13 @@ pub fn evm_main(args: EvmArgs) {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
-                    ConciseEVMInput
+                    ConciseEVMInput,
                 >,
             >,
         >,
     > = vec![];
 
+    #[allow(clippy::type_complexity)]
     let mut producers: Vec<
         Rc<
             RefCell<
@@ -330,7 +326,7 @@ pub fn evm_main(args: EvmArgs) {
                     Vec<u8>,
                     EVMInput,
                     EVMFuzzState,
-                    ConciseEVMInput
+                    ConciseEVMInput,
                 >,
             >,
         >,
@@ -352,7 +348,6 @@ pub fn evm_main(args: EvmArgs) {
 
     if args.typed_bug_oracle {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
-
     }
 
     if args.ierc20_oracle || args.pair_oracle {
@@ -386,8 +381,8 @@ pub fn evm_main(args: EvmArgs) {
 
             let data = params[0].clone();
 
-            let data = if data.starts_with("0x") {
-                &data[2..]
+            let data = if let Some(stripped) = data.strip_prefix("0x") {
+                stripped
             } else {
                 &data
             };
@@ -407,14 +402,12 @@ pub fn evm_main(args: EvmArgs) {
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_loader: match target_type {
-            EVMTargetType::Glob => {
-                ContractLoader::from_glob(
-                    args.target.as_str(),
-                    &mut state,
-                    &proxy_deploy_codes,
-                    &constructor_args_map,
-                )
-            }
+            EVMTargetType::Glob => ContractLoader::from_glob(
+                args.target.as_str(),
+                &mut state,
+                &proxy_deploy_codes,
+                &constructor_args_map,
+            ),
             EVMTargetType::Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
@@ -425,29 +418,32 @@ pub fn evm_main(args: EvmArgs) {
                     const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
                     const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
                     if "bsc" == onchain.as_ref().unwrap().chain_name {
-                        if args_target.find(BSC_ADDRESS) == None {
-                            args_target.push_str(",");
+                        if !args_target.contains(BSC_ADDRESS) {
+                            args_target.push(',');
                             args_target.push_str(BSC_ADDRESS);
                         }
-                    } else if "eth" == onchain.as_ref().unwrap().chain_name {
-                        if args_target.find(ETH_ADDRESS) == None {
-                            args_target.push_str(",");
-                            args_target.push_str(ETH_ADDRESS);
-                        }
+                    } else if "eth" == onchain.as_ref().unwrap().chain_name
+                        && !args_target.contains(ETH_ADDRESS)
+                    {
+                        args_target.push(',');
+                        args_target.push_str(ETH_ADDRESS);
                     }
                 }
                 let addresses: Vec<EVMAddress> = args_target
-                    .split(",")
+                    .split(',')
                     .map(|s| EVMAddress::from_str(s).unwrap())
                     .collect();
                 ContractLoader::from_address(
-                    &mut onchain.as_mut().unwrap(),
+                    onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
                 )
             }
         },
-        only_fuzz: if args.only_fuzz.len() > 0 {
-            args.only_fuzz.split(",").map(|s| EVMAddress::from_str(s).expect("failed to parse only fuzz")).collect()
+        only_fuzz: if !args.only_fuzz.is_empty() {
+            args.only_fuzz
+                .split(',')
+                .map(|s| EVMAddress::from_str(s).expect("failed to parse only fuzz"))
+                .collect()
         } else {
             HashSet::new()
         },
@@ -474,12 +470,12 @@ pub fn evm_main(args: EvmArgs) {
         replay_file: args.replay_file,
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
-        state_comp_matching: if args.state_comp_oracle.len() > 0 {
+        state_comp_matching: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_matching)
         } else {
             None
         },
-        state_comp_oracle: if args.state_comp_oracle.len() > 0 {
+        state_comp_oracle: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_oracle)
         } else {
             None
@@ -494,10 +490,8 @@ pub fn evm_main(args: EvmArgs) {
         spec_id: args.spec_id,
     };
 
-    match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
-        // FuzzerTypes::BASIC => basic_fuzzer(config)
-        _ => {}
+    if let FuzzerTypes::CMP = config.fuzzer_type {
+        evm_fuzzer(config, &mut state)
     }
     //
     //     Some(v) => {

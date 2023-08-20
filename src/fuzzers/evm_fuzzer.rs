@@ -6,48 +6,38 @@ use std::io::Read;
 use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
+use glob::glob;
+use itertools::Itertools;
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{HasMetadata, ShMemProvider};
+use libafl::prelude::HasMetadata;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
-use libafl::stages::{CalibrationStage, StdMutationalStage};
+use libafl::stages::StdMutationalStage;
 use libafl::{
     prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
-use glob::glob;
-use itertools::Itertools;
 
-use crate::evm::host::{ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS};
-use crate::evm::host::{CALL_UNTIL};
+use crate::evm::host::CALL_UNTIL;
+use crate::evm::host::{
+    ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS,
+};
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasCaller, HasExecutionResult};
-use crate::state_input::StagedVMState;
+use crate::state::HasExecutionResult;
 
 use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 
-use crate::evm::mutator::{AccessPattern, FuzzMutator};
-use crate::evm::onchain::flashloan::Flashloan;
-use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
-use crate::evm::onchain::selfdestruct::{Selfdestruct};
-use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
-use primitive_types::{H160, U256};
-use revm_primitives::{BlockEnv, Bytecode, Env};
-use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
-use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
@@ -55,24 +45,32 @@ use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::mutator::FuzzMutator;
+use crate::evm::onchain::flashloan::Flashloan;
+use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
+use crate::evm::onchain::selfdestruct::Selfdestruct;
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
+use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256};
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
-use crate::input::{ConciseSerde, VMInputT};
-
-struct ABIConfig {
-    abi: String,
-    function: [u8; 4],
-}
-
-struct ContractInfo {
-    name: String,
-    abi: Vec<ABIConfig>,
-}
+use crate::input::ConciseSerde;
+use revm_primitives::Bytecode;
 
 pub fn evm_fuzzer(
-    config: Config<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>, state: &mut EVMFuzzState
+    config: Config<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+    >,
+    state: &mut EVMFuzzState,
 ) {
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -100,11 +98,11 @@ pub fn evm_fuzzer(
         let mid = Rc::new(RefCell::new(
             Selfdestruct::<EVMState, EVMInput, EVMFuzzState>::new(),
         ));
-        fuzz_host.add_middlewares(mid.clone());
+        fuzz_host.add_middlewares(mid);
         // Selfdestruct end
     }
 
-    let onchain_middleware = match config.onchain.clone() {
+    let _onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
                 let mid = Rc::new(RefCell::new(
@@ -147,7 +145,7 @@ pub fn evm_fuzzer(
         PANIC_ON_BUG = config.panic_on_bug;
     }
 
-    if config.only_fuzz.len() > 0 {
+    if !config.only_fuzz.is_empty() {
         unsafe {
             WHITELIST_ADDR = Some(config.only_fuzz);
         }
@@ -201,7 +199,7 @@ pub fn evm_fuzzer(
         &mut scheduler,
         &infant_scheduler,
         state,
-        config.work_dir.clone()
+        config.work_dir.clone(),
     );
 
     #[cfg(feature = "use_presets")]
@@ -210,11 +208,12 @@ pub fn evm_fuzzer(
     let mut artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     let mut instance_map = ABIAddressToInstanceMap::new();
-    artifacts.address_to_abi_object.iter().for_each(
-        |(addr, abi)| {
-            instance_map.map.insert(addr.clone(), abi.clone());
-        }
-    );
+    artifacts
+        .address_to_abi_object
+        .iter()
+        .for_each(|(addr, abi)| {
+            instance_map.map.insert(*addr, abi.clone());
+        });
 
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
@@ -224,9 +223,7 @@ pub fn evm_fuzzer(
 
     evm_executor.host.add_middlewares(cov_middleware.clone());
 
-    state.add_metadata(
-        instance_map
-    );
+    state.add_metadata(instance_map);
 
     evm_executor.host.initialize(state);
 
@@ -234,41 +231,32 @@ pub fn evm_fuzzer(
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
 
-
     for (addr, bytecode) in &mut artifacts.address_to_bytecode {
         unsafe {
             cov_middleware.deref().borrow_mut().on_insert(
                 bytecode,
                 *addr,
                 &mut evm_executor_ref.deref().borrow_mut().host,
-                state
+                state,
             );
         }
     }
 
-
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
-    feedback
-        .init_state(state)
-        .expect("Failed to init state");
+    feedback.init_state(state).expect("Failed to init state");
     // let calibration = CalibrationStage::new(&feedback);
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
-        evm_executor_ref.clone()
+        evm_executor_ref.clone(),
     );
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 
     let std_stage = StdMutationalStage::new(mutator);
 
-    let coverage_obs_stage = CoverageStage::new(
-        evm_executor_ref.clone(),
-        cov_middleware.clone(),
-    );
+    let coverage_obs_stage = CoverageStage::new(evm_executor_ref.clone(), cov_middleware.clone());
 
     let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
-
-
 
     let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
@@ -281,53 +269,45 @@ pub fn evm_fuzzer(
 
     if config.echidna_oracle {
         let echidna_oracle = EchidnaOracle::new(
-            artifacts.address_to_abi.iter()
-                .map(
-                    |(address, abis)| {
-                        abis.iter().filter(
-                            |abi| {
-                                abi.function_name.starts_with("echidna_")
-                                    && abi.abi == "()"
-                            }
-                        ).map(
-                            |abi| (address.clone(), abi.function.to_vec())
-                        ).collect_vec()
-                    }
-                ).flatten().collect_vec(),
-
-            artifacts.address_to_abi.iter()
-                .map(
-                    |(address, abis)| {
-                        abis.iter().filter(
-                            |abi| {
-                                abi.function_name.starts_with("echidna_")
-                                    && abi.abi == "()"
-                            }
-                        ).map(
-                            |abi| (abi.function.to_vec(), abi.function_name.clone())
-                        ).collect_vec()
-                    }
-                ).flatten().collect::<HashMap<Vec<u8>, String>>(),
+            artifacts
+                .address_to_abi
+                .iter()
+                .flat_map(|(address, abis)| {
+                    abis.iter()
+                        .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
+                        .map(|abi| (*address, abi.function.to_vec()))
+                        .collect_vec()
+                })
+                .collect_vec(),
+            artifacts
+                .address_to_abi
+                .iter()
+                .flat_map(|(_address, abis)| {
+                    abis.iter()
+                        .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
+                        .map(|abi| (abi.function.to_vec(), abi.function_name.clone()))
+                        .collect_vec()
+                })
+                .collect::<HashMap<Vec<u8>, String>>(),
         );
         oracles.push(Rc::new(RefCell::new(echidna_oracle)));
     }
 
     if let Some(path) = config.state_comp_oracle {
-        let mut file = File::open(path.clone()).expect("Failed to open state comp oracle file");
+        let mut file = File::open(path).expect("Failed to open state comp oracle file");
         let mut buf = String::new();
-        file.read_to_string(&mut buf).expect("Failed to read state comp oracle file");
+        file.read_to_string(&mut buf)
+            .expect("Failed to read state comp oracle file");
 
-        let evm_state = serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state comp oracle file");
+        let evm_state = serde_json::from_str::<EVMState>(buf.as_str())
+            .expect("Failed to parse state comp oracle file");
 
-        let oracle = Rc::new(RefCell::new(
-            StateCompOracle::new(
-                evm_state,
-                    config.state_comp_matching.unwrap(),
-            )
-        ));
+        let oracle = Rc::new(RefCell::new(StateCompOracle::new(
+            evm_state,
+            config.state_comp_matching.unwrap(),
+        )));
         oracles.push(oracle);
     }
-
 
     let mut producers = config.producers;
 
@@ -336,7 +316,7 @@ pub fn evm_fuzzer(
         feedback,
         sha3_taint,
         evm_executor_ref.clone(),
-        config.sha3_bypass
+        config.sha3_bypass,
     ));
 
     let mut fuzzer = ItyFuzzer::new(
@@ -360,7 +340,10 @@ pub fn evm_fuzzer(
             }
 
             let printer = Rc::new(RefCell::new(CallPrinter::new()));
-            evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
+            evm_executor_ref
+                .borrow_mut()
+                .host
+                .add_middlewares(printer.clone());
 
             let initial_vm_state = artifacts.initial_state.clone();
             for file in glob(files.as_str()).expect("Failed to read glob pattern") {
@@ -373,7 +356,7 @@ pub fn evm_fuzzer(
 
                 let mut idx = 0;
 
-                for txn in transactions.split("\n") {
+                for txn in transactions.split('\n') {
                     idx += 1;
                     // let splitter = txn.split(" ").collect::<Vec<&str>>();
                     if txn.len() < 4 {
@@ -385,7 +368,9 @@ pub fn evm_fuzzer(
                         .to_input(vm_state.clone());
                     printer.borrow_mut().register_input(&inp);
 
-                    unsafe {CALL_UNTIL = call_until;}
+                    unsafe {
+                        CALL_UNTIL = call_until;
+                    }
 
                     fuzzer
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
@@ -396,10 +381,7 @@ pub fn evm_fuzzer(
                         "reverted: {:?}",
                         state.get_execution_result().clone().reverted
                     );
-                    println!(
-                        "call trace:\n{}",
-                        printer.deref().borrow().get_trace()
-                    );
+                    println!("call trace:\n{}", printer.deref().borrow().get_trace());
                     println!(
                         "output: {:?}",
                         hex::encode(state.get_execution_result().clone().output)

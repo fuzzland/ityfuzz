@@ -1,9 +1,9 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::mutation_utils::byte_mutator;
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
 use crate::input::{ConciseSerde, VMInputT};
+use crate::mutation_utils::byte_mutator;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 
@@ -15,14 +15,13 @@ use primitive_types::U512;
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::generic_vm::vm_executor::ExecutionResult;
+use crate::generic_vm::vm_state::VMStateT;
 use bytes::Bytes;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
-use crate::generic_vm::vm_executor::ExecutionResult;
-use crate::generic_vm::vm_state::VMStateT;
-
 
 /// EVM Input Types
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -89,7 +88,6 @@ pub trait EVMInputT {
 
     fn get_repeat(&self) -> usize;
 }
-
 
 /// EVM Input
 #[derive(Serialize, Deserialize, Clone)]
@@ -187,11 +185,14 @@ pub struct ConciseEVMInput {
     pub call_leak: u32,
 }
 
-
 impl ConciseEVMInput {
-    pub fn from_input<I, Out>(input: &I, execution_result: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> Self
-    where I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    Out: Default
+    pub fn from_input<I, Out>(
+        input: &I,
+        execution_result: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>,
+    ) -> Self
+    where
+        I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+        Out: Default,
     {
         Self {
             #[cfg(feature = "flashloan_v2")]
@@ -203,7 +204,7 @@ impl ConciseEVMInput {
             #[cfg(feature = "debug")]
             direct_data: match &input.get_data_abi() {
                 Some(v) => hex::encode(v.get_bytes()),
-                None => "".to_string()
+                None => "".to_string(),
             },
             txn_value: input.get_txn_value(),
             step: input.is_step(),
@@ -215,8 +216,8 @@ impl ConciseEVMInput {
             layer: input.get_state().get_post_execution_len(),
             call_leak: match execution_result.additional_info {
                 Some(ref info) => info[0] as u32,
-                None => u32::MAX
-            }
+                None => u32::MAX,
+            },
         }
     }
 
@@ -242,12 +243,11 @@ impl ConciseEVMInput {
                 #[cfg(not(feature = "debug"))]
                 direct_data: Bytes::new(),
                 #[cfg(feature = "debug")]
-                direct_data: Bytes::from(
-                    hex::decode(&self.direct_data).unwrap_or_default()
-                ),
+                direct_data: Bytes::from(hex::decode(&self.direct_data).unwrap_or_default()),
                 randomness: self.randomness.clone(),
                 repeat: self.repeat,
-            }, self.call_leak
+            },
+            self.call_leak,
         )
     }
 
@@ -259,7 +259,8 @@ impl ConciseEVMInput {
         match self.data {
             Some(ref d) => Some(format!(
                 "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
-                self.caller, self.contract,
+                self.caller,
+                self.contract,
                 d.to_string(),
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes()),
@@ -268,20 +269,24 @@ impl ConciseEVMInput {
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
                     "{:?} => {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract,
-                    self.txn_value, liq
+                    self.caller, self.contract, self.txn_value, liq
                 )),
                 EVMInputTy::Borrow => Some(format!(
                     "{:?} borrow token {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract,
-                    self.txn_value, liq
+                    self.caller, self.contract, self.txn_value, liq
                 )),
                 EVMInputTy::Liquidate => None,
             },
         }
 
         #[cfg(feature = "debug")]
-        Some(format!("{:?} => {:?} with {:?} ETH, {}", self.caller, self.contract, self.txn_value, hex::encode(self.direct_data.clone())))
+        Some(format!(
+            "{:?} => {:?} with {:?} ETH, {}",
+            self.caller,
+            self.contract,
+            self.txn_value,
+            hex::encode(self.direct_data.clone())
+        ))
     }
 
     #[cfg(not(feature = "flashloan_v2"))]
@@ -289,19 +294,21 @@ impl ConciseEVMInput {
         match self.data {
             Some(ref d) => Some(format!(
                 "{:?} => {:?} {} with {} ETH ({})",
-                self.caller, self.contract,
+                self.caller,
+                self.contract,
                 d.to_string(),
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes())
             )),
-            None => Some(format!("{:?} => {:?} transfer {} ETH",
-                                 self.caller, self.contract,
-                                 self.txn_value.unwrap_or(EVMU256::ZERO),
+            None => Some(format!(
+                "{:?} => {:?} transfer {} ETH",
+                self.caller,
+                self.contract,
+                self.txn_value.unwrap_or(EVMU256::ZERO),
             )),
         }
     }
 }
-
 
 impl HasLen for EVMInput {
     /// Get the length of the ABI encoded input
@@ -393,7 +400,6 @@ impl EVMInputT for EVMInput {
     }
 }
 
-
 ///
 macro_rules! impl_env_mutator_u256 {
     ($item: ident, $loc: ident) => {
@@ -413,7 +419,8 @@ macro_rules! impl_env_mutator_u256 {
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
+            input.get_vm_env_mut().$loc.$item =
+                EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
             res
         }
     };
@@ -545,10 +552,7 @@ impl EVMInput {
         } else {
             None
         };
-        let mut input_by: [u8; 32] = input
-            .get_txn_value()
-            .unwrap_or(EVMU256::ZERO)
-            .to_be_bytes();
+        let mut input_by: [u8; 32] = input.get_txn_value().unwrap_or(EVMU256::ZERO).to_be_bytes();
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
         let res = byte_mutator(state_, &mut wrapper, vm_slots);
@@ -599,7 +603,7 @@ impl EVMInput {
         add_mutator!(chain_id);
         add_mutator!(prevrandao);
 
-        if mutators.len() == 0 {
+        if mutators.is_empty() {
             return MutationResult::Skipped;
         }
 
@@ -614,8 +618,7 @@ impl ConciseSerde for ConciseEVMInput {
     }
 
     fn deserialize_concise(data: &[u8]) -> Self {
-        serde_json::from_slice(data)
-            .expect("Failed to deserialize concise input")
+        serde_json::from_slice(data).expect("Failed to deserialize concise input")
     }
 
     fn serialize_string(&self) -> String {
@@ -624,10 +627,14 @@ impl ConciseSerde for ConciseEVMInput {
             s.push_str("==");
         }
         if self.layer > 0 {
-            s.push_str(" ");
+            s.push(' ');
         }
 
-        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+        s.push_str(
+            self.pretty_txn()
+                .expect("Failed to pretty print txn")
+                .as_str(),
+        );
         s
     }
 }
@@ -751,7 +758,10 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
         self.txn_value
     }
 
-    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>) -> ConciseEVMInput {
+    fn get_concise<Out: Default>(
+        &self,
+        exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>,
+    ) -> ConciseEVMInput {
         ConciseEVMInput::from_input(self, exec_res)
     }
 }
