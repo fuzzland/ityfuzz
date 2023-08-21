@@ -1,13 +1,10 @@
-use crate::evm::types::{
-    fixed_address, generate_random_address, EVMAddress, EVMFuzzMutator, EVMFuzzState,
-};
+use crate::evm::types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState};
 /// Load contract from file system or remote
 use glob::glob;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
-use crate::state::FuzzState;
 use itertools::Itertools;
 use std::io::Read;
 use std::path::Path;
@@ -19,9 +16,6 @@ use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
-use hex::encode;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
@@ -72,7 +66,7 @@ impl ContractLoader {
         let mut data = String::new();
         file.read_to_string(&mut data)
             .expect("failed to read abis file");
-        return Self::parse_abi_str(&data);
+        Self::parse_abi_str(&data)
     }
 
     fn process_input(ty: String, input: &Value) -> String {
@@ -98,8 +92,8 @@ impl ContractLoader {
         }
     }
 
-    pub fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
-        let json: Vec<Value> = serde_json::from_str(&data).expect("failed to parse abis file");
+    pub fn parse_abi_str(data: &str) -> Vec<ABIConfig> {
+        let json: Vec<Value> = serde_json::from_str(data).expect("failed to parse abis file");
         json.iter()
             .flat_map(|abi| {
                 if abi["type"] == "function" || abi["type"] == "constructor" {
@@ -148,12 +142,12 @@ impl ContractLoader {
         hex::decode(data).expect("Failed to parse hex file")
     }
 
-    fn constructor_args_encode(constructor_args: &Vec<String>) -> Vec<u8> {
+    fn constructor_args_encode(constructor_args: &[String]) -> Vec<u8> {
         constructor_args
             .iter()
             .flat_map(|arg| {
-                let arg = if arg.starts_with("0x") {
-                    &arg[2..]
+                let arg = if let Some(stripped) = arg.strip_prefix("0x") {
+                    stripped
                 } else {
                     arg
                 };
@@ -180,9 +174,9 @@ impl ContractLoader {
         state: &mut EVMFuzzState,
         source_map_info: Option<ContractsSourceMapInfo>,
         proxy_deploy_codes: &Vec<String>,
-        constructor_args: &Vec<String>,
+        constructor_args: &[String],
     ) -> Self {
-        let contract_name = prefix.split("/").last().unwrap().replace("*", "");
+        let contract_name = prefix.split('/').last().unwrap().replace('*', "");
 
         // get constructor args
         let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(constructor_args);
@@ -197,13 +191,12 @@ impl ContractLoader {
             deployed_address: generate_random_address(state),
             source_map: source_map_info.map(|info| {
                 info.get(contract_name.as_str())
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|| {
+                        panic!(
                             "combined.json provided but contract ({:?}) not found",
                             contract_name
                         )
-                        .as_str(),
-                    )
+                    })
                     .clone()
             }),
         };
@@ -244,7 +237,7 @@ impl ContractLoader {
             let mut abi_instance =
                 get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
             abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
-            if contract_result.constructor_args.len() == 0 {
+            if contract_result.constructor_args.is_empty() {
                 println!("No constructor args found, using default constructor args");
                 contract_result.constructor_args = abi_instance.get().get_bytes();
             }
@@ -262,8 +255,8 @@ impl ContractLoader {
         let current_code = hex::encode(&contract_result.code);
         for deployed_code in proxy_deploy_codes {
             // if deploy_code startwiths '0x' then remove it
-            let deployed_code_cleaned = if deployed_code.starts_with("0x") {
-                &deployed_code[2..]
+            let deployed_code_cleaned = if let Some(stripped) = deployed_code.strip_prefix("0x") {
+                stripped
             } else {
                 deployed_code
             };
@@ -287,22 +280,22 @@ impl ContractLoader {
                 }
             }
         }
-        return Self {
-            contracts: if contract_result.code.len() > 0 {
+        Self {
+            contracts: if !contract_result.code.is_empty() {
                 vec![contract_result]
             } else {
                 vec![]
             },
             abis: vec![abi_result],
-        };
+        }
     }
 
     // This function loads constructs Contract infos from path p
     // The organization of directory p should be
     // p
-    // |- contract1.abis
+    // |- contract1.abi
     // |- contract1.bin
-    // |- contract2.abis
+    // |- contract2.abi
     // |- contract2.bin
     pub fn from_glob(
         p: &str,
@@ -316,9 +309,9 @@ impl ContractLoader {
             match i {
                 Ok(path) => {
                     let path_str = path.to_str().unwrap();
-                    if path_str.ends_with(".abis") {
+                    if path_str.ends_with(".abi") {
                         *prefix_file_count
-                            .entry(path_str.replace(".abis", "").clone())
+                            .entry(path_str.replace(".abi", "").clone())
                             .or_insert(0) += 1;
                     } else if path_str.ends_with(".bin") {
                         *prefix_file_count
@@ -410,7 +403,6 @@ impl ContractLoader {
     }
 }
 
-type ContractSourceMap = HashMap<usize, SourceMapLocation>;
 type ContractsSourceMapInfo = HashMap<String, HashMap<usize, SourceMapLocation>>;
 
 pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
@@ -430,7 +422,6 @@ pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
 
     for (contract_name, contract_info) in contracts {
         let splitter = contract_name.split(':').collect::<Vec<&str>>();
-        let file_name = splitter.iter().take(splitter.len() - 1).join(":");
         let contract_name = splitter.last().unwrap().to_string();
 
         let bin_runtime = contract_info["bin-runtime"]
@@ -478,8 +469,9 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
                 code_sig.push(sig_bytes.try_into().unwrap());
             }
         }
-        /// skip off the PUSH XXXxxxxxxXXX instruction
-        if op >= 0x60 && op <= 0x7f {
+
+        // skip off the PUSH XXXxxxxxxXXX instruction
+        if (0x60..=0x7f).contains(&op) {
             i += op as usize - 0x5f;
             continue;
         }
@@ -488,9 +480,6 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
 }
 
 mod tests {
-    use super::*;
-    use std::str::FromStr;
-
     #[test]
     fn test_load() {
         let codes: Vec<String> = vec![];

@@ -81,7 +81,7 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
-    let mut scheduler = QueueScheduler::new();
+    let scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
@@ -196,7 +196,7 @@ pub fn evm_fuzzer(
 
     let mut corpus_initializer = EVMCorpusInitializer::new(
         &mut evm_executor,
-        &mut scheduler,
+        &scheduler,
         &infant_scheduler,
         state,
         config.work_dir.clone(),
@@ -362,6 +362,7 @@ pub fn evm_fuzzer(
                     if txn.len() < 4 {
                         continue;
                     }
+                    print!(" ");
 
                     // [is_step] [caller] [target] [input] [value]
                     let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())

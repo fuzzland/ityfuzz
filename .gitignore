@@ -14,3 +14,4 @@ cache
 output
 work_dir
 .z3-trace
+*.code-workspace
