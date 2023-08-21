@@ -11,6 +11,8 @@ use crate::state::FuzzState;
 use itertools::Itertools;
 use std::io::Read;
 use std::path::Path;
+use bytes::Bytes;
+
 extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
@@ -23,9 +25,15 @@ use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use hex::encode;
 use regex::Regex;
 use revm_interpreter::analysis::to_analysed;
+use revm_interpreter::opcode::PUSH4;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use crate::evm::blaz::builder::{BuildJob, BuildJobResult};
+use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
+use crate::evm::blaz::offchain_config::OffchainConfig;
+use crate::evm::bytecode_iterator::all_bytecode;
+use crate::evm::host::FuzzHost;
+use crate::evm::vm::EVMExecutor;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
@@ -431,6 +439,105 @@ impl ContractLoader {
         }
         Self { contracts, abis }
     }
+
+    pub fn from_config(
+        offchain_artifacts: &Vec<OffChainArtifact>,
+        offchain_config: &OffchainConfig,
+    ) -> Self {
+        let mut contracts: Vec<ContractInfo> = vec![];
+        let mut abis: Vec<ABIInfo> = vec![];
+        for (slug, contract_info) in &offchain_config.configs {
+            let mut more_info = None;
+            let mut sources = None;
+
+            for artifact in offchain_artifacts {
+                if artifact.contracts.contains_key(slug) {
+                    more_info = Some(artifact.contracts.get(slug).unwrap().clone());
+                    sources = Some(artifact.sources.clone()); // <- todo: this is not correct
+                    break;
+                }
+            }
+
+            let more_info = more_info.expect("Failed to find contract info");
+            let sources = sources.expect("Failed to find sources");
+            let abi = Self::parse_abi_str(&more_info.abi);
+
+            abis.push(ABIInfo {
+                source: format!("{}:{}", slug.0, slug.1),
+                abi: abi.clone(),
+            });
+
+            contracts.push(ContractInfo {
+                name: format!("{}:{}", slug.0, slug.1),
+                code: more_info.deploy_bytecode.to_vec(),
+                abi: abi,
+                is_code_deployed: false,
+                constructor_args: hex::decode(contract_info.constructor.clone()).expect("failed to decode hex"),
+                deployed_address: contract_info.address,
+                source_map: None,
+                build_artifact: Some(BuildJobResult {
+                    sources,
+                    source_maps: more_info.source_map,
+                    bytecodes: more_info.deploy_bytecode,
+                    abi: more_info.abi.clone(),
+                })
+            })
+        }
+
+
+        Self { contracts, abis }
+    }
+
+    // pub fn from_artifacts_and_proxy(
+    //     offchain_artifacts: &Vec<OffChainArtifact>,
+    //     proxy_deploy_codes: &Vec<String>,
+    // ) {
+    //     for deployed_code in proxy_deploy_codes {
+    //         deployed_code_cleaned = deployed_code.replace("0x", "");
+    //         let mut deployed_code_bytes = hex::decode(deployed_code_cleaned).expect("Failed to decode hex");
+    //
+    //         EVMExecutor::new(
+    //             FuzzHost::new(
+    //
+    //             )
+    //         )
+    //
+    //         // let build_job = OffChainArtifact::locate(
+    //         //     offchain_artifacts,
+    //         //     deployed_code_bytes,
+    //         // );
+    //         //
+    //         // if build_job.is_none() {
+    //         //     println!("Failed to find build job for {}", deployed_code);
+    //         //     continue;
+    //         // }
+    //         //
+    //         // let build_job = build_job.unwrap();
+    //         //
+    //         // abis.push(ABIInfo {
+    //         //     source: format!("{}:{}", slug.0, slug.1),
+    //         //     abi: abi.clone(),
+    //         // });
+    //         //
+    //         // contracts.push(ContractInfo {
+    //         //     name: format!("{}:{}", slug.0, slug.1),
+    //         //     code: more_info.deploy_bytecode.to_vec(),
+    //         //     abi: abi,
+    //         //     is_code_deployed: false,
+    //         //     constructor_args: hex::decode(contract_info.constructor.clone()).expect("failed to decode hex"),
+    //         //     deployed_address: contract_info.address,
+    //         //     source_map: None,
+    //         //     build_artifact: Some(BuildJobResult {
+    //         //         sources,
+    //         //         source_maps: more_info.source_map,
+    //         //         bytecodes: more_info.deploy_bytecode,
+    //         //         abi: more_info.abi.clone(),
+    //         //     })
+    //         // })
+    //
+    //
+    //     }
+    // }
 }
 
 type ContractSourceMap = HashMap<usize, SourceMapLocation>;
@@ -474,40 +581,31 @@ pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
 }
 
 pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
-    let mut i = 0;
     let bytes = hex::decode(code).expect("failed to decode contract code");
-    let mut code_sig = vec![];
+    let mut code_sig = HashSet::new();
 
-    while i < bytes.len() {
-        let op = *bytes.get(i).unwrap();
-        i += 1;
+    let bytecode = all_bytecode(&bytes);
 
-        // PUSH4
-        if op == 0x63 {
-            // peak forward
-
+    for (pc, op) in bytecode {
+        if op == PUSH4 {
             // ensure we have enough bytes
-            if i + 4 + 2 >= bytes.len() {
+            if pc + 6 >= bytes.len() {
                 break;
             }
 
             // Solidity: check whether next ops is EQ
             // Vyper: check whether next 2 ops contain XOR
-            if bytes[i + 4] == 0x14 || bytes[i + 5] == 0x18 || bytes[i + 4] == 0x18 {
+            // if bytes[pc + 5] == 0x14 || bytes[pc + 5] == 0x18 || bytes[pc + 6] == 0x18  {
                 let mut sig_bytes = vec![];
                 for j in 0..4 {
-                    sig_bytes.push(*bytes.get(i + j).unwrap());
+                    sig_bytes.push(*bytes.get(pc + j + 1).unwrap());
                 }
-                code_sig.push(sig_bytes.try_into().unwrap());
-            }
+                code_sig.insert(sig_bytes.try_into().unwrap());
+            // }
         }
-        /// skip off the PUSH XXXxxxxxxXXX instruction
-        if op >= 0x60 && op <= 0x7f {
-            i += op as usize - 0x5f;
-            continue;
-        }
+
     }
-    code_sig
+    code_sig.iter().cloned().collect_vec()
 }
 
 mod tests {

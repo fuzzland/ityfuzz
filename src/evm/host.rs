@@ -429,13 +429,12 @@ where
                 }
             }
         }
-        assert!(self
+        self
             .code
             .insert(
                 address,
                 Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap())
-            )
-            .is_none());
+            );
     }
 
     pub fn find_static_call_read_slot(

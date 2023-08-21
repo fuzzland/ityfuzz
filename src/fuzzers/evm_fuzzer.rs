@@ -239,7 +239,13 @@ pub fn evm_fuzzer(
     // now evm executor is ready, we can clone it
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
-
+    if !state.metadata().contains::<ArtifactInfoMetadata>() {
+        state.metadata_mut().insert(ArtifactInfoMetadata::new());
+    }
+    let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().unwrap();
+    for (addr, build_artifact) in &artifacts.build_artifacts {
+        meta.add(*addr, build_artifact.clone());
+    }
 
     for (addr, bytecode) in &mut artifacts.address_to_bytecode {
         unsafe {
@@ -252,16 +258,6 @@ pub fn evm_fuzzer(
         }
     }
 
-
-    {
-        if !state.metadata().contains::<ArtifactInfoMetadata>() {
-            state.add_metadata(ArtifactInfoMetadata::new());
-        }
-        let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().unwrap();
-        for (addr, build_artifact) in &artifacts.build_artifacts {
-            meta.add(*addr, build_artifact.clone());
-        }
-    }
 
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     feedback

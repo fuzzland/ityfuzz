@@ -307,11 +307,12 @@ where
 
                     if let Some(job) = build_job {
                         abi = Some(job.abi.clone());
+                        // replace the code with the one from builder
+                        println!("replace code for {:?} with builder's", address_h160);
                         host.set_codedata(address_h160, contract_code.clone());
                         state.metadata_mut().get_mut::<ArtifactInfoMetadata>()
                             .expect("artifact info metadata").add(address_h160, job);
                     }
-
                 }
 
                 if abi.is_none() {

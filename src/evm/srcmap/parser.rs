@@ -111,6 +111,9 @@ fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String)>) 
             line_number += 1;
         }
     }
+    if end_line == 0 {
+        end_line = line_number;
+    }
 
     let lines_in_range = contents.lines()
         .skip(start_line)

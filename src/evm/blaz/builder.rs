@@ -6,6 +6,7 @@ use libafl::impl_serdeany;
 use revm_primitives::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::evm::blaz::get_client;
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::types::EVMAddress;
 
@@ -16,13 +17,6 @@ pub struct BuildJob {
 
 pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
 const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources";
-
-fn get_client() -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .build()
-        .expect("build client failed")
-}
 
 impl BuildJob {
     pub fn new(build_server: String) -> Self {

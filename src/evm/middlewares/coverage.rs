@@ -25,32 +25,27 @@ use crate::evm::types::{EVMAddress, is_zero, ProjectSourceMapTy};
 use crate::evm::vm::IN_DEPLOY;
 use serde_json;
 use crate::evm::blaz::builder::ArtifactInfoMetadata;
+use crate::evm::bytecode_iterator::{all_bytecode, walk_bytecode};
 
 pub static mut EVAL_COVERAGE: bool = false;
 
 /// Finds all PCs (offsets of bytecode) that are instructions / JUMPDEST
 /// Returns a tuple of (instruction PCs, JUMPI PCs, Skip PCs)
 pub fn instructions_pc(bytecode: &Bytecode) -> (HashSet<usize>, HashSet<usize>, HashSet<usize>) {
-    let mut i = 0;
-    let bytes = bytecode.bytes();
     let mut complete_bytes = vec![];
     let mut skip_instructions = HashSet::new();
     let mut total_jumpi_set = HashSet::new();
-
-    while i < bytes.len() {
-        let op = *bytes.get(i).unwrap();
-        if op == JUMPDEST || op == STOP || op == INVALID {
-            skip_instructions.insert(i);
+    all_bytecode(&bytecode.bytes().to_vec()).iter().for_each(
+        |(pc, op)| {
+            if *op == JUMPDEST || *op == STOP || *op == INVALID {
+                skip_instructions.insert(*pc);
+            }
+            if *op == JUMPI {
+                total_jumpi_set.insert(*pc);
+            }
+            complete_bytes.push(*pc);
         }
-        if op == JUMPI {
-            total_jumpi_set.insert(i);
-        }
-        complete_bytes.push(i);
-        i += 1;
-        if op >= 0x60 && op <= 0x7f {
-            i += op as usize - 0x5f;
-        }
-    }
+    );
     (complete_bytes.into_iter().collect(), total_jumpi_set, skip_instructions)
 }
 
@@ -67,6 +62,8 @@ pub struct Coverage {
     pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
     pub pc_info: HashMap<(EVMAddress, usize), SourceMapWithCode>,
+
+    pub sources: HashMap<EVMAddress, Vec<(String, String)>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -77,6 +74,7 @@ pub struct CoverageResult {
     pub total_branches: usize,
     pub uncovered: HashSet<SourceMapWithCode>,
     pub uncovered_pc: Vec<usize>,
+    pub address: EVMAddress,
 }
 
 impl CoverageResult {
@@ -88,6 +86,7 @@ impl CoverageResult {
             total_branches: 0,
             uncovered: HashSet::new(),
             uncovered_pc: vec![],
+            address: Default::default(),
         }
     }
 }
@@ -95,12 +94,15 @@ impl CoverageResult {
 #[derive(Clone, Debug, Serialize)]
 pub struct CoverageReport {
     pub coverage: HashMap<String, CoverageResult>,
+    #[serde(skip)]
+    pub files: HashMap<String, Vec<(String, String)>>,
 }
 
 impl CoverageReport {
     pub fn new() -> Self {
         Self {
             coverage: HashMap::new(),
+            files: Default::default(),
         }
     }
 
@@ -154,6 +156,16 @@ impl CoverageReport {
             .unwrap();
         json_file.write_all(serde_json::to_string(self).unwrap().as_bytes()).unwrap();
         json_file.flush().unwrap();
+
+        let mut file_json_file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}/files.json", work_dir))
+            .unwrap();
+        file_json_file.write_all(serde_json::to_string(&self.files).unwrap().as_bytes()).unwrap();
+        file_json_file.flush().unwrap();
     }
 
     pub fn summarize(&self) {
@@ -190,6 +202,7 @@ impl Coverage {
             sourcemap,
             address_to_name,
             pc_info: Default::default(),
+            sources: Default::default(),
         }
     }
 
@@ -200,12 +213,15 @@ impl Coverage {
         let default_skipper = HashSet::new();
 
         for (addr, all_pcs) in &self.total_instr_set {
+            let mut name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
+            if name != format!("{:?}", addr) {
+                name = format!("{}({:?})", name, addr.clone());
+            }
+            report.files.insert(name.clone(), self.sources.get(addr).unwrap_or(&vec![]).clone());
             match self.pc_coverage.get_mut(addr) {
                 None => {}
                 Some(covered) => {
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
-                    let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
-
                     // Handle Instruction Coverage
                     let mut real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
                     let uncovered_pc = all_pcs.difference(&real_covered).cloned().collect_vec();
@@ -216,6 +232,7 @@ impl Coverage {
                         total_branches: 0,
                         uncovered: HashSet::new(),
                         uncovered_pc: uncovered_pc.clone(),
+                        address: addr.clone(),
                     });
 
                     let mut result_ref = report.coverage.get_mut(&name).unwrap();
@@ -238,8 +255,6 @@ impl Coverage {
                         .collect_vec();
                     result_ref.branch_coverage = existing_branch_pcs.len();
                     result_ref.total_branches = all_branch_pcs.len() * 2;
-
-
                 }
             }
         }
@@ -296,6 +311,9 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
                 &build_artifact.sources.iter().map(|(file_name, _)| file_name.clone()).collect(),
             );
 
+            self.sources.insert(address, build_artifact.sources.clone());
+
+
             pcs.iter().for_each(|pc| {
                 match pretty_print_source_map_single(*pc, &sourcemap, &build_artifact.sources) {
                     SourceMapAvailability::Available(s) => { self.pc_info.insert((address, *pc), s); },
@@ -324,6 +342,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         self.total_jumpi_set.insert(address, jumpis);
 
         self.skip_pcs.insert(address, skip_pcs);
+
     }
 
     fn get_type(&self) -> MiddlewareType {
