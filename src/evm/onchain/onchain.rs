@@ -36,6 +36,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 
@@ -60,6 +61,7 @@ where
     pub storage_fetching: StorageFetchingMode,
     pub storage_all: HashMap<EVMAddress, Arc<HashMap<String, EVMU256>>>,
     pub storage_dump: HashMap<EVMAddress, Arc<HashMap<EVMU256, EVMU256>>>,
+    pub builder: Option<BuildJob>,
     pub phantom: std::marker::PhantomData<(I, S, VS)>,
 }
 
@@ -122,9 +124,14 @@ where
             ]),
             storage_all: Default::default(),
             storage_dump: Default::default(),
+            builder: None,
             phantom: Default::default(),
             storage_fetching,
         }
+    }
+
+    pub fn add_builder(&mut self, builder: BuildJob) {
+        self.builder = Some(builder);
     }
 
     pub fn add_blacklist(&mut self, address: EVMAddress) {
@@ -290,8 +297,27 @@ where
                     _ => false,
                 };
 
-                println!("fetching abi {:?}", address_h160);
-                let abi = self.endpoint.fetch_abi(address_h160);
+                let mut abi = None;
+                if let Some(builder) = &self.builder {
+                    println!("onchain job {:?}", address_h160);
+                    let build_job = builder.onchain_job(
+                        self.endpoint.chain_name.clone(),
+                        address_h160,
+                    );
+
+                    if let Some(job) = build_job {
+                        abi = Some(job.abi.clone());
+                        host.set_codedata(address_h160, contract_code.clone());
+                        state.metadata_mut().get_mut::<ArtifactInfoMetadata>()
+                            .expect("artifact info metadata").add(address_h160, job);
+                    }
+
+                }
+
+                if abi.is_none() {
+                    println!("fetching abi {:?}", address_h160);
+                    abi = self.endpoint.fetch_abi(address_h160);
+                }
 
                 let mut parsed_abi = vec![];
                 match abi {

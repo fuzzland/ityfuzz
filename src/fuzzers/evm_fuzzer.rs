@@ -47,6 +47,7 @@ use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
@@ -114,6 +115,11 @@ pub fn evm_fuzzer(
                         config.onchain_storage_fetching.unwrap(),
                     ),
                 ));
+
+                if let Some(builder) = config.builder {
+                    mid.borrow_mut().add_builder(builder);
+                }
+
                 fuzz_host.add_middlewares(mid.clone());
                 mid
             })
@@ -246,6 +252,16 @@ pub fn evm_fuzzer(
         }
     }
 
+
+    {
+        if !state.metadata().contains::<ArtifactInfoMetadata>() {
+            state.add_metadata(ArtifactInfoMetadata::new());
+        }
+        let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().unwrap();
+        for (addr, build_artifact) in &artifacts.build_artifacts {
+            meta.add(*addr, build_artifact.clone());
+        }
+    }
 
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     feedback

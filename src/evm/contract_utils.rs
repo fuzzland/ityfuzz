@@ -22,7 +22,10 @@ use self::crypto::sha3::Sha3;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use hex::encode;
 use regex::Regex;
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
+use crate::evm::blaz::builder::{BuildJob, BuildJobResult};
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
@@ -46,6 +49,7 @@ pub struct ContractInfo {
     pub constructor_args: Vec<u8>,
     pub deployed_address: EVMAddress,
     pub source_map: Option<HashMap<usize, SourceMapLocation>>,
+    pub build_artifact: Option<BuildJobResult>,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +210,7 @@ impl ContractLoader {
                     )
                     .clone()
             }),
+            build_artifact: None,
         };
         let mut abi_result = ABIInfo {
             source: prefix.to_string(),
@@ -379,12 +384,29 @@ impl ContractLoader {
         ContractLoader { contracts, abis }
     }
 
-    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>) -> Self {
+    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>, builder: Option<BuildJob>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
         for addr in address {
-            let abi = onchain.fetch_abi(addr);
-            let contract_code = onchain.get_contract_code(addr, false);
+            let mut abi = None;
+            let mut bytecode = None;
+            let mut build_artifact = None;
+
+            if let Some(builder) = builder.clone() {
+                let result = builder.onchain_job(onchain.chain_name.clone(), addr);
+                if let Some(result) = result {
+                    abi = Some(result.abi.clone());
+                    bytecode = Some(to_analysed(Bytecode::new_raw(result.bytecodes.clone())));
+                    build_artifact = Some(result);
+                }
+            }
+
+            if abi.is_none() || bytecode.is_none() {
+                abi = onchain.fetch_abi(addr);
+                bytecode = Some(onchain.get_contract_code(addr, false));
+            }
+
+            let contract_code = bytecode.expect("Failed to get bytecode");
 
             let abi_parsed = if let Some(abi) = abi {
                 Self::parse_abi_str(&abi)
@@ -400,6 +422,7 @@ impl ContractLoader {
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
                 source_map: None,
+                build_artifact
             });
             abis.push(ABIInfo {
                 source: addr.to_string(),

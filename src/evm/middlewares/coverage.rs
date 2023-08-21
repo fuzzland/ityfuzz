@@ -16,7 +16,7 @@ use serde::Serialize;
 use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::srcmap::parser::{pretty_print_source_map, SourceMapAvailability, SourceMapLocation, SourceMapWithCode};
+use crate::evm::srcmap::parser::{decode_instructions, pretty_print_source_map, pretty_print_source_map_single, SourceMapAvailability, SourceMapLocation, SourceMapWithCode};
 use crate::evm::srcmap::parser::SourceMapAvailability::Available;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -24,6 +24,7 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::evm::types::{EVMAddress, is_zero, ProjectSourceMapTy};
 use crate::evm::vm::IN_DEPLOY;
 use serde_json;
+use crate::evm::blaz::builder::ArtifactInfoMetadata;
 
 pub static mut EVAL_COVERAGE: bool = false;
 
@@ -287,13 +288,32 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
-        pcs.iter().for_each(|pc| {
-            match pretty_print_source_map(*pc, &address, &self.sourcemap) {
-                SourceMapAvailability::Available(s) => { self.pc_info.insert((address, *pc), s); },
-                SourceMapAvailability::Unknown => { skip_pcs.insert(*pc); },
-                SourceMapAvailability::Unavailable => {}
-            };
-        });
+        let meta = state.metadata().get::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
+        if let Some(build_artifact) = meta.get(&address) {
+            let sourcemap = decode_instructions(
+                bytecode.bytecode.to_vec(),
+                build_artifact.source_maps.clone(),
+                &build_artifact.sources.iter().map(|(file_name, _)| file_name.clone()).collect(),
+            );
+
+            pcs.iter().for_each(|pc| {
+                match pretty_print_source_map_single(*pc, &sourcemap, &build_artifact.sources) {
+                    SourceMapAvailability::Available(s) => { self.pc_info.insert((address, *pc), s); },
+                    SourceMapAvailability::Unknown => { skip_pcs.insert(*pc); },
+                    SourceMapAvailability::Unavailable => {}
+                };
+            });
+
+        } else {
+            pcs.iter().for_each(|pc| {
+                match pretty_print_source_map(*pc, &address, &self.sourcemap) {
+                    SourceMapAvailability::Available(s) => { self.pc_info.insert((address, *pc), s); },
+                    SourceMapAvailability::Unknown => { skip_pcs.insert(*pc); },
+                    SourceMapAvailability::Unavailable => {}
+                };
+            });
+        }
+
 
         // total instr minus skipped pcs
         let total_instr = pcs.iter().filter(|pc| !skip_pcs.contains(*pc)).cloned().collect();

@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
+use ityfuzz::evm::blaz::builder::BuildJob;
 
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
@@ -223,10 +224,18 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     base_path: String,
 
-    ///spec id
+    /// Spec ID
     #[arg(long, default_value = "Latest")]
     spec_id: String,
 
+    /// Builder URL. If specified, will use this builder to build contracts instead of using
+    /// bins and abis.
+    #[arg(long, default_value = "")]
+    onchain_builder: String,
+
+    /// Builder Artifacts. If specified, will use this artifact to derive code coverage.
+    #[arg(long, default_value = "")]
+    builder_artifacts: String
 }
 
 enum EVMTargetType {
@@ -404,6 +413,12 @@ pub fn evm_main(args: EvmArgs) {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
+    let builder = if args.onchain_builder.len() > 1 {
+        Some(BuildJob::new(args.onchain_builder))
+    } else {
+        None
+    };
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_loader: match target_type {
@@ -443,6 +458,7 @@ pub fn evm_main(args: EvmArgs) {
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
+                     builder.clone(),
                 )
             }
         },
@@ -492,6 +508,7 @@ pub fn evm_main(args: EvmArgs) {
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
+        builder,
     };
 
     match config.fuzzer_type {

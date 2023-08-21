@@ -42,6 +42,7 @@ use std::fs::File;
 use std::path::Path;
 use crate::input::ConciseSerde;
 use std::io::Write;
+use crate::evm::blaz::builder::BuildJobResult;
 use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::evm::types::EVMExecutionResult;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
@@ -63,6 +64,7 @@ pub struct EVMInitializationArtifacts {
     pub address_to_abi_object: HashMap<EVMAddress, Vec<BoxedABI>>,
     pub address_to_name: HashMap<EVMAddress, String>,
     pub initial_state: EVMStagedVMState,
+    pub build_artifacts: HashMap<EVMAddress, BuildJobResult>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -204,7 +206,8 @@ impl<'a> EVMCorpusInitializer<'a> {
             address_to_abi: HashMap::new(),
             address_to_abi_object: Default::default(),
             address_to_name: Default::default(),
-            initial_state: StagedVMState::new_uninitialized()
+            initial_state: StagedVMState::new_uninitialized(),
+            build_artifacts: Default::default(),
         };
         for contract in &mut loader.contracts {
             if contract.abi.len() == 0 {
@@ -253,6 +256,10 @@ impl<'a> EVMCorpusInitializer<'a> {
             );
             artifacts.address_to_name.insert(contract.deployed_address,
                                              contract.name.clone().trim_end_matches('*').to_string());
+
+            if let Some(build_artifact) = &contract.build_artifact {
+                artifacts.build_artifacts.insert(contract.deployed_address, build_artifact.clone());
+            }
 
             #[cfg(feature = "flashloan_v2")]
             {

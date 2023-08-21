@@ -34,14 +34,16 @@ impl SourceMapWithCode {
 #[derive(Debug,Clone)]
 pub struct SourceMapLocation {
     pub file: Option<String>,
+    pub file_idx: Option<usize>,
     pub offset: usize,
     pub length: usize,
 }
 
 impl SourceMapLocation {
-    pub fn new(file: Option<String>, offset: usize, length: usize) -> Self {
+    pub fn new(file: Option<String>, file_idx: Option<usize>, offset: usize, length: usize) -> Self {
         Self {
             file,
+            file_idx,
             offset,
             length,
         }
@@ -52,6 +54,7 @@ impl Default for SourceMapLocation {
     fn default() -> Self {
         Self {
             file: None,
+            file_idx: None,
             offset: 0,
             length: 0,
         }
@@ -64,25 +67,32 @@ pub enum SourceMapAvailability {
     Unknown,
 }
 
-fn read_source_code(loc: &SourceMapLocation) -> SourceMapWithCode {
+fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String)>) -> SourceMapWithCode {
     let file_name = loc.file.clone().unwrap();
     let offset = loc.offset;
     let length = loc.length;
 
-    let mut file = match File::open(unsafe {BASE_PATH.clone()} + file_name.as_str()) {
-        Ok(f) => f,
-        Err(e) => {
-            return SourceMapWithCode {
-                file: file_name,
-                line_start: 0,
-                line_end: 0,
-                code: "code not available".to_string(),
-            };
-        }
+    let mut contents = String::new();
+    let bad_file = SourceMapWithCode {
+        file: file_name.clone(),
+        line_start: offset,
+        line_end: length,
+        code: "code not available".to_string(),
     };
 
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
+    if file_blob.len() > 0 && file_blob.iter().any(|(name, _)| name == &file_name) {
+        let (_, code) = file_blob.iter().find(|(name, _)| name == &file_name).unwrap();
+        contents = code.clone();
+    } else {
+        let mut file = match File::open(unsafe {BASE_PATH.clone()} + file_name.as_str()) {
+            Ok(f) => f,
+            Err(e) => {
+                return bad_file;
+            }
+        };
+        file.read_to_string(&mut contents).unwrap();
+    }
+
 
     // get starting and ending line number
     let mut line_number = 1;
@@ -118,19 +128,24 @@ fn read_source_code(loc: &SourceMapLocation) -> SourceMapWithCode {
 pub fn pretty_print_source_map(pc: usize, addr: &EVMAddress, data: &ProjectSourceMapTy) -> SourceMapAvailability {
     match data.get(addr) {
         Some(Some(contract_data)) => {
-            match contract_data.get(&pc) {
-                Some(info) => {
-                    match info.file {
-                        Some(ref file) => {
-                            SourceMapAvailability::Available(read_source_code(info))
-                        }
-                        None => SourceMapAvailability::Unknown
-                    }
+            pretty_print_source_map_single(pc, contract_data, &vec![])
+        }
+        _ => SourceMapAvailability::Unavailable
+    }
+}
+
+
+pub fn pretty_print_source_map_single(pc: usize, data: &HashMap<usize, SourceMapLocation>, file_blob: &Vec<(String, String)>) -> SourceMapAvailability {
+    match data.get(&pc) {
+        Some(info) => {
+            match info.file {
+                Some(ref file) => {
+                    SourceMapAvailability::Available(read_source_code(info, file_blob))
                 }
                 None => SourceMapAvailability::Unknown
             }
         }
-        _ => SourceMapAvailability::Unavailable
+        None => SourceMapAvailability::Unknown
     }
 }
 
@@ -165,6 +180,16 @@ pub fn uncompress_srcmap_single(map: String, files: &Vec<String>) -> Vec<SourceM
                         }
                     } else {
                         results[counter - 1].file.clone()
+                    },
+                    if has_file {
+                        let idx = parts[2].parse::<usize>().unwrap_or(usize::MAX);
+                        if idx < files.len() {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    } else {
+                        results[counter - 1].file_idx.clone()
                     },
                     if has_offset && let Ok(res) = parts[0].parse::<usize>() {
                         res
