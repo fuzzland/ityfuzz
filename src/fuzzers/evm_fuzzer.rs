@@ -8,6 +8,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::evm::presets::pair::PairPreset;
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,

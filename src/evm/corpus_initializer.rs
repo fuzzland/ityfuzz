@@ -5,6 +5,7 @@ use crate::evm::bytecode_analyzer;
 use crate::evm::contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader};
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::mutator::AccessPattern;
+use crate::evm::presets::presets::Preset;
 
 use crate::evm::onchain::onchain::BLACKLIST_ADDR;
 use crate::evm::types::{
@@ -42,6 +43,8 @@ use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
+
+// use crate::evm::gpt::add_gpt_generated_txs;
 
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
@@ -108,6 +111,7 @@ macro_rules! handle_contract_insertion {
     };
 }
 
+#[macro_export]
 macro_rules! wrap_input {
     ($input: expr) => {{
         let mut tc = Testcase::new($input);
@@ -116,6 +120,7 @@ macro_rules! wrap_input {
     }};
 }
 
+#[macro_export(local_inner_macros)]
 macro_rules! add_input_to_corpus {
     ($state: expr, $scheduler: expr, $input: expr) => {
         let idx = $state
@@ -294,6 +299,10 @@ impl<'a> EVMCorpusInitializer<'a> {
                     &mut artifacts,
                 );
             }
+
+            // add gpt corpus
+            // add_gpt_generated_txs(self.state, self.scheduler, contract.deployed_address);
+
             // add transfer txn
             {
                 let input = EVMInput {
@@ -431,7 +440,7 @@ impl<'a> EVMCorpusInitializer<'a> {
         {
             let presets = self.presets.clone();
             for p in presets {
-                let mut presets = p.presets(abi.function, &input, self.executor);
+                let presets = p.presets(abi.function, &input, self.executor);
                 presets.iter().for_each(|preset| {
                     add_input_to_corpus!(self.state, scheduler, preset.clone());
                 });
