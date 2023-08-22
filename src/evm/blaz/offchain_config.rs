@@ -38,7 +38,7 @@ impl OffchainConfig {
                 let address = config_obj["address"].as_str().expect("get address failed");
                 let address = EVMAddress::from_str(address).expect("parse address failed");
                 configs.insert((filename.clone(), contract_name.clone()), OffchainContractConfig {
-                    constructor: constructor.to_string(),
+                    constructor: constructor.to_string().trim_start_matches("0x").to_string(),
                     address,
                 });
             }

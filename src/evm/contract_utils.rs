@@ -467,12 +467,13 @@ impl ContractLoader {
                 abi: abi.clone(),
             });
 
+            let constructor_args = hex::decode(contract_info.constructor.clone()).expect("failed to decode hex");
             contracts.push(ContractInfo {
                 name: format!("{}:{}", slug.0, slug.1),
-                code: more_info.deploy_bytecode.to_vec(),
+                code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
                 abi: abi,
                 is_code_deployed: false,
-                constructor_args: hex::decode(contract_info.constructor.clone()).expect("failed to decode hex"),
+                constructor_args,
                 deployed_address: contract_info.address,
                 source_map: None,
                 build_artifact: Some(BuildJobResult {
