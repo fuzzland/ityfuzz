@@ -69,6 +69,17 @@ impl CallPrinter {
         self.entry = true;
     }
 
+    pub fn mark_new_tx(&mut self) {
+        self.current_layer = 0;
+        self.entry = true;
+    }
+
+    /// Wont collect the starting tx
+    pub fn mark_step_tx(&mut self) {
+        self.current_layer = 0;
+        self.entry = false;
+    }
+
     pub fn get_trace(&self) -> String {
         self.results.data.iter().map(|(layer, call)| {
             let padding = (0..*layer).map(|_| "  ").join("");
