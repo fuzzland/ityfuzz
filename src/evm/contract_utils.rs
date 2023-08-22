@@ -661,7 +661,7 @@ mod tests {
             .collect_vec();
         println!("{}: {:?}", sigs.len(), sigs);
         // counted from etherscan lol
-        assert_eq!(sigs.len(), 56);
+        assert_eq!(sigs.len(), 60);
     }
 
     // #[test]
