@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::process::id;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 use bytes::Bytes;
@@ -7,9 +9,13 @@ use libafl::impl_serdeany;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::evm::blaz::get_client;
+use crate::evm::host::FuzzHost;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
-use crate::evm::types::EVMAddress;
+use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy};
+use crate::evm::vm::{EVMExecutor, EVMState};
+use crate::generic_vm::vm_executor::GenericVM;
 
 #[derive(Clone)]
 pub struct BuildJob {
@@ -102,9 +108,28 @@ pub struct BuildJobResult {
     pub source_maps: String,
     pub bytecodes: Bytes,
     pub abi: String,
+
+    _cache_src_map: HashMap<usize, SourceMapLocation>,
+    _cached: bool
 }
 
 impl BuildJobResult {
+    pub fn new(
+        sources: Vec<(String, String)>,
+        source_maps: String,
+        bytecodes: Bytes,
+        abi: String,
+    ) -> Self {
+        Self {
+            sources,
+            source_maps,
+            bytecodes,
+            abi,
+            _cache_src_map: Default::default(),
+            _cached: false,
+        }
+    }
+
     pub fn from_json_url(url: String) -> Option<Self> {
         let client = get_client();
         let resp = client.get(&url)
@@ -132,6 +157,8 @@ impl BuildJobResult {
             source_maps: sourcemap.to_string(),
             bytecodes: Bytes::from(hex::decode(bytecode).expect("decode bytecode failed")),
             abi: abi.to_string(),
+            _cache_src_map: Default::default(),
+            _cached: false,
         })
     }
 
@@ -139,12 +166,51 @@ impl BuildJobResult {
         None
     }
 
-    pub fn get_sourcemap(&self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
-        decode_instructions(
-            bytecode,
-            self.source_maps.clone(),
-            &self.sources.iter().map(|(name, _)| (name)).cloned().collect()
-        )
+    pub fn get_sourcemap(&mut self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
+        if self._cached {
+            return self._cache_src_map.clone();
+        } else {
+            let result = decode_instructions(
+                bytecode,
+                self.source_maps.clone(),
+                &self.sources.iter().map(|(name, _)| (name)).cloned().collect()
+            );
+            self._cache_src_map = result.clone();
+            self._cached = true;
+            return result;
+        }
+    }
+
+    pub fn get_sourcemap_executor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>(
+        _self: Option<&mut Self>,
+        executor: &mut  Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+        addr: &EVMAddress,
+        additional_sourcemap: &ProjectSourceMapTy,
+        pc: usize,
+    ) -> Option<SourceMapLocation> {
+        if let Some(_self) = _self {
+            if _self._cached {
+                return _self._cache_src_map.get(&pc).cloned();
+            }
+
+            let bytecode = Vec::from((**executor)
+                .borrow_mut()
+                .as_any()
+                .downcast_ref::<EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>>()
+                .unwrap()
+                .host
+                .code
+                .get(addr)
+                .unwrap()
+                .clone()
+                .bytecode());
+            return _self.get_sourcemap(bytecode).get(&pc).cloned();
+        }
+
+        if let Some(Some(srcmap)) = additional_sourcemap.get(addr) {
+            return srcmap.get(&pc).cloned();
+        }
+        None
     }
 }
 
@@ -166,6 +232,10 @@ impl ArtifactInfoMetadata {
 
     pub fn get(&self, addr: &EVMAddress) -> Option<&BuildJobResult> {
         self.info.get(addr)
+    }
+
+    pub fn get_mut(&mut self, addr: &EVMAddress) -> Option<&mut BuildJobResult> {
+        self.info.get_mut(addr)
     }
 }
 

@@ -476,12 +476,12 @@ impl ContractLoader {
                 constructor_args,
                 deployed_address: contract_info.address,
                 source_map: None,
-                build_artifact: Some(BuildJobResult {
+                build_artifact: Some(BuildJobResult::new(
                     sources,
-                    source_maps: more_info.source_map,
-                    bytecodes: more_info.deploy_bytecode,
-                    abi: more_info.abi.clone(),
-                })
+                    more_info.source_map,
+                    more_info.deploy_bytecode,
+                    more_info.abi.clone(),
+                ))
             })
         }
 

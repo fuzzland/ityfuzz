@@ -254,8 +254,12 @@ impl<'a> EVMCorpusInitializer<'a> {
                 contract.deployed_address,
                 Bytecode::new_raw(Bytes::from(code))
             );
-            artifacts.address_to_name.insert(contract.deployed_address,
-                                             contract.name.clone().trim_end_matches('*').to_string());
+
+            let mut name = contract.name.clone().trim_end_matches('*').to_string();
+            if name != format!("{:?}", contract.deployed_address) {
+                name = format!("{}({:?})", name, contract.deployed_address.clone());
+            }
+            artifacts.address_to_name.insert(contract.deployed_address, name);
 
             if let Some(build_artifact) = &contract.build_artifact {
                 artifacts.build_artifacts.insert(contract.deployed_address, build_artifact.clone());

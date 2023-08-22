@@ -139,14 +139,16 @@ where
 pub struct BugMetadata {
     pub known_bugs: HashSet<u64>,
     pub current_bugs: Vec<u64>,
-    pub corpus_idx_to_bug: HashMap<usize, u64>,
+    pub corpus_idx_to_bug: HashMap<usize, Vec<u64>>,
 }
 
 impl BugMetadata {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     pub fn register_corpus_idx(&mut self, corpus_idx: usize) {
-        self.current_bugs.iter().for_each(|bug_idx| {
-            self.corpus_idx_to_bug.insert(corpus_idx, *bug_idx);
-        });
+        self.corpus_idx_to_bug.insert(corpus_idx, self.current_bugs.clone());
     }
 }
 

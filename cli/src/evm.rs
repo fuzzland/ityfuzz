@@ -371,10 +371,6 @@ pub fn evm_main(args: EvmArgs) {
         oracles.push(flashloan_oracle.clone());
     }
 
-    if args.selfdestruct_oracle {
-        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
-    }
-
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
     }
@@ -553,6 +549,7 @@ pub fn evm_main(args: EvmArgs) {
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
         typed_bug: args.typed_bug_oracle,
+        selfdestruct_bug: args.selfdestruct_oracle,
         builder,
     };
 

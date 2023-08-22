@@ -15,6 +15,9 @@ use libafl::impl_serdeany;
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
+use crate::evm::middlewares::call_printer::CallPrinterResult;
+use crate::evm::srcmap::parser::SourceMapLocation;
+use crate::fuzzer::ORACLE_OUTPUT;
 
 pub struct NoOracle {}
 
@@ -32,5 +35,49 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
 pub fn dummy_precondition(_ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
     99
+}
+
+
+pub struct EVMBugResult {
+    pub bug_info: String,
+    pub input: ConciseEVMInput,
+    pub sourcemap: Option<SourceMapLocation>,
+    pub bug_idx: u64,
+}
+
+
+impl EVMBugResult {
+    pub fn to_value(&self) -> serde_json::Value {
+        serde_json::json!({
+            "bug_info": self.bug_info,
+            "input": self.input,
+            "sourcemap": self.sourcemap,
+            "bug_idx": self.bug_idx,
+        })
+    }
+
+    pub fn new(bug_idx: u64, bug_info: String, input: ConciseEVMInput,  sourcemap: Option<SourceMapLocation>) -> Self {
+        Self {
+            bug_info,
+            input,
+            sourcemap,
+            bug_idx,
+        }
+    }
+
+    pub fn new_simple(bug_idx: u64, bug_info: String, input: ConciseEVMInput) -> Self {
+        Self {
+            bug_info,
+            input,
+            sourcemap: None,
+            bug_idx,
+        }
+    }
+
+    pub fn push_to_output(&self) {
+        unsafe {
+            ORACLE_OUTPUT.push(self.to_value());
+        }
+    }
 }
 

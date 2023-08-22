@@ -241,7 +241,7 @@ pub struct EVMState {
     pub bug_hit: bool,
     /// selftdestruct() call in Solidity hit?
     #[serde(skip)]
-    pub selfdestruct_hit: bool,
+    pub self_destruct: HashSet<(EVMAddress, usize)>,
     /// bug type call in solidity type
     #[serde(skip)]
     pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
@@ -271,7 +271,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            selfdestruct_hit: false,
+            self_destruct: Default::default(),
             typed_bug: Default::default(),
         }
     }
@@ -355,7 +355,7 @@ impl EVMState {
             post_execution: vec![],
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            selfdestruct_hit: false,
+            self_destruct: Default::default(),
             typed_bug: Default::default(),
         }
     }
@@ -480,8 +480,8 @@ where
         if cleanup {
             self.host.coverage_changed = false;
             self.host.bug_hit = false;
-            self.host.selfdestruct_hit = false;
             self.host.current_typed_bug = vec![];
+            self.host.current_self_destructs = vec![];
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -759,11 +759,14 @@ where
             _ => {}
         }
 
-        r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        r.new_state.selfdestruct_hit = vm_state.selfdestruct_hit || self.host.selfdestruct_hit;
         r.new_state.typed_bug = HashSet::from_iter(
             vm_state.typed_bug.iter().cloned().chain(
                 self.host.current_typed_bug.iter().cloned()
+            )
+        );
+        r.new_state.self_destruct = HashSet::from_iter(
+            vm_state.self_destruct.iter().cloned().chain(
+                self.host.current_self_destructs.iter().cloned()
             )
         );
 
@@ -973,8 +976,7 @@ where
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
-            self.host.bug_hit = false;
-            self.host.selfdestruct_hit = false;
+            self.host.current_self_destructs = vec![];
             self.host.call_count = 0;
             self.host.current_typed_bug = vec![];
             self.host.randomness = vec![9];

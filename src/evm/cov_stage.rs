@@ -72,10 +72,14 @@ impl<EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, EVMFuzzState, Z> for CoverageStag
                corpus_idx: usize
     ) -> Result<(), Error> {
         let total = state.corpus().count();
+        if self.last_corpus_idx == total {
+            return Ok(());
+        }
+
         let mut exec = self.executor.deref().borrow_mut();
         exec.host.add_middlewares(self.call_printer.clone());
 
-        let meta = state.metadata().get::<BugMetadata>().unwrap();
+        let meta = state.metadata().get::<BugMetadata>().unwrap().clone();
         for i in self.last_corpus_idx..total {
             self.call_printer.deref().borrow_mut().cleanup();
             let testcase = state.corpus().get(i).unwrap().borrow().clone();
@@ -83,8 +87,11 @@ impl<EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, EVMFuzzState, Z> for CoverageStag
             unsafe { EVAL_COVERAGE = true; }
             exec.execute(input, state);
             self.call_printer.deref().borrow_mut().save_trace(format!("{}/{}", self.trace_dir, i).as_str());
-            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i).is_some() {
-                fs::copy(format!("{}/{}", self.trace_dir, i), format!("{}/bug_{}", self.trace_dir, bug_idx)).unwrap();
+            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i) {
+
+                for id in bug_idx {
+                    fs::copy(format!("{}/{}.json", self.trace_dir, i), format!("{}/bug_{}.json", self.trace_dir, id)).unwrap();
+                }
             }
             unsafe { EVAL_COVERAGE = false; }
         }

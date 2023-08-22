@@ -40,7 +40,6 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
-use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
 use primitive_types::{H160, U256};
@@ -57,11 +56,13 @@ use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
+use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
+use crate::oracle::BugMetadata;
 
 struct ABIConfig {
     abi: String,
@@ -96,15 +97,6 @@ pub fn evm_fuzzer(
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
-
-    if config.selfdestruct_oracle {
-        //Selfdestruct middlewares
-        let mid = Rc::new(RefCell::new(
-            Selfdestruct::<EVMState, EVMInput, EVMFuzzState>::new(),
-        ));
-        fuzz_host.add_middlewares(mid.clone());
-        // Selfdestruct end
-    }
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
@@ -350,6 +342,15 @@ pub fn evm_fuzzer(
 
     if config.typed_bug {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
+    state.add_metadata(BugMetadata::new());
+
+    if config.selfdestruct_oracle {
+        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new(
             artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));

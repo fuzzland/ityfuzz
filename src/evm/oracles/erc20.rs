@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use crate::evm::oracle::EVMBugResult;
 use crate::evm::oracles::ERC20_BUG_IDX;
 use crate::evm::producers::erc20::ERC20Producer;
 use crate::fuzzer::ORACLE_OUTPUT;
@@ -71,10 +72,17 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         let exec_res = &ctx.fuzz_state.get_execution_result().new_state.state;
         if exec_res.flashloan_data.earned > exec_res.flashloan_data.owed {
             unsafe {
-                ORACLE_OUTPUT += format!(
-                    "[Flashloan] Earned {} more than owed {}",
-                    exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
-                ).as_str();
+                EVMBugResult::new_simple(
+                    ERC20_BUG_IDX,
+                    format!(
+                        "[Flashloan] Earned {} more than owed {}",
+                        exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
+                    ),
+                    ConciseEVMInput::from_input(
+                        ctx.input,
+                        ctx.fuzz_state.get_execution_result(),
+                    )
+                ).push_to_output();
             }
             vec![ERC20_BUG_IDX]
         } else {
@@ -194,18 +202,21 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             // we scaled by 1e24, so divide by 1e24 to get ETH
             let net_eth = net / EVMU512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
-
-
-                {
-                    ORACLE_OUTPUT += format!(
+                EVMBugResult::new_simple(
+                    ERC20_BUG_IDX,
+                    format!(
                         "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}\n",
                         exec_res.new_state.state.flashloan_data.earned,
                         exec_res.new_state.state.flashloan_data.owed,
                         net,
                         net_eth,
                         exec_res.new_state.state.flashloan_data.extra_info
-                    ).as_str();
-                }
+                    ),
+                    ConciseEVMInput::from_input(
+                        ctx.input,
+                        ctx.fuzz_state.get_execution_result(),
+                    )
+                ).push_to_output();
             }
             vec![ERC20_BUG_IDX]
         } else {

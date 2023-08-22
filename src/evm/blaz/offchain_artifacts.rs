@@ -130,12 +130,12 @@ impl OffChainArtifact {
         let contract_artifact = &existing_artifacts[candidates[selected_idx].0].contracts[&candidates[selected_idx].1];
         let sources = existing_artifacts[candidates[selected_idx].0].sources.clone();
 
-        Some(BuildJobResult {
+        Some(BuildJobResult::new(
             sources,
-            source_maps: contract_artifact.source_map.clone(),
-            bytecodes: contract_artifact.deploy_bytecode.clone(),
-            abi: contract_artifact.abi.clone(),
-        })
+            contract_artifact.source_map.clone(),
+            contract_artifact.deploy_bytecode.clone(),
+            contract_artifact.abi.clone(),
+        ))
     }
 }
 

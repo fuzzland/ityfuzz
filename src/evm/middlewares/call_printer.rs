@@ -28,8 +28,8 @@ use crate::evm::blaz::builder::ArtifactInfoMetadata;
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
 pub struct SingleCall {
-    pub caller: EVMAddress,
-    pub contract: EVMAddress,
+    pub caller: String,
+    pub contract: String,
     pub input: String,
     pub source: Option<SourceMapLocation>,
 }
@@ -44,7 +44,9 @@ pub struct CallPrinter {
     pub address_to_name: HashMap<EVMAddress, String>,
     pub sourcemaps: ProjectSourceMapTy,
     pub current_layer: usize,
-    pub results: CallPrinterResult
+    pub results: CallPrinterResult,
+
+    entry: bool
 }
 
 impl CallPrinter {
@@ -57,12 +59,14 @@ impl CallPrinter {
             sourcemaps,
             current_layer: 0,
             results: Default::default(),
+            entry: true,
         }
     }
 
     pub fn cleanup(&mut self) {
         self.current_layer = 0;
         self.results = Default::default();
+        self.entry = true;
     }
 
     pub fn get_trace(&self) -> String {
@@ -90,6 +94,10 @@ impl CallPrinter {
         let json = serde_json::to_string(&self.results).unwrap();
         json_file.write_all(json.as_bytes()).unwrap();
     }
+
+    fn translate_address(&self, a: EVMAddress) -> String {
+        self.address_to_name.get(&a).unwrap_or(&format!("{:?}", a)).to_string()
+    }
 }
 
 
@@ -112,6 +120,33 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
+        if self.entry {
+            self.entry = false;
+            let code_address = interp.contract.address;
+            let caller_code = host.code.get(&interp.contract.code_address).map(
+                |code| {
+                    Vec::from(code.bytecode())
+                },
+            ).unwrap_or(vec![]);
+            self.results.data.push((0, SingleCall {
+                caller: self.translate_address(interp.contract.caller),
+                contract: self.translate_address(interp.contract.address),
+                input: hex::encode(interp.contract.input.clone()),
+                source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
+                    && let Some(source) = source.get(&interp.program_counter()) {
+                    Some(source.clone())
+                } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
+                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
+                        Some(srcmap.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                },
+            }));
+        }
+
         let (arg_offset, arg_len) = match unsafe { *interp.instruction_pointer } {
             0xf1 | 0xf2 => {
                 (
@@ -145,7 +180,9 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 unreachable!()
             }
         };
-        let address_h160 = convert_u256_to_h160(address);
+        let target = convert_u256_to_h160(address);
+
+        let caller_code_address = interp.contract.code_address;
         let caller_code = host.code.get(&interp.contract.code_address).map(
             |code| {
                 Vec::from(code.bytecode())
@@ -153,13 +190,13 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         ).unwrap_or(vec![]);
 
         self.results.data.push((self.current_layer, SingleCall {
-            caller,
-            contract: address_h160,
+            caller: self.translate_address(caller),
+            contract: self.translate_address(target),
             input: hex::encode(arg),
-            source: if let Some(Some(source)) = self.sourcemaps.get(&address_h160)
+            source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
                 && let Some(source) = source.get(&interp.program_counter()) {
                 Some(source.clone())
-            } else if let Some(artifact) = state.metadata().get::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get(&address_h160) {
+            } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
                 if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
                     Some(srcmap.clone())
                 } else {

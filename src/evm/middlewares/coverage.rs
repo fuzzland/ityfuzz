@@ -162,7 +162,7 @@ impl CoverageReport {
             .append(false)
             .create(true)
             .truncate(true)
-            .open(format!("{}/files.json", work_dir))
+            .open(format!("{}/../files.json", work_dir))
             .unwrap();
         file_json_file.write_all(serde_json::to_string(&self.files).unwrap().as_bytes()).unwrap();
         file_json_file.flush().unwrap();
@@ -214,9 +214,6 @@ impl Coverage {
 
         for (addr, all_pcs) in &self.total_instr_set {
             let mut name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
-            if name != format!("{:?}", addr) {
-                name = format!("{}({:?})", name, addr.clone());
-            }
             report.files.insert(name.clone(), self.sources.get(addr).unwrap_or(&vec![]).clone());
             match self.pc_coverage.get_mut(addr) {
                 None => {}

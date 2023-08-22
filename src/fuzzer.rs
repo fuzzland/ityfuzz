@@ -36,6 +36,7 @@ use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use itertools::Itertools;
 use libafl::prelude::HasRand;
 use primitive_types::H256;
 use serde_json::Value;
@@ -48,7 +49,7 @@ use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
-pub static mut ORACLE_OUTPUT: String = String::new();
+pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
@@ -516,13 +517,13 @@ where
             // find the solution
             ExecuteInputResult::Solution => {
                 report_vulnerability(
-                    unsafe {ORACLE_OUTPUT.clone()},
+                    unsafe {serde_json::to_string(&ORACLE_OUTPUT).expect("")},
                 );
 
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
-                    unsafe { ORACLE_OUTPUT.clone() },
+                    unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     state
                         .get_execution_result()
                         .new_state
@@ -531,6 +532,18 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
+
+                let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
+                let mut f = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(vuln_file)
+                    .expect("Unable to open file");
+                f.write_all(unsafe {
+                    ORACLE_OUTPUT.iter().map(|v| serde_json::to_string(v).expect("failed to json"))
+                        .join("\n").as_bytes()
+                }).expect("Unable to write data");
+                f.write_all(b"\n").expect("Unable to write data");
 
                 state.metadata_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
                     corpus_idx
@@ -568,7 +581,7 @@ where
             }
         };
         unsafe {
-            ORACLE_OUTPUT = String::new();
+            ORACLE_OUTPUT.clear();
         }
         final_res
     }
