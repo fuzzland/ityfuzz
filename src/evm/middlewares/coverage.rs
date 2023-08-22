@@ -306,7 +306,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         let meta = state.metadata().get::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
         if let Some(build_artifact) = meta.get(&address) {
             let sourcemap = decode_instructions(
-                bytecode.bytecode.to_vec(),
+                Vec::from(host.code.get(&address).unwrap().clone().bytecode()),
                 build_artifact.source_maps.clone(),
                 &build_artifact.sources.iter().map(|(file_name, _)| file_name.clone()).collect(),
             );

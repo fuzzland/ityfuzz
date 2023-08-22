@@ -34,13 +34,15 @@ use libafl::{
 
 use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use libafl::prelude::HasRand;
 use primitive_types::H256;
+use serde_json::Value;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
+use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
 use crate::telemetry::report_vulnerability;
 
@@ -441,6 +443,20 @@ where
             }
         }
 
+        let mut corpus_idx = 0;
+        if res == ExecuteInputResult::Corpus || res == ExecuteInputResult::Solution {
+            // Add the input to the main corpus
+            let mut testcase = Testcase::new(input.clone());
+            self.feedback.append_metadata(state, &mut testcase)?;
+            corpus_idx = state.corpus_mut().add(testcase)?;
+            self.infant_scheduler.report_corpus(
+                state.get_infant_state_state(),
+                state_idx
+            );
+            self.scheduler.on_add(state, corpus_idx)?;
+            self.on_add_corpus(&input, unsafe { &JMP_MAP }, corpus_idx);
+        }
+
         let final_res = match res {
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
@@ -474,17 +490,6 @@ where
                 // Not a solution
                 self.objective.discard_metadata(state, &input)?;
 
-                // Add the input to the main corpus
-                let mut testcase = Testcase::new(input.clone());
-                self.feedback.append_metadata(state, &mut testcase)?;
-                let idx = state.corpus_mut().add(testcase)?;
-                self.infant_scheduler.report_corpus(
-                    state.get_infant_state_state(),
-                    state_idx
-                );
-                self.scheduler.on_add(state, idx)?;
-                self.on_add_corpus(&input, unsafe { &JMP_MAP }, idx);
-
                 // Fire the event for CLI
                 if send_events {
                     // TODO set None for fast targets
@@ -506,7 +511,7 @@ where
                         },
                     )?;
                 }
-                Ok((res, Some(idx)))
+                Ok((res, Some(corpus_idx)))
             }
             // find the solution
             ExecuteInputResult::Solution => {
@@ -526,6 +531,10 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
+
+                state.metadata_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
+                    corpus_idx
+                );
 
                 #[cfg(feature = "print_txn_corpus")]
                 {

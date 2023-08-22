@@ -58,6 +58,7 @@ use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
+use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
@@ -273,9 +274,16 @@ pub fn evm_fuzzer(
 
     let std_stage = StdMutationalStage::new(mutator);
 
+    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(
+        artifacts.address_to_name.clone(),
+        artifacts.address_to_sourcemap.clone(),
+    )));
+
     let coverage_obs_stage = CoverageStage::new(
         evm_executor_ref.clone(),
         cov_middleware.clone(),
+        call_printer_mid.clone(),
+        config.work_dir.clone(),
     );
 
     let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
@@ -340,6 +348,13 @@ pub fn evm_fuzzer(
         oracles.push(oracle);
     }
 
+    if config.typed_bug {
+        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
 
     let mut producers = config.producers;
 
@@ -371,7 +386,10 @@ pub fn evm_fuzzer(
                 EVAL_COVERAGE = true;
             }
 
-            let printer = Rc::new(RefCell::new(CallPrinter::new()));
+            let printer = Rc::new(RefCell::new(CallPrinter::new(
+                artifacts.address_to_name.clone(),
+                artifacts.address_to_sourcemap.clone(),
+            )));
             evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
 
             let initial_vm_state = artifacts.initial_state.clone();
@@ -395,7 +413,7 @@ pub fn evm_fuzzer(
                     // [is_step] [caller] [target] [input] [value]
                     let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())
                         .to_input(vm_state.clone());
-                    printer.borrow_mut().register_input(&inp);
+                    printer.borrow_mut().cleanup();
 
                     unsafe {CALL_UNTIL = call_until;}
 

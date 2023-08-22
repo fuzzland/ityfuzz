@@ -10,7 +10,7 @@ use libafl::state::State;
 use serde::de::DeserializeOwned;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -138,7 +138,16 @@ where
 #[derive(Clone,Debug,Serialize,Deserialize, Default)]
 pub struct BugMetadata {
     pub known_bugs: HashSet<u64>,
-    pub current_bugs: Vec<u64>
+    pub current_bugs: Vec<u64>,
+    pub corpus_idx_to_bug: HashMap<usize, u64>,
+}
+
+impl BugMetadata {
+    pub fn register_corpus_idx(&mut self, corpus_idx: usize) {
+        self.current_bugs.iter().for_each(|bug_idx| {
+            self.corpus_idx_to_bug.insert(corpus_idx, *bug_idx);
+        });
+    }
 }
 
 impl_serdeany!(BugMetadata);

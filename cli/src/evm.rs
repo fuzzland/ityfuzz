@@ -375,11 +375,6 @@ pub fn evm_main(args: EvmArgs) {
         oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
     }
 
-    if args.typed_bug_oracle {
-        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
-
-    }
-
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
     }
@@ -557,6 +552,7 @@ pub fn evm_main(args: EvmArgs) {
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
+        typed_bug: args.typed_bug_oracle,
         builder,
     };
 

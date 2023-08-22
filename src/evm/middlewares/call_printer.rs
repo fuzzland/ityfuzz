@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::srcmap::parser::{pretty_print_source_map, SourceMapAvailability, SourceMapLocation, SourceMapWithCode};
+use crate::evm::srcmap::parser::{decode_instructions, pretty_print_source_map, SourceMapAvailability, SourceMapLocation, SourceMapWithCode};
 use crate::evm::srcmap::parser::SourceMapAvailability::Available;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -24,30 +24,71 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use crate::evm::types::{as_u64, convert_u256_to_h160, EVMAddress, is_zero, ProjectSourceMapTy};
 use crate::evm::vm::IN_DEPLOY;
 use serde_json;
+use crate::evm::blaz::builder::ArtifactInfoMetadata;
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
-pub struct CallPrinter {
-    pub layer: usize,
-    pub data: String
+pub struct SingleCall {
+    pub caller: EVMAddress,
+    pub contract: EVMAddress,
+    pub input: String,
+    pub source: Option<SourceMapLocation>,
 }
 
+#[derive(Clone, Debug, Serialize, Default, Deserialize)]
+pub struct CallPrinterResult {
+    pub data: Vec<(usize, SingleCall)>
+}
+
+#[derive(Clone, Debug)]
+pub struct CallPrinter {
+    pub address_to_name: HashMap<EVMAddress, String>,
+    pub sourcemaps: ProjectSourceMapTy,
+    pub current_layer: usize,
+    pub results: CallPrinterResult
+}
 
 impl CallPrinter {
-    pub fn new() -> Self {
-        Self { layer: 0, data: "".to_string() }
+    pub fn new(
+        address_to_name: HashMap<EVMAddress, String>,
+        sourcemaps: ProjectSourceMapTy,
+    ) -> Self {
+        Self {
+            address_to_name,
+            sourcemaps,
+            current_layer: 0,
+            results: Default::default(),
+        }
     }
 
-    pub fn register_input(&mut self, input: &EVMInput) {
-        self.layer = 0;
-        self.data = "".to_string();
-        self.data.push_str(
-            format!("[{:?}]=>{:?} {}", input.get_caller(), input.get_contract(), hex::encode(input.to_bytes()))
-                .as_str()
-        )
+    pub fn cleanup(&mut self) {
+        self.current_layer = 0;
+        self.results = Default::default();
     }
 
     pub fn get_trace(&self) -> String {
-        self.data.clone()
+        self.results.data.iter().map(|(layer, call)| {
+            let padding = (0..*layer).map(|_| "  ").join("");
+            format!("{}[{} -> {}] ({})", padding, call.caller, call.contract, call.input)
+        }).join("\n")
+    }
+
+    pub fn save_trace(&self, path: &str) {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(false)
+            .open(path)
+            .unwrap();
+        file.write_all(self.get_trace().as_bytes()).unwrap();
+
+        let mut json_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(false)
+            .open(format!("{}.json", path))
+            .unwrap();
+        let json = serde_json::to_string(&self.results).unwrap();
+        json_file.write_all(json.as_bytes()).unwrap();
     }
 }
 
@@ -89,7 +130,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             }
         };
 
-        self.layer += 1;
+        self.current_layer += 1;
 
         let arg_offset = as_u64(arg_offset) as usize;
         let arg_len = as_u64(arg_len) as usize;
@@ -105,18 +146,29 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             }
         };
         let address_h160 = convert_u256_to_h160(address);
-        let padding = " ".repeat(self.layer * 4);
-        self.data.push_str(
-            format!(
-                "\n{}[{:?}]=>{:?} {}",
-                padding,
-                caller,
-                address_h160,
-                hex::encode(arg)
-            )
-                .as_str(),
-        );
+        let caller_code = host.code.get(&interp.contract.code_address).map(
+            |code| {
+                Vec::from(code.bytecode())
+            },
+        ).unwrap_or(vec![]);
 
+        self.results.data.push((self.current_layer, SingleCall {
+            caller,
+            contract: address_h160,
+            input: hex::encode(arg),
+            source: if let Some(Some(source)) = self.sourcemaps.get(&address_h160)
+                && let Some(source) = source.get(&interp.program_counter()) {
+                Some(source.clone())
+            } else if let Some(artifact) = state.metadata().get::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get(&address_h160) {
+                if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
+                    Some(srcmap.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+        }));
     }
 
     unsafe fn on_return(
@@ -125,7 +177,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        self.layer -= 1;
+        self.current_layer -= 1;
     }
 
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {

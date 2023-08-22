@@ -1,13 +1,14 @@
+use std::collections::HashMap;
 use std::process::id;
 use std::thread::sleep;
 use std::time::Duration;
 use bytes::Bytes;
 use libafl::impl_serdeany;
-use revm_primitives::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::evm::blaz::get_client;
 use crate::evm::onchain::endpoints::Chain;
+use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
 use crate::evm::types::EVMAddress;
 
 #[derive(Clone)]
@@ -136,6 +137,14 @@ impl BuildJobResult {
 
     pub fn from_artifact() -> Option<Self> {
         None
+    }
+
+    pub fn get_sourcemap(&self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
+        decode_instructions(
+            bytecode,
+            self.source_maps.clone(),
+            &self.sources.iter().map(|(name, _)| (name)).cloned().collect()
+        )
     }
 }
 

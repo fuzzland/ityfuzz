@@ -128,7 +128,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub current_typed_bug: Vec<String>,
+    pub current_typed_bug: Vec<(String, (EVMAddress, usize))>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -925,7 +925,7 @@ where
                     }
                     self._pc = interp.program_counter();
                 }
-                0xf0 | 0xf5 => {
+                0xf0 | 0xf5 | 0xa0..=0xa4 => {
                     // CREATE, CREATE2
                     self._pc = interp.program_counter();
                 }
@@ -1034,7 +1034,10 @@ where
                         "target bug found: {}", data_string
                     );
                 }
-                self.current_typed_bug.push(data_string.clone().trim_end_matches("\u{0}").to_string());
+                self.current_typed_bug.push((
+                    data_string.clone().trim_end_matches("\u{0}").to_string(),
+                    (_address, self._pc),
+                ));
             }
         }
 

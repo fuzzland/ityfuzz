@@ -37,6 +37,7 @@ use revm_interpreter::InstructionResult::ControlLeak;
 use revm_primitives::{Bytecode, LatestSpec};
 
 use core::ops::Range;
+use std::any::Any;
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
@@ -54,7 +55,6 @@ use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
 use crate::{invoke_middlewares};
 
@@ -244,7 +244,7 @@ pub struct EVMState {
     pub selfdestruct_hit: bool,
     /// bug type call in solidity type
     #[serde(skip)]
-    pub typed_bug: HashSet<String>,
+    pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
 }
 
 
@@ -442,7 +442,7 @@ where
         + Debug
         + 'static,
     VS: Default + VMStateT + 'static,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
 {
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
@@ -822,7 +822,7 @@ where
         + Debug
         + 'static,
     VS: VMStateT + Default + 'static,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
 {
     /// Deploy a contract
     fn deploy(
@@ -1025,6 +1025,10 @@ where
 
     fn state_changed(&self) -> bool {
         unsafe { STATE_CHANGE }
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

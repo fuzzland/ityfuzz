@@ -5,7 +5,7 @@ use itertools::Itertools;
 use serde_json;
 use revm;
 use revm_primitives::Bytecode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::evm::types::{EVMAddress, ProjectSourceMapTy};
 
 pub static mut BASE_PATH: String = String::new();
@@ -31,7 +31,7 @@ impl SourceMapWithCode {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone, Serialize, Deserialize)]
 pub struct SourceMapLocation {
     pub file: Option<String>,
     pub file_idx: Option<usize>,
