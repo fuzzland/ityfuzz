@@ -1,6 +1,9 @@
 use revm_interpreter::opcode::{INVALID, JUMP, JUMPDEST, JUMPI, RETURN, REVERT, STOP};
 
+#[cfg(not(test))]
 pub static mut SKIP_CBOR: bool = false;
+#[cfg(test)]
+pub static mut SKIP_CBOR: bool = true;
 
 pub fn walk_bytecode<Fn: FnOnce(usize, u8) + Copy>(bytes: Vec<u8>, it: Fn) {
     let mut i = 0;
@@ -63,10 +66,12 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
 macro_rules! skip_cbor {
     ($e: expr) => {
         {
+            #[cfg(not(test))]
             unsafe {
                 SKIP_CBOR = true;
             }
             let res = $e;
+            #[cfg(not(test))]
             unsafe {
                 SKIP_CBOR = false;
             }
