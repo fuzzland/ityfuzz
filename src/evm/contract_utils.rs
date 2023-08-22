@@ -481,6 +481,7 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
 
 mod tests {
     use super::*;
+    use crate::state::FuzzState;
     use std::str::FromStr;
 
     #[test]
