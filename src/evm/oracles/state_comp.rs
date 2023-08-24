@@ -85,8 +85,9 @@ for StateCompOracle
         unsafe {
             if STATE_CHANGE && comp(&ctx.post_state, &self.desired_state) {
                 EVMBugResult::new_simple(
+                    "state_comp".to_string(),
                     STATE_COMP_BUG_IDX,
-                    "[state_comp] found equivalent state".to_string(),
+                    "Found equivalent state".to_string(),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                 ).push_to_output();
                 vec![STATE_COMP_BUG_IDX]

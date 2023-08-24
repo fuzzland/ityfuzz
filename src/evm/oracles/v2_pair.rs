@@ -79,9 +79,10 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
                             let bug_idx = hash << 8 + V2_PAIR_BUG_IDX;
 
                             EVMBugResult::new_simple(
+                                "imbalanced_pair".to_string(),
                                 bug_idx,
                                 format!(
-                                    "Imbalanced Pair: {:?}, Reserves: {:?} => {:?}\n",
+                                    "{:?}, Reserves changed from {:?} to {:?}\n",
                                     addr,
                                     (r0, r1),
                                     (pre_r0, pre_r1)

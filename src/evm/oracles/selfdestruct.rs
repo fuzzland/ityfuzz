@@ -79,13 +79,14 @@ for SelfdestructOracle
                     *pc
                 );
                 EVMBugResult::new(
+                    "selfdestruct".to_string(),
                     real_bug_idx,
                     format!(
-                        "[selfdestruct] hit at contract ({})",
-                        name
+                        "Destructed",
                     ),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                     srcmap,
+                    Some(name.clone())
                 ).push_to_output();
                 real_bug_idx
             }).collect_vec()

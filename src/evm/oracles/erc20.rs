@@ -73,9 +73,10 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         if exec_res.flashloan_data.earned > exec_res.flashloan_data.owed {
             unsafe {
                 EVMBugResult::new_simple(
+                    "erc20".to_string(),
                     ERC20_BUG_IDX,
                     format!(
-                        "[Flashloan] Earned {} more than owed {}",
+                        "Earned {}wei more than owed {}wei",
                         exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
                     ),
                     ConciseEVMInput::from_input(
@@ -203,14 +204,14 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             let net_eth = net / EVMU512::from(10_000_000_000_000_000_000_000_00u128);
             unsafe {
                 EVMBugResult::new_simple(
+                    "erc20".to_string(),
                     ERC20_BUG_IDX,
                     format!(
-                        "💰[Flashloan] Earned {} more than owed {}, net earned = {}wei ({}ETH), extra: {:?}\n",
+                        "Earned {} more than owed {}, net earned = {}wei ({}ETH)\n",
                         exec_res.new_state.state.flashloan_data.earned,
                         exec_res.new_state.state.flashloan_data.owed,
                         net,
                         net_eth,
-                        exec_res.new_state.state.flashloan_data.extra_info
                     ),
                     ConciseEVMInput::from_input(
                         ctx.input,

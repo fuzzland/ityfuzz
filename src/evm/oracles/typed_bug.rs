@@ -80,14 +80,15 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
                     *pc
                 );
                 EVMBugResult::new(
+                    "typed_bug".to_string(),
                     real_bug_idx,
                     format!(
-                        "[typed_bug] {:?} hit at contract ({})",
+                        "{:?} violated",
                         bug_id,
-                        name
                     ),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                     srcmap,
+                    Some(name.clone())
                 ).push_to_output();
                 real_bug_idx
             }).collect_vec()
