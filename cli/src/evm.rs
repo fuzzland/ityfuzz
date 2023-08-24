@@ -257,7 +257,7 @@ pub fn evm_main(args: EvmArgs) {
         match args.chain_type {
             Some(chain_str) => {
                 let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
-                let block_number = args.onchain_block_number.unwrap();
+                let block_number = args.onchain_block_number.unwrap_or(0);
                 Some(OnChainConfig::new(chain, block_number))
             }
             None => Some(OnChainConfig::new_raw(
