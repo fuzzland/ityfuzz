@@ -5,7 +5,7 @@ Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
 
-[Research Paper](https://scf.so/ityfuzz.pdf) / [Fuzzing EVM Contracts](#building-evm) / [Fuzzing Move Contracts](#building-with-move-sui-support)
+[Tool](https://github.com/fuzzland/ityfuzz/) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Fuzzing EVM Contracts](#building-evm) / [Fuzzing Move Contracts](#building-with-move-sui-support)
 
 ### Run ItyFuzz with UI
 
