@@ -29,7 +29,7 @@ use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use ityfuzz::evm::blaz::builder::BuildJob;
+use ityfuzz::evm::blaz::builder::{BuildJob, BuildJobResult};
 use ityfuzz::evm::blaz::offchain_artifacts::OffChainArtifact;
 use ityfuzz::evm::blaz::offchain_config::OffchainConfig;
 
@@ -235,6 +235,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     onchain_builder: String,
 
+    /// Replacement config (replacing bytecode) for onchain campaign
+    #[arg(long, default_value = "")]
+    onchain_replacements_file: String,
+
     /// Builder Artifacts url. If specified, will use this artifact to derive code coverage.
     #[arg(long, default_value = "")]
     builder_artifacts_url: String,
@@ -420,8 +424,15 @@ pub fn evm_main(args: EvmArgs) {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
+
+    let onchain_replacements = if args.onchain_replacements_file.len() > 0 {
+        BuildJobResult::from_multi_file(args.onchain_replacements_file)
+    } else {
+        HashMap::new()
+    };
+
     let builder = if args.onchain_builder.len() > 1 {
-        Some(BuildJob::new(args.onchain_builder))
+        Some(BuildJob::new(args.onchain_builder, onchain_replacements))
     } else {
         None
     };

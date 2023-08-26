@@ -33,6 +33,9 @@ pub fn walk_bytecode<Fn: FnOnce(usize, u8) + Copy>(bytes: Vec<u8>, it: Fn) {
 }
 
 pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
+    if bytes.len() == 0 {
+        return vec![];
+    }
     let mut i = 0;
     let last_op = *bytes.last().unwrap();
     let has_cbor = last_op != JUMP &&

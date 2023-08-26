@@ -1,5 +1,6 @@
 use std::error::Error;
 use bytes::Bytes;
+use itertools::Itertools;
 use revm_primitives::HashMap;
 use serde_json::Value;
 use crate::evm::blaz::{get_client, is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
@@ -10,6 +11,7 @@ pub struct ContractArtifact {
     pub deploy_bytecode: Bytes,
     pub abi: String,
     pub source_map: String,
+    pub source_map_replacements: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +72,24 @@ impl OffChainArtifact {
                 }
             }
 
+            let mut all_source_maps_replacement = HashMap::new();
+            if let Some(source_maps_replacement) = json["replacements"].as_object() {
+                for (filename, contract) in source_maps_replacement {
+                    let contract_obj = contract.as_object().expect("get contract failed");
+                    for (contract_name, source_map_replacements) in contract_obj {
+                        let source_map_replacements = source_map_replacements.as_array().expect("get source_map_replacements failed");
+                        all_source_maps_replacement.insert((filename.clone(), contract_name.clone()), source_map_replacements.iter().map(
+                            |replacements| {
+                                let replacements = replacements.as_array().expect("get replacements failed");
+                                let source = replacements[0].as_str().expect("get source failed");
+                                let target = replacements[1].as_str().expect("get target failed");
+                                (source.to_string(), target.to_string())
+                            }
+                        ).collect_vec());
+                    }
+                }
+            }
+
             let sources = json["sources"].as_object().expect("get sources failed");
             let mut all_sources = vec![(String::new(), String::new()); sources.len()];
             for (filename, source) in sources {
@@ -83,10 +103,15 @@ impl OffChainArtifact {
                 let bytecode = all_bytecode.get(loc).expect("get bytecode failed").clone();
                 let abi = all_abi.get(loc).expect("get abi failed").clone();
                 let source_map = all_source_map.get(loc).expect("get source_map failed").clone();
+                let source_map_replacements = all_source_maps_replacement
+                    .get(loc)
+                    .map(|x| x.clone())
+                    .unwrap_or(vec![]);
                 contracts.insert(loc.clone(), ContractArtifact {
                     deploy_bytecode: bytecode,
                     abi,
                     source_map,
+                    source_map_replacements,
                 });
             }
             artifacts.push(Self {
@@ -98,44 +123,45 @@ impl OffChainArtifact {
     }
 
     pub fn locate(existing_artifacts: &Vec<Self>, to_find: Vec<u8>) -> Option<BuildJobResult> {
-        let mut candidates = vec![];
-        let mut all_candidates = vec![];
-        for (idx, artifact) in existing_artifacts.iter().enumerate() {
-            for (loc, contract) in &artifact.contracts {
-                if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) {
-                    candidates.push((idx, loc.clone()));
-                }
-                all_candidates.push((idx, loc.clone()));
-            }
-        }
-        if candidates.len() == 0 {
-            candidates = all_candidates;
-        }
-
-        let diffs = candidates.iter().map(|(idx, loc)| {
-            let artifact = &existing_artifacts[*idx].contracts[loc];
-            is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
-        }).collect::<Vec<_>>();
-
-        let mut min_diff = usize::MAX;
-        let mut selected_idx = 0;
-
-        for (idx, diff) in diffs.iter().enumerate() {
-            if *diff < min_diff {
-                min_diff = *diff;
-                selected_idx = idx;
-            }
-        }
-
-        let contract_artifact = &existing_artifacts[candidates[selected_idx].0].contracts[&candidates[selected_idx].1];
-        let sources = existing_artifacts[candidates[selected_idx].0].sources.clone();
-
-        Some(BuildJobResult::new(
-            sources,
-            contract_artifact.source_map.clone(),
-            contract_artifact.deploy_bytecode.clone(),
-            contract_artifact.abi.clone(),
-        ))
+        todo!("locate artifact")
+        // let mut candidates = vec![];
+        // let mut all_candidates = vec![];
+        // for (idx, artifact) in existing_artifacts.iter().enumerate() {
+        //     for (loc, contract) in &artifact.contracts {
+        //         if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) {
+        //             candidates.push((idx, loc.clone()));
+        //         }
+        //         all_candidates.push((idx, loc.clone()));
+        //     }
+        // }
+        // if candidates.len() == 0 {
+        //     candidates = all_candidates;
+        // }
+        //
+        // let diffs = candidates.iter().map(|(idx, loc)| {
+        //     let artifact = &existing_artifacts[*idx].contracts[loc];
+        //     is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
+        // }).collect::<Vec<_>>();
+        //
+        // let mut min_diff = usize::MAX;
+        // let mut selected_idx = 0;
+        //
+        // for (idx, diff) in diffs.iter().enumerate() {
+        //     if *diff < min_diff {
+        //         min_diff = *diff;
+        //         selected_idx = idx;
+        //     }
+        // }
+        //
+        // let contract_artifact = &existing_artifacts[candidates[selected_idx].0].contracts[&candidates[selected_idx].1];
+        // let sources = existing_artifacts[candidates[selected_idx].0].sources.clone();
+        //
+        // Some(BuildJobResult::new(
+        //     sources,
+        //     contract_artifact.source_map.clone(),
+        //     contract_artifact.deploy_bytecode.clone(),
+        //     contract_artifact.abi.clone(),
+        // ))
     }
 }
 

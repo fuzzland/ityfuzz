@@ -300,16 +300,13 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
-        let meta = state.metadata().get::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
-        if let Some(build_artifact) = meta.get(&address) {
-            let sourcemap = decode_instructions(
-                Vec::from(host.code.get(&address).unwrap().clone().bytecode()),
-                build_artifact.source_maps.clone(),
-                &build_artifact.sources.iter().map(|(file_name, _)| file_name.clone()).collect(),
-            );
-
+        let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
+        if let Some(build_artifact) = meta.get_mut(&address) {
             self.sources.insert(address, build_artifact.sources.clone());
 
+            let sourcemap = build_artifact.get_sourcemap(
+                Vec::from(host.code.get(&address).unwrap().clone().bytecode())
+            );
 
             pcs.iter().for_each(|pc| {
                 match pretty_print_source_map_single(*pc, &sourcemap, &build_artifact.sources) {

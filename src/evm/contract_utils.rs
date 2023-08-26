@@ -481,6 +481,7 @@ impl ContractLoader {
                     more_info.source_map,
                     more_info.deploy_bytecode,
                     more_info.abi.clone(),
+                    more_info.source_map_replacements.clone(),
                 ))
             })
         }

@@ -28,7 +28,7 @@ use std::ops::Deref;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
-use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
+use crate::evm::srcmap::parser::{SourceMapLocation};
 use hex;
 use itertools::Itertools;
 use std::rc::Rc;

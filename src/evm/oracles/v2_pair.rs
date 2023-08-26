@@ -63,15 +63,6 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
                     .prev_reserves.get(addr) {
                     Some((pre_r0, pre_r1)) => {
                         if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
-                            unsafe {
-                                ORACLE_OUTPUT += format!(
-                                    "Imbalanced Pair: {:?}, Reserves: {:?} => {:?}\n",
-                                    addr,
-                                    (r0, r1),
-                                    (pre_r0, pre_r1)
-                                ).as_str();
-                            }
-
                             // calculate hash in u64 of pair address (addr) using DefaultHasher
                             let mut hasher = DefaultHasher::new();
                             addr.hash(&mut hasher);
