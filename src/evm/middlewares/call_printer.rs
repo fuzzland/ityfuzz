@@ -181,7 +181,13 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         let arg_offset = as_u64(arg_offset) as usize;
         let arg_len = as_u64(arg_len) as usize;
 
-        let arg = interp.memory.get_slice(arg_offset, arg_len);
+
+        let arg = if interp.memory.len() < arg_offset + arg_len {
+            hex::encode(interp.memory.data[arg_len..].to_vec())
+        } else {
+            hex::encode(interp.memory.get_slice(arg_offset, arg_len))
+        };
+
 
         let caller = interp.contract.address;
         let address = match *interp.instruction_pointer {
@@ -203,7 +209,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         self.results.data.push((self.current_layer, SingleCall {
             caller: self.translate_address(caller),
             contract: self.translate_address(target),
-            input: hex::encode(arg),
+            input: arg,
             source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
                 && let Some(source) = source.get(&interp.program_counter()) {
                 Some(source.clone())
