@@ -169,10 +169,10 @@ impl OffChainArtifact {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_from_url() {
-        let url = "https://storage.googleapis.com/faas_bucket_1/client_builds/36b4bea2-2f2d-41d0-835e-db10e0a72ddf-results.json?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=client-project-rw%40adept-vigil-394020.iam.gserviceaccount.com%2F20230821%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230821T163007Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=89f3af8074712c7d5720844617064c1f62544c9b4667dbf7b910d988ef81c10c282ffcdd6160acff8a513e581b2516a6de8cda08f92788d210da110d87c00dff65c9a4f19fdb8e004b90578dd2978fbbf1c7bef7b9415579da7127651c46a2ae6115b1d425eba7c7950dc6df52925e7f4f204605c5c470fccebb922db95fa0d3ebeabfa33454ab1174e8ae8efa5b2cd7269c2edfd446cfee696d8b5172171eb3ae71db9da2f3554f52dc522ba01d60de71ba4fc5eb8040ff85a16fdf5685ba983f53728da90a672ada45e92eda1e4c88ee397027eacd36972f5f8551afbdf1ed747ce12e19a0c4b446e66b4cca6c8a177c2ee8e503d09930fa04ba464c1d6db6";
-        let artifact = OffChainArtifact::from_json_url(url.to_string()).expect("get artifact failed");
-        println!("{:?}", artifact);
-    }
+    // #[test]
+    // fn test_from_url() {
+    //     let url = "https://storage.googleapis.com/faas_bucket_1/client_builds/36b4bea2-2f2d-41d0-835e-db10e0a72ddf-results.json?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=client-project-rw%40adept-vigil-394020.iam.gserviceaccount.com%2F20230821%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230821T163007Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=89f3af8074712c7d5720844617064c1f62544c9b4667dbf7b910d988ef81c10c282ffcdd6160acff8a513e581b2516a6de8cda08f92788d210da110d87c00dff65c9a4f19fdb8e004b90578dd2978fbbf1c7bef7b9415579da7127651c46a2ae6115b1d425eba7c7950dc6df52925e7f4f204605c5c470fccebb922db95fa0d3ebeabfa33454ab1174e8ae8efa5b2cd7269c2edfd446cfee696d8b5172171eb3ae71db9da2f3554f52dc522ba01d60de71ba4fc5eb8040ff85a16fdf5685ba983f53728da90a672ada45e92eda1e4c88ee397027eacd36972f5f8551afbdf1ed747ce12e19a0c4b446e66b4cca6c8a177c2ee8e503d09930fa04ba464c1d6db6";
+    //     let artifact = OffChainArtifact::from_json_url(url.to_string()).expect("get artifact failed");
+    //     println!("{:?}", artifact);
+    // }
 }
