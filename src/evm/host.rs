@@ -128,7 +128,7 @@ where
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     pub bug_hit: bool,
-    pub current_typed_bug: Vec<String>,
+    pub current_typed_bug: Vec<(String, (EVMAddress, usize))>,
     pub call_count: u32,
 
     #[cfg(feature = "print_logs")]
@@ -136,7 +136,7 @@ where
     // set_code data
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
     // selftdestruct
-    pub selfdestruct_hit:bool,
+    pub current_self_destructs: Vec<(EVMAddress, usize)>,
     // relations file handle
     relations_file: std::fs::File,
     // Filter duplicate relations
@@ -214,7 +214,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:self.setcode_data.clone(),
-            selfdestruct_hit:self.selfdestruct_hit,
+            current_self_destructs: self.current_self_destructs.clone(),
             relations_file: self.relations_file.try_clone().unwrap(),
             relations_hash: self.relations_hash.clone(),
             current_typed_bug: self.current_typed_bug.clone(),
@@ -269,7 +269,7 @@ where
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
             setcode_data:HashMap::new(),
-            selfdestruct_hit:false,
+            current_self_destructs: Default::default(),
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
             current_typed_bug: Default::default(),
@@ -429,13 +429,12 @@ where
                 }
             }
         }
-        assert!(self
+        self
             .code
             .insert(
                 address,
                 Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap())
-            )
-            .is_none());
+            );
     }
 
     pub fn find_static_call_read_slot(
@@ -469,7 +468,9 @@ where
         if funtion_hash.len() < 0x4 {
             return;
         }
-        let cur_write_str = format!("{{caller:0x{} --> traget:0x{} function(0x{})}}\n", hex::encode(caller), hex::encode(target), hex::encode(&funtion_hash[..4]));
+        let cur_write_str = format!("{{caller:0x{} --> target:0x{} function(0x{})}}\n",
+                                    hex::encode(caller),
+                                    hex::encode(target), hex::encode(&funtion_hash[..4]));
         let mut hasher = DefaultHasher::new();
         cur_write_str.hash(&mut hasher);
         let cur_wirte_hash = hasher.finish();
@@ -926,7 +927,7 @@ where
                     }
                     self._pc = interp.program_counter();
                 }
-                0xf0 | 0xf5 => {
+                0xf0 | 0xf5 | 0xa0..=0xa4 | 0xff => {
                     // CREATE, CREATE2
                     self._pc = interp.program_counter();
                 }
@@ -1035,7 +1036,10 @@ where
                         "target bug found: {}", data_string
                     );
                 }
-                self.current_typed_bug.push(data_string.clone().trim_end_matches("\u{0}").to_string());
+                self.current_typed_bug.push((
+                    data_string.clone().trim_end_matches("\u{0}").to_string(),
+                    (_address, self._pc),
+                ));
             }
         }
 
@@ -1057,6 +1061,7 @@ where
     }
 
     fn selfdestruct(&mut self, _address: EVMAddress, _target: EVMAddress) -> Option<SelfDestructResult> {
+        self.current_self_destructs.push((_address, self._pc));
         return Some(SelfDestructResult::default());
     }
 

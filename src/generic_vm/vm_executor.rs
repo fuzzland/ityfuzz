@@ -57,7 +57,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde;
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static;
 
     fn fast_static_call(&mut self, data: &Vec<(Addr, By)>, vm_state: &VS, state: &mut S) -> Vec<Out>
     where
@@ -73,4 +73,6 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
     fn get_write(&self) -> &'static mut [u8; MAP_SIZE];
     fn get_cmp(&self) -> &'static mut [SlotTy; MAP_SIZE];
     fn state_changed(&self) -> bool;
+
+    fn as_any(&mut self) -> &mut dyn std::any::Any;
 }

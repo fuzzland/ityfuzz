@@ -7,7 +7,9 @@ use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::Bytecode;
+use crate::evm::oracle::EVMBugResult;
 use crate::fuzzer::ORACLE_OUTPUT;
+use crate::state::HasExecutionResult;
 
 pub struct EchidnaOracle {
     pub batch_call_txs: Vec<(EVMAddress, Bytes)>,
@@ -69,14 +71,16 @@ impl
             .map(|(idx, x)| {
                 if x {
                     let name = self.names.get(&self.batch_call_txs[idx].1.to_vec()).unwrap();
-                    unsafe {
-                        ORACLE_OUTPUT += format!(
-                            "[echidna_bug] echidna_bug({:?}) hit at contract {:?}\n",
-                            name,
-                            ctx.input.contract
-                        ).as_str();
-                    }
-                    (idx << 8) as u64 + ECHIDNA_BUG_IDX
+                    let bug_idx = (idx << 8) as u64 + ECHIDNA_BUG_IDX;
+                    EVMBugResult::new(
+                        "echidna".to_string(),
+                        bug_idx,
+                        format!("{:?} violated", name),
+                        ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
+                        None,
+                        Some(name.clone())
+                    ).push_to_output();
+                    bug_idx
                 } else { 0 }
             })
             .filter(|x| *x != 0)

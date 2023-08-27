@@ -471,6 +471,10 @@ where
         todo!()
     }
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn execute(
         &mut self,
         input: &I,

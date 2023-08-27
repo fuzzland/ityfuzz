@@ -1,5 +1,5 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::dummy_precondition;
+use crate::evm::oracle::{dummy_precondition, EVMBugResult};
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{bytes_to_u64, EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
@@ -63,20 +63,25 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
                     .prev_reserves.get(addr) {
                     Some((pre_r0, pre_r1)) => {
                         if *pre_r0 == *r0 && *pre_r1 > *r1 || *pre_r1 == *r1 && *pre_r0 > *r0 {
-                            unsafe {
-                                ORACLE_OUTPUT += format!(
-                                    "Imbalanced Pair: {:?}, Reserves: {:?} => {:?}\n",
-                                    addr,
-                                    (r0, r1),
-                                    (pre_r0, pre_r1)
-                                ).as_str();
-                            }
-
                             // calculate hash in u64 of pair address (addr) using DefaultHasher
                             let mut hasher = DefaultHasher::new();
                             addr.hash(&mut hasher);
                             let hash = hasher.finish();
-                            violations.push(hash << 8 + V2_PAIR_BUG_IDX);
+                            let bug_idx = hash << 8 + V2_PAIR_BUG_IDX;
+
+                            EVMBugResult::new_simple(
+                                "imbalanced_pair".to_string(),
+                                bug_idx,
+                                format!(
+                                    "{:?}, Reserves changed from {:?} to {:?}\n",
+                                    addr,
+                                    (r0, r1),
+                                    (pre_r0, pre_r1)
+                                ),
+                                ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
+                            ).push_to_output();
+
+                            violations.push(bug_idx);
                         }
                     }
                     None => {

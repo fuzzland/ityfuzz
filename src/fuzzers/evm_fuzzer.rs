@@ -40,13 +40,13 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
-use crate::evm::onchain::selfdestruct::{Selfdestruct};
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
@@ -56,10 +56,13 @@ use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::oracles::echidna::EchidnaOracle;
+use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
+use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::srcmap::parser::BASE_PATH;
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
+use crate::oracle::BugMetadata;
 
 struct ABIConfig {
     abi: String,
@@ -95,15 +98,6 @@ pub fn evm_fuzzer(
     let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
 
-    if config.selfdestruct_oracle {
-        //Selfdestruct middlewares
-        let mid = Rc::new(RefCell::new(
-            Selfdestruct::<EVMState, EVMInput, EVMFuzzState>::new(),
-        ));
-        fuzz_host.add_middlewares(mid.clone());
-        // Selfdestruct end
-    }
-
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
@@ -114,6 +108,11 @@ pub fn evm_fuzzer(
                         config.onchain_storage_fetching.unwrap(),
                     ),
                 ));
+
+                if let Some(builder) = config.builder {
+                    mid.borrow_mut().add_builder(builder);
+                }
+
                 fuzz_host.add_middlewares(mid.clone());
                 mid
             })
@@ -233,7 +232,13 @@ pub fn evm_fuzzer(
     // now evm executor is ready, we can clone it
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
-
+    if !state.metadata().contains::<ArtifactInfoMetadata>() {
+        state.metadata_mut().insert(ArtifactInfoMetadata::new());
+    }
+    let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().unwrap();
+    for (addr, build_artifact) in &artifacts.build_artifacts {
+        meta.add(*addr, build_artifact.clone());
+    }
 
     for (addr, bytecode) in &mut artifacts.address_to_bytecode {
         unsafe {
@@ -261,9 +266,16 @@ pub fn evm_fuzzer(
 
     let std_stage = StdMutationalStage::new(mutator);
 
+    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(
+        artifacts.address_to_name.clone(),
+        artifacts.address_to_sourcemap.clone(),
+    )));
+
     let coverage_obs_stage = CoverageStage::new(
         evm_executor_ref.clone(),
         cov_middleware.clone(),
+        call_printer_mid.clone(),
+        config.work_dir.clone(),
     );
 
     let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
@@ -328,6 +340,22 @@ pub fn evm_fuzzer(
         oracles.push(oracle);
     }
 
+    if config.typed_bug {
+        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
+    state.add_metadata(BugMetadata::new());
+
+    if config.selfdestruct_oracle {
+        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
 
     let mut producers = config.producers;
 
@@ -359,7 +387,10 @@ pub fn evm_fuzzer(
                 EVAL_COVERAGE = true;
             }
 
-            let printer = Rc::new(RefCell::new(CallPrinter::new()));
+            let printer = Rc::new(RefCell::new(CallPrinter::new(
+                artifacts.address_to_name.clone(),
+                artifacts.address_to_sourcemap.clone(),
+            )));
             evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
 
             let initial_vm_state = artifacts.initial_state.clone();
@@ -383,7 +414,7 @@ pub fn evm_fuzzer(
                     // [is_step] [caller] [target] [input] [value]
                     let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())
                         .to_input(vm_state.clone());
-                    printer.borrow_mut().register_input(&inp);
+                    printer.borrow_mut().cleanup();
 
                     unsafe {CALL_UNTIL = call_until;}
 

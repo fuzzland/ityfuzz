@@ -90,7 +90,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
 {
     /// Run the VM to execute the input
     fn run_target(

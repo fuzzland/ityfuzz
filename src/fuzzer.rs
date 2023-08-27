@@ -34,19 +34,22 @@ use libafl::{
 
 use crate::evm::host::JMP_MAP;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use itertools::Itertools;
 use libafl::prelude::HasRand;
 use primitive_types::H256;
+use serde_json::Value;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
+use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
 use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
-pub static mut ORACLE_OUTPUT: String = String::new();
+pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
@@ -441,6 +444,20 @@ where
             }
         }
 
+        let mut corpus_idx = 0;
+        if res == ExecuteInputResult::Corpus || res == ExecuteInputResult::Solution {
+            // Add the input to the main corpus
+            let mut testcase = Testcase::new(input.clone());
+            self.feedback.append_metadata(state, &mut testcase)?;
+            corpus_idx = state.corpus_mut().add(testcase)?;
+            self.infant_scheduler.report_corpus(
+                state.get_infant_state_state(),
+                state_idx
+            );
+            self.scheduler.on_add(state, corpus_idx)?;
+            self.on_add_corpus(&input, unsafe { &JMP_MAP }, corpus_idx);
+        }
+
         let final_res = match res {
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
@@ -474,17 +491,6 @@ where
                 // Not a solution
                 self.objective.discard_metadata(state, &input)?;
 
-                // Add the input to the main corpus
-                let mut testcase = Testcase::new(input.clone());
-                self.feedback.append_metadata(state, &mut testcase)?;
-                let idx = state.corpus_mut().add(testcase)?;
-                self.infant_scheduler.report_corpus(
-                    state.get_infant_state_state(),
-                    state_idx
-                );
-                self.scheduler.on_add(state, idx)?;
-                self.on_add_corpus(&input, unsafe { &JMP_MAP }, idx);
-
                 // Fire the event for CLI
                 if send_events {
                     // TODO set None for fast targets
@@ -506,18 +512,18 @@ where
                         },
                     )?;
                 }
-                Ok((res, Some(idx)))
+                Ok((res, Some(corpus_idx)))
             }
             // find the solution
             ExecuteInputResult::Solution => {
                 report_vulnerability(
-                    unsafe {ORACLE_OUTPUT.clone()},
+                    unsafe {serde_json::to_string(&ORACLE_OUTPUT).expect("")},
                 );
 
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
-                    unsafe { ORACLE_OUTPUT.clone() },
+                    unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     state
                         .get_execution_result()
                         .new_state
@@ -526,6 +532,22 @@ where
                         .to_string(state)
                 );
                 println!("{}", cur_report);
+
+                let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
+                let mut f = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(vuln_file)
+                    .expect("Unable to open file");
+                f.write_all(unsafe {
+                    ORACLE_OUTPUT.iter().map(|v| serde_json::to_string(v).expect("failed to json"))
+                        .join("\n").as_bytes()
+                }).expect("Unable to write data");
+                f.write_all(b"\n").expect("Unable to write data");
+
+                state.metadata_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
+                    corpus_idx
+                );
 
                 #[cfg(feature = "print_txn_corpus")]
                 {
@@ -559,7 +581,7 @@ where
             }
         };
         unsafe {
-            ORACLE_OUTPUT = String::new();
+            ORACLE_OUTPUT.clear();
         }
         final_res
     }

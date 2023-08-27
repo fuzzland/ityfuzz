@@ -19,3 +19,5 @@ pub mod uniswap;
 pub mod vm;
 pub mod feedbacks;
 pub mod cov_stage;
+pub mod blaz;
+pub mod bytecode_iterator;

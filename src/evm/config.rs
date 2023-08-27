@@ -8,6 +8,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs::File;
 use std::rc::Rc;
+use crate::evm::blaz::builder::BuildJob;
+use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
+use crate::evm::blaz::offchain_config::OffchainConfig;
 use crate::evm::types::EVMAddress;
 
 pub enum FuzzerTypes {
@@ -69,4 +72,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub panic_on_bug: bool,
     pub spec_id: String,
     pub only_fuzz: HashSet<EVMAddress>,
+    pub typed_bug: bool,
+    pub selfdestruct_bug: bool,
+    pub builder: Option<BuildJob>,
 }

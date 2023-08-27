@@ -1,5 +1,5 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::dummy_precondition;
+use crate::evm::oracle::{dummy_precondition, EVMBugResult};
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{bytes_to_u64, EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
@@ -84,7 +84,12 @@ for StateCompOracle
 
         unsafe {
             if STATE_CHANGE && comp(&ctx.post_state, &self.desired_state) {
-                ORACLE_OUTPUT += "[state_comp] found equivalent state\n";
+                EVMBugResult::new_simple(
+                    "state_comp".to_string(),
+                    STATE_COMP_BUG_IDX,
+                    "Found equivalent state".to_string(),
+                    ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
+                ).push_to_output();
                 vec![STATE_COMP_BUG_IDX]
             } else {
                 vec![]

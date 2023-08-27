@@ -29,6 +29,9 @@ use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
+use ityfuzz::evm::blaz::builder::{BuildJob, BuildJobResult};
+use ityfuzz::evm::blaz::offchain_artifacts::OffChainArtifact;
+use ityfuzz::evm::blaz::offchain_config::OffchainConfig;
 
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
@@ -223,20 +226,46 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     base_path: String,
 
-    ///spec id
+    /// Spec ID
     #[arg(long, default_value = "Latest")]
     spec_id: String,
 
+    /// Builder URL. If specified, will use this builder to build contracts instead of using
+    /// bins and abis.
+    #[arg(long, default_value = "")]
+    onchain_builder: String,
+
+    /// Replacement config (replacing bytecode) for onchain campaign
+    #[arg(long, default_value = "")]
+    onchain_replacements_file: String,
+
+    /// Builder Artifacts url. If specified, will use this artifact to derive code coverage.
+    #[arg(long, default_value = "")]
+    builder_artifacts_url: String,
+
+    /// Builder Artifacts file. If specified, will use this artifact to derive code coverage.
+    #[arg(long, default_value = "")]
+    builder_artifacts_file: String,
+
+    /// Offchain Config Url. If specified, will deploy based on offchain config file.
+    #[arg(long, default_value = "")]
+    offchain_config_url: String,
+
+    /// Offchain Config File. If specified, will deploy based on offchain config file.
+    #[arg(long, default_value = "")]
+    offchain_config_file: String,
 }
 
 enum EVMTargetType {
     Glob,
     Address,
+    ArtifactAndProxy,
+    Config
 }
 
 pub fn evm_main(args: EvmArgs) {
     ityfuzz::telemetry::report_campaign(args.onchain, args.target.clone());
-    let target_type: EVMTargetType = match args.target_type {
+    let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => EVMTargetType::Glob,
             "address" => EVMTargetType::Address,
@@ -346,15 +375,6 @@ pub fn evm_main(args: EvmArgs) {
         oracles.push(flashloan_oracle.clone());
     }
 
-    if args.selfdestruct_oracle {
-        oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new())));
-    }
-
-    if args.typed_bug_oracle {
-        oracles.push(Rc::new(RefCell::new(TypedBugOracle::new())));
-
-    }
-
     if args.ierc20_oracle || args.pair_oracle {
         producers.push(pair_producer);
     }
@@ -404,6 +424,38 @@ pub fn evm_main(args: EvmArgs) {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
+
+    let onchain_replacements = if args.onchain_replacements_file.len() > 0 {
+        BuildJobResult::from_multi_file(args.onchain_replacements_file)
+    } else {
+        HashMap::new()
+    };
+
+    let builder = if args.onchain_builder.len() > 1 {
+        Some(BuildJob::new(args.onchain_builder, onchain_replacements))
+    } else {
+        None
+    };
+
+    let offchain_artifacts = if args.builder_artifacts_url.len() > 0 {
+        target_type = EVMTargetType::ArtifactAndProxy;
+        Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
+    } else if args.builder_artifacts_file.len() > 0 {
+        target_type = EVMTargetType::ArtifactAndProxy;
+        Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
+    } else {
+        None
+    };
+    let offchain_config = if args.offchain_config_url.len() > 0 {
+        target_type = EVMTargetType::Config;
+        Some(OffchainConfig::from_json_url(args.offchain_config_url).expect("failed to parse offchain config"))
+    } else if args.offchain_config_file.len() > 0 {
+        target_type = EVMTargetType::Config;
+        Some(OffchainConfig::from_file(args.offchain_config_file).expect("failed to parse offchain config"))
+    } else {
+        None
+    };
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_loader: match target_type {
@@ -414,6 +466,20 @@ pub fn evm_main(args: EvmArgs) {
                     &proxy_deploy_codes,
                     &constructor_args_map,
                 )
+            }
+            EVMTargetType::Config => {
+                ContractLoader::from_config(
+                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                    &offchain_config.expect("offchain config is required for config target type"),
+                )
+            }
+
+            EVMTargetType::ArtifactAndProxy => {
+                // ContractLoader::from_artifacts_and_proxy(
+                //     &offchain_artifacts.expect("offchain artifacts is required for artifact and proxy target type"),
+                //     &proxy_deploy_codes,
+                // )
+                todo!("Artifact and proxy is not supported yet")
             }
             EVMTargetType::Address => {
                 if onchain.is_none() {
@@ -443,6 +509,7 @@ pub fn evm_main(args: EvmArgs) {
                 ContractLoader::from_address(
                     &mut onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
+                     builder.clone(),
                 )
             }
         },
@@ -492,6 +559,9 @@ pub fn evm_main(args: EvmArgs) {
         echidna_oracle: args.echidna_oracle,
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
+        typed_bug: args.typed_bug_oracle,
+        selfdestruct_bug: args.selfdestruct_oracle,
+        builder,
     };
 
     match config.fuzzer_type {

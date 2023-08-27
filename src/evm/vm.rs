@@ -37,6 +37,7 @@ use revm_interpreter::InstructionResult::ControlLeak;
 use revm_primitives::{Bytecode, LatestSpec};
 
 use core::ops::Range;
+use std::any::Any;
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
@@ -54,7 +55,6 @@ use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use serde_traitobject::Any;
 use crate::evm::vm::Constraint::NoLiquidation;
 use crate::{invoke_middlewares};
 
@@ -241,10 +241,10 @@ pub struct EVMState {
     pub bug_hit: bool,
     /// selftdestruct() call in Solidity hit?
     #[serde(skip)]
-    pub selfdestruct_hit: bool,
+    pub self_destruct: HashSet<(EVMAddress, usize)>,
     /// bug type call in solidity type
     #[serde(skip)]
-    pub typed_bug: HashSet<String>,
+    pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
 }
 
 
@@ -271,7 +271,7 @@ impl Default for EVMState {
             post_execution: Vec::new(),
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            selfdestruct_hit: false,
+            self_destruct: Default::default(),
             typed_bug: Default::default(),
         }
     }
@@ -355,7 +355,7 @@ impl EVMState {
             post_execution: vec![],
             flashloan_data: FlashloanData::new(),
             bug_hit: false,
-            selfdestruct_hit: false,
+            self_destruct: Default::default(),
             typed_bug: Default::default(),
         }
     }
@@ -442,7 +442,7 @@ where
         + Debug
         + 'static,
     VS: Default + VMStateT + 'static,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
 {
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
@@ -480,8 +480,8 @@ where
         if cleanup {
             self.host.coverage_changed = false;
             self.host.bug_hit = false;
-            self.host.selfdestruct_hit = false;
             self.host.current_typed_bug = vec![];
+            self.host.current_self_destructs = vec![];
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -759,11 +759,14 @@ where
             _ => {}
         }
 
-        r.new_state.bug_hit = vm_state.bug_hit || self.host.bug_hit;
-        r.new_state.selfdestruct_hit = vm_state.selfdestruct_hit || self.host.selfdestruct_hit;
         r.new_state.typed_bug = HashSet::from_iter(
             vm_state.typed_bug.iter().cloned().chain(
                 self.host.current_typed_bug.iter().cloned()
+            )
+        );
+        r.new_state.self_destruct = HashSet::from_iter(
+            vm_state.self_destruct.iter().cloned().chain(
+                self.host.current_self_destructs.iter().cloned()
             )
         );
 
@@ -822,7 +825,7 @@ where
         + Debug
         + 'static,
     VS: VMStateT + Default + 'static,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
 {
     /// Deploy a contract
     fn deploy(
@@ -973,8 +976,7 @@ where
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
-            self.host.bug_hit = false;
-            self.host.selfdestruct_hit = false;
+            self.host.current_self_destructs = vec![];
             self.host.call_count = 0;
             self.host.current_typed_bug = vec![];
             self.host.randomness = vec![9];
@@ -1025,6 +1027,10 @@ where
 
     fn state_changed(&self) -> bool {
         unsafe { STATE_CHANGE }
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
