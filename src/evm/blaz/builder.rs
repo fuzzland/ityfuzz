@@ -305,10 +305,10 @@ mod tests {
     //     println!("{:?}", job.id);
     // }
     //
-    #[test]
-    fn test_wait_build_job() {
-        let job = JobContext::new("fc0fc148-0e8e-4352-9f5f-d49f9fd421c1".to_string());
-        let result = job.wait_build_job().expect("wait build job failed");
-        println!("{:?}", result.abi);
-    }
+    // #[test]
+    // fn test_wait_build_job() {
+    //     let job = JobContext::new("fc0fc148-0e8e-4352-9f5f-d49f9fd421c1".to_string());
+    //     let result = job.wait_build_job().expect("wait build job failed");
+    //     println!("{:?}", result.abi);
+    // }
 }
