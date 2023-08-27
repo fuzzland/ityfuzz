@@ -26,8 +26,24 @@ use crate::evm::vm::IN_DEPLOY;
 use serde_json;
 use crate::evm::blaz::builder::ArtifactInfoMetadata;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CallType {
+    Call,
+    CallCode,
+    DelegateCall,
+    StaticCall,
+    FirstLevelCall
+}
+
+impl Default for CallType {
+    fn default() -> Self {
+        CallType::Call
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
 pub struct SingleCall {
+    pub call_type: CallType,
     pub caller: String,
     pub contract: String,
     pub input: String,
@@ -140,6 +156,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 },
             ).unwrap_or(vec![]);
             self.results.data.push((0, SingleCall {
+                call_type: CallType::FirstLevelCall,
                 caller: self.translate_address(interp.contract.caller),
                 contract: self.translate_address(interp.contract.address),
                 input: hex::encode(interp.contract.input.clone()),
@@ -176,6 +193,16 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             }
         };
 
+        let call_type = match unsafe { *interp.instruction_pointer } {
+            0xf1 => CallType::Call,
+            0xf2 => CallType::CallCode,
+            0xf4 => CallType::DelegateCall,
+            0xfa => CallType::StaticCall,
+            _ => {
+                return;
+            }
+        };
+
         self.current_layer += 1;
 
         let arg_offset = as_u64(arg_offset) as usize;
@@ -207,6 +234,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         ).unwrap_or(vec![]);
 
         self.results.data.push((self.current_layer, SingleCall {
+            call_type,
             caller: self.translate_address(caller),
             contract: self.translate_address(target),
             input: arg,
