@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ityfuzz = {path = "../", version = "0.1.0"}
-clap = {version = "4.0.18", features = ["derive"]}
+clap = {version = "=4.0.18", features = ["derive"]}
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 sentry = "0.29.1"
 reqwest = "0.11.6"

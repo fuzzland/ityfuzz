@@ -21,7 +21,7 @@ use crate::evm::srcmap::parser::SourceMapAvailability::Available;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use crate::evm::types::{as_u64, convert_u256_to_h160, EVMAddress, is_zero, ProjectSourceMapTy};
+use crate::evm::types::{as_u64, convert_u256_to_h160, EVMAddress, EVMU256, is_zero, ProjectSourceMapTy};
 use crate::evm::vm::IN_DEPLOY;
 use serde_json;
 use crate::evm::blaz::builder::ArtifactInfoMetadata;
@@ -47,6 +47,7 @@ pub struct SingleCall {
     pub caller: String,
     pub contract: String,
     pub input: String,
+    pub value: String,
     pub source: Option<SourceMapLocation>,
 }
 
@@ -85,14 +86,13 @@ impl CallPrinter {
         self.entry = true;
     }
 
-    pub fn mark_new_tx(&mut self) {
-        self.current_layer = 0;
+    pub fn mark_new_tx(&mut self, layer: usize) {
+        self.current_layer = layer;
         self.entry = true;
     }
 
     /// Wont collect the starting tx
     pub fn mark_step_tx(&mut self) {
-        self.current_layer = 0;
         self.entry = false;
     }
 
@@ -155,11 +155,12 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                     Vec::from(code.bytecode())
                 },
             ).unwrap_or(vec![]);
-            self.results.data.push((0, SingleCall {
+            self.results.data.push((self.current_layer, SingleCall {
                 call_type: CallType::FirstLevelCall,
                 caller: self.translate_address(interp.contract.caller),
                 contract: self.translate_address(interp.contract.address),
                 input: hex::encode(interp.contract.input.clone()),
+                value: format!("{}", interp.contract.value),
                 source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
                     && let Some(source) = source.get(&interp.program_counter()) {
                     Some(source.clone())
@@ -224,6 +225,13 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 unreachable!()
             }
         };
+
+        let value = match *interp.instruction_pointer {
+            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
+            _ => EVMU256::ZERO,
+
+        };
+
         let target = convert_u256_to_h160(address);
 
         let caller_code_address = interp.contract.code_address;
@@ -238,6 +246,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             caller: self.translate_address(caller),
             contract: self.translate_address(target),
             input: arg,
+            value: format!("{}", value),
             source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
                 && let Some(source) = source.get(&interp.program_counter()) {
                 Some(source.clone())

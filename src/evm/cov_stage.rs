@@ -130,11 +130,20 @@ impl<EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, EVMFuzzState, Z> for CoverageStag
                 }
                 let res = exec.execute(&tx, state);
                 last_state = res.new_state.clone();
-                self.call_printer.deref().borrow_mut().mark_new_tx();
+                self.call_printer.deref().borrow_mut().mark_new_tx(
+                    last_state.state.post_execution.len()
+                );
             }
             unsafe { CALL_UNTIL = u32::MAX; }
             unsafe { EVAL_COVERAGE = true; }
-            exec.execute(last_input, state);
+
+            {
+                if last_input.step {
+                    self.call_printer.deref().borrow_mut().mark_step_tx();
+                }
+                exec.execute(last_input, state);
+            }
+
             self.call_printer.deref().borrow_mut().save_trace(format!("{}/{}", self.trace_dir, i).as_str());
             if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i) {
                 for id in bug_idx {
