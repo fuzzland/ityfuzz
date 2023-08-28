@@ -305,7 +305,11 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
             self.sources.insert(address, build_artifact.sources.clone());
 
             let sourcemap = build_artifact.get_sourcemap(
-                Vec::from(host.code.get(&address).unwrap().clone().bytecode())
+                if (host.code.contains_key(&address)) {
+                    Vec::from(host.code.get(&address).unwrap().clone().bytecode())
+                } else {
+                    host.setcode_data.get(&address).unwrap().clone().bytecode.to_vec()
+                }
             );
 
             pcs.iter().for_each(|pc| {
