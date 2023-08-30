@@ -10,6 +10,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
+use crate::evm::types::{EVMAddress, EVMU256};
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::bitvec::macros::internal::funty::Integral;
+use revm_primitives::{Bytecode, LatestSpec};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;
@@ -19,10 +23,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use revm_interpreter::analysis::to_analysed;
-use revm_primitives::bitvec::macros::internal::funty::Integral;
-use revm_primitives::{Bytecode, LatestSpec};
-use crate::evm::types::{EVMAddress, EVMU256};
 
 const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
@@ -169,7 +169,7 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PairData {
     src: String,
     in_: i32,
@@ -407,7 +407,10 @@ impl OnChainConfig {
         self.etherscan_api_key.push(key);
     }
 
-    pub fn fetch_storage_all(&mut self, address: EVMAddress) -> Option<Arc<HashMap<String, EVMU256>>> {
+    pub fn fetch_storage_all(
+        &mut self,
+        address: EVMAddress,
+    ) -> Option<Arc<HashMap<String, EVMU256>>> {
         if let Some(storage) = self.storage_all_cache.get(&address) {
             return storage.clone();
         } else {
@@ -417,7 +420,10 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_storage_all_uncached(&self, address: EVMAddress) -> Option<Arc<HashMap<String, EVMU256>>> {
+    pub fn fetch_storage_all_uncached(
+        &self,
+        address: EVMAddress,
+    ) -> Option<Arc<HashMap<String, EVMU256>>> {
         assert_eq!(
             self.block_number, "latest",
             "fetch_full_storage only works with latest block"
@@ -470,7 +476,10 @@ impl OnChainConfig {
         return self.block_hash.as_ref().unwrap();
     }
 
-    pub fn fetch_storage_dump(&mut self, address: EVMAddress) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
+    pub fn fetch_storage_dump(
+        &mut self,
+        address: EVMAddress,
+    ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         if let Some(storage) = self.storage_dump_cache.get(&address) {
             return storage.clone();
         } else {
@@ -639,7 +648,7 @@ impl OnChainConfig {
             let mut params = String::from("[");
             params.push_str(&format!("\"0x{:x}\",", address));
             params.push_str(&format!("\"{}\"", self.block_number));
-            params.push_str("]");
+            params.push(']');
             let resp = self._request("eth_getCode".to_string(), params);
             match resp {
                 Some(resp) => {
@@ -650,17 +659,22 @@ impl OnChainConfig {
             }
         };
         let code = resp_string.trim_start_matches("0x");
-        if code.len() == 0 {
+        if code.is_empty() {
             self.code_cache.insert(address, Bytecode::new());
             return Bytecode::new();
         }
         let code = hex::decode(code).unwrap();
         let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
         self.code_cache.insert(address, bytes.clone());
-        return bytes;
+        bytes
     }
 
-    pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
+    pub fn get_contract_slot(
+        &mut self,
+        address: EVMAddress,
+        slot: EVMU256,
+        force_cache: bool,
+    ) -> EVMU256 {
         if self.slot_cache.contains_key(&(address, slot)) {
             return self.slot_cache[&(address, slot)];
         }
@@ -728,11 +742,13 @@ impl OnChainConfig {
                                 )),
                                 initial_reserves: (
                                     EVMU256::try_from_be_slice(
-                                        &hex::decode(pair.initial_reserves_0.to_string()).unwrap(),
-                                    ).unwrap(),
+                                        &hex::decode(&pair.initial_reserves_0).unwrap(),
+                                    )
+                                    .unwrap(),
                                     EVMU256::try_from_be_slice(
-                                        &hex::decode(pair.initial_reserves_1.to_string()).unwrap(),
-                                    ).unwrap(),
+                                        &hex::decode(&pair.initial_reserves_1).unwrap(),
+                                    )
+                                    .unwrap(),
                                 ),
                             })));
                         }
@@ -753,13 +769,13 @@ impl OnChainConfig {
                                     )),
                                     initial_reserves: (
                                         EVMU256::try_from_be_slice(
-                                            &hex::decode(pair.initial_reserves_0.to_string())
-                                                .unwrap(),
-                                        ).unwrap(),
+                                            &hex::decode(&pair.initial_reserves_0).unwrap(),
+                                        )
+                                        .unwrap(),
                                         EVMU256::try_from_be_slice(
-                                            &hex::decode(pair.initial_reserves_1.to_string())
-                                                .unwrap(),
-                                        ).unwrap(),
+                                            &hex::decode(&pair.initial_reserves_1).unwrap(),
+                                        )
+                                        .unwrap(),
                                     ),
                                 })));
                         }
@@ -794,53 +810,58 @@ impl OnChainConfig {
 }
 
 impl OnChainConfig {
-    fn get_pair(&self, token: &str, network: &str, block: &str) -> Vec<PairData> {
-        let block_int;
-        println!("get pair {} {} {}", token, network, block);
-        match block {
-            "latest" => block_int = self.get_latest_block() - 50,
-            _ => block_int = u64::from_str_radix(&block.trim_start_matches("0x"), 16).unwrap(),
-        }
-
-        let mut next_tokens: Vec<PairData> = vec![];
-        let api = get_uniswap_api(network);
-
-        if api.contains_key("v2") {
-            for (name, url) in api.get("v2").unwrap() {
-                let body = json!({
-                    "query": format!("{{ p0: pairs(block:{{number:{}}},first:10,where :{{token0 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} p1: pairs(block:{{number:{}}},first:10, where :{{token1 : \"{}\"}}) {{ id token0 {{ decimals id }} token1 {{ decimals id }} }} }}", block_int, token.to_lowercase(), block_int, token.to_lowercase())
-                }).to_string();
-
-                let res = self.get_pair_response(url.to_string(), body);
-
-                for pair in res.data.p0.iter().chain(res.data.p1.iter()) {
-                    next_tokens.push(PairData {
-                        src: "v2".to_string(),
-                        in_: if pair.token0.id == *token { 0 } else { 1 },
-                        pair: pair.id.to_string(),
-                        next: if pair.token0.id != *token {
-                            pair.token0.id.clone()
-                        } else {
-                            pair.token1.id.clone()
-                        },
-                        decimals0: pair.token0.decimals.parse().unwrap(),
-                        decimals1: pair.token1.decimals.parse().unwrap(),
-                        src_exact: name.to_string(),
-                        rate: 0,
-                        token: token.to_string(),
-                        initial_reserves_0: "".to_string(),
-                        initial_reserves_1: "".to_string(),
-                    });
-                }
+    fn get_pair(&self, token: &str, network: &str) -> Vec<PairData> {
+        // API calls are limited to 300 requests per minute
+        let url = format!("https://api.dexscreener.com/latest/dex/tokens/{token}");
+        let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
+        let mut pairs: Vec<PairData> = Vec::new();
+        for pair in resp["pairs"].as_array().unwrap() {
+            if !pair["chainId"].as_str().unwrap().contains(network) {
+                continue;
             }
+            // only v2
+            if !pair["labels"]
+                .as_array()
+                .unwrap()
+                .contains(&Value::String("v2".to_string()))
+            {
+                continue;
+            }
+            let base_token = pair["baseToken"].as_object().unwrap()["address"]
+                .as_str()
+                .unwrap()
+                .to_lowercase();
+            let quote_token = pair["quoteToken"].as_object().unwrap()["address"]
+                .as_str()
+                .unwrap()
+                .to_lowercase();
+            let another_token = if token == base_token {
+                quote_token
+            } else {
+                base_token
+            };
+            let data = PairData {
+                src: "v2".to_string(),
+                in_: if token < another_token.as_str() { 0 } else { 1 },
+                pair: pair["pairAddress"].as_str().unwrap().to_lowercase(),
+                next: another_token,
+                decimals0: 18,
+                decimals1: 18,
+                src_exact: "uniswapv2".to_string(),
+                rate: 0,
+                token: token.to_string(),
+                initial_reserves_0: "".to_string(),
+                initial_reserves_1: "".to_string(),
+            };
+            pairs.push(data);
         }
-        next_tokens
+        pairs
     }
 
     fn get_pair_pegged(&self, token: &str, network: &str, block: &str) -> Vec<PairData> {
         println!("get pair pegged {} {} {}", token, network, block);
         let block_int = if block != "latest" {
-            u64::from_str_radix(&block.trim_start_matches("0x"), 16)
+            u64::from_str_radix(block.trim_start_matches("0x"), 16)
                 .expect("failed to parse block number")
                 - 50
         } else {
@@ -978,7 +999,6 @@ impl OnChainConfig {
         &self,
         token: &str,
         network: &str,
-        block: &str,
         hop: u32,
         known: &mut HashSet<String>,
     ) -> HashMap<String, Vec<PairData>> {
@@ -989,7 +1009,7 @@ impl OnChainConfig {
         }
 
         let mut hops: HashMap<String, Vec<PairData>> = HashMap::new();
-        hops.insert(token.to_string(), self.get_pair(token, network, block));
+        hops.insert(token.to_string(), self.get_pair(token, network));
 
         let pegged_tokens = self.get_pegged_token(network);
 
@@ -997,7 +1017,7 @@ impl OnChainConfig {
             if pegged_tokens.values().any(|v| v == &i.next) || known.contains(&i.next) {
                 continue;
             }
-            let next_hops = self.get_all_hops(&i.next, network, block, hop + 1, known);
+            let next_hops = self.get_all_hops(&i.next, network, hop + 1, known);
             hops.extend(next_hops);
         }
 
@@ -1073,7 +1093,6 @@ impl OnChainConfig {
         hops: &HashMap<String, Vec<PairData>>,
         routes: &mut Vec<Vec<PairData>>,
     ) {
-
         if pegged_tokens.values().any(|v| v == token) {
             let mut new_path = path.clone();
             new_path.push(self.get_pegged_next_hop(token, network, block));
@@ -1112,7 +1131,7 @@ impl OnChainConfig {
         }
 
         let mut known: HashSet<String> = HashSet::new();
-        let hops = self.get_all_hops(token, network, block, 0, &mut known);
+        let hops = self.get_all_hops(token, network, 0, &mut known);
 
         let mut routes: Vec<Vec<PairData>> = vec![];
 
@@ -1137,23 +1156,20 @@ impl OnChainConfig {
     }
 
     // fix get pair thegraph block sync old data
-    fn get_pair_response(&self, url: String, body: String)-> GetPairResponse
-    {
+    fn get_pair_response(&self, url: String, body: String) -> GetPairResponse {
         match self.try_get_pair(url.to_string(), body) {
             Some(v) => v,
-            __ => {
-                GetPairResponse {
-                    data: GetPairResponseData {
-                        p0: vec![],
-                        p1: vec![],
-                    },
-                }
-            }
+            __ => GetPairResponse {
+                data: GetPairResponseData {
+                    p0: vec![],
+                    p1: vec![],
+                },
+            },
         }
     }
 
-    fn try_get_pair_resut(&self, respose: &String)  -> Option<GetPairResponse>  {
-       let respose = respose.replace("\"decimals\":null", "\"decimals\":\"18\"");  // thegraph return decimals is null
+    fn try_get_pair_resut(&self, respose: &String) -> Option<GetPairResponse> {
+        let respose = respose.replace("\"decimals\":null", "\"decimals\":\"18\""); // thegraph return decimals is null
         match serde_json::from_str::<GetPairResponse>(&respose) {
             Ok(v) => return Some(v),
             Err(e) => {
@@ -1163,7 +1179,7 @@ impl OnChainConfig {
     }
 
     // try agin get thegraph pair
-    fn try_get_pair(&self, url: String, body: String)  -> Option<GetPairResponse>  {
+    fn try_get_pair(&self, url: String, body: String) -> Option<GetPairResponse> {
         let r = self.post(url.to_string(), body.clone());
         if r.is_none() {
             return None;
@@ -1181,7 +1197,7 @@ impl OnChainConfig {
         let lfind = r.find("up to block number ").unwrap();
         let rfind = r.find(" and data for block").unwrap();
         let cur_maxblock = r[lfind + 19..rfind].to_string();
-        let maxblock = format!(":{}",cur_maxblock.parse::<i32>().unwrap()-1);
+        let maxblock = format!(":{}", cur_maxblock.parse::<i32>().unwrap() - 1);
         let newbody = body.replace(&curblock, &maxblock);
         let r = self.post(url, newbody);
         if r.is_none() {
@@ -1267,8 +1283,11 @@ fn get_uniswap_api(network: &str) -> HashMap<&str, HashMap<&str, &str>> {
             api.insert("v2", v2);
         }
         _ => {
-            println!("[Flashloan] Network {} is not supported for ERC20 Flashloan", network)
-        },
+            println!(
+                "[Flashloan] Network {} is not supported for ERC20 Flashloan",
+                network
+            )
+        }
     }
 
     api
@@ -1312,8 +1331,8 @@ mod tests {
     #[test]
     fn test_fetch_abi() {
         let mut config = OnChainConfig::new(BSC, 0);
-        let v =
-            config.fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
+        let v = config
+            .fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         println!("{:?}", v)
     }
 
