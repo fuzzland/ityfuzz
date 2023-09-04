@@ -33,7 +33,7 @@ use rand::random;
 
 use revm::db::BenchmarkDB;
 use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory, Stack};
-use revm_interpreter::InstructionResult::ControlLeak;
+use revm_interpreter::InstructionResult::{ArbitraryExternalCallAddressBounded, ControlLeak};
 use revm_primitives::{Bytecode, LatestSpec};
 
 use core::ops::Range;
@@ -55,7 +55,7 @@ use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use crate::evm::vm::Constraint::NoLiquidation;
+use crate::evm::vm::Constraint::{NoLiquidation, Value};
 use crate::{invoke_middlewares};
 
 const MAX_POST_EXECUTION: usize = 10;
@@ -80,6 +80,7 @@ macro_rules! get_token_ctx {
 pub enum Constraint {
     Caller(EVMAddress),
     Contract(EVMAddress),
+    Value(EVMU256),
     NoLiquidation
 }
 
@@ -245,6 +246,8 @@ pub struct EVMState {
     /// bug type call in solidity type
     #[serde(skip)]
     pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
+    #[serde(skip)]
+    pub arbitrary_calls: HashSet<(EVMAddress, EVMAddress, usize)>,
 }
 
 
@@ -266,14 +269,7 @@ impl Default for EVMState {
     /// Default VM state, containing empty state, no post execution context,
     /// and no flashloan usage
     fn default() -> Self {
-        Self {
-            state: HashMap::new(),
-            post_execution: Vec::new(),
-            flashloan_data: FlashloanData::new(),
-            bug_hit: false,
-            self_destruct: Default::default(),
-            typed_bug: Default::default(),
-        }
+        Self::new()
     }
 }
 
@@ -357,6 +353,7 @@ impl EVMState {
             bug_hit: false,
             self_destruct: Default::default(),
             typed_bug: Default::default(),
+            arbitrary_calls: Default::default(),
         }
     }
 
@@ -481,7 +478,9 @@ where
             self.host.coverage_changed = false;
             self.host.bug_hit = false;
             self.host.current_typed_bug = vec![];
+            self.host.jumpi_trace = 37;
             self.host.current_self_destructs = vec![];
+            self.host.current_arbitrary_calls = vec![];
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -727,7 +726,7 @@ where
         }
         let mut r = r.unwrap();
         match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => unsafe {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_,_, _) => unsafe {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -742,14 +741,14 @@ where
                     pes: leak_ctx,
                     must_step: match r.ret {
                         ControlLeak => false,
-                        InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => true,
+                        InstructionResult::ArbitraryExternalCallAddressBounded(_,_,_) => true,
                         _ => unreachable!(),
                     },
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
-                        InstructionResult::ArbitraryExternalCallAddressBounded(caller, target) => {
-                            vec![Constraint::Caller(caller), Constraint::Contract(target), NoLiquidation]
+                        InstructionResult::ArbitraryExternalCallAddressBounded(caller, target, value) => {
+                            vec![Constraint::Caller(caller), Constraint::Contract(target), Value(value), NoLiquidation]
                         }
                         _ => unreachable!(),
                     },
@@ -769,6 +768,11 @@ where
                 self.host.current_self_destructs.iter().cloned()
             )
         );
+        r.new_state.arbitrary_calls = HashSet::from_iter(
+            vm_state.arbitrary_calls.iter().cloned().chain(
+                self.host.current_arbitrary_calls.iter().cloned()
+            )
+        );
 
         // println!("r.ret: {:?}", r.ret);
 
@@ -778,7 +782,7 @@ where
                 reverted: match r.ret {
                     InstructionResult::Return | InstructionResult::Stop | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => false,
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_,_,_ ) => false,
                     _ => true,
                 },
                 new_state: StagedVMState::new_with_state(
@@ -977,7 +981,9 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
             self.host.current_self_destructs = vec![];
+            self.host.current_arbitrary_calls = vec![];
             self.host.call_count = 0;
+            self.host.jumpi_trace = 37;
             self.host.current_typed_bug = vec![];
             self.host.randomness = vec![9];
         }
