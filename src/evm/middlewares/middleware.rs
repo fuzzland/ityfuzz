@@ -99,7 +99,8 @@ where
         interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
-    );
+        ret: &Bytes
+    ) {}
 
     unsafe fn on_insert(&mut self,
                         bytecode: &mut Bytecode,
