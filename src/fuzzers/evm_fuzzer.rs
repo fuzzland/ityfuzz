@@ -260,7 +260,8 @@ pub fn evm_fuzzer(
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
-        evm_executor_ref.clone()
+        evm_executor_ref.clone(),
+        artifacts.address_to_sourcemap.clone(),
     );
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 

@@ -33,7 +33,8 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero, ProjectSourceMapTy};
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
 
 pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -564,10 +565,12 @@ pub struct ConcolicHost<I, VS> {
 
     pub ctxs: Vec<ConcolicCallCtx>,
     pub phantom: PhantomData<(I, VS)>,
+
+    pub source_map: ProjectSourceMapTy
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -577,6 +580,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             testcase_ref,
             phantom: Default::default(),
             ctxs: vec![],
+            source_map: sourcemap
         }
     }
 
@@ -654,6 +658,7 @@ impl<I, VS> ConcolicHost<I, VS> {
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let caller = BV::new_const(&context, "caller", 256);
         let balance = BV::new_const(&context, "balance", 256);
+        println!("constraints: {:?}", self.constraints);
 
         let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &caller, &self.constraints);
         solving.solve()
@@ -1173,29 +1178,67 @@ where
                     as_u64(fast_peek!(0))
                 };
 
-                let real_path_constraint = if br {
-                    // path_condition = false
-                    stack_bv!(1).lnot()
-                } else {
-                    // path_condition = true
-                    stack_bv!(1)
-                };
+                /*
+                 * Missing cases:
+                 * 1. global public variable
+                 *    This is done by function selector, but the source file exsits
+                 *    and the length is normal
+                 *
+                 * ...
+                 */
 
-                let idx = (interp.program_counter() * (intended_jmp_dest as usize)) % MAP_SIZE;
-                if JMP_MAP[idx] == 0 && !real_path_constraint.is_concrete() {
-                    let intended_path_constraint = real_path_constraint.clone().lnot();
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
-                    self.constraints.push(intended_path_constraint);
-
-                    solutions.extend(self.solve());
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] Solutions: {:?}", solutions);
-                    self.constraints.pop();
+                // Get the source map of current pc
+                let mut need_solve = true;
+                let pc = interp.program_counter();
+                let address = interp.contract.address;
+                println!("[concolic] address: {:?} pc: {:x}", address, pc);
+                println!("input: {:?}", self.input_bytes);
+                if let Some(Some(srcmap)) = self.source_map.get(&address) {
+                    println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                    let source_map_loc = srcmap.get(&pc).unwrap();
+                    if let Some(_file) = &source_map_loc.file {
+                        // FIXME: Arbitrary threshold
+                        if source_map_loc.length > 0x80 {
+                            println!("[concolic] skip solve for huge length");
+                            need_solve = false;
+                        }
+                    }
+                    else {
+                        // FIXME: This might not hold true for all cases
+                        println!("[concolic] skip solve for None file");
+                        need_solve = false;
+                    }
                 }
-                // jumping only happens if the second element is false
-                if !real_path_constraint.is_concrete() {
-                    self.constraints.push(real_path_constraint);
+                else {
+                    panic!("source line: None");
+                }
+
+                if need_solve {
+                    println!("[concolic] still need to solve");
+                    let real_path_constraint = if br {
+                        // path_condition = false
+                        stack_bv!(1).lnot()
+                    } else {
+                        // path_condition = true
+                        stack_bv!(1)
+                    };
+
+                    let idx = (interp.program_counter() * (intended_jmp_dest as usize)) % MAP_SIZE;
+                    if JMP_MAP[idx] == 0 && !real_path_constraint.is_concrete() {
+                        let intended_path_constraint = real_path_constraint.clone().lnot();
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
+                        self.constraints.push(intended_path_constraint);
+
+                        solutions.extend(self.solve());
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] Solutions: {:?}", solutions);
+                        self.constraints.pop();
+                    }
+                    // jumping only happens if the second element is false
+                    if !real_path_constraint.is_concrete() {
+                        self.constraints.push(real_path_constraint);
+                    }
                 }
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
