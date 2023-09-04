@@ -74,5 +74,6 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub only_fuzz: HashSet<EVMAddress>,
     pub typed_bug: bool,
     pub selfdestruct_bug: bool,
+    pub arbitrary_external_call: bool,
     pub builder: Option<BuildJob>,
 }

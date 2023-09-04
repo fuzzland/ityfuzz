@@ -177,6 +177,9 @@ pub struct EvmArgs {
     selfdestruct_oracle: bool,
 
     #[arg(long, default_value = "true")]
+    arbitrary_external_call_oracle: bool,
+
+    #[arg(long, default_value = "true")]
     echidna_oracle: bool,
 
     ///Enable oracle for detecting whether bug() / typed_bug() is called
@@ -561,6 +564,7 @@ pub fn evm_main(args: EvmArgs) {
         spec_id: args.spec_id,
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
+        arbitrary_external_call: args.arbitrary_external_call_oracle,
         builder,
     };
 

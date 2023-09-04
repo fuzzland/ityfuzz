@@ -55,6 +55,7 @@ use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::oracles::arb_call::ArbitraryCallOracle;
 use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
@@ -338,6 +339,16 @@ pub fn evm_fuzzer(
             )
         ));
         oracles.push(oracle);
+    }
+
+    if config.arbitrary_external_call {
+
+        oracles.push(Rc::new(RefCell::new(
+            ArbitraryCallOracle::new(
+                artifacts.address_to_sourcemap.clone(),
+                artifacts.address_to_name.clone(),
+            )
+        )));
     }
 
     if config.typed_bug {
