@@ -119,9 +119,9 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         let mut liquidations_owed = Vec::new();
         let mut liquidations_earned = Vec::new();
 
-        for ((_, token), (prev_balance, new_balance)) in self.erc20_producer.deref().borrow().balances.iter() {
+        for ((caller, token), (prev_balance, new_balance)) in self.erc20_producer.deref().borrow().balances.iter() {
             let token_info = self.known_tokens.get(token).expect("Token not found");
-            // ctx.fuzz_state.get_execution_result_mut().new_state.state.flashloan_data.extra_info += format!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token).as_str();
+            // println!("Balance: {} -> {} for {:?} @ {:?}\n", prev_balance, new_balance, caller, token);
 
             if prev_balance > new_balance {
                 liquidations_owed.push((token_info, prev_balance - new_balance));
@@ -197,6 +197,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
         if exec_res.new_state.state.flashloan_data.earned
             > exec_res.new_state.state.flashloan_data.owed
+            && exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed > EVMU512::from(10_000_000_000_000_000_000_000_0u128) // > 0.1ETH
         {
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;

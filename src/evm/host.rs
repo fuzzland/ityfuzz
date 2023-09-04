@@ -122,7 +122,7 @@ where
     pub _pc: usize,
     pub pc_to_addresses: HashMap<(EVMAddress, usize), HashSet<EVMAddress>>,
     pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
-    pub pc_to_call_hash: HashMap<(EVMAddress, usize), HashSet<Vec<u8>>>,
+    pub pc_to_call_hash: HashMap<(EVMAddress, usize, usize), HashSet<Vec<u8>>>,
     pub middlewares_enabled: bool,
     pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
 
@@ -149,6 +149,8 @@ where
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
     // selftdestruct
     pub current_self_destructs: Vec<(EVMAddress, usize)>,
+    // arbitrary calls
+    pub current_arbitrary_calls: Vec<(EVMAddress, EVMAddress, usize)>,
     // relations file handle
     relations_file: std::fs::File,
     // Filter duplicate relations
@@ -168,6 +170,8 @@ where
 
     /// For future continue executing when control leak happens
     pub leak_ctx: Vec<SinglePostExecution>,
+
+    pub jumpi_trace: usize,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -227,6 +231,7 @@ where
             logs: Default::default(),
             setcode_data: self.setcode_data.clone(),
             current_self_destructs: self.current_self_destructs.clone(),
+            current_arbitrary_calls: self.current_arbitrary_calls.clone(),
             relations_file: self.relations_file.try_clone().unwrap(),
             relations_hash: self.relations_hash.clone(),
             current_typed_bug: self.current_typed_bug.clone(),
@@ -237,6 +242,7 @@ where
             leak_ctx: self.leak_ctx.clone(),
             mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
+            jumpi_trace: self.jumpi_trace,
         }
     }
 }
@@ -244,7 +250,7 @@ where
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
-const CONTROL_LEAK_DETECTION: bool = true;
+const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
 
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
@@ -289,6 +295,7 @@ where
             logs: Default::default(),
             setcode_data: HashMap::new(),
             current_self_destructs: Default::default(),
+            current_arbitrary_calls: Default::default(),
             relations_file: std::fs::File::create(format!("{}/relations.log", workdir)).unwrap(),
             relations_hash: HashSet::new(),
             current_typed_bug: Default::default(),
@@ -299,6 +306,7 @@ where
             leak_ctx: vec![],
             mapping_sstore_pcs: Default::default(),
             mapping_sstore_pcs_to_slot: Default::default(),
+            jumpi_trace: 37,
         };
         // ret.env.block.timestamp = EVMU256::max_value();
         ret
@@ -604,29 +612,33 @@ where
             // check whether the whole CALLDATAVALUE can be arbitrary
             if !self
                 .pc_to_call_hash
-                .contains_key(&(input.context.caller, self._pc))
+                .contains_key(&(input.context.caller, self._pc, self.jumpi_trace))
             {
                 self.pc_to_call_hash
-                    .insert((input.context.caller, self._pc), HashSet::new());
+                    .insert((input.context.caller, self._pc, self.jumpi_trace), HashSet::new());
             }
             self.pc_to_call_hash
-                .get_mut(&(input.context.caller, self._pc))
+                .get_mut(&(input.context.caller, self._pc, self.jumpi_trace))
                 .unwrap()
                 .insert(hash.to_vec());
             if self
                 .pc_to_call_hash
-                .get(&(input.context.caller, self._pc))
+                .get(&(input.context.caller, self._pc, self.jumpi_trace))
                 .unwrap()
                 .len()
                 > UNBOUND_CALL_THRESHOLD
                 && input_seq.len() >= 4
             {
-                // println!("ub leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                self.current_arbitrary_calls.push(
+                    (input.context.caller, input.context.address, interp.program_counter()),
+                );
+                // println!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
                 push_interp!();
                 return (
                     InstructionResult::ArbitraryExternalCallAddressBounded(
                         input.context.caller,
                         input.context.address,
+                        input.transfer.value
                     ),
                     Gas::new(0),
                     Bytes::new(),
@@ -690,7 +702,7 @@ where
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
         match res.0 {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _) => unsafe {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => unsafe {
                 unsafe {
                     self.leak_ctx.push(SinglePostExecution::from_interp(
                         interp,
@@ -873,7 +885,11 @@ where
                     } else {
                         as_u64(fast_peek!(0))
                     };
-                    let idx = (interp.program_counter() * (jump_dest as usize)) % MAP_SIZE;
+                    let _pc = interp.program_counter();
+
+                    let (shash, _) = self.jumpi_trace.overflowing_mul(54059);
+                    self.jumpi_trace = (shash) ^ (_pc * 76963);
+                    let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
                         self.coverage_changed = true;
                     }
@@ -1286,8 +1302,19 @@ where
             }
         };
 
+        let ret_buffer = res.2.clone();
+
         unsafe {
-            invoke_middlewares!(self, interp, state, on_return);
+            if self.middlewares_enabled {
+                for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut()
+                {
+                    middleware
+                        .deref()
+                        .deref()
+                        .borrow_mut()
+                        .on_return(interp, self, state, &ret_buffer);
+                }
+            }
         }
         res
     }

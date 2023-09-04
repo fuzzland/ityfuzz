@@ -493,7 +493,7 @@ where
         }
 
         unsafe {
-            if self.vm.deref().borrow_mut().state_changed() {
+            if self.vm.deref().borrow_mut().state_changed() || state.get_execution_result().new_state.state.has_post_execution() {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);

@@ -5,6 +5,7 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
@@ -385,10 +386,8 @@ where
     }
 
     unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
+        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S,
+        by: &Bytes
     ) {
         self.pop_ctx();
     }
@@ -465,13 +464,6 @@ where
         MiddlewareType::Sha3Bypass
     }
 
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {
-    }
 }
 
 mod tests {
