@@ -5,6 +5,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
@@ -382,7 +383,10 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
         }
     }
 
-    unsafe fn on_return(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_return(
+        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S,
+        by: &Bytes
+    ) {
         self.pop_ctx();
     }
 
@@ -439,12 +443,6 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
         MiddlewareType::Sha3Bypass
     }
 
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {}
 }
 
 
