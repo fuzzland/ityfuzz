@@ -286,7 +286,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
-        let address = interp.contract.address;
+        let address = interp.contract.code_address;
         let pc = interp.program_counter();
         self.pc_coverage.entry(address).or_default().insert(pc);
 
