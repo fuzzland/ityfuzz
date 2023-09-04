@@ -6,6 +6,7 @@ use std::io::Write;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
@@ -49,6 +50,7 @@ pub struct SingleCall {
     pub input: String,
     pub value: String,
     pub source: Option<SourceMapLocation>,
+    pub results: String
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
@@ -62,6 +64,7 @@ pub struct CallPrinter {
     pub sourcemaps: ProjectSourceMapTy,
     pub current_layer: usize,
     pub results: CallPrinterResult,
+    pub offsets: usize,
 
     entry: bool
 }
@@ -77,6 +80,7 @@ impl CallPrinter {
             current_layer: 0,
             results: Default::default(),
             entry: true,
+            offsets: 0
         }
     }
 
@@ -99,7 +103,7 @@ impl CallPrinter {
     pub fn get_trace(&self) -> String {
         self.results.data.iter().map(|(layer, call)| {
             let padding = (0..*layer).map(|_| "  ").join("");
-            format!("{}[{} -> {}] ({})", padding, call.caller, call.contract, call.input)
+            format!("{}[{} -> {}] ({}) > ({})", padding, call.caller, call.contract, call.input, call.results)
         }).join("\n")
     }
 
@@ -173,6 +177,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 } else {
                     None
                 },
+                results: "".to_string(),
             }));
         }
 
@@ -241,6 +246,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             },
         ).unwrap_or(vec![]);
 
+        self.offsets = 0;
         self.results.data.push((self.current_layer, SingleCall {
             call_type,
             caller: self.translate_address(caller),
@@ -259,6 +265,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             } else {
                 None
             },
+            results: "".to_string(),
         }));
     }
 
@@ -267,7 +274,13 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
+        by: &Bytes
     ) {
+        self.offsets += 1;
+        let l = self.results.data.len();
+        self.results.data[l - self.offsets]
+            .1.results = hex::encode(by);
+
         self.current_layer -= 1;
     }
 
