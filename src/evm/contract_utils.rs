@@ -313,9 +313,9 @@ impl ContractLoader {
     // This function loads constructs Contract infos from path p
     // The organization of directory p should be
     // p
-    // |- contract1.abis
+    // |- contract1.abi
     // |- contract1.bin
-    // |- contract2.abis
+    // |- contract2.abi
     // |- contract2.bin
     pub fn from_glob(
         p: &str,
@@ -329,9 +329,9 @@ impl ContractLoader {
             match i {
                 Ok(path) => {
                     let path_str = path.to_str().unwrap();
-                    if path_str.ends_with(".abis") {
+                    if path_str.ends_with(".abi") {
                         *prefix_file_count
-                            .entry(path_str.replace(".abis", "").clone())
+                            .entry(path_str.replace(".abi", "").clone())
                             .or_insert(0) += 1;
                     } else if path_str.ends_with(".bin") {
                         *prefix_file_count

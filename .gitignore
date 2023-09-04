@@ -8,3 +8,10 @@ corpus
 .vscode
 node_modules
 cache
+.idea
+.z3-trace
+*.code-workspace
+output/
+work_dir/
+*.abi
+*.bin
