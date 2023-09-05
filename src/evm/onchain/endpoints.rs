@@ -804,7 +804,21 @@ impl OnChainConfig {
 }
 
 impl OnChainConfig {
-    fn get_pair(&self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
+    fn get_pair(&self, token: &str, network: &str, block: &str, is_pegged: bool) -> Vec<PairData> {
+        let params = format!("[\"{}\", false]", block);
+        let resp = self
+            ._request("eth_getBlockByNumber".to_string(), params)
+            .unwrap();
+        let timestamp = resp
+            .as_object()
+            .unwrap()
+            .get("timestamp")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        let timestamp_ms =
+            u64::from_str_radix(timestamp.trim_start_matches("0x"), 16).unwrap() * 1000;
+
         // API calls are limited to 300 requests per minute
         let url = format!("https://api.dexscreener.com/latest/dex/tokens/{token}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
@@ -817,9 +831,13 @@ impl OnChainConfig {
                 // only v2
                 if !pair["labels"]
                     .as_array()
-                    .unwrap()
+                    .unwrap_or(&vec![])
                     .contains(&Value::String("v2".to_string()))
                 {
+                    continue;
+                }
+                // only existed in the target block
+                if pair["pairCreatedAt"].as_u64().unwrap_or_default() > timestamp_ms {
                     continue;
                 }
                 let base_token = pair["baseToken"].as_object().unwrap()["address"]
@@ -842,7 +860,7 @@ impl OnChainConfig {
                     next: another_token,
                     decimals0: 18,
                     decimals1: 18,
-                    src_exact: "uniswapv2".to_string(),
+                    src_exact: pair["dexId"].as_str().unwrap().to_owned() + "v2",
                     rate: 0,
                     token: token.to_string(),
                     initial_reserves_0: "".to_string(),
@@ -931,6 +949,7 @@ impl OnChainConfig {
         &self,
         token: &str,
         network: &str,
+        block: &str,
         hop: u32,
         known: &mut HashSet<String>,
     ) -> HashMap<String, Vec<PairData>> {
@@ -941,7 +960,10 @@ impl OnChainConfig {
         }
 
         let mut hops: HashMap<String, Vec<PairData>> = HashMap::new();
-        hops.insert(token.to_string(), self.get_pair(token, network, false));
+        hops.insert(
+            token.to_string(),
+            self.get_pair(token, network, block, false),
+        );
 
         let pegged_tokens = self.get_pegged_token(network);
 
@@ -949,7 +971,7 @@ impl OnChainConfig {
             if pegged_tokens.values().any(|v| v == &i.next) || known.contains(&i.next) {
                 continue;
             }
-            let next_hops = self.get_all_hops(&i.next, network, hop + 1, known);
+            let next_hops = self.get_all_hops(&i.next, network, block, hop + 1, known);
             hops.extend(next_hops);
         }
 
@@ -972,7 +994,11 @@ impl OnChainConfig {
                 src_exact: "".to_string(),
             };
         }
-        let mut peg_info = self.get_pair(token, network, true).get(0).unwrap().clone();
+        let mut peg_info = self
+            .get_pair(token, network, block, true)
+            .get(0)
+            .unwrap()
+            .clone();
 
         self.add_reserve_info(&mut peg_info, block);
         let p0 = i128::from_str_radix(&peg_info.initial_reserves_0, 16).unwrap();
@@ -1059,7 +1085,7 @@ impl OnChainConfig {
         }
 
         let mut known: HashSet<String> = HashSet::new();
-        let hops = self.get_all_hops(token, network, 0, &mut known);
+        let hops = self.get_all_hops(token, network, block, 0, &mut known);
 
         let mut routes: Vec<Vec<PairData>> = vec![];
 
