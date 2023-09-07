@@ -175,8 +175,8 @@ pub struct PairData {
     in_: i32,
     pair: String,
     next: String,
-    decimals0: i32,
-    decimals1: i32,
+    decimals0: u64,
+    decimals1: u64,
     src_exact: String,
     rate: u32,
     token: String,
@@ -278,7 +278,7 @@ impl OnChainConfig {
             block_hash: None,
             etherscan_api_key: vec![],
             etherscan_base,
-            chain_name: chain_name,
+            chain_name,
             slot_cache: Default::default(),
             code_cache: Default::default(),
             price_cache: Default::default(),
@@ -703,9 +703,14 @@ impl OnChainConfig {
         return slot_value;
     }
 
-    pub fn fetch_uniswap_path(&self, token_address: EVMAddress) -> TokenContext {
+    pub fn fetch_uniswap_path(
+        &mut self,
+        network: &str,
+        token_address: EVMAddress,
+        block: &str,
+    ) -> TokenContext {
         let token = format!("{:?}", token_address);
-        let info: Info = self.find_path_subgraph(&self.chain_name, &token, &self.block_number);
+        let info: Info = self.find_path_subgraph(network, &token, block);
 
         let basic_info = info.basic_info;
         let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
@@ -797,70 +802,35 @@ impl OnChainConfig {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
 
-        let path = self.fetch_uniswap_path(token);
+        let path =
+            self.fetch_uniswap_path(&self.chain_name.clone(), token, &self.block_number.clone());
         self.uniswap_path_cache.insert(token, path);
         self.uniswap_path_cache.get(&token).unwrap()
     }
 }
 
 impl OnChainConfig {
-    fn get_pair(&self, token: &str, network: &str, block: &str, is_pegged: bool) -> Vec<PairData> {
-        let params = format!("[\"{}\", false]", block);
-        let resp = self
-            ._request("eth_getBlockByNumber".to_string(), params)
-            .unwrap();
-        let timestamp = resp
-            .as_object()
-            .unwrap()
-            .get("timestamp")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let timestamp_ms =
-            u64::from_str_radix(timestamp.trim_start_matches("0x"), 16).unwrap() * 1000;
-
-        // API calls are limited to 300 requests per minute
-        let url = format!("https://api.dexscreener.com/latest/dex/tokens/{token}");
+    fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
+        let url = format!("https://pairs.infra.fuzz.land/pairs/{network}/{token}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
-        if let Some(resp_pairs) = resp["pairs"].as_array() {
-            for pair in resp_pairs {
-                if !pair["chainId"].as_str().unwrap().contains(network) {
+        if let Some(resp_pairs) = resp.as_array() {
+            for item in resp_pairs {
+                let pair = item["pair"].to_string();
+                let code = self.get_contract_code(EVMAddress::from_str(&pair).unwrap(), false);
+                if code.is_empty() {
                     continue;
                 }
-                // only v2
-                if !pair["labels"]
-                    .as_array()
-                    .unwrap_or(&vec![])
-                    .contains(&Value::String("v2".to_string()))
-                {
-                    continue;
-                }
-                // only existed in the target block
-                if pair["pairCreatedAt"].as_u64().unwrap_or_default() > timestamp_ms {
-                    continue;
-                }
-                let base_token = pair["baseToken"].as_object().unwrap()["address"]
-                    .as_str()
-                    .unwrap()
-                    .to_lowercase();
-                let quote_token = pair["quoteToken"].as_object().unwrap()["address"]
-                    .as_str()
-                    .unwrap()
-                    .to_lowercase();
-                let another_token = if token == base_token {
-                    quote_token
-                } else {
-                    base_token
-                };
+                let token0 = item["token0"].to_string();
+                let token1 = item["token1"].to_string();
                 let data = PairData {
                     src: if is_pegged { "pegged" } else { "v2" }.to_string(),
-                    in_: if token < another_token.as_str() { 0 } else { 1 },
-                    pair: pair["pairAddress"].as_str().unwrap().to_lowercase(),
-                    next: another_token,
-                    decimals0: 18,
-                    decimals1: 18,
-                    src_exact: pair["dexId"].as_str().unwrap().to_owned() + "v2",
+                    in_: if token == token0 { 0 } else { 1 },
+                    pair,
+                    next: if token == token0 { token1 } else { token0 },
+                    decimals0: item["token0_decimals"].as_u64().unwrap(),
+                    decimals1: item["token1_decimals"].as_u64().unwrap(),
+                    src_exact: item["interface"].to_string(),
                     rate: 0,
                     token: token.to_string(),
                     initial_reserves_0: "".to_string(),
@@ -946,10 +916,9 @@ impl OnChainConfig {
     }
 
     fn get_all_hops(
-        &self,
+        &mut self,
         token: &str,
         network: &str,
-        block: &str,
         hop: u32,
         known: &mut HashSet<String>,
     ) -> HashMap<String, Vec<PairData>> {
@@ -960,10 +929,7 @@ impl OnChainConfig {
         }
 
         let mut hops: HashMap<String, Vec<PairData>> = HashMap::new();
-        hops.insert(
-            token.to_string(),
-            self.get_pair(token, network, block, false),
-        );
+        hops.insert(token.to_string(), self.get_pair(token, network, false));
 
         let pegged_tokens = self.get_pegged_token(network);
 
@@ -971,14 +937,14 @@ impl OnChainConfig {
             if pegged_tokens.values().any(|v| v == &i.next) || known.contains(&i.next) {
                 continue;
             }
-            let next_hops = self.get_all_hops(&i.next, network, block, hop + 1, known);
+            let next_hops = self.get_all_hops(&i.next, network, hop + 1, known);
             hops.extend(next_hops);
         }
 
         hops
     }
 
-    fn get_pegged_next_hop(&self, token: &str, network: &str, block: &str) -> PairData {
+    fn get_pegged_next_hop(&mut self, token: &str, network: &str, block: &str) -> PairData {
         if token == self.get_weth(network) {
             return PairData {
                 src: "pegged_weth".to_string(),
@@ -994,11 +960,7 @@ impl OnChainConfig {
                 src_exact: "".to_string(),
             };
         }
-        let mut peg_info = self
-            .get_pair(token, network, block, true)
-            .get(0)
-            .unwrap()
-            .clone();
+        let mut peg_info = self.get_pair(token, network, true).get(0).unwrap().clone();
 
         self.add_reserve_info(&mut peg_info, block);
         let p0 = i128::from_str_radix(&peg_info.initial_reserves_0, 16).unwrap();
@@ -1036,8 +998,9 @@ impl OnChainConfig {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dfs(
-        &self,
+        &mut self,
         token: &str,
         network: &str,
         block: &str,
@@ -1076,7 +1039,7 @@ impl OnChainConfig {
         }
     }
 
-    fn find_path_subgraph(&self, network: &str, token: &str, block: &str) -> Info {
+    fn find_path_subgraph(&mut self, network: &str, token: &str, block: &str) -> Info {
         let pegged_tokens = self.get_pegged_token(network);
 
         if pegged_tokens.values().any(|v| v == token) {
@@ -1085,7 +1048,7 @@ impl OnChainConfig {
         }
 
         let mut known: HashSet<String> = HashSet::new();
-        let hops = self.get_all_hops(token, network, block, 0, &mut known);
+        let hops = self.get_all_hops(token, network, 0, &mut known);
 
         let mut routes: Vec<Vec<PairData>> = vec![];
 
@@ -1119,7 +1082,7 @@ impl OnChainConfig {
 impl PriceOracle for OnChainConfig {
     fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)> {
         if self.price_cache.contains_key(&token_address) {
-            return self.price_cache.get(&token_address).unwrap().clone();
+            return *self.price_cache.get(&token_address).unwrap();
         }
         let price = self.fetch_token_price_uncached(token_address);
         self.price_cache.insert(token_address, price);
