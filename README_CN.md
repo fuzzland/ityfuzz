@@ -127,6 +127,9 @@ ItyFuzz 将自动检测目录中的合约之间的关联（参见`tests/multi-co
 
 ### 在线 Fuzz 一个项目
 
+Ityfuzz 将优先读取 `ETH_RPC_URL` 环境变量作为 RPC 地址，如果没有设置，将使用内置的公共 RPC 地址。
+
+
 （可选）启用 flashloan_v2 重新构建以获得更好的结果。
 
 ```bash

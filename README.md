@@ -138,6 +138,8 @@ Caveats:
 
 ### Fuzz a Project (Online)
 
+Ityfuzz will prioritize the use of environment variables `ETH_RPC_URL` as the RPC endpoint, otherwise it will use built-in public RPCs.
+
 Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result.
 
 ```bash

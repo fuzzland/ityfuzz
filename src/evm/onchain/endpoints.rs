@@ -1,4 +1,5 @@
 use crate::cache::{Cache, FileSystemCache};
+use crate::evm::types::{EVMAddress, EVMU256};
 use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
@@ -7,18 +8,17 @@ use nix::sys::uio::IoVec;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
-
-use crate::evm::types::{EVMAddress, EVMU256};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::bitvec::macros::internal::funty::Integral;
 use revm_primitives::{Bytecode, LatestSpec};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -124,6 +124,9 @@ impl Chain {
     }
 
     pub fn get_chain_rpc(&self) -> String {
+        if let Ok(url) = env::var("ETH_RPC_URL") {
+            return url;
+        }
         match self {
             Chain::ETH => "https://eth.llamarpc.com",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
