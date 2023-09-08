@@ -409,6 +409,15 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             )
             .unwrap(),
         },
+        (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
+            pool_fee: 25,
+            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+            init_code_hash: hex::decode(
+                "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
+            )
+            .unwrap(),
+        },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
             pool_fee: 3,
             router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
