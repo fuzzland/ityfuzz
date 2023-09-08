@@ -919,12 +919,17 @@ impl OnChainConfig {
     }
 
     fn fetch_reserve(&self, pair: &str, block: &str) -> (String, String) {
+        let block = if block.parse::<u64>().is_ok() {
+            format!("0x{:x}", block.parse::<u64>().unwrap())
+        } else {
+            block.to_string()
+        };
         let result = {
             let params = json!([{
             "to": pair,
             "data": "0x0902f1ac",
             "id": 1
-        }, block.parse::<u64>().unwrap_or_default()]);
+        }, block]);
             println!("fetching reserve for {pair} {block} {params}");
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
@@ -932,8 +937,6 @@ impl OnChainConfig {
                 None => "".to_string(),
             }
         };
-
-        println!("fetching reserve for {pair} {block} {result}");
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
