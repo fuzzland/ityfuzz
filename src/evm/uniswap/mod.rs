@@ -10,11 +10,11 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::evm::types::{EVMAddress, EVMU256};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use crate::evm::types::{EVMAddress, EVMU256};
 
 pub enum UniswapVer {
     V1,
@@ -122,7 +122,12 @@ impl PairContext {
     //     self.reserve1 = EVMU256::from_big_endian(&res.output[32..64]);
     // }
 
-    pub fn get_amount_out(&self, amount_in: EVMU256, reserve0: EVMU256, reserve1: EVMU256) -> SwapResult {
+    pub fn get_amount_out(
+        &self,
+        amount_in: EVMU256,
+        reserve0: EVMU256,
+        reserve1: EVMU256,
+    ) -> SwapResult {
         self.uniswap_info.calculate_amounts_out(
             if amount_in > EVMU256::from(u128::MAX) {
                 EVMU256::from(u128::MAX)
@@ -134,7 +139,12 @@ impl PairContext {
         )
     }
 
-    pub fn get_amount_in(&self, amount_out: EVMU256, reserve0: EVMU256, reserve1: EVMU256) -> SwapResult {
+    pub fn get_amount_in(
+        &self,
+        amount_out: EVMU256,
+        reserve0: EVMU256,
+        reserve1: EVMU256,
+    ) -> SwapResult {
         self.uniswap_info.calculate_amounts_in(
             if amount_out > EVMU256::from(u128::MAX) {
                 EVMU256::from(u128::MAX)
@@ -215,7 +225,8 @@ impl PathContext {
             } else {
                 initial_reserve.1
             }
-        } * EVMU256::from(percentage) / EVMU256::from(1000);
+        } * EVMU256::from(percentage)
+            / EVMU256::from(1000);
         println!("amount_out: {}", amount_out);
 
         // address => (new reserve0, new reserve1)
@@ -389,7 +400,7 @@ pub fn liquidate_all_token(
 
 pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
     match (provider, chain) {
-        (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
+        (&UniswapProvider::UniswapV2, &Chain::BSC) => UniswapInfo {
             pool_fee: 25,
             router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
@@ -457,7 +468,8 @@ impl UniswapInfo {
         };
 
         let numerator = reserve_in * adjusted_amount_out * EVMU256::from(10000);
-        let denominator = (reserve_out - adjusted_amount_out) * EVMU256::from(10000 - self.pool_fee);
+        let denominator =
+            (reserve_out - adjusted_amount_out) * EVMU256::from(10000 - self.pool_fee);
         if denominator == EVMU256::ZERO {
             return SwapResult {
                 amount: EVMU256::ZERO,
@@ -541,7 +553,8 @@ mod tests {
         );
         let path = PathContext {
             route: vec![wrap!(PairContext {
-                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F")
+                    .unwrap(),
                 side: 0,
                 uniswap_info: Arc::new(get_uniswap_info(
                     &UniswapProvider::PancakeSwap,
@@ -578,8 +591,10 @@ mod tests {
         let path = PathContext {
             route: vec![
                 wrap!(PairContext {
-                    pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F")
-                        .unwrap(),
+                    pair_address: EVMAddress::from_str(
+                        "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+                    )
+                    .unwrap(),
                     side: 0,
                     uniswap_info: Arc::new(get_uniswap_info(
                         &UniswapProvider::PancakeSwap,
@@ -589,8 +604,10 @@ mod tests {
                     next_hop: Default::default(),
                 }),
                 wrap!(PairContext {
-                    pair_address: EVMAddress::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
-                        .unwrap(),
+                    pair_address: EVMAddress::from_str(
+                        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                    )
+                    .unwrap(),
                     side: 1,
                     uniswap_info: Arc::new(get_uniswap_info(
                         &UniswapProvider::PancakeSwap,
@@ -620,7 +637,8 @@ mod tests {
         );
         let path = PathContext {
             route: vec![wrap!(PairContext {
-                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+                pair_address: EVMAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F")
+                    .unwrap(),
                 side: 0,
                 uniswap_info: Arc::new(get_uniswap_info(
                     &UniswapProvider::PancakeSwap,
@@ -657,8 +675,10 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000000"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -672,8 +692,10 @@ mod tests {
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000001")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000001"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -718,8 +740,10 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000000"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -733,8 +757,10 @@ mod tests {
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000003")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000003"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -756,8 +782,10 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000000"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -771,8 +799,10 @@ mod tests {
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000002")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000002"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -823,8 +853,10 @@ mod tests {
             swaps: vec![
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000000"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -838,8 +870,10 @@ mod tests {
                 },
                 PathContext {
                     route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000002")
-                            .unwrap(),
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000002"
+                        )
+                        .unwrap(),
                         side: 0,
                         uniswap_info: Arc::new(get_uniswap_info(
                             &UniswapProvider::PancakeSwap,
@@ -865,11 +899,20 @@ mod tests {
 
     #[test]
     fn test_reserve_parser() {
-        let (r0, r1) = reserve_parser(&EVMU256::from_str_radix(
-            "63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
-            16
-        ).unwrap());
-        assert_eq!(r0, EVMU256::from_str_radix("000000004b702d24750df9f77b84", 16).unwrap());
-        assert_eq!(r1, EVMU256::from_str_radix("00000016e7f19fdf1ede2902b6ae", 16).unwrap());
+        let (r0, r1) = reserve_parser(
+            &EVMU256::from_str_radix(
+                "63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
+                16,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            r0,
+            EVMU256::from_str_radix("000000004b702d24750df9f77b84", 16).unwrap()
+        );
+        assert_eq!(
+            r1,
+            EVMU256::from_str_radix("00000016e7f19fdf1ede2902b6ae", 16).unwrap()
+        );
     }
 }

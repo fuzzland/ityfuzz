@@ -3,6 +3,7 @@ use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
+use nix::sys::uio::IoVec;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
@@ -218,7 +219,7 @@ pub struct GetPairResponseDataPairToken {
     pub id: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct OnChainConfig {
     pub endpoint_url: String,
     // pub cache_len: usize,
@@ -235,6 +236,7 @@ pub struct OnChainConfig {
 
     pub chain_name: String,
 
+    pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     code_cache: HashMap<EVMAddress, Bytecode>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
@@ -279,15 +281,8 @@ impl OnChainConfig {
             etherscan_api_key: vec![],
             etherscan_base,
             chain_name,
-            slot_cache: Default::default(),
-            code_cache: Default::default(),
-            price_cache: Default::default(),
-            abi_cache: Default::default(),
-
-            storage_all_cache: Default::default(),
-            storage_dump_cache: Default::default(),
-            uniswap_path_cache: Default::default(),
             rpc_cache: FileSystemCache::new("./cache"),
+            ..Default::default()
         }
     }
 
@@ -654,6 +649,7 @@ impl OnChainConfig {
         };
         let code = resp_string.trim_start_matches("0x");
         if code.is_empty() {
+            println!("{address} empty code");
             self.code_cache.insert(address, Bytecode::new());
             return Bytecode::new();
         }
@@ -811,18 +807,40 @@ impl OnChainConfig {
 
 impl OnChainConfig {
     fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
-        let url = format!("https://pairs.infra.fuzz.land/pairs/{network}/{token}");
+        let token = token.to_lowercase();
+        println!("fetching pairs for {token}");
+        if self
+            .pair_cache
+            .contains_key(&EVMAddress::from_str(&token).unwrap())
+        {
+            return self.pair_cache[&EVMAddress::from_str(&token).unwrap()].clone();
+        }
+        if token == self.get_weth(network) {
+            return vec![];
+        }
+        let url = if is_pegged
+            || self
+                .get_pegged_token(network)
+                .into_values()
+                .collect::<Vec<String>>()
+                .contains(&token)
+        {
+            let weth = self.get_weth(network);
+            format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
+        } else {
+            format!("https://pairs.infra.fuzz.land/pairs/{network}/{token}")
+        };
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
         if let Some(resp_pairs) = resp.as_array() {
             for item in resp_pairs {
-                let pair = item["pair"].to_string();
+                let pair = item["pair"].as_str().unwrap().to_string();
                 let code = self.get_contract_code(EVMAddress::from_str(&pair).unwrap(), false);
                 if code.is_empty() {
                     continue;
                 }
-                let token0 = item["token0"].to_string();
-                let token1 = item["token1"].to_string();
+                let token0 = item["token0"].as_str().unwrap().to_string();
+                let token1 = item["token1"].as_str().unwrap().to_string();
                 let data = PairData {
                     src: if is_pegged { "pegged" } else { "v2" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
@@ -830,7 +848,7 @@ impl OnChainConfig {
                     next: if token == token0 { token1 } else { token0 },
                     decimals0: item["token0_decimals"].as_u64().unwrap(),
                     decimals1: item["token1_decimals"].as_u64().unwrap(),
-                    src_exact: item["interface"].to_string(),
+                    src_exact: item["interface"].as_str().unwrap().to_string(),
                     rate: 0,
                     token: token.to_string(),
                     initial_reserves_0: "".to_string(),
@@ -839,6 +857,8 @@ impl OnChainConfig {
                 pairs.push(data);
             }
         }
+        self.pair_cache
+            .insert(EVMAddress::from_str(&token).unwrap(), pairs.clone());
         pairs
     }
 
@@ -901,13 +921,16 @@ impl OnChainConfig {
             "to": pair,
             "data": "0x0902f1ac",
             "id": 1
-        }, block]);
+        }, block.parse::<u64>().unwrap_or_default()]);
+            println!("fetching reserve for {pair} {block} {params}");
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
                 None => "".to_string(),
             }
         };
+
+        println!("fetching reserve for {pair} {block} {result}");
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
@@ -1161,61 +1184,54 @@ mod tests {
         println!("{:?}", v)
     }
 
-    // #[test]
-    // fn test_get_pegged_next_hop() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let token = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-    //     let v = config.get_pegged_next_hop(token, "bsc", "latest");
-    //     assert!(v.src == "pegged_weth");
-    //     assert!(v.token == token);
-    // }
+    #[test]
+    fn test_get_pegged_next_hop() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+        let v = config.get_pegged_next_hop(token, "bsc", "latest");
+        assert!(v.src == "pegged_weth");
+        assert!(v.token == token.to_lowercase());
+    }
 
-    // #[test]
-    // fn test_get_all_hops() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let mut known: HashSet<String> = HashSet::new();
-    //     let v = config.get_all_hops(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //         0,
-    //         &mut known,
-    //     );
-    //     assert!(v.len() > 0);
-    // }
+    #[test]
+    fn test_get_all_hops() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let mut known: HashSet<String> = HashSet::new();
+        let v = config.get_all_hops(
+            "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+            "bsc",
+            0,
+            &mut known,
+        );
+        assert!(v.len() > 0);
+    }
 
-    // #[test]
-    // fn test_get_pair_pegged() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.get_pair_pegged(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //     );
-    //     assert!(!v.is_empty());
-    // }
+    #[test]
+    fn test_get_pair_pegged() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", true);
+        assert!(v.len() > 0 && v.len() < 10);
+    }
 
-    // #[test]
-    // fn test_get_pair() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.get_pair(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //     );
-    //     assert!(!v.is_empty());
-    // }
+    #[test]
+    fn test_get_pair() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", false);
+        assert!(!v.is_empty());
+    }
 
-    // #[test]
-    // fn test_fetch_uniswap_path() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.fetch_uniswap_path(
-    //         EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
-    //     );
-    //     assert!(v.swaps.len() > 0);
-    //     assert!(!v.weth_address.is_zero());
-    //     assert!(!v.address.is_zero());
-    // }
+    #[test]
+    fn test_fetch_uniswap_path() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.fetch_uniswap_path(
+            "bsc",
+            EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+            "22055611",
+        );
+        assert!(v.swaps.len() > 0);
+        assert!(!v.weth_address.is_zero());
+        assert!(!v.address.is_zero());
+    }
 
     // #[test]
     // fn test_fetch_token_price() {

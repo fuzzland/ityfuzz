@@ -10,7 +10,7 @@ pub trait Cache {
     fn load(&self, key: &str) -> Result<String, Box<dyn Error>>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FileSystemCache {
     file_path: String,
 }
