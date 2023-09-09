@@ -932,6 +932,11 @@ impl OnChainConfig {
             }
         };
 
+        assert!(
+            result.len() == 196,
+            "Unexpected RPC error, consider setting env <ETH_RPC_URL> "
+        );
+
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
 
@@ -981,7 +986,11 @@ impl OnChainConfig {
                 src_exact: "".to_string(),
             };
         }
-        let mut peg_info = self.get_pair(token, network, true).get(0).unwrap().clone();
+        let mut peg_info = self
+            .get_pair(token, network, true)
+            .get(0)
+            .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
+            .clone();
 
         self.add_reserve_info(&mut peg_info, block);
         let p0 = i128::from_str_radix(&peg_info.initial_reserves_0, 16).unwrap();
