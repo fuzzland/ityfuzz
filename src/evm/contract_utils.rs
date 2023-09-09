@@ -404,7 +404,7 @@ impl ContractLoader {
                 let result = builder.onchain_job(onchain.chain_name.clone(), addr);
                 if let Some(result) = result {
                     abi = Some(result.abi.clone());
-                    bytecode = Some(to_analysed(Bytecode::new_raw(result.bytecodes.clone())));
+                    bytecode = Some(onchain.get_contract_code(addr, false)); // Some(to_analysed(Bytecode::new_raw(result.bytecodes.clone())));
                     build_artifact = Some(result);
                 }
             }
