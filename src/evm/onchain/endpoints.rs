@@ -4,13 +4,12 @@ use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
-use nix::sys::uio::IoVec;
+use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
 use revm_interpreter::analysis::to_analysed;
-use revm_primitives::bitvec::macros::internal::funty::Integral;
-use revm_primitives::{Bytecode, LatestSpec};
+use revm_primitives::Bytecode;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;
@@ -524,7 +523,7 @@ impl OnChainConfig {
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
             address,
-            if self.etherscan_api_key.len() > 0 {
+            if !self.etherscan_api_key.is_empty() {
                 self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()]
                     .clone()
             } else {
@@ -697,7 +696,7 @@ impl OnChainConfig {
         }
         let slot_value = EVMU256::try_from_be_slice(&hex::decode(slot_suffix).unwrap()).unwrap();
         self.slot_cache.insert((address, slot), slot_value);
-        return slot_value;
+        slot_value
     }
 
     pub fn fetch_uniswap_path(
@@ -819,13 +818,8 @@ impl OnChainConfig {
         if token == self.get_weth(network) {
             return vec![];
         }
-        let url = if is_pegged
-            || self
-                .get_pegged_token(network)
-                .into_values()
-                .collect::<Vec<String>>()
-                .contains(&token)
-        {
+        let pegged_tokens = self.get_pegged_token(network);
+        let url = if is_pegged || pegged_tokens.values().contains(&token) {
             let weth = self.get_weth(network);
             format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
@@ -856,6 +850,10 @@ impl OnChainConfig {
                 pairs.push(data);
             }
         }
+        if pairs.len() > 10 {
+            pairs.retain(|p| pegged_tokens.values().contains(&p.next));
+        }
+
         self.pair_cache
             .insert(EVMAddress::from_str(&token).unwrap(), pairs.clone());
         pairs
