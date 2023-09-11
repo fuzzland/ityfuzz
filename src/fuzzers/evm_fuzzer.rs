@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
+    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap}, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
@@ -41,7 +41,7 @@ use crate::evm::mutator::{AccessPattern, FuzzMutator};
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
 use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address};
+use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address, ProjectSourceMapTy};
 use primitive_types::{H160, U256};
 use revm_primitives::{BlockEnv, Bytecode, Env};
 use revm_primitives::bitvec::view::BitViewSized;
@@ -59,7 +59,7 @@ use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
-use crate::evm::srcmap::parser::BASE_PATH;
+use crate::evm::srcmap::parser::{BASE_PATH, SourceMapLocation};
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
@@ -257,11 +257,25 @@ pub fn evm_fuzzer(
         .init_state(state)
         .expect("Failed to init state");
     // let calibration = CalibrationStage::new(&feedback);
+
+    let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
+    for (addr, build_job_result) in &artifacts.build_artifacts {
+        let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
+        remote_addr_sourcemaps.insert(addr.clone(), Some(sourcemap));
+    }
+
+    // check if we use the remote or local
+    let srcmap = if remote_addr_sourcemaps.len() > 0 {
+        remote_addr_sourcemaps
+    } else {
+        artifacts.address_to_sourcemap.clone()
+    };
+
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
         evm_executor_ref.clone(),
-        artifacts.address_to_sourcemap.clone(),
+        srcmap,
     );
     let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
 

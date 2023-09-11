@@ -610,6 +610,13 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
     code_sig.iter().cloned().collect_vec()
 }
 
+pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> ContractSourceMap {
+    let files = build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec();
+    let map = build_job_result.source_maps.clone();
+    let bytecode = build_job_result.bytecodes.to_vec();
+    decode_instructions(bytecode, map, &files)
+}
+
 mod tests {
     use super::*;
     use std::str::FromStr;
