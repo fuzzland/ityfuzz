@@ -3,6 +3,7 @@ use crate::evm::types::{
 };
 /// Load contract from file system or remote
 use glob::glob;
+use revm::precompile::B160;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -34,6 +35,8 @@ use crate::evm::blaz::offchain_config::OffchainConfig;
 use crate::evm::bytecode_iterator::all_bytecode;
 use crate::evm::host::FuzzHost;
 use crate::evm::vm::EVMExecutor;
+
+use super::types::ProjectSourceMapTy;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
@@ -605,7 +608,6 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
                 code_sig.insert(sig_bytes.try_into().unwrap());
             }
         }
-
     }
     code_sig.iter().cloned().collect_vec()
 }
@@ -614,7 +616,109 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
     let files = build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec();
     let map = build_job_result.source_maps.clone();
     let bytecode = build_job_result.bytecodes.to_vec();
+    // TODO: Does BuildJobResult have "replacement"?
     decode_instructions(bytecode, map, &files)
+}
+
+pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) {
+    // key: full_path, value: file_content
+    let mut file_contents = HashMap::<String, String>::new();
+    // panic!("{:?}", orginal);
+    for (addr, source_map) in orginal {
+        // println!("{:?}", addr);
+        let srcmap = source_map.clone().unwrap();
+        for (pc, loc) in srcmap {
+            // println!("\t{:?}", loc);
+            if loc.file.is_none() {
+                continue;
+            }
+            let filename = loc.file.clone().unwrap();
+            // source file is at work_dir/sources/addr/file
+            let file_path = format!("{}/sources/{:?}/{}", work_dir, addr, filename);
+            if !Path::new(&file_path).exists() {
+                continue;
+            }
+            let file_content = file_contents.entry(file_path.clone()).or_insert_with(|| {
+                let mut file = File::open(file_path.clone()).unwrap();
+                let mut buf = String::new();
+                file.read_to_string(&mut buf).unwrap();
+                buf
+            });
+
+            // println!("file_content: {}", file_content);
+            let mapped_source = file_content[loc.offset..loc.offset + loc.length].to_string();
+            // if starts with "library, contract, function" and ends with "}" then skip
+            let re = Regex::new(r"^(library|contract|function)(.|\n)*\}$").unwrap();
+            // println!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
+            if re.is_match(&mapped_source) {
+                // update loc's skip_on_concolic to true
+                source_map.as_mut().unwrap().insert(pc, SourceMapLocation {
+                    offset: loc.offset,
+                    length: loc.length,
+                    file: match loc.file {
+                        Some(file) => Some(file),
+                        None => None,
+                    },
+                    file_idx: loc.file_idx,
+                    skip_on_concolic: true,
+                });
+                // println!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
+            }
+        }
+    }
+}
+
+pub fn save_builder_source_code(build_artifact: &HashMap<EVMAddress, BuildJobResult>, work_dir: &String) {
+    todo!("save_builder_source_code")
+}
+
+// Save the code of contract at 'addr'
+pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &B160, work_dir: &String) {
+    todo!("save_builder_addr_source_code")
+}
+
+pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, addr_map: &ProjectSourceMapTy, base_path: &String) {
+    for (addr, src_map) in addr_map.clone() {
+        // each addr has its own source map
+        let src_map = src_map.unwrap();
+        let mut files_copied = HashSet::<String>::new();
+        // mkdir -p work_dir/addr
+        let addr_dir = format!("{}/sources/{:?}", work_dir, addr);
+        std::fs::create_dir_all(addr_dir.clone()).unwrap();
+
+        for (_pc, loc) in src_map {
+            match loc.file {
+                Some(file) => {
+                    // copy file to work_dir/sources/addr/file
+                    if !files_copied.contains(&file) {
+                        let file_path = if base_path.len() > 0 {
+                            format!("{}{}/{}", source_dir_pattern.replace("*", ""), base_path, file)
+                        } else {
+                            format!("{}/{}", source_dir_pattern.replace("*", ""), file)
+                        };
+
+                        if Path::new(&file_path).exists() {
+                            // NOTICE, HERE PATH TRAVERSAL IS POSSIBLE
+                            println!("Copying {} to {}", &file_path, &addr_dir);
+                            std::fs::create_dir_all(addr_dir.clone()).unwrap();
+                            if file.contains("/") {
+                                // we make the parent directory
+                                let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
+                                std::fs::create_dir_all(parent_dir).unwrap();
+                            }
+                            std::fs::copy(&file_path, format!("{}/{}", addr_dir, file)).unwrap();
+                            println!("Copied {} to {}", &file_path, &addr_dir);
+                            files_copied.insert(file);
+                        }
+                        else {
+                            println!("File {} not found", &file_path);
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+    }
 }
 
 mod tests {

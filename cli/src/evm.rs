@@ -562,6 +562,10 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
         builder,
+        local_files_basedir_pattern: match target_type {
+            EVMTargetType::Glob => Some(args.target),
+            _ => None
+        },
     };
 
     match config.fuzzer_type {
