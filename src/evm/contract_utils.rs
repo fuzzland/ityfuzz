@@ -18,7 +18,7 @@ extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::srcmap::parser::{decode_instructions, SourceMapLocation};
+use crate::evm::srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
@@ -613,11 +613,12 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
 }
 
 pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> ContractSourceMap {
-    let files = build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec();
-    let map = build_job_result.source_maps.clone();
-    let bytecode = build_job_result.bytecodes.to_vec();
-    // TODO: Does BuildJobResult have "replacement"?
-    decode_instructions(bytecode, map, &files)
+    decode_instructions_with_replacement(
+        build_job_result.bytecodes.to_vec(),
+        &build_job_result.source_maps_replacements,
+        build_job_result.source_maps.clone(),
+        &build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec()
+    )
 }
 
 pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) {
