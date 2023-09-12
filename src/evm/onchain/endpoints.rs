@@ -1,23 +1,23 @@
 use crate::cache::{Cache, FileSystemCache};
+use crate::evm::types::{EVMAddress, EVMU256};
 use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
 use bytes::Bytes;
+use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
-
-use crate::evm::types::{EVMAddress, EVMU256};
 use revm_interpreter::analysis::to_analysed;
-use revm_primitives::bitvec::macros::internal::funty::Integral;
-use revm_primitives::{Bytecode, LatestSpec};
+use revm_primitives::Bytecode;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::panic;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -123,6 +123,9 @@ impl Chain {
     }
 
     pub fn get_chain_rpc(&self) -> String {
+        if let Ok(url) = env::var("ETH_RPC_URL") {
+            return url;
+        }
         match self {
             Chain::ETH => "https://eth.llamarpc.com",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
@@ -175,8 +178,6 @@ pub struct PairData {
     in_: i32,
     pair: String,
     next: String,
-    decimals0: i32,
-    decimals1: i32,
     src_exact: String,
     rate: u32,
     token: String,
@@ -218,7 +219,7 @@ pub struct GetPairResponseDataPairToken {
     pub id: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct OnChainConfig {
     pub endpoint_url: String,
     // pub cache_len: usize,
@@ -235,6 +236,7 @@ pub struct OnChainConfig {
 
     pub chain_name: String,
 
+    pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     code_cache: HashMap<EVMAddress, Bytecode>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
@@ -278,16 +280,9 @@ impl OnChainConfig {
             block_hash: None,
             etherscan_api_key: vec![],
             etherscan_base,
-            chain_name: chain_name,
-            slot_cache: Default::default(),
-            code_cache: Default::default(),
-            price_cache: Default::default(),
-            abi_cache: Default::default(),
-
-            storage_all_cache: Default::default(),
-            storage_dump_cache: Default::default(),
-            uniswap_path_cache: Default::default(),
+            chain_name,
             rpc_cache: FileSystemCache::new("./cache"),
+            ..Default::default()
         }
     }
 
@@ -528,7 +523,7 @@ impl OnChainConfig {
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
             address,
-            if self.etherscan_api_key.len() > 0 {
+            if !self.etherscan_api_key.is_empty() {
                 self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()]
                     .clone()
             } else {
@@ -654,6 +649,7 @@ impl OnChainConfig {
         };
         let code = resp_string.trim_start_matches("0x");
         if code.is_empty() {
+            println!("{address} empty code");
             self.code_cache.insert(address, Bytecode::new());
             return Bytecode::new();
         }
@@ -700,12 +696,17 @@ impl OnChainConfig {
         }
         let slot_value = EVMU256::try_from_be_slice(&hex::decode(slot_suffix).unwrap()).unwrap();
         self.slot_cache.insert((address, slot), slot_value);
-        return slot_value;
+        slot_value
     }
 
-    pub fn fetch_uniswap_path(&self, token_address: EVMAddress) -> TokenContext {
+    pub fn fetch_uniswap_path(
+        &mut self,
+        network: &str,
+        token_address: EVMAddress,
+        block: &str,
+    ) -> TokenContext {
         let token = format!("{:?}", token_address);
-        let info: Info = self.find_path_subgraph(&self.chain_name, &token, &self.block_number);
+        let info: Info = self.find_path_subgraph(network, &token, block);
 
         let basic_info = info.basic_info;
         let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
@@ -797,70 +798,50 @@ impl OnChainConfig {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
 
-        let path = self.fetch_uniswap_path(token);
+        let path =
+            self.fetch_uniswap_path(&self.chain_name.clone(), token, &self.block_number.clone());
         self.uniswap_path_cache.insert(token, path);
         self.uniswap_path_cache.get(&token).unwrap()
     }
 }
 
 impl OnChainConfig {
-    fn get_pair(&self, token: &str, network: &str, block: &str, is_pegged: bool) -> Vec<PairData> {
-        let params = format!("[\"{}\", false]", block);
-        let resp = self
-            ._request("eth_getBlockByNumber".to_string(), params)
-            .unwrap();
-        let timestamp = resp
-            .as_object()
-            .unwrap()
-            .get("timestamp")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let timestamp_ms =
-            u64::from_str_radix(timestamp.trim_start_matches("0x"), 16).unwrap() * 1000;
-
-        // API calls are limited to 300 requests per minute
-        let url = format!("https://api.dexscreener.com/latest/dex/tokens/{token}");
+    fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
+        let token = token.to_lowercase();
+        println!("fetching pairs for {token}");
+        if self
+            .pair_cache
+            .contains_key(&EVMAddress::from_str(&token).unwrap())
+        {
+            return self.pair_cache[&EVMAddress::from_str(&token).unwrap()].clone();
+        }
+        if token == self.get_weth(network) {
+            return vec![];
+        }
+        let pegged_tokens = self.get_pegged_token(network);
+        let url = if is_pegged || pegged_tokens.values().contains(&token) {
+            let weth = self.get_weth(network);
+            format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
+        } else {
+            format!("https://pairs.infra.fuzz.land/pairs/{network}/{token}")
+        };
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
-        if let Some(resp_pairs) = resp["pairs"].as_array() {
-            for pair in resp_pairs {
-                if !pair["chainId"].as_str().unwrap().contains(network) {
+        if let Some(resp_pairs) = resp.as_array() {
+            for item in resp_pairs {
+                let pair = item["pair"].as_str().unwrap().to_string();
+                let code = self.get_contract_code(EVMAddress::from_str(&pair).unwrap(), false);
+                if code.is_empty() {
                     continue;
                 }
-                // only v2
-                if !pair["labels"]
-                    .as_array()
-                    .unwrap_or(&vec![])
-                    .contains(&Value::String("v2".to_string()))
-                {
-                    continue;
-                }
-                // only existed in the target block
-                if pair["pairCreatedAt"].as_u64().unwrap_or_default() > timestamp_ms {
-                    continue;
-                }
-                let base_token = pair["baseToken"].as_object().unwrap()["address"]
-                    .as_str()
-                    .unwrap()
-                    .to_lowercase();
-                let quote_token = pair["quoteToken"].as_object().unwrap()["address"]
-                    .as_str()
-                    .unwrap()
-                    .to_lowercase();
-                let another_token = if token == base_token {
-                    quote_token
-                } else {
-                    base_token
-                };
+                let token0 = item["token0"].as_str().unwrap().to_string();
+                let token1 = item["token1"].as_str().unwrap().to_string();
                 let data = PairData {
                     src: if is_pegged { "pegged" } else { "v2" }.to_string(),
-                    in_: if token < another_token.as_str() { 0 } else { 1 },
-                    pair: pair["pairAddress"].as_str().unwrap().to_lowercase(),
-                    next: another_token,
-                    decimals0: 18,
-                    decimals1: 18,
-                    src_exact: pair["dexId"].as_str().unwrap().to_owned() + "v2",
+                    in_: if token == token0 { 0 } else { 1 },
+                    pair,
+                    next: if token == token0 { token1 } else { token0 },
+                    src_exact: item["interface"].as_str().unwrap().to_string(),
                     rate: 0,
                     token: token.to_string(),
                     initial_reserves_0: "".to_string(),
@@ -869,6 +850,12 @@ impl OnChainConfig {
                 pairs.push(data);
             }
         }
+        if pairs.len() > 10 {
+            pairs.retain(|p| pegged_tokens.values().contains(&p.next));
+        }
+
+        self.pair_cache
+            .insert(EVMAddress::from_str(&token).unwrap(), pairs.clone());
         pairs
     }
 
@@ -926,18 +913,29 @@ impl OnChainConfig {
     }
 
     fn fetch_reserve(&self, pair: &str, block: &str) -> (String, String) {
+        let block = if block.parse::<u64>().is_ok() {
+            format!("0x{:x}", block.parse::<u64>().unwrap())
+        } else {
+            block.to_string()
+        };
         let result = {
             let params = json!([{
             "to": pair,
             "data": "0x0902f1ac",
             "id": 1
         }, block]);
+            println!("fetching reserve for {pair} {block} {params}");
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
                 None => "".to_string(),
             }
         };
+
+        assert!(
+            result.len() == 196,
+            "Unexpected RPC error, consider setting env <ETH_RPC_URL> "
+        );
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
@@ -946,10 +944,9 @@ impl OnChainConfig {
     }
 
     fn get_all_hops(
-        &self,
+        &mut self,
         token: &str,
         network: &str,
-        block: &str,
         hop: u32,
         known: &mut HashSet<String>,
     ) -> HashMap<String, Vec<PairData>> {
@@ -960,10 +957,7 @@ impl OnChainConfig {
         }
 
         let mut hops: HashMap<String, Vec<PairData>> = HashMap::new();
-        hops.insert(
-            token.to_string(),
-            self.get_pair(token, network, block, false),
-        );
+        hops.insert(token.to_string(), self.get_pair(token, network, false));
 
         let pegged_tokens = self.get_pegged_token(network);
 
@@ -971,14 +965,14 @@ impl OnChainConfig {
             if pegged_tokens.values().any(|v| v == &i.next) || known.contains(&i.next) {
                 continue;
             }
-            let next_hops = self.get_all_hops(&i.next, network, block, hop + 1, known);
+            let next_hops = self.get_all_hops(&i.next, network, hop + 1, known);
             hops.extend(next_hops);
         }
 
         hops
     }
 
-    fn get_pegged_next_hop(&self, token: &str, network: &str, block: &str) -> PairData {
+    fn get_pegged_next_hop(&mut self, token: &str, network: &str, block: &str) -> PairData {
         if token == self.get_weth(network) {
             return PairData {
                 src: "pegged_weth".to_string(),
@@ -987,17 +981,15 @@ impl OnChainConfig {
                 in_: 0,
                 next: "".to_string(),
                 pair: "".to_string(),
-                decimals0: 0,
-                decimals1: 0,
                 initial_reserves_0: "".to_string(),
                 initial_reserves_1: "".to_string(),
                 src_exact: "".to_string(),
             };
         }
         let mut peg_info = self
-            .get_pair(token, network, block, true)
+            .get_pair(token, network, true)
             .get(0)
-            .unwrap()
+            .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
             .clone();
 
         self.add_reserve_info(&mut peg_info, block);
@@ -1036,8 +1028,9 @@ impl OnChainConfig {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dfs(
-        &self,
+        &mut self,
         token: &str,
         network: &str,
         block: &str,
@@ -1076,7 +1069,7 @@ impl OnChainConfig {
         }
     }
 
-    fn find_path_subgraph(&self, network: &str, token: &str, block: &str) -> Info {
+    fn find_path_subgraph(&mut self, network: &str, token: &str, block: &str) -> Info {
         let pegged_tokens = self.get_pegged_token(network);
 
         if pegged_tokens.values().any(|v| v == token) {
@@ -1085,7 +1078,7 @@ impl OnChainConfig {
         }
 
         let mut known: HashSet<String> = HashSet::new();
-        let hops = self.get_all_hops(token, network, block, 0, &mut known);
+        let hops = self.get_all_hops(token, network, 0, &mut known);
 
         let mut routes: Vec<Vec<PairData>> = vec![];
 
@@ -1119,7 +1112,7 @@ impl OnChainConfig {
 impl PriceOracle for OnChainConfig {
     fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)> {
         if self.price_cache.contains_key(&token_address) {
-            return self.price_cache.get(&token_address).unwrap().clone();
+            return *self.price_cache.get(&token_address).unwrap();
         }
         let price = self.fetch_token_price_uncached(token_address);
         self.price_cache.insert(token_address, price);
@@ -1198,61 +1191,54 @@ mod tests {
         println!("{:?}", v)
     }
 
-    // #[test]
-    // fn test_get_pegged_next_hop() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let token = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-    //     let v = config.get_pegged_next_hop(token, "bsc", "latest");
-    //     assert!(v.src == "pegged_weth");
-    //     assert!(v.token == token);
-    // }
+    #[test]
+    fn test_get_pegged_next_hop() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+        let v = config.get_pegged_next_hop(token, "bsc", "latest");
+        assert!(v.src == "pegged_weth");
+        assert!(v.token == token.to_lowercase());
+    }
 
-    // #[test]
-    // fn test_get_all_hops() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let mut known: HashSet<String> = HashSet::new();
-    //     let v = config.get_all_hops(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //         0,
-    //         &mut known,
-    //     );
-    //     assert!(v.len() > 0);
-    // }
+    #[test]
+    fn test_get_all_hops() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let mut known: HashSet<String> = HashSet::new();
+        let v = config.get_all_hops(
+            "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+            "bsc",
+            0,
+            &mut known,
+        );
+        assert!(v.len() > 0);
+    }
 
-    // #[test]
-    // fn test_get_pair_pegged() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.get_pair_pegged(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //     );
-    //     assert!(!v.is_empty());
-    // }
+    #[test]
+    fn test_get_pair_pegged() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", true);
+        assert!(v.len() > 0 && v.len() < 10);
+    }
 
-    // #[test]
-    // fn test_get_pair() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.get_pair(
-    //         "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-    //         "bsc",
-    //         "latest",
-    //     );
-    //     assert!(!v.is_empty());
-    // }
+    #[test]
+    fn test_get_pair() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", false);
+        assert!(!v.is_empty());
+    }
 
-    // #[test]
-    // fn test_fetch_uniswap_path() {
-    //     let config = OnChainConfig::new(BSC, 22055611);
-    //     let v = config.fetch_uniswap_path(
-    //         EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
-    //     );
-    //     assert!(v.swaps.len() > 0);
-    //     assert!(!v.weth_address.is_zero());
-    //     assert!(!v.address.is_zero());
-    // }
+    #[test]
+    fn test_fetch_uniswap_path() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = config.fetch_uniswap_path(
+            "bsc",
+            EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+            "22055611",
+        );
+        assert!(v.swaps.len() > 0);
+        assert!(!v.weth_address.is_zero());
+        assert!(!v.address.is_zero());
+    }
 
     // #[test]
     // fn test_fetch_token_price() {
