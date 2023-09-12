@@ -5,6 +5,7 @@ use crate::evm::types::{
 use glob::glob;
 use revm::precompile::B160;
 use serde_json::Value;
+use core::panic;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
@@ -18,7 +19,7 @@ extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation};
+use crate::evm::srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
@@ -670,12 +671,44 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
 }
 
 pub fn save_builder_source_code(build_artifact: &HashMap<EVMAddress, BuildJobResult>, work_dir: &String) {
-    todo!("save_builder_source_code")
+    for (addr, build_job_result) in build_artifact {
+        save_builder_addr_source_code(build_job_result, addr, work_dir, &parse_buildjob_result_sourcemap(&build_job_result));
+    }
 }
 
 // Save the code of contract at 'addr'
-pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &B160, work_dir: &String) {
-    todo!("save_builder_addr_source_code")
+pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &EVMAddress, work_dir: &String, src_map: &ContractSourceMap) {
+    let mut files_downloaded = HashSet::<String>::new();
+
+    let addr_dir = format!("{}/sources/{:?}", work_dir, addr);
+    std::fs::create_dir_all(addr_dir.clone()).unwrap();
+
+    for (_pc, loc) in src_map {
+        match loc.file.clone() {
+            Some(file) => {
+                if !files_downloaded.contains(&file) {
+                    if file.contains("/") {
+                        // we make the parent directory
+                        let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
+                        std::fs::create_dir_all(parent_dir).unwrap();
+                    }
+                    let file_path = format!("{}/{}", addr_dir, file);
+                    println!("Downloading {} to {}", &file, &file_path);
+                    // println!("{:?}", build_job_result.sources);
+                    let mut file_content = String::new();
+                    for (filename, content) in build_job_result.sources.clone().into_iter() {
+                        if filename == file {
+                            file_content = content;
+                            break;
+                        }
+                    }
+                    std::fs::write(file_path, file_content).unwrap();
+                    files_downloaded.insert(file);
+                }
+            },
+            None => {}
+        }
+    }
 }
 
 pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, addr_map: &ProjectSourceMapTy, base_path: &String) {
