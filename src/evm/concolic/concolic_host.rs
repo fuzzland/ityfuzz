@@ -658,7 +658,6 @@ impl<I, VS> ConcolicHost<I, VS> {
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let caller = BV::new_const(&context, "caller", 256);
         let balance = BV::new_const(&context, "balance", 256);
-        println!("constraints: {:?}", self.constraints);
 
         let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &caller, &self.constraints);
         solving.solve()
@@ -1179,27 +1178,22 @@ where
                 };
 
                 /*
-                 * Missing cases:
-                 * 1. global public variable
-                 *    This is done by function selector, but the source file exsits
-                 *    and the length is normal
-                 *
-                 * ...
+                 * Skip rules:
+                 * 1. r"^(library|contract|function)(.|\n)*\}$" // skip library, contract, function
+                 * TODO: 2. global variable signature?
                  */
 
                 // Get the source map of current pc
                 let mut need_solve = true;
                 let pc = interp.program_counter();
                 let address = interp.contract.address;
-                println!("[concolic] address: {:?} pc: {:x}", address, pc);
-                println!("input: {:?}", self.input_bytes);
+                // println!("[concolic] address: {:?} pc: {:x}", address, pc);
+                // println!("input: {:?}", self.input_bytes);
                 if let Some(Some(srcmap)) = self.source_map.get(&address) {
-                    println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                    // println!("source line: {:?}", srcmap.get(&pc).unwrap());
                     let source_map_loc = srcmap.get(&pc).unwrap();
                     if let Some(_file) = &source_map_loc.file {
-                        // FIXME: Arbitrary threshold
-                        if source_map_loc.length > 0x80 {
-                            println!("[concolic] skip solve for huge length");
+                        if source_map_loc.skip_on_concolic {
                             need_solve = false;
                         }
                     }
@@ -1210,11 +1204,12 @@ where
                     }
                 }
                 else {
-                    panic!("source line: None");
+                    // Is this possible?
+                    // panic!("source line: None");
                 }
 
                 if need_solve {
-                    println!("[concolic] still need to solve");
+                    // println!("[concolic] still need to solve");
                     let real_path_constraint = if br {
                         // path_condition = false
                         stack_bv!(1).lnot()
