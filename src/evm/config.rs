@@ -76,4 +76,5 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub selfdestruct_bug: bool,
     pub arbitrary_external_call: bool,
     pub builder: Option<BuildJob>,
+    pub priority_file: Option<String>,
 }

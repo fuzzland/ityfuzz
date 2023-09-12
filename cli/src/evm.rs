@@ -257,6 +257,10 @@ pub struct EvmArgs {
     /// Offchain Config File. If specified, will deploy based on offchain config file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
+
+    /// [Experimental] Priority of ABI functions
+    #[arg(long)]
+    priority_file: Option<String>,
 }
 
 enum EVMTargetType {
@@ -566,6 +570,7 @@ pub fn evm_main(args: EvmArgs) {
         selfdestruct_bug: args.selfdestruct_oracle,
         arbitrary_external_call: args.arbitrary_external_call_oracle,
         builder,
+        priority_file: args.priority_file,
     };
 
     match config.fuzzer_type {

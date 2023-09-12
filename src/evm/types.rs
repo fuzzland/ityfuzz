@@ -5,7 +5,7 @@ use crate::evm::mutator::FuzzMutator;
 use crate::evm::vm::EVMState;
 
 use crate::oracle::OracleCtx;
-use crate::scheduler::SortedDroppingScheduler;
+use crate::scheduler::{ProbSamplingScheduler, SortedDroppingScheduler};
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -32,6 +32,7 @@ pub type EVMFuzzMutator<'a> = FuzzMutator<
     SortedDroppingScheduler<
         StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
         InfantStateState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>,
+        ProbSamplingScheduler<EVMStagedVMState>
     >,
     ConciseEVMInput
 >;

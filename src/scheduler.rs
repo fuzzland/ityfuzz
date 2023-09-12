@@ -35,13 +35,61 @@ pub const PRUNE_AMT: usize = 250;
 /// If inputs (or VMState) has not been visited this many times, it will be ignored during pruning
 pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 
-/// A scheduler that drops inputs (or VMState) based on a voting mechanism
-#[derive(Debug, Clone)]
-pub struct SortedDroppingScheduler<I, S> {
-    phantom: std::marker::PhantomData<(I, S)>,
+pub trait SortedDroppingSchedulerNext<S> {
+    fn next(state: &mut S) -> Result<usize, Error>;
+    fn before_on_add(state: &mut S, idx: usize) -> Result<(), Error> {
+        Ok(())
+    }
+    fn before_on_remove(state: &mut S, idx: usize) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
-impl<I, S> SortedDroppingScheduler<I, S> {
+
+pub struct ProbSamplingScheduler<I> {
+    phantom: std::marker::PhantomData<I>,
+}
+
+impl<I, S> SortedDroppingSchedulerNext<S> for ProbSamplingScheduler<I>
+where     S: HasCorpus<I> + HasRand + HasMetadata + HasParent,
+          I: Input + Debug,
+{
+    fn next(state: &mut S) -> Result<usize, Error> {
+        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
+            * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
+        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        let mut idx = usize::MAX;
+
+        let mut s: f64 = 0.0; // sum of votes so far
+
+        for i in &data.sorted_votes {
+            s += data.votes_and_visits.get(&i).unwrap().0 as f64;
+            if s > threshold {
+                idx = *i;
+                break;
+            }
+        }
+
+        if idx == usize::MAX {  // if we didn't find an input, just use the last one
+            idx = *data.sorted_votes.last().unwrap();
+        }
+        {
+            data.votes_and_visits.get_mut(&idx).unwrap().1 += 1;
+            data.visits_total += 1;
+        }
+
+        Ok(idx)
+    }
+}
+
+
+/// A scheduler that drops inputs (or VMState) based on a voting mechanism
+#[derive(Debug, Clone)]
+pub struct SortedDroppingScheduler<I, S, SCC> {
+    phantom: std::marker::PhantomData<(I, S, SCC)>,
+}
+
+impl<I, S, SCC> SortedDroppingScheduler<I, S, SCC> {
     /// Create a new SortedDroppingScheduler
     pub fn new() -> Self {
         Self {
@@ -145,10 +193,11 @@ pub trait HasReportCorpus<S>
     fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize);
 }
 
-impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
+impl<I, S, SCC> HasReportCorpus<S> for SortedDroppingScheduler<I, S, SCC>
     where
         S: HasCorpus<I> + HasRand + HasMetadata + HasParent,
         I: Input + Debug,
+        SCC: SortedDroppingSchedulerNext<S>,
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
         self.vote(state, state_idx, 3);
@@ -171,14 +220,16 @@ impl_serdeany!(VoteData);
 #[cfg(feature = "full_trace")]
 pub static mut REMOVED_CORPUS: usize = 0;
 
-impl<I, S> Scheduler<I, S> for SortedDroppingScheduler<I, S>
+impl<I, S, SCC> Scheduler<I, S> for SortedDroppingScheduler<I, S, SCC>
 where
     S: HasCorpus<I> + HasRand + HasMetadata + HasParent,
     I: Input + Debug,
+    SCC: SortedDroppingSchedulerNext<S>,
 {
     /// Hooks called every time an input (or VMState) is added to the corpus
     /// Set up the metadata for the input (or VMState)
     fn on_add(&self, state: &mut S, idx: usize) -> Result<(), Error> {
+        SCC::before_on_add(state, idx)?;
         // Initialize metadata if it doesn't exist
         if !state.has_metadata::<VoteData>() {
             state.metadata_mut().insert(VoteData {
@@ -268,6 +319,7 @@ where
         idx: usize,
         _testcase: &Option<Testcase<I>>,
     ) -> Result<(), Error> {
+        SCC::before_on_remove(state, idx)?;
         let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
         data.votes_total -= data.votes_and_visits.get(&idx).unwrap().0;
         data.visits_total -= data.votes_and_visits.get(&idx).unwrap().1;
@@ -306,40 +358,15 @@ where
             }
         }
 
-        // Conduct a probabilistic sampling from votes and visits (weighted by votes)
-        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
-            * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
-        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        let mut idx = usize::MAX;
-
-        let mut s: f64 = 0.0; // sum of votes so far
-
-        for i in &data.sorted_votes {
-            s += data.votes_and_visits.get(&i).unwrap().0 as f64;
-            if s > threshold {
-                idx = *i;
-                break;
-            }
-        }
-
-        if idx == usize::MAX {  // if we didn't find an input, just use the last one
-            idx = *data.sorted_votes.last().unwrap();
-        }
-
-        // Update metadata
-        {
-            data.votes_and_visits.get_mut(&idx).unwrap().1 += 1;
-            data.visits_total += 1;
-        }
-
-        Ok(idx)
+        SCC::next(state)
     }
 }
 
-impl<I, S> HasVote<I, S> for SortedDroppingScheduler<I, S>
+impl<I, S, SCC> HasVote<I, S> for SortedDroppingScheduler<I, S, SCC>
 where
     S: HasCorpus<I> + HasRand + HasMetadata,
     I: Input,
+    SCC: SortedDroppingSchedulerNext<S>,
 {
     /// Vote for an input (or VMState)
     fn vote(&self, state: &mut S, idx: usize, increment: usize) {

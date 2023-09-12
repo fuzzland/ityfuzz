@@ -50,6 +50,7 @@ use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::concolic::concolic_host::ConcolicHost;
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
+use crate::evm::experimental::priority_scoring::{ProbabilityABISamplingScheduler, SigScore};
 use crate::evm::feedbacks::Sha3WrappedFeedback;
 use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
@@ -87,6 +88,10 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
+
+    #[cfg(feature = "llm")]
+    let mut scheduler: ProbabilityABISamplingScheduler<EVMInput, EVMFuzzState> = ProbabilityABISamplingScheduler::new();
+    #[cfg(not(feature = "llm"))]
     let mut scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
@@ -359,6 +364,17 @@ pub fn evm_fuzzer(
     }
 
     state.add_metadata(BugMetadata::new());
+
+
+    let mut sig_score = match config.priority_file {
+        Some(path) => {
+            SigScore::from_file(path.as_str()).expect("Failed to load priority file")
+        }
+        None => {
+            SigScore::new()
+        }
+    };
+    state.metadata_mut().insert(sig_score);
 
     if config.selfdestruct_oracle {
         oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new(

@@ -36,6 +36,7 @@ memory_limit = [
     "revm-interpreter/memory_limit",
     "revm/memory_limit",
 ]
+llm = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

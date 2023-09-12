@@ -54,6 +54,9 @@ pub trait EVMInputT {
     /// Get the ABI encoded input
     fn to_bytes(&self) -> Vec<u8>;
 
+    /// Get the function
+    fn get_function(&self) -> Option<&[u8; 4]>;
+
     /// Get revm environment (block, timestamp, etc.)
     fn get_vm_env(&self) -> &Env;
 
@@ -347,6 +350,13 @@ impl EVMInputT for EVMInput {
 
     fn get_vm_env_mut(&mut self) -> &mut Env {
         &mut self.env
+    }
+
+    fn get_function(&self) -> Option<&[u8; 4]> {
+        match self.data.as_ref() {
+            None => None,
+            Some(v) => Some(&v.function)
+        }
     }
 
     fn get_vm_env(&self) -> &Env {
