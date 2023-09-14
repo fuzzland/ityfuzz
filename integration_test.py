@@ -117,7 +117,7 @@ def update_cargo_toml():
     with open("Cargo.toml", "r") as file:
         content = file.read()
 
-    if 'flashloan_v2' in content:
+    if '"flashloan_v2"' in content:
         return
 
     if '"cmp"' in content:
