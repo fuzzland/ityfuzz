@@ -64,6 +64,10 @@ def test_one(path):
 
 def test_onchain(test):
 
+    if len(test) != 4:
+        print(f"=== Invalid test: {test}")
+        return
+
     # randomly sleep for 0 - 30s to avoid peak traffic
     time.sleep(30 * random.random())
 
