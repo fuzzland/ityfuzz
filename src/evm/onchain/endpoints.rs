@@ -288,7 +288,7 @@ impl OnChainConfig {
 
     fn get(&self, url: String) -> Option<String> {
         let mut hasher = DefaultHasher::new();
-        let key = format!("post_{}", url.as_str());
+        let key = format!("get_{}", url.as_str());
         key.hash(&mut hasher);
         let hash = hasher.finish().to_string();
         if let Ok(t) = self.rpc_cache.load(hash.as_str()) {
