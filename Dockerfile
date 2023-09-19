@@ -46,6 +46,7 @@ WORKDIR /app
 COPY --from=builder /bins /bins
 
 WORKDIR /bins
+COPY tests /bins/tests
 
 EXPOSE 8000
 
