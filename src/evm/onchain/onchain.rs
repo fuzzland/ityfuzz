@@ -31,7 +31,6 @@ use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
-use bytes::Bytes;
 use itertools::Itertools;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
@@ -144,10 +143,10 @@ where
 pub fn keccak_hex(data: EVMU256) -> String {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let mut input: [u8; 32] = data.to_be_bytes();
+    let input: [u8; 32] = data.to_be_bytes();
     hasher.input(input.as_ref());
     hasher.result(&mut output);
-    hex::encode(&output).to_string()
+    hex::encode(output)
 }
 
 impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
@@ -170,10 +169,10 @@ where
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
     ) {
-        let pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {
+                let pc = interp.program_counter();
                 match $ty.get_mut(&(interp.contract.address, pc)) {
                     None => {
                         $ty.insert((interp.contract.address, pc), HashSet::from([$target]));
@@ -198,6 +197,7 @@ where
         }
 
         match *interp.instruction_pointer {
+            // SLOAD
             0x54 => {
                 let address = interp.contract.address;
                 let slot_idx = interp.stack.peek(0).unwrap();
@@ -236,15 +236,34 @@ where
                     ),
                 };
             }
-
+            // BALANCE
+            0x31 => {
+                let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
+                println!("onchain balance for {:?}", address);
+                // std::thread::sleep(std::time::Duration::from_secs(3));
+                host.next_slot = self.endpoint.get_balance(address);
+            }
+            // 	SELFBALANCE
+            0x47 => {
+                let address = interp.contract.address;
+                println!("onchain selfbalance for {:?}", address);
+                // std::thread::sleep(std::time::Duration::from_secs(3));
+                host.next_slot = self.endpoint.get_balance(address);
+            }
+            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
                 let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
-                    0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
-                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
-                    _ => {
-                        unreachable!()
+                    0xf1 | 0xf2 => {
+                        // CALL | CALLCODE
+                        // Get balance of the callee
+                        host.next_slot = self.endpoint.get_balance(caller);
+
+                        interp.stack.peek(1).unwrap()
                     }
+                    0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
+                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                    _ => unreachable!(),
                 };
                 let address_h160 = convert_u256_to_h160(address);
                 if self.loaded_abi.contains(&address_h160) {
@@ -277,10 +296,7 @@ where
 
                 // setup abi
                 self.loaded_abi.insert(address_h160);
-                let is_proxy_call = match *interp.instruction_pointer {
-                    0xf2 | 0xf4 => true,
-                    _ => false,
-                };
+                let is_proxy_call = matches!(*interp.instruction_pointer, 0xf2 | 0xf4);
 
                 let mut abi = None;
                 if let Some(builder) = &self.builder {
@@ -368,7 +384,7 @@ where
                         "Propagating hashes {:?} for proxy {:?}",
                         abi_hashes_to_add
                             .iter()
-                            .map(|x| hex::encode(x))
+                            .map(hex::encode)
                             .collect::<Vec<_>>(),
                         caller
                     );
@@ -400,15 +416,9 @@ where
                     );
                 }
                 // add abi to corpus
-
-                unsafe {
-                    match WHITELIST_ADDR.as_ref() {
-                        Some(whitelist) => {
-                            if !whitelist.contains(&target) {
-                                return;
-                            }
-                        }
-                        None => {}
+                if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
+                    if !whitelist.contains(&target) {
+                        return;
                     }
                 }
 

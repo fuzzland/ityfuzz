@@ -1,5 +1,4 @@
 /// Implements fuzzing logic for ItyFuzz
-
 use crate::{
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
@@ -33,24 +32,23 @@ use libafl::{
 };
 
 use crate::evm::host::JMP_MAP;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
-use itertools::Itertools;
-use libafl::prelude::HasRand;
-use primitive_types::H256;
-use serde_json::Value;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
 use crate::telemetry::report_vulnerability;
+use itertools::Itertools;
+use libafl::prelude::HasRand;
+use primitive_types::H256;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::hash::{Hash, Hasher};
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
 pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
-
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
 ///
@@ -68,7 +66,8 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 pub struct ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     IFR: Feedback<I, S>,
@@ -104,7 +103,8 @@ impl<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
     ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     IFR: Feedback<I, S>,
@@ -191,23 +191,30 @@ where
 }
 
 /// Implement fuzzer trait for ItyFuzzer
-impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI> Fuzzer<E, EM, I, S, ST>
+impl<'a, VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI>
+    Fuzzer<E, EM, I, S, ST>
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     EM: EventManager<E, I, S, Self>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     IFR: Feedback<I, S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<I, S>,
-    S: HasClientPerfMonitor + HasExecutions + HasMetadata + HasCurrentInputIdx + HasRand + HasCorpus<I>,
+    S: HasClientPerfMonitor
+        + HasExecutions
+        + HasMetadata
+        + HasCurrentInputIdx
+        + HasRand
+        + HasCorpus<I>,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Fuzz one input
     fn fuzz_one(
@@ -253,77 +260,85 @@ pub static mut DUMP_FILE_COUNT: usize = 0;
 
 pub static mut REPLAY: bool = false;
 
-
 #[macro_export]
 macro_rules! dump_file {
-    ($state: expr, $corpus_path: expr, $print: expr) => {
-        {
-            if !unsafe {REPLAY} {
-                unsafe {
-                    DUMP_FILE_COUNT += 1;
-                }
-
-                let tx_trace = $state.get_execution_result().new_state.trace.clone();
-                let txn_text = tx_trace.to_string($state);
-                let txn_text_replayable = tx_trace.to_file_str($state);
-
-                let data = format!(
-                    "Reverted? {} \n Txn: {}",
-                    $state.get_execution_result().reverted,
-                    txn_text
-                );
-                if $print {
-                    println!("============= New Corpus Item =============");
-                    println!("{}", data);
-                    println!("==========================================");
-                }
-
-                // write to file
-                let path = Path::new($corpus_path.as_str());
-                if !path.exists() {
-                    std::fs::create_dir_all(path).unwrap();
-                }
-                let mut file =
-                    File::create(format!("{}/{}", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                file.write_all(data.as_bytes()).unwrap();
-
-                let mut replayable_file =
-                    File::create(format!("{}/{}_replayable", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+    ($state: expr, $corpus_path: expr, $print: expr) => {{
+        if !unsafe { REPLAY } {
+            unsafe {
+                DUMP_FILE_COUNT += 1;
             }
+
+            let tx_trace = $state.get_execution_result().new_state.trace.clone();
+            let txn_text = tx_trace.to_string($state);
+            let txn_text_replayable = tx_trace.to_file_str($state);
+
+            let data = format!(
+                "Reverted? {} \n Txn: {}",
+                $state.get_execution_result().reverted,
+                txn_text
+            );
+            if $print {
+                println!("============= New Corpus Item =============");
+                println!("{}", data);
+                println!("==========================================");
+            }
+
+            // write to file
+            let path = Path::new($corpus_path.as_str());
+            if !path.exists() {
+                std::fs::create_dir_all(path).unwrap();
+            }
+            let mut file =
+                File::create(format!("{}/{}", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
+            file.write_all(data.as_bytes()).unwrap();
+
+            let mut replayable_file =
+                File::create(format!("{}/{}_replayable", $corpus_path, unsafe {
+                    DUMP_FILE_COUNT
+                }))
+                .unwrap();
+            replayable_file
+                .write_all(txn_text_replayable.as_bytes())
+                .unwrap();
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! dump_txn {
-    ($corpus_path: expr, $input: expr) => {
-        {
-            if !unsafe {REPLAY} {
-                unsafe {
-                    DUMP_FILE_COUNT += 1;
-                }
-                // write to file
-                let path = Path::new($corpus_path.as_str());
-                if !path.exists() {
-                    std::fs::create_dir_all(path).unwrap();
-                }
-
-                let concise_input = ConciseEVMInput::from_input($input, &EVMExecutionResult::empty_result());
-
-                let txn_text = concise_input.serialize_string();
-                let txn_text_replayable = String::from_utf8(concise_input.serialize_concise()).unwrap();
-
-                let mut file =
-                    File::create(format!("{}/{}_seed", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                file.write_all(txn_text.as_bytes()).unwrap();
-
-                let mut replayable_file =
-                    File::create(format!("{}/{}_seed_replayable", $corpus_path, unsafe { DUMP_FILE_COUNT })).unwrap();
-                replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
+    ($corpus_path: expr, $input: expr) => {{
+        if !unsafe { REPLAY } {
+            unsafe {
+                DUMP_FILE_COUNT += 1;
             }
+            // write to file
+            let path = Path::new($corpus_path.as_str());
+            if !path.exists() {
+                std::fs::create_dir_all(path).unwrap();
+            }
+
+            let concise_input =
+                ConciseEVMInput::from_input($input, &EVMExecutionResult::empty_result());
+
+            let txn_text = concise_input.serialize_string();
+            let txn_text_replayable = String::from_utf8(concise_input.serialize_concise()).unwrap();
+
+            let mut file = File::create(format!("{}/{}_seed", $corpus_path, unsafe {
+                DUMP_FILE_COUNT
+            }))
+            .unwrap();
+            file.write_all(txn_text.as_bytes()).unwrap();
+
+            let mut replayable_file =
+                File::create(format!("{}/{}_seed_replayable", $corpus_path, unsafe {
+                    DUMP_FILE_COUNT
+                }))
+                .unwrap();
+            replayable_file
+                .write_all(txn_text_replayable.as_bytes())
+                .unwrap();
         }
-    };
+    }};
 }
 
 // implement evaluator trait for ItyFuzzer
@@ -331,7 +346,8 @@ impl<'a, VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI> Evalua
     for ItyFuzzer<'a, VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<I, S>,
-    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<I, S>,
     IF: Feedback<I, S>,
     IFR: Feedback<I, S>,
@@ -353,7 +369,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -412,15 +428,15 @@ where
             state_idx = state.add_infant_state(
                 &state.get_execution_result().new_state.clone(),
                 self.infant_scheduler,
-                input.get_state_idx()
+                input.get_state_idx(),
             );
 
             if self
                 .infant_result_feedback
-                .is_interesting(state, manager, &input, observers, &exitkind)? {
-                self.infant_scheduler.sponsor_state(
-                    state.get_infant_state_state(), state_idx, 3
-                )
+                .is_interesting(state, manager, &input, observers, &exitkind)?
+            {
+                self.infant_scheduler
+                    .sponsor_state(state.get_infant_state_state(), state_idx, 3)
             }
         }
 
@@ -450,10 +466,8 @@ where
             let mut testcase = Testcase::new(input.clone());
             self.feedback.append_metadata(state, &mut testcase)?;
             corpus_idx = state.corpus_mut().add(testcase)?;
-            self.infant_scheduler.report_corpus(
-                state.get_infant_state_state(),
-                state_idx
-            );
+            self.infant_scheduler
+                .report_corpus(state.get_infant_state_state(), state_idx);
             self.scheduler.on_add(state, corpus_idx)?;
             self.on_add_corpus(&input, unsafe { &JMP_MAP }, corpus_idx);
         }
@@ -468,10 +482,8 @@ where
 
                         let mut testcase = Testcase::new(input.clone());
                         let new_testcase_idx = state.corpus_mut().add(testcase)?;
-                        self.infant_scheduler.report_corpus(
-                            state.get_infant_state_state(),
-                            state_idx
-                        );
+                        self.infant_scheduler
+                            .report_corpus(state.get_infant_state_state(), state_idx);
                         self.scheduler.on_add(state, new_testcase_idx)?;
                         self.on_replace_corpus(
                             (hash, new_fav_factor, old_testcase_idx),
@@ -516,9 +528,7 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
-                report_vulnerability(
-                    unsafe {serde_json::to_string(&ORACLE_OUTPUT).expect("")},
-                );
+                report_vulnerability(unsafe { serde_json::to_string(&ORACLE_OUTPUT).expect("") });
 
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
@@ -540,14 +550,20 @@ where
                     .open(vuln_file)
                     .expect("Unable to open file");
                 f.write_all(unsafe {
-                    ORACLE_OUTPUT.iter().map(|v| serde_json::to_string(v).expect("failed to json"))
-                        .join("\n").as_bytes()
-                }).expect("Unable to write data");
+                    ORACLE_OUTPUT
+                        .iter()
+                        .map(|v| serde_json::to_string(v).expect("failed to json"))
+                        .join("\n")
+                        .as_bytes()
+                })
+                .expect("Unable to write data");
                 f.write_all(b"\n").expect("Unable to write data");
 
-                state.metadata_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
-                    corpus_idx
-                );
+                state
+                    .metadata_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap()
+                    .register_corpus_idx(corpus_idx);
 
                 #[cfg(feature = "print_txn_corpus")]
                 {

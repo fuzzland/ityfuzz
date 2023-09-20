@@ -233,6 +233,9 @@ pub struct EVMState {
     /// State of the EVM, which is mapping of EVMU256 slot to EVMU256 value for each contract
     pub state: HashMap<EVMAddress, HashMap<EVMU256, EVMU256>>,
 
+    /// Balance of addresses
+    pub balance: HashMap<EVMAddress, EVMU256>,
+
     /// Post execution context
     /// If control leak happens, we add the post execution context to the VM state,
     /// which contains all information needed to continue execution.
@@ -366,6 +369,16 @@ impl EVMState {
     pub fn insert(&mut self, address: EVMAddress, storage: HashMap<EVMU256, EVMU256>) {
         self.state.insert(address, storage);
     }
+
+    /// Get balance of a specific address
+    pub fn get_balance(&self, address: &EVMAddress) -> Option<&EVMU256> {
+        self.balance.get(address)
+    }
+
+    /// Set balance of a specific address
+    pub fn set_balance(&mut self, address: EVMAddress, balance: EVMU256) {
+        self.balance.insert(address, balance);
+    }
 }
 
 /// Is current EVM execution fast call
@@ -386,7 +399,7 @@ where
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
     pub host: FuzzHost<VS, I, S>,
     /// [Depreciated] Deployer address
-    deployer: EVMAddress,
+    pub deployer: EVMAddress,
     /// Known arbitrary (caller,pc)
     pub _known_arbitrary: HashSet<(EVMAddress, usize)>,
     phandom: PhantomData<(I, S, VS, CI)>,
@@ -854,13 +867,16 @@ where
         deployed_address: EVMAddress,
         state: &mut S,
     ) -> Option<EVMAddress> {
+        println!("deployer = 0x{} ", hex::encode(self.deployer));
+        // println!("{:?}", constructor_args);
+        // println!("{:?}", hex::encode(code.clone().bytecode));
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
             deployed_address,
             self.deployer,
-            EVMU256::from(0),
+            EVMU256::from(2),
         );
         // disable middleware for deployment
         unsafe {

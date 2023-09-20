@@ -46,6 +46,8 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
+pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
+
 pub struct EVMCorpusInitializer<'a> {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
     scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
@@ -164,6 +166,10 @@ impl<'a> EVMCorpusInitializer<'a> {
     }
 
     pub fn initialize_contract(&mut self, loader: &mut ContractLoader) {
+        self.executor
+            .host
+            .evmstate
+            .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
         for contract in &mut loader.contracts {
             println!();
             println!("Deploying contract: {}", contract.name);
@@ -191,9 +197,11 @@ impl<'a> EVMCorpusInitializer<'a> {
                     .set_code(contract.deployed_address, contract_code, self.state);
                 contract.deployed_address
             };
-            println!("Deployed to: {:?}", deployed_address);
-
             contract.deployed_address = deployed_address;
+            println!(
+                "Contract {} deployed to: {deployed_address:?}",
+                contract.name
+            );
             self.state.add_address(&deployed_address);
         }
         println!("Deployed all contracts\n");
@@ -362,6 +370,10 @@ impl<'a> EVMCorpusInitializer<'a> {
 
         for caller in default_callers {
             self.state.add_caller(&caller);
+            self.executor
+                .host
+                .evmstate
+                .set_balance(caller, EVMU256::from(INITIAL_BALANCE));
         }
     }
 
@@ -378,6 +390,10 @@ impl<'a> EVMCorpusInitializer<'a> {
                 Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
                 self.state,
             );
+            self.executor
+                .host
+                .evmstate
+                .set_balance(caller, EVMU256::from(INITIAL_BALANCE));
         }
     }
 

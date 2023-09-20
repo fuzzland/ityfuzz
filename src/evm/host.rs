@@ -1,4 +1,3 @@
-use crate::evm::bytecode_analyzer;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::{
     add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType,
@@ -6,19 +5,14 @@ use crate::evm::middlewares::middleware::{
 use crate::evm::mutator::AccessPattern;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
-use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
+use crate::evm::onchain::flashloan::Flashloan;
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler};
 use libafl::state::State;
-use primitive_types::H256;
-use revm::db::BenchmarkDB;
-use revm_interpreter::InstructionResult::{Continue, ControlLeak, Return, Revert};
+use revm_interpreter::InstructionResult::{Continue, ControlLeak, Revert};
 
-use crate::evm::types::{
-    as_u64, bytes_to_u64, generate_random_address, is_zero, EVMAddress, EVMU256,
-};
-use hex::FromHex;
+use crate::evm::types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256};
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::analysis::to_analysed;
 use revm_interpreter::{
@@ -30,7 +24,6 @@ use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
-use std::fs::OpenOptions;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
@@ -40,7 +33,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::{
     EVMState, PostExecutionCtx, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC,
 };
@@ -51,7 +43,6 @@ use crate::input::VMInputT;
 use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::contract_utils::extract_sig_from_contract;
 use crate::evm::corpus_initializer::ABIMap;
-use crate::evm::input::EVMInputTy::ArbitraryCallBoundedAddr;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::handle_contract_insertion;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
@@ -94,7 +85,6 @@ const SCRIBBLE_EVENT_HEX: [u8; 32] = [
     0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c,
     0x1b, 0x48, 0x26, 0x46, 0x5e, 0x8b, 0xc5, 0x04, 0xb3, 0xeb, 0x3e, 0x88, 0xb3, 0xe6, 0xa4, 0xa0,
 ];
-pub static mut CONCRETE_CREATE: bool = false;
 
 /// Check if address is precompile by having assumption
 /// that precompiles are in range of 1 to N.
@@ -841,6 +831,8 @@ where
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         unsafe {
+            // println!("pc: {}", interp.program_counter());
+            // println!("{:?}", *interp.instruction_pointer);
             invoke_middlewares!(self, interp, state, on_step);
             if IS_FAST_CALL_STATIC {
                 return Continue;
@@ -854,6 +846,10 @@ where
             match *interp.instruction_pointer {
                 // 0xfd => {
                 //     println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
+                // }
+                // 0x31 | 0x47 => {
+                //     println!("host setp balance");
+                //     std::thread::sleep(std::time::Duration::from_secs(3));
                 // }
                 0x57 => {
                     // JUMPI counter cond
@@ -1030,16 +1026,20 @@ where
     }
 
     fn block_hash(&mut self, _number: EVMU256) -> Option<B256> {
-        Some(
-            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
-        )
+        Some(B256::zero())
     }
 
-    fn balance(&mut self, _address: EVMAddress) -> Option<(EVMU256, bool)> {
+    fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
         // println!("balance");
-
-        Some((EVMU256::MAX, true))
+        println!("host balance for {:?}", address);
+        // std::thread::sleep(std::time::Duration::from_secs(2));
+        if let Some(balance) = self.evmstate.get_balance(&address) {
+            println!("balance0: {}", balance);
+            return Some((*balance, true));
+        }
+        println!("balance1: {}", self.next_slot);
+        self.evmstate.set_balance(address, self.next_slot);
+        Some((self.next_slot, true))
     }
 
     fn code(&mut self, address: EVMAddress) -> Option<(Arc<BytecodeLocked>, bool)> {
@@ -1150,7 +1150,9 @@ where
         inputs: &mut CreateInputs,
         state: &mut S,
     ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
-        if unsafe { CONCRETE_CREATE || IN_DEPLOY } {
+        println!("host create");
+        println!("inputs: {:?}", hex::encode(inputs.init_code.clone()));
+        if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
             let mut interp = Interpreter::new_with_memory_limit(
@@ -1266,6 +1268,30 @@ where
         output_info: (usize, usize),
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
+        let value = EVMU256::from(input.transfer.value);
+        if value != EVMU256::ZERO {
+            let sender = input.transfer.source;
+            // println!("call sender: {:?}", sender);
+            let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
+                *balance
+            } else {
+                self.evmstate.set_balance(sender, self.next_slot);
+                self.next_slot
+            };
+            // println!("call sender balance: {}", current);
+            if current < value {
+                return (Revert, Gas::new(0), Bytes::new());
+            }
+            self.evmstate.set_balance(sender, current - value);
+
+            let receiver = input.transfer.target;
+            if let Some(balance) = self.evmstate.get_balance(&receiver) {
+                self.evmstate.set_balance(receiver, *balance + value);
+            } else {
+                self.evmstate.set_balance(receiver, self.next_slot + value);
+            };
+        }
+
         let res = if is_precompile(input.contract, self.precompiles.len()) {
             self.call_precompile(input, state)
         } else if unsafe { IS_FAST_CALL_STATIC } {
