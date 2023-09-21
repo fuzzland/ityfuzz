@@ -330,10 +330,18 @@ impl ContractLoader {
                 Ok(path) => {
                     let path_str = path.to_str().unwrap();
                     if path_str.ends_with(".abi") {
+                        // skip FuzzLand.abi
+                        if path_str.ends_with("FuzzLand.abi") {
+                            continue;
+                        }
                         *prefix_file_count
                             .entry(path_str.replace(".abi", "").clone())
                             .or_insert(0) += 1;
                     } else if path_str.ends_with(".bin") {
+                        // skip FuzzLand.bin
+                        if path_str.ends_with("FuzzLand.bin") {
+                            continue;
+                        }
                         *prefix_file_count
                             .entry(path_str.replace(".bin", "").clone())
                             .or_insert(0) += 1;
