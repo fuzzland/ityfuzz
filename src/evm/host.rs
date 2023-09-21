@@ -1030,14 +1030,9 @@ where
     }
 
     fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
-        // println!("balance");
-        println!("host balance for {:?}", address);
-        // std::thread::sleep(std::time::Duration::from_secs(2));
         if let Some(balance) = self.evmstate.get_balance(&address) {
-            println!("balance0: {}", balance);
             return Some((*balance, true));
         }
-        println!("balance1: {}", self.next_slot);
         self.evmstate.set_balance(address, self.next_slot);
         Some((self.next_slot, true))
     }
@@ -1150,8 +1145,6 @@ where
         inputs: &mut CreateInputs,
         state: &mut S,
     ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
-        println!("host create");
-        println!("inputs: {:?}", hex::encode(inputs.init_code.clone()));
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);

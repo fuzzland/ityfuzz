@@ -624,8 +624,6 @@ impl OnChainConfig {
         if self.balance_cache.contains_key(&address) {
             return self.balance_cache[&address];
         }
-        println!("rpc fetching balance for {:?}", address);
-        // std::thread::sleep(std::time::Duration::from_secs(2));
 
         let resp_string = {
             let mut params = String::from("[");

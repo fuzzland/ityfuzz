@@ -868,15 +868,13 @@ where
         state: &mut S,
     ) -> Option<EVMAddress> {
         println!("deployer = 0x{} ", hex::encode(self.deployer));
-        // println!("{:?}", constructor_args);
-        // println!("{:?}", hex::encode(code.clone().bytecode));
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
             deployed_address,
             deployed_address,
             self.deployer,
-            EVMU256::from(2),
+            EVMU256::from(0),
         );
         // disable middleware for deployment
         unsafe {
