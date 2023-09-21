@@ -2,8 +2,8 @@ name: Rust Build and Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - feature/ci_build
 
 jobs:
   build_and_release:
