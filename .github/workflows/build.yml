@@ -9,8 +9,10 @@ jobs:
   build_and_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
