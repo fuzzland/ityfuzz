@@ -100,7 +100,7 @@ impl<I, S> Scheduler<I, S> for ProbabilityABISamplingScheduler<I, S>
         let meta = state.metadata_mut().get_mut::<SigScore>().unwrap();
 
         if meta.scores.get(&key).is_none() {
-            meta.register_score(&key, 50.0);
+            meta.register_score(&key, 10.0);
         }
         meta.sig_indexes.entry(key).or_insert_with(Vec::new).push(idx);
         Ok(())
