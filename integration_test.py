@@ -69,7 +69,7 @@ def test_onchain(test):
         return
 
     # randomly sleep for 0 - 30s to avoid peak traffic
-    time.sleep(30 * random.random())
+    time.sleep(60 * random.random())
 
     contract_addresses, block_number, chain, name= test[3], test[2], test[1], test[0]
     if chain not in ["eth", "bsc"]:
@@ -78,18 +78,18 @@ def test_onchain(test):
     cmd = [
         TIMEOUT_BIN, 
         # set timeout to 5m because it takes longer time to sync the chain
-        "5m",
+        "20m",
         "./cli/target/release/cli", "evm", "-o", 
         "-t", contract_addresses, 
         "-c", chain, 
         "--onchain-block-number", str(block_number), 
-        "-f", "-i", "-p"
+        "-f", "-i", "-p", "--onchain-etherscan-api-key", "PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF",  "--work-dir", f"w_{name}", "--run-forever"
     ]
 
     start_time = time.time()
 
     # try 3 times in case of rpc failure
-    for i in range(3):
+    for i in range(1):
         p = subprocess.run(" ".join(cmd),
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
@@ -97,6 +97,7 @@ def test_onchain(test):
 
         if b"Found violations!" in p.stdout:
             print(f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s")
+            open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
             return
 
         time.sleep(30)
@@ -106,6 +107,7 @@ def test_onchain(test):
     print("================ STDOUT =================")
     print(p.stdout.decode("utf-8"))
     print(f"=== Failed to test onchain for contracts: {name}")
+    open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
 
 def build_fuzzer():
     # build fuzzer
@@ -139,13 +141,13 @@ def build_flash_loan_v2_fuzzer():
 import multiprocessing
 
 if __name__ == "__main__":
-    build_fuzzer()
-    with multiprocessing.Pool(3) as p:
-        p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
+    #build_fuzzer()
+    #with multiprocessing.Pool(3) as p:
+    #    p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
 
     build_flash_loan_v2_fuzzer()
 
     tests = read_onchain_tests()
 
-    with multiprocessing.Pool(3) as p:
+    with multiprocessing.Pool(10) as p:
         p.map(test_onchain, tests)
