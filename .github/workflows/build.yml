@@ -1,0 +1,54 @@
+name: Rust Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      # Build cli folder
+      - name: Build CLI without flashloan
+        run: |
+          cd cli
+          cargo build --release
+          mv target/release/cli ../cli_without_flashloan
+
+      - name: Modify Cargo.toml and Build CLI with flashloan
+        run: |
+          sed -i 's/"cmp"/"cmp","flashloan_v2"/g' Cargo.toml
+          cargo build --release
+          mv target/release/cli ../cli_with_flashloan
+
+      - name: Zip the binaries
+        run: |
+          zip cli.zip cli_without_flashloan cli_with_flashloan
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload zip to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./cli.zip
+          asset_name: cli.zip
+          asset_content_type: application/zip
