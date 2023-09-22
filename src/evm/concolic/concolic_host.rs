@@ -6,6 +6,7 @@ use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
 use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 
 use crate::evm::host::{FuzzHost, JMP_MAP};
+use crate::evm::srcmap::parser::SourceMapLocation;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -1191,7 +1192,17 @@ where
                 // println!("input: {:?}", self.input_bytes);
                 if let Some(Some(srcmap)) = self.source_map.get(&address) {
                     // println!("source line: {:?}", srcmap.get(&pc).unwrap());
-                    let source_map_loc = srcmap.get(&pc).unwrap();
+                    let source_map_loc = if srcmap.get(&pc).is_some() {
+                        srcmap.get(&pc).unwrap()
+                    } else {
+                        &SourceMapLocation {
+                            file: None,
+                            file_idx: None,
+                            offset: 0,
+                            length: 0,
+                            skip_on_concolic :false
+                        }
+                    };
                     if let Some(_file) = &source_map_loc.file {
                         if source_map_loc.skip_on_concolic {
                             need_solve = false;
