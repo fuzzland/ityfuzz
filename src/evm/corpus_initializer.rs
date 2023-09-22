@@ -19,29 +19,29 @@ use crate::state_input::StagedVMState;
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 
-#[cfg(feature = "print_txn_corpus")]
-use crate::fuzzer::DUMP_FILE_COUNT;
-use crate::fuzzer::REPLAY;
-use libafl::schedulers::Scheduler;
-use libafl::state::HasCorpus;
-use revm_primitives::Bytecode;
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-
 use crate::dump_txn;
 use crate::evm::blaz::builder::BuildJobResult;
 use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
 use crate::evm::types::EVMExecutionResult;
+#[cfg(feature = "print_txn_corpus")]
+use crate::fuzzer::DUMP_FILE_COUNT;
+use crate::fuzzer::REPLAY;
 use crate::input::ConciseSerde;
 use hex;
 use itertools::Itertools;
 use libafl::impl_serdeany;
 use libafl::prelude::HasMetadata;
+use libafl::schedulers::Scheduler;
+use libafl::state::HasCorpus;
+use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
+use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
