@@ -5,7 +5,8 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::{ConciseSerde, VMInputT};
 use crate::state::HasExecutionResult;
 
-use libafl::prelude::{HasCorpus, HasMetadata, SerdeAnyMap};
+use libafl::prelude::{HasCorpus, HasMetadata};
+use libafl_bolts::bolts_prelude::SerdeAnyMap;
 use libafl::state::State;
 use serde::de::DeserializeOwned;
 use serde::{Serialize, Deserialize};
@@ -15,7 +16,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 
 /// The context passed to the oracle
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
@@ -46,7 +47,7 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
     OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
-    S: State + HasCorpus<I> + HasMetadata + HasExecutionResult<Loc, Addr, VS, Out, CI>,
+    S: State + HasCorpus + HasMetadata + HasExecutionResult<Loc, Addr, VS, Out, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -153,4 +154,3 @@ impl BugMetadata {
 }
 
 impl_serdeany!(BugMetadata);
-

@@ -72,7 +72,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
                 let real_bug_idx = (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX;
                 let srcmap = BuildJobResult::get_sourcemap_executor(
-                    ctx.fuzz_state.metadata_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
+                    ctx.fuzz_state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
                         .get_mut(addr),
                     ctx.executor,
                     addr,

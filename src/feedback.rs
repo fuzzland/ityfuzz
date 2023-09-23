@@ -13,7 +13,9 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::inputs::Input;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{Feedback, HasMetadata, Named};
+use libafl::prelude::{Feedback, HasMetadata, UsesInput};
+use libafl_bolts::Named;
+
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
 use libafl::Error;
@@ -103,14 +105,15 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<I, S>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<S>
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
     S: State
         + HasClientPerfMonitor
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
-        + HasCorpus<I>
+        + HasCorpus
         + HasMetadata
+        + UsesInput<Input = I>
         + 'static,
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
     VS: Default + VMStateT,
@@ -132,23 +135,23 @@ where
         &mut self,
         state: &mut S,
         _manager: &mut EMI,
-        input: &I,
+        input: &S::Input,
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EMI: EventFirer<I>,
-        OT: ObserversTuple<I, S>,
+        EMI: EventFirer<State = S>,
+        OT: ObserversTuple<S>,
     {
         if state.get_execution_result().reverted {
             return Ok(false);
         }
         {
             if !state.has_metadata::<BugMetadata>() {
-                state.metadata_mut().insert(BugMetadata::default());
+                state.metadata_map_mut().insert(BugMetadata::default());
             }
 
-            state.metadata_mut().get_mut::<BugMetadata>().unwrap().current_bugs.clear();
+            state.metadata_map_mut().get_mut::<BugMetadata>().unwrap().current_bugs.clear();
 
         }
 
@@ -191,7 +194,7 @@ where
                 .deref()
                 .borrow()
                 .oracle(&mut oracle_ctx, original_stage) {
-                let metadata = oracle_ctx.fuzz_state.metadata_mut().get_mut::<BugMetadata>().unwrap();
+                let metadata = oracle_ctx.fuzz_state.metadata_map_mut().get_mut::<BugMetadata>().unwrap();
                 if metadata.known_bugs.contains(&bug_idx) || has_post_exec {
                     continue;
                 }
@@ -210,20 +213,6 @@ where
 
         before_exit!();
         Ok(is_any_bug_hit)
-    }
-
-    // dummy method
-    fn append_metadata(
-        &mut self,
-        _state: &mut S,
-        _testcase: &mut Testcase<I>,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-
-    // dummy method
-    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
-        Ok(())
     }
 }
 
@@ -274,10 +263,10 @@ impl<'a, VS, Loc, Addr, Out, CI> DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
 }
 
 #[cfg(feature = "dataflow")]
-impl<'a, VS, Loc, Addr, I, S, Out, CI> Feedback<I, S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
+impl<'a, VS, Loc, Addr, S, Out, CI, I> Feedback<S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
 where
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI>,
     I: VMInputT<VS, Loc, Addr, CI>,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI> + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -293,13 +282,13 @@ where
         &mut self,
         _state: &mut S,
         _manager: &mut EMI,
-        _input: &I,
+        _input: &S::Input,
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EMI: EventFirer<I>,
-        OT: ObserversTuple<I, S>,
+        EMI: EventFirer<State = S>,
+        OT: ObserversTuple<S>,
     {
         let mut interesting = false;
         for i in 0..MAP_SIZE {
@@ -330,18 +319,6 @@ where
             self.write_map[i] = 0;
         }
         return Ok(interesting);
-    }
-
-    fn append_metadata(
-        &mut self,
-        _state: &mut S,
-        _testcase: &mut Testcase<I>,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn discard_metadata(&mut self, _state: &mut S, _input: &I) -> Result<(), Error> {
-        Ok(())
     }
 }
 
@@ -374,7 +351,7 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
     /// a set of hashes of already encountered VMStates so that we don't re-analyze them
     known_states: HashSet<u64>,
     /// votable scheduler that can vote on whether a VMState is interesting or not
-    scheduler: &'a SC,
+    scheduler: SC,
     /// the VM providing information about the current execution
     vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     phantom: PhantomData<(Addr, Out)>,
@@ -384,8 +361,7 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
     CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
-    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
-        + HasVote<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT,
     SlotTy: PartialOrd + Copy + TryFrom<u128>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -396,7 +372,7 @@ where
     /// Create a new CmpFeedback.
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
-        scheduler: &'a SC,
+        scheduler: SC,
         vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     ) -> Self {
         Self {
@@ -429,16 +405,16 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> Debug
 }
 
 #[cfg(feature = "cmp")]
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, I0, S0, SC, CI> Feedback<I0, S0>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, I0, S0, SC, CI> Feedback<S0>
     for CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
+    I0: Input + VMInputT<VS, Loc, Addr, CI>,
     S0: State
         + HasClientPerfMonitor
         + HasInfantStateState<Loc, Addr, VS, CI>
-        + HasExecutionResult<Loc, Addr, VS, Out, CI>,
-    I0: Input + VMInputT<VS, Loc, Addr, CI>,
-    SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>
-        + HasVote<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>
+        + UsesInput<Input = I0>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -456,13 +432,13 @@ where
         &mut self,
         state: &mut S0,
         _manager: &mut EMI,
-        input: &I0,
+        input: &S0::Input,
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EMI: EventFirer<I0>,
-        OT: ObserversTuple<I0, S0>,
+        EMI: EventFirer<State = S0>,
+        OT: ObserversTuple<S0>,
     {
         let mut cmp_interesting = false;
         let mut cov_interesting = false;
@@ -502,17 +478,5 @@ where
             }
         }
         Ok(false)
-    }
-
-    fn append_metadata(
-        &mut self,
-        _state: &mut S0,
-        _testcase: &mut Testcase<I0>,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn discard_metadata(&mut self, _state: &mut S0, _input: &I0) -> Result<(), Error> {
-        Ok(())
     }
 }

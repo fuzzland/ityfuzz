@@ -1,3 +1,4 @@
+use libafl::prelude::UsesInput;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use primitive_types::H256;

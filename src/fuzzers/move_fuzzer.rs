@@ -13,13 +13,15 @@ use crate::{
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{HasMetadata, MapFeedback, ShMemProvider};
+use libafl::prelude::{HasMetadata, MapFeedback};
+use libafl_bolts::bolts_prelude::ShMemProvider;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
-    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
+    prelude::{MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
+use libafl_bolts::tuples::tuple_list;
 use glob::glob;
 use itertools::Itertools;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
@@ -72,29 +74,27 @@ pub fn move_fuzzer(
         MoveCorpusInitializer::new(
             &mut state,
             &mut vm,
-            &scheduler,
-            &infant_scheduler,
+            scheduler.clone(),
+            infant_scheduler.clone(),
         ).setup(vec![config.target.clone()]);
     }
 
     let vm_ref = Rc::new(RefCell::new(vm));
 
-    let jmp_observer = StdMapObserver::new("jmp", vm_ref.borrow().get_jmp());
-    let mut feedback:
-        MapFeedback<MoveFunctionInput, _, _, _, MoveFuzzState, _>
-        = MaxMapFeedback::new(&jmp_observer);
+    let jmp_observer = unsafe { StdMapObserver::new("jmp", vm_ref.borrow().get_jmp()) };
+    let mut feedback: MapFeedback<_, _, _, MoveFuzzState, _> = MaxMapFeedback::new(&jmp_observer);
     feedback
         .init_state(&mut state)
         .expect("Failed to init state");
 
-    let mutator = MoveFuzzMutator::new(&infant_scheduler);
+    let mutator = MoveFuzzMutator::new(infant_scheduler.clone());
 
     let std_stage = StdMutationalStage::new(mutator);
     let mut stages = tuple_list!(std_stage);
 
     let mut executor = FuzzExecutor::new(vm_ref.clone(), tuple_list!(jmp_observer));
 
-    let infant_feedback = CmpFeedback::new(vm_ref.borrow().get_cmp(), &infant_scheduler, vm_ref.clone());
+    let infant_feedback = CmpFeedback::new(vm_ref.borrow().get_cmp(), infant_scheduler.clone(), vm_ref.clone());
     let infant_result_feedback = DataflowFeedback::new(vm_ref.borrow().get_read(), vm_ref.borrow().get_write());
 
     let mut oracles: Vec<Rc<RefCell<dyn Oracle<_, _, _, _, _, _, _, _, _, _>>>> = vec![
@@ -108,7 +108,7 @@ pub fn move_fuzzer(
     //
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
-        &infant_scheduler,
+        infant_scheduler,
         feedback,
         infant_feedback,
         infant_result_feedback,

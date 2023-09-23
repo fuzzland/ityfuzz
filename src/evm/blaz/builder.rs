@@ -10,7 +10,7 @@ use std::time::Duration;
 use std::collections::hash_map::DefaultHasher;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::cache::{Cache, FileSystemCache};
@@ -19,7 +19,7 @@ use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation};
-use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy};
+use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMQueueExecutor};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
@@ -257,7 +257,7 @@ impl BuildJobResult {
             let bytecode = Vec::from((**executor)
                 .borrow_mut()
                 .as_any()
-                .downcast_ref::<EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>>()
+                .downcast_ref::<EVMQueueExecutor>()
                 .unwrap()
                 .host
                 .code

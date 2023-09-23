@@ -18,8 +18,9 @@ use crate::state_input::StagedVMState;
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 use libafl::corpus::Corpus;
-use libafl::prelude::{HasCorpus, HasMetadata, Input};
+use libafl::prelude::{HasCorpus, HasMetadata, Input, UsesInput};
 
+use libafl::schedulers::Scheduler;
 use libafl::state::{HasRand, State};
 
 
@@ -151,24 +152,26 @@ pub fn keccak_hex(data: EVMU256) -> String {
     hex::encode(&output).to_string()
 }
 
-impl<VS, I, S> Middleware<VS, I, S> for OnChain<VS, I, S>
+impl<VS, I, S, SC> Middleware<VS, I, S, SC> for OnChain<VS, I, S>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         +HasRand
         + Debug
         + HasCaller<EVMAddress>
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + Clone
+        + UsesInput<Input = I>
         + 'static,
     VS: VMStateT + Default + 'static,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         let pc = interp.program_counter();
@@ -310,7 +313,7 @@ where
                         // replace the code with the one from builder
                         // println!("replace code for {:?} with builder's", address_h160);
                         // host.set_codedata(address_h160, contract_code.clone());
-                        state.metadata_mut().get_mut::<ArtifactInfoMetadata>()
+                        state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>()
                             .expect("artifact info metadata").add(address_h160, job);
                     }
                 }
@@ -334,7 +337,7 @@ where
                         let sigs = extract_sig_from_contract(&contract_code_str);
                         let mut unknown_sigs: usize = 0;
                         for sig in &sigs {
-                            if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                            if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
                                 parsed_abi.push(abi.clone());
                             } else {
                                 unknown_sigs += 1;
@@ -346,7 +349,7 @@ where
                             let abis = fetch_abi_heimdall(contract_code_str)
                                 .iter()
                                 .map(|abi| {
-                                    if let Some(known_abi) = state.metadata().get::<ABIMap>().unwrap().get(&abi.function) {
+                                    if let Some(known_abi) = state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function) {
                                         known_abi
                                     } else {
                                         abi
@@ -465,7 +468,7 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
 
     }
 

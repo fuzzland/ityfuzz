@@ -44,7 +44,8 @@ revm-primitives = { path = "./externals/revm/crates/primitives", features = ["no
 revm-interpreter = { path = "./externals/revm/crates/interpreter", features = ["no_gas_measuring", "serde"] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
-libafl = "0.8.2"
+libafl = "0.11.1"
+libafl_bolts = "0.11.1"
 rand = "0.8.5"
 nix = "0.24"
 serde = "1.0.147"

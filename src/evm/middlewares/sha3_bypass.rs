@@ -9,6 +9,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::opcode::JUMPI;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
@@ -101,23 +102,24 @@ impl Sha3TaintAnalysis {
     }
 }
 
-impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Sha3TaintAnalysis
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
         + HasCaller<EVMAddress>
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
         + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         //
@@ -386,7 +388,7 @@ where
     }
 
     unsafe fn on_return(
-        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S,
+        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S,
         by: &Bytes
     ) {
         self.pop_ctx();
@@ -396,7 +398,7 @@ where
         &mut self,
         bytecode: &mut Bytecode,
         address: EVMAddress,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
     }
@@ -417,23 +419,24 @@ impl Sha3Bypass {
     }
 }
 
-impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Sha3Bypass
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
         + HasCaller<EVMAddress>
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
         + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         if *interp.instruction_pointer == JUMPI {
@@ -455,7 +458,7 @@ where
         &mut self,
         bytecode: &mut Bytecode,
         address: EVMAddress,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
     }
@@ -491,9 +494,9 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
             EVMExecutor::new(
-                FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
+                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
                 generate_random_address(&mut state),
             );
 

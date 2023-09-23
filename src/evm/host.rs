@@ -9,7 +9,7 @@ use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler};
+use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
@@ -107,11 +107,12 @@ pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
     num.wrapping_sub(1) < num_of_precompiles as u16
 }
 
-pub struct FuzzHost<VS, I, S>
+pub struct FuzzHost<VS, I, S, SC>
 where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     pub evmstate: EVMState,
     // these are internal to the host
@@ -124,7 +125,7 @@ where
     pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
     pub pc_to_call_hash: HashMap<(EVMAddress, usize, usize), HashSet<Vec<u8>>>,
     pub middlewares_enabled: bool,
-    pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<VS, I, S>>>>>>,
+    pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<VS, I, S, SC>>>>>>,
 
     pub coverage_changed: bool,
 
@@ -132,7 +133,7 @@ where
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
 
-    pub scheduler: Arc<dyn Scheduler<EVMInput, S>>,
+    pub scheduler: SC,
 
     // controlled by onchain module, if sload cant find the slot, use this value
     pub next_slot: EVMU256,
@@ -174,11 +175,12 @@ where
     pub jumpi_trace: usize,
 }
 
-impl<VS, I, S> Debug for FuzzHost<VS, I, S>
+impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
 where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
@@ -200,11 +202,12 @@ where
 }
 
 // all clones would not include middlewares and states
-impl<VS, I, S> Clone for FuzzHost<VS, I, S>
+impl<VS, I, S, SC> Clone for FuzzHost<VS, I, S, SC>
 where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -256,21 +259,23 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
 
-impl<VS, I, S> FuzzHost<VS, I, S>
+impl<VS, I, S, SC> FuzzHost<VS, I, S, SC>
 where
     S: State
         + HasRand
         + HasCaller<EVMAddress>
         + Debug
         + Clone
-        + HasCorpus<I>
+        + HasCorpus
         + HasMetadata
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + UsesInput<Input = I>
         + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
-    pub fn new(scheduler: Arc<dyn Scheduler<EVMInput, S>>, workdir: String) -> Self {
+    pub fn new(scheduler: SC, workdir: String) -> Self {
         let ret = Self {
             evmstate: EVMState::new(),
             env: Env::default(),
@@ -323,37 +328,37 @@ where
         mut state: &mut S,
     ) -> InstructionResult {
         match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state),
+            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
             SpecId::FRONTIER => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, FrontierSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, FrontierSpec>(self, state)
             }
             SpecId::HOMESTEAD => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, HomesteadSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, HomesteadSpec>(self, state)
             }
             SpecId::TANGERINE => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, TangerineSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, TangerineSpec>(self, state)
             }
             SpecId::SPURIOUS_DRAGON => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, SpuriousDragonSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, SpuriousDragonSpec>(self, state)
             }
             SpecId::BYZANTIUM => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, ByzantiumSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ByzantiumSpec>(self, state)
             }
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, PetersburgSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, PetersburgSpec>(self, state)
             }
             SpecId::ISTANBUL => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, IstanbulSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, IstanbulSpec>(self, state)
             }
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, BerlinSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, BerlinSpec>(self, state)
             }
-            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S>, LondonSpec>(self, state),
-            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S>, MergeSpec>(self, state),
+            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state),
+            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state),
             SpecId::SHANGHAI => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S>, ShanghaiSpec>(self, state)
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ShanghaiSpec>(self, state)
             }
-            _ => interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state),
+            _ => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
         }
     }
 
@@ -362,13 +367,13 @@ where
         self.middlewares.deref().borrow_mut().clear();
     }
 
-    pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
+    pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>) {
         self.middlewares_enabled = true;
         let ty = middlewares.deref().borrow().get_type();
         self.middlewares.deref().borrow_mut().push(middlewares);
     }
 
-    pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S>>>) {
+    pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>) {
         let ty = middlewares.deref().borrow().get_type();
         self.middlewares
             .deref()
@@ -847,19 +852,21 @@ macro_rules! invoke_middlewares {
     };
 }
 
-impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
+impl<VS, I, S, SC> Host<S> for FuzzHost<VS, I, S, SC>
 where
     S: State
         + HasRand
         + HasCaller<EVMAddress>
         + Debug
         + Clone
-        + HasCorpus<I>
+        + HasCorpus
         + HasMetadata
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + UsesInput<Input = I>
         + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         unsafe {
@@ -927,7 +934,7 @@ where
                         let compressed_value = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
-                        let res = <FuzzHost<VS, I, S> as Host<S>>::sload(
+                        let res = <FuzzHost<VS, I, S, SC> as Host<S>>::sload(
                             self,
                             interp.contract.address,
                             fast_peek!(0),
@@ -1205,7 +1212,7 @@ where
                         let mut unknown_sigs: usize = 0;
                         let mut parsed_abi = vec![];
                         for sig in &sigs {
-                            if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                            if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
                                 parsed_abi.push(abi.clone());
                             } else {
                                 unknown_sigs += 1;
@@ -1218,7 +1225,7 @@ where
                                 .iter()
                                 .map(|abi| {
                                     if let Some(known_abi) =
-                                        state.metadata().get::<ABIMap>().unwrap().get(&abi.function)
+                                        state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
                                     {
                                         known_abi
                                     } else {

@@ -61,7 +61,7 @@ where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
             return String::from("Begin\n");
         }
         let current_idx = self.from_idx.unwrap();
-        let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
+        let corpus_item = state.get_infant_state_state().corpus().get(current_idx.into());
         // This happens when full_trace feature is not enabled, the corpus item may be discarded
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");
@@ -95,7 +95,7 @@ where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
             return String::from("");
         }
         let current_idx = self.from_idx.unwrap();
-        let corpus_item = state.get_infant_state_state().corpus().get(current_idx);
+        let corpus_item = state.get_infant_state_state().corpus().get(current_idx.into());
         // This happens when full_trace feature is not enabled, the corpus item may be discarded
         if corpus_item.is_err() {
             return String::from("Corpus returning error\n");

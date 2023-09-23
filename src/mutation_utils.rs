@@ -3,14 +3,15 @@ use crate::input::VMInputT;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{
-    tuple_list, BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
+    BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
     ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
     BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasMetadata, Mutator, Named,
-    QwordAddMutator, Rand, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
+    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasMetadata, Mutator,
+    QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
 };
+use libafl_bolts::{impl_serdeany, Named, prelude::Rand, tuples::tuple_list};
 use libafl::state::{HasMaxSize, HasRand, State};
-use libafl::{impl_serdeany, Error};
+use libafl::Error;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -73,9 +74,9 @@ where
     ) -> Result<MutationResult, Error> {
         let idx = state.rand_mut().next() as usize;
 
-        let constant = match state.metadata().get::<ConstantPoolMetadata>() {
-            Some(meta) if !meta.constants.is_empty() => unsafe { 
-                meta.constants.get_unchecked(idx % meta.constants.len()) 
+        let constant = match state.metadata_map().get::<ConstantPoolMetadata>() {
+            Some(meta) if !meta.constants.is_empty() => unsafe {
+                meta.constants.get_unchecked(idx % meta.constants.len())
             },
             _ => return Ok(MutationResult::Skipped),
         };
