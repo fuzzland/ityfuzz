@@ -17,6 +17,8 @@ jobs:
         with:
           submodules: recursive
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Download and Extract Cache
+        run: curl -L https://github.com/fuzzland/ityfuzz-test-cache/releases/latest/download/cache.tar.gz -o cache.tar.gz && tar -xzf cache.tar.gz
       - name: Build
         run: cargo build --verbose
       - name: Run tests
