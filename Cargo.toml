@@ -12,7 +12,7 @@ name = "ityfuzz"
 harness = false
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", ]
+default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "memory_limit"]
 evm = []
 cmp = []
 dataflow = []
@@ -31,6 +31,11 @@ print_logs = []
 z3_debug = []
 sui_support = ["dep:move-binary-format", "dep:move-core-types", "dep:move-stdlib", "dep:move-vm-runtime", "dep:move-vm-types", "dep:sui-move-natives-latest", "dep:sui-protocol-config", "dep:sui-types"]
 debug = []
+memory_limit = [
+    "revm-primitives/memory_limit",
+    "revm-interpreter/memory_limit",
+    "revm/memory_limit",
+]
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

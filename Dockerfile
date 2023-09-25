@@ -45,16 +45,9 @@ FROM run_environment
 WORKDIR /app
 COPY --from=builder /bins /bins
 
-COPY ui /app/ui
-RUN pip3 install -r ui/requirements.txt
-RUN pip3 install solc-select
-
-COPY ui/start.sh .
-RUN chmod +x start.sh
+WORKDIR /bins
+COPY tests /bins/tests
 
 EXPOSE 8000
-
-CMD ./start.sh
-
 
 

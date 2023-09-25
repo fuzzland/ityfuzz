@@ -43,7 +43,6 @@ use crate::evm::types::convert_u256_to_h160;
 use crate::evm::types::float_scale_to_u512;
 use crate::evm::vm::IS_FAST_CALL_STATIC;
 
-const UNBOUND_TRANSFER_AMT: usize = 5;
 macro_rules! scale {
     () => {
         EVMU512::from(1_000_000)
@@ -502,13 +501,6 @@ where
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
-
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {}
 
     fn get_type(&self) -> MiddlewareType {
         return MiddlewareType::Flashloan;

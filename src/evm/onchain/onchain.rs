@@ -308,8 +308,8 @@ where
                     if let Some(job) = build_job {
                         abi = Some(job.abi.clone());
                         // replace the code with the one from builder
-                        println!("replace code for {:?} with builder's", address_h160);
-                        host.set_codedata(address_h160, contract_code.clone());
+                        // println!("replace code for {:?} with builder's", address_h160);
+                        // host.set_codedata(address_h160, contract_code.clone());
                         state.metadata_mut().get_mut::<ArtifactInfoMetadata>()
                             .expect("artifact info metadata").add(address_h160, job);
                     }
@@ -468,13 +468,6 @@ where
     unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
 
     }
-
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {}
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::OnChain

@@ -1,23 +1,21 @@
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug};
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use itertools::Itertools;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use revm_interpreter::Interpreter;
-use revm_interpreter::opcode::JUMPI;
-use revm_primitives::Bytecode;
 use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256};
+use bytes::Bytes;
+use itertools::Itertools;
+use libafl::inputs::Input;
+use libafl::prelude::{HasCorpus, HasMetadata, State};
+use revm_interpreter::opcode::JUMPI;
+use revm_interpreter::Interpreter;
+use revm_primitives::Bytecode;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Sha3TaintAnalysisCtx {
@@ -26,7 +24,6 @@ pub struct Sha3TaintAnalysisCtx {
     pub dirty_stack: Vec<bool>,
     pub input_data: Vec<bool>,
 }
-
 
 impl Sha3TaintAnalysisCtx {
     pub fn read_input(&self, start: usize, length: usize) -> Vec<bool> {
@@ -47,8 +44,6 @@ pub struct Sha3TaintAnalysis {
 
     pub ctxs: Vec<Sha3TaintAnalysisCtx>,
 }
-
-
 
 impl Sha3TaintAnalysis {
     pub fn new() -> Self {
@@ -77,18 +72,8 @@ impl Sha3TaintAnalysis {
 
     pub fn push_ctx(&mut self, interp: &mut Interpreter) {
         let (arg_offset, arg_len) = match unsafe { *interp.instruction_pointer } {
-            0xf1 | 0xf2 => {
-                (
-                    interp.stack.peek(3).unwrap(),
-                    interp.stack.peek(4).unwrap(),
-                )
-            }
-            0xf4 | 0xfa => {
-                (
-                    interp.stack.peek(2).unwrap(),
-                    interp.stack.peek(3).unwrap(),
-                )
-            }
+            0xf1 | 0xf2 => (interp.stack.peek(3).unwrap(), interp.stack.peek(4).unwrap()),
+            0xf4 | 0xfa => (interp.stack.peek(2).unwrap(), interp.stack.peek(3).unwrap()),
             _ => {
                 panic!("not supported opcode");
             }
@@ -116,12 +101,11 @@ impl Sha3TaintAnalysis {
     }
 }
 
-
 impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
-    where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
@@ -141,19 +125,16 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
         // println!("stack: {:?}", self.dirty_stack);
         // println!("origin: {:?}", interp.stack);
 
-
         macro_rules! pop_push {
-            ($pop_cnt: expr,$push_cnt: expr) => {
-                {
-                    let mut res = false;
-                    for _ in 0..$pop_cnt {
-                        res |= self.dirty_stack.pop().expect("stack is empty");
-                    }
-                    for _ in 0..$push_cnt {
-                        self.dirty_stack.push(res);
-                    }
+            ($pop_cnt: expr,$push_cnt: expr) => {{
+                let mut res = false;
+                for _ in 0..$pop_cnt {
+                    res |= self.dirty_stack.pop().expect("stack is empty");
                 }
-            };
+                for _ in 0..$push_cnt {
+                    self.dirty_stack.push(res);
+                }
+            }};
         }
 
         macro_rules! stack_pop_n {
@@ -161,8 +142,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 for _ in 0..$pop_cnt {
                     self.dirty_stack.pop().expect("stack is empty");
                 }
-            }
-
+            };
         }
 
         macro_rules! push_false {
@@ -180,40 +160,55 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
         }
 
         macro_rules! setup_mem {
-            () => {
-                {
-                    stack_pop_n!(3);
-                    let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
-                    let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
-                    ensure_size!(self.dirty_memory, mem_offset + len);
-                    self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
-                }
-            };
+            () => {{
+                stack_pop_n!(3);
+                let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
+                let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
+                ensure_size!(self.dirty_memory, mem_offset + len);
+                self.dirty_memory[mem_offset..mem_offset + len]
+                    .copy_from_slice(vec![false; len as usize].as_slice());
+            }};
         }
 
         assert_eq!(interp.stack.len(), self.dirty_stack.len());
 
         match *interp.instruction_pointer {
             0x00 => {}
-            0x01..=0x7 => { pop_push!(2, 1) },
-            0x08..=0x09 => { pop_push!(3, 1) },
-            0xa | 0x0b | 0x10..=0x14 => { pop_push!(2, 1); }
-            0x15 => { pop_push!(1, 1); }
-            0x16..=0x18 => { pop_push!(2, 1); }
-            0x19 => { pop_push!(1, 1); }
-            0x1a..=0x1d => { pop_push!(2, 1); }
+            0x01..=0x7 => {
+                pop_push!(2, 1)
+            }
+            0x08..=0x09 => {
+                pop_push!(3, 1)
+            }
+            0xa | 0x0b | 0x10..=0x14 => {
+                pop_push!(2, 1);
+            }
+            0x15 => {
+                pop_push!(1, 1);
+            }
+            0x16..=0x18 => {
+                pop_push!(2, 1);
+            }
+            0x19 => {
+                pop_push!(1, 1);
+            }
+            0x1a..=0x1d => {
+                pop_push!(2, 1);
+            }
             0x20 => {
                 // sha3
                 stack_pop_n!(2);
                 self.dirty_stack.push(true);
             }
             0x30 => push_false!(),
+            // BALANCE
+            0x31 => pop_push!(1, 1),
             // ORIGIN
-            0x32 =>  push_false!(),
+            0x32 => push_false!(),
             // CALLER
-            0x33 =>  push_false!(),
+            0x33 => push_false!(),
             // CALLVALUE
-            0x34 =>  push_false!(),
+            0x34 => push_false!(),
             // CALLDATALOAD
             0x35 => {
                 self.dirty_stack.pop();
@@ -230,7 +225,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 } else {
                     push_false!()
                 }
-            },
+            }
             // CALLDATASIZE
             0x36 => push_false!(),
             // CALLDATACOPY
@@ -245,7 +240,7 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
             0x3b | 0x3f => {
                 stack_pop_n!(1);
                 self.dirty_stack.push(false);
-            },
+            }
             // EXTCODECOPY
             0x3c => setup_mem!(),
             // RETURNDATASIZE
@@ -263,7 +258,9 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 self.dirty_stack.pop();
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                 ensure_size!(self.dirty_memory, mem_offset + 32);
-                let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32].iter().any(|x| *x);
+                let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32]
+                    .iter()
+                    .any(|x| *x);
                 self.dirty_stack.push(is_dirty);
             }
             // MSTORE
@@ -272,7 +269,8 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                 let is_dirty = self.dirty_stack.pop().expect("stack is empty");
                 ensure_size!(self.dirty_memory, mem_offset + 32);
-                self.dirty_memory[mem_offset..mem_offset + 32].copy_from_slice(vec![is_dirty; 32].as_slice());
+                self.dirty_memory[mem_offset..mem_offset + 32]
+                    .copy_from_slice(vec![is_dirty; 32].as_slice());
             }
             // MSTORE8
             0x53 => {
@@ -305,8 +303,13 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 self.dirty_stack.pop();
                 let v = self.dirty_stack.pop().expect("stack is empty");
                 if v {
-                    println!("new tainted jumpi: {:x} {:x}", interp.contract.address, interp.program_counter());
-                    self.tainted_jumpi.insert((interp.contract.address, interp.program_counter()));
+                    println!(
+                        "new tainted jumpi: {:x} {:x}",
+                        interp.contract.address,
+                        interp.program_counter()
+                    );
+                    self.tainted_jumpi
+                        .insert((interp.contract.address, interp.program_counter()));
                 }
             }
             // PC
@@ -322,7 +325,8 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
             // DUP
             0x80..=0x8f => {
                 let _n = (*interp.instruction_pointer) - 0x80 + 1;
-                self.dirty_stack.push(self.dirty_stack[self.dirty_stack.len() - _n as usize]);
+                self.dirty_stack
+                    .push(self.dirty_stack[self.dirty_stack.len() - _n as usize]);
             }
             // SWAP
             0x90..=0x9f => {
@@ -378,22 +382,29 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3TaintAnalysis
                 // stack_pop_n!(1);
             }
             _ => panic!("unknown opcode: {:x}", *interp.instruction_pointer),
-
         }
     }
 
-    unsafe fn on_return(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_return(
+        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S,
+        by: &Bytes
+    ) {
         self.pop_ctx();
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: EVMAddress,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3TaintAnalysis
     }
 }
-
 
 #[derive(Debug)]
 pub struct Sha3Bypass {
@@ -402,18 +413,15 @@ pub struct Sha3Bypass {
 
 impl Sha3Bypass {
     pub fn new(sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>) -> Self {
-        Self {
-            sha3_taints,
-        }
+        Self { sha3_taints }
     }
 }
 
-
 impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
-    where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
         + HasCaller<EVMAddress>
         + HasCorpus<I>
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
@@ -422,50 +430,60 @@ impl<I, VS, S> Middleware<VS, I, S> for Sha3Bypass
         + Debug
         + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
-            if self.sha3_taints.borrow().tainted_jumpi.contains(&(interp.contract.address, jumpi)) {
+            if self
+                .sha3_taints
+                .borrow()
+                .tainted_jumpi
+                .contains(&(interp.contract.address, jumpi))
+            {
                 let stack_len = interp.stack.len();
-                interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                interp.stack.data[stack_len - 2] =
+                    EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: EVMAddress,
+        host: &mut FuzzHost<VS, I, S>,
+        state: &mut S,
+    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3Bypass
     }
 
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {}
 }
 
-
 mod tests {
-    use std::cell::RefCell;
-    use std::path::Path;
-    use std::rc::Rc;
-    use std::sync::Arc;
-    use bytes::Bytes;
-    use libafl::schedulers::StdScheduler;
-    use revm_interpreter::analysis::to_analysed;
-    use revm_interpreter::BytecodeLocked;
-    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP};
+    use super::*;
     use crate::evm::input::{EVMInput, EVMInputTy};
     use crate::evm::mutator::AccessPattern;
-    use crate::evm::types::{EVMFuzzState, generate_random_address};
+    use crate::evm::types::{generate_random_address, EVMFuzzState};
     use crate::evm::vm::{EVMExecutor, EVMState};
     use crate::generic_vm::vm_executor::GenericVM;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
-    use super::*;
+    use bytes::Bytes;
+    use libafl::schedulers::StdScheduler;
+    use revm_interpreter::analysis::to_analysed;
+    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP};
+    use revm_interpreter::BytecodeLocked;
+    use std::cell::RefCell;
+    use std::path::Path;
+    use std::rc::Rc;
+    use std::sync::Arc;
 
     fn execute(bys: Bytes, code: Bytes) -> Vec<usize> {
         let mut state: EVMFuzzState = FuzzState::new(0);
@@ -473,17 +491,16 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> = EVMExecutor::new(
-            FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
-            generate_random_address(&mut state),
-        );
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
+            EVMExecutor::new(
+                FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
+                generate_random_address(&mut state),
+            );
 
         let target_addr = generate_random_address(&mut state);
         evm_executor.host.code.insert(
             target_addr.clone(),
-            Arc::new(BytecodeLocked::try_from(
-                to_analysed(Bytecode::new_raw(code))
-            ).unwrap()),
+            Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
         );
 
         let sha3 = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
@@ -510,73 +527,44 @@ mod tests {
 
         let res = evm_executor.execute(&input, &mut state);
         assert!(!res.reverted);
-        return sha3.borrow().tainted_jumpi.iter().map(|(addr, pc)| pc).cloned().collect_vec();
+        return sha3
+            .borrow()
+            .tainted_jumpi
+            .iter()
+            .map(|(addr, pc)| pc)
+            .cloned()
+            .collect_vec();
     }
 
     #[test]
     fn test_hash_none() {
         let bys = vec![
-            PUSH1, 0x2,
-            PUSH0,
-            ADD, // stack = [2]
+            PUSH1, 0x2, PUSH0, ADD, // stack = [2]
             PUSH1, 0x7, // stack = [2, 7]
-            JUMPI,
-            JUMPDEST,
-            STOP
+            JUMPI, JUMPDEST, STOP,
         ];
-        let taints = execute(
-            Bytes::new(),
-            Bytes::from(bys)
-        );
+        let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 0);
     }
 
     #[test]
     fn test_hash_simple() {
         let bys = vec![
-            PUSH0,
-            PUSH1, 0x42,
-            MSTORE,
-            PUSH0,
-            PUSH1, 0x1,
-            SHA3,
-            PUSH1, 0x2,
-            EQ,
-            PUSH1, 0xe,
-            JUMPI,
-            JUMPDEST,
-            STOP
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI,
+            JUMPDEST, STOP,
         ];
-        let taints = execute(
-            Bytes::new(),
-            Bytes::from(bys)
-        );
+        let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 1);
         assert_eq!(taints[0], 0xd);
     }
 
-
     #[test]
     fn test_hash_simple_none() {
         let bys = vec![
-            PUSH0,
-            PUSH1, 0x42,
-            MSTORE,
-            PUSH0,
-            PUSH1, 0x1,
-            SHA3,
-            PUSH1, 0x2,
-            EQ,
-            PUSH0,
-            PUSH1, 0xf,
-            JUMPI,
-            JUMPDEST,
-            STOP
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf,
+            JUMPI, JUMPDEST, STOP,
         ];
-        let taints = execute(
-            Bytes::new(),
-            Bytes::from(bys)
-        );
+        let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 0);
     }
 

@@ -10,7 +10,7 @@ pub trait Cache {
     fn load(&self, key: &str) -> Result<String, Box<dyn Error>>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FileSystemCache {
     file_path: String,
 }
@@ -30,24 +30,36 @@ impl FileSystemCache {
 
 impl Cache for FileSystemCache {
     fn save(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-        // write `value` to file `key`, create a new file if it doesn't exist
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(self.file_path.clone() + "/" + key)?;
+        let path = if key.len() < 5 {
+            format!("{}/{}", self.file_path, key)
+        } else {
+            format!("{}/{}/{}/{}", self.file_path, &key[0..2], &key[2..4], &key[4..])
+        };
+        
+        let path_obj = Path::new(&path);
+        if let Some(parent) = path_obj.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = OpenOptions::new().write(true).create(true).open(path)?;
         file.write_all(value.as_bytes())?;
         Ok(())
     }
 
     fn load(&self, key: &str) -> Result<String, Box<dyn Error>> {
-        if !Path::exists(Path::new((self.file_path.clone() + "/" + key).as_str())) {
+        let path = if key.len() < 5 {
+            format!("{}/{}", self.file_path, key)
+        } else {
+            format!("{}/{}/{}/{}", self.file_path, &key[0..2], &key[2..4], &key[4..])
+        };
+        
+        if !Path::new(&path).exists() {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 "Key not found",
             )));
         }
 
-        let mut file = File::open(self.file_path.clone() + "/" + key)?;
+        let mut file = File::open(path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         Ok(contents)

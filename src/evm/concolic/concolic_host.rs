@@ -1326,6 +1326,7 @@ where
         interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S>,
         state: &mut S,
+        by: &Bytes
     ) {
         self.pop_ctx();
     }

@@ -17,7 +17,7 @@ use crate::evm::input::EVMInputTy::Borrow;
 use std::fmt::Debug;
 use revm_interpreter::Interpreter;
 use crate::evm::abi::ABIAddressToInstanceMap;
-use crate::evm::types::{convert_u256_to_h160, EVMAddress};
+use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use crate::evm::vm::{Constraint, EVMState, EVMStateT};
 
 use crate::state::HasItyState;
@@ -128,6 +128,9 @@ impl<'a, VS, Loc, Addr, SC, CI> FuzzMutator<'a, VS, Loc, Addr, SC, CI>
                 Constraint::Caller(caller) => {
                     input.set_caller_evm(caller);
                 }
+                Constraint::Value(value) => {
+                    input.set_txn_value(value);
+                }
                 Constraint::Contract(target) => {
                     let rand_int = state.rand_mut().next();
                     let always_none = state.rand_mut().next() % 30 == 0;
@@ -155,6 +158,7 @@ impl<'a, VS, Loc, Addr, SC, CI> FuzzMutator<'a, VS, Loc, Addr, SC, CI>
                         input.set_liquidation_percent(0);
                     }
                 }
+                _ => {}
             }
         }
     }
@@ -201,7 +205,7 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<'a, VS, Loc,
             // if the input is a step input (resume execution from a control leak)
             // we should not mutate the VM state, but only mutate the bytes
             if input.is_step() {
-                return match state.rand_mut().below(100) {
+                let res = match state.rand_mut().below(100) {
                     #[cfg(feature = "flashloan_v2")]
                     0..=5 => {
                         let prev_percent = input.get_liquidation_percent();
@@ -218,6 +222,9 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<'a, VS, Loc,
                     }
                     _ => input.mutate(state),
                 };
+
+                input.set_txn_value(EVMU256::ZERO);
+                return res;
             }
 
             // if the input is to borrow token, we should mutate the randomness
