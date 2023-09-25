@@ -19,7 +19,6 @@ pub mod oracle;
 pub mod scheduler;
 pub mod state;
 pub mod state_input;
-pub mod telemetry;
 pub mod tracer;
 pub mod mutation_utils;
 

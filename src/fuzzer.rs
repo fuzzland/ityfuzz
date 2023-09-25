@@ -45,7 +45,6 @@ use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
-use crate::telemetry::report_vulnerability;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
@@ -516,9 +515,6 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
-                report_vulnerability(
-                    unsafe {serde_json::to_string(&ORACLE_OUTPUT).expect("")},
-                );
 
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
