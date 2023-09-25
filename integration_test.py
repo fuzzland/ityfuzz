@@ -141,15 +141,31 @@ def build_flash_loan_v2_fuzzer():
 
 
 import multiprocessing
+import sys
+
 
 if __name__ == "__main__":
-    build_fuzzer()
-    with multiprocessing.Pool(3) as p:
-        p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
+    actions = []
 
-    build_flash_loan_v2_fuzzer()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "onchain":
+            actions.append("onchain")
+        elif sys.argv[1] == "offchain":
+            actions.append("offchain")
+    else:
+        actions = ["onchain", "offchain"]
 
-    tests = read_onchain_tests()
+    if "offchain" in actions:
+        build_fuzzer()
+        with multiprocessing.Pool(3) as p:
+            p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
 
-    with multiprocessing.Pool(10) as p:
-        p.map(test_onchain, tests)
+    if "onchain" in actions:
+        build_flash_loan_v2_fuzzer()
+        tests = read_onchain_tests()
+        with multiprocessing.Pool(10) as p:
+            p.map(test_onchain, tests)
+
+
+
+
