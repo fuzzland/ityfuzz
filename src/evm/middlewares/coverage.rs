@@ -308,7 +308,12 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
                 if (host.code.contains_key(&address)) {
                     Vec::from(host.code.get(&address).unwrap().clone().bytecode())
                 } else {
-                    host.setcode_data.get(&address).unwrap().clone().bytecode.to_vec()
+                    // e.g. interface does not have a source map
+                    if host.setcode_data.get(&address).is_some() {
+                        host.setcode_data.get(&address).unwrap().clone().bytecode.to_vec()
+                    } else {
+                        Vec::new()
+                    }
                 }
             );
 
