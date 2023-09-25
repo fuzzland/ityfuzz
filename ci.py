@@ -44,17 +44,20 @@ def parse_res(file):
                 last_ts = _ts
             if "more than owed" in i:
                 ts = last_ts
-                violation = "erc20"
+                violation = "Fund Loss"
             if "Reserves changed from" in i:
                 ts = last_ts
-                violation = "uniswapv2"
+                violation = "Price Manipulation"
 
+            if "Arbitrary call " in i:
+                ts = last_ts
+                violation = "Arbitrary Call"
             if "panicked at " in i:
                 crashed = True
-        violation = "✅" + violation  if violation else "❌"
+        violation = "✅ " + violation  if violation else "❌"
 
         if crashed:
-            violation = "❌‼️ Crashed"
+            violation = "❌‼️  Crashed"
 
         return (file.replace("res_", ""), ts, violation)
 
@@ -69,7 +72,7 @@ def parse_all():
     for i in os.listdir(UID):
         if i.startswith("res_"):
             fn, ts, violation = parse_res(i)
-            if violation != "❌":
+            if "❌" not in violation:
                 found += 1
             log = f"https://cilogs-ityfuzz.s3.amazonaws.com/{UID}/{i}"
             md += f"\n| {fn} | {violation} | {ts} | [Log File]({log}) |"
