@@ -30,6 +30,12 @@ jobs:
       - name: Report onchain tests
         env:
           BOT_GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
+          BSC_ETHERSCAN_API_KEY: ${{ secrets.BSC_ETHERSCAN_API_KEY }}
+          BSC_RPC_URL: ${{ secrets.BSC_RPC_URL }}
+          ETH_ETHERSCAN_API_KEY: ${{ secrets.ETH_ETHERSCAN_API_KEY }}
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+          POLYGON_ETHERSCAN_API_KEY: ${{ secrets.POLYGON_ETHERSCAN_API_KEY }}
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
           PR_NUMBER: ${{ github.event.number }}
         run: echo "PR=$PR_NUMBER" && python3 ci.py
   
