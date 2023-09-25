@@ -1,5 +1,6 @@
 import os
 import requests
+import uuid
 
 def post_comment_to_pr(pr_number, token, message):
     """
@@ -27,15 +28,16 @@ def post_comment_to_pr(pr_number, token, message):
 
 
 
-DEFAULT_MD = """| Project Name | Vulnerability Found | Time Taken |
-|---------|---------|---------|"""
+DEFAULT_MD = """| Project Name | Vulnerability Found | Time Taken | Log |
+|---------|---------|---------|---------|"""
 
 def parse_res(file):
-    with open(file, 'r') as f:
+    with open(UID + "/" + file, 'r') as f:
         lines = f.readlines()
         last_ts = -1
         ts = -1
         violation = ""
+        crashed = False
         for i in lines:
             if "run time: " in i:
                 _ts = i.split("run time: ")[1].split(",")[0]
@@ -46,18 +48,31 @@ def parse_res(file):
             if "Reserves changed from" in i:
                 ts = last_ts
                 violation = "uniswapv2"
-        return (file.replace("res_", ""), ts, "✅" + violation  if violation else "❌")
 
+            if "panicked at " in i:
+                crashed = True
+        violation = "✅" + violation  if violation else "❌"
+
+        if crashed:
+            violation = "❌‼️ Crashed"
+
+        return (file.replace("res_", ""), ts, violation)
+
+
+UID = str(uuid.uuid4())
 
 def parse_all():
+    os.system(f"mkdir {UID} && mv res_* {UID} && aws s3 cp {UID} s3://cilogs-ityfuzz/{UID} --recursive")
+
     found = 0
     md = DEFAULT_MD
-    for i in os.listdir("."):
+    for i in os.listdir(UID):
         if i.startswith("res_"):
             fn, ts, violation = parse_res(i)
             if violation != "❌":
                 found += 1
-            md += f"\n| {fn} | {violation} | {ts} |"
+            log = f"https://cilogs-ityfuzz.s3.amazonaws.com/{UID}/{i}"
+            md += f"\n| {fn} | {violation} | {ts} | [Log File]({log}) |"
     return f"Found: {found}\n\n" + md
 
 if __name__ == "__main__":

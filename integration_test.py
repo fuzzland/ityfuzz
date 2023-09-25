@@ -110,13 +110,13 @@ def test_onchain(test):
 
         if b"Found violations!" in p.stdout:
             print(f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s")
-            open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
+            open(f"res_{name}.txt", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
             return
         time.sleep(30)
 
 
     print(f"=== Failed to test onchain for contracts: {name}")
-    open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
+    open(f"res_{name}.txt", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
 
 def build_fuzzer():
     # build fuzzer
