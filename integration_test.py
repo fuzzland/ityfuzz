@@ -72,9 +72,18 @@ def test_onchain(test):
     time.sleep(60 * random.random())
 
     contract_addresses, block_number, chain, name= test[3], test[2], test[1], test[0]
-    if chain not in ["eth", "bsc"]:
+    
+    if chain not in ["eth", "bsc", "polygon"]:
         print(f"=== Unsupported chain: {chain}")
         return
+    
+    etherscan_key = os.getenv(f"{chain.upper()}_ETHERSCAN_API_KEY")
+    if etherscan_key is None:
+        print(f"=== No etherscan api key for {chain}")
+        return
+    my_env = os.environ.copy()
+    my_env["ETH_RPC_URL"] = os.getenv(f"{chain.upper()}_RPC_URL")
+
     cmd = [
         TIMEOUT_BIN, 
         # set timeout to 5m because it takes longer time to sync the chain
@@ -83,7 +92,9 @@ def test_onchain(test):
         "-t", contract_addresses, 
         "-c", chain, 
         "--onchain-block-number", str(block_number), 
-        "-f", "-i", "-p", "--onchain-etherscan-api-key", "PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF",  "--work-dir", f"w_{name}", 
+        "-f", "-i", "-p", 
+        "--onchain-etherscan-api-key", etherscan_key,  
+        "--work-dir", f"w_{name}", 
         #"--run-forever"
     ]
 
@@ -91,8 +102,7 @@ def test_onchain(test):
 
     # try 3 times in case of rpc failure
     for i in range(3):
-        my_env = os.environ.copy()
-        my_env["ETH_RPC_URL"] = "http://bsc.dev.fuzz.land/"
+        
         p = subprocess.run(" ".join(cmd),
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
@@ -103,11 +113,8 @@ def test_onchain(test):
             open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
             return
         time.sleep(30)
-            
-    print("================ STDERR =================")
-    print(p.stderr.decode("utf-8") + " ".join(cmd))
-    print("================ STDOUT =================")
-    print(p.stdout.decode("utf-8"))
+
+
     print(f"=== Failed to test onchain for contracts: {name}")
     open(f"res_{name}", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
 
@@ -165,7 +172,3 @@ if __name__ == "__main__":
         tests = read_onchain_tests()
         with multiprocessing.Pool(10) as p:
             p.map(test_onchain, tests)
-
-
-
-
