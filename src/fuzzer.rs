@@ -37,7 +37,6 @@ use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
-use crate::telemetry::report_vulnerability;
 use itertools::Itertools;
 use libafl::prelude::HasRand;
 use primitive_types::H256;
@@ -528,8 +527,6 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
-                report_vulnerability(unsafe { serde_json::to_string(&ORACLE_OUTPUT).expect("") });
-
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",

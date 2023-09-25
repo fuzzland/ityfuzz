@@ -41,14 +41,6 @@ pub fn init_sentry() {
         release: sentry::release_name!(),
         ..Default::default()
     }));
-    if let Ok(value) = env::var("NO_TELEMETRY") {
-        if value == "1" {
-            println!("Telemetry is disabled.");
-            unsafe {
-                ityfuzz::telemetry::TELEMETRY_ENABLED = false;
-            }
-        }
-    }
 }
 
 #[derive(Parser)]
