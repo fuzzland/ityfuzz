@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IWMATIC} from "./interfaces/IWMATIC.sol";
@@ -21,10 +21,10 @@ contract Bounty {
         WMATICV2 = IWMATICV2(address(0xDA3AF9c51F6953988a46C21d43A5152AFC7f389d));
     }
 
-    function getBounty() payable public returns (bool) {
-//        if (WMATICV2.totalSupply() != WMATICV2.balance()) {
-//            bug();
-//        }
+    function getBounty() public payable returns (bool) {
+        //        if (WMATICV2.totalSupply() != WMATICV2.balance()) {
+        //            bug();
+        //        }
         uint256 delta = WMATICV2.totalSupply() >= WMATICV2.balance()
             ? WMATICV2.totalSupply() - WMATICV2.balance()
             : WMATICV2.balance() - WMATICV2.totalSupply();
@@ -35,11 +35,10 @@ contract Bounty {
 
             // reward the first finder
             isHacked = true;
-//            IERC20(WMATIC).transfer(msg.sender, IERC20(WMATIC).balanceOf(address((this))));
+            //            IERC20(WMATIC).transfer(msg.sender, IERC20(WMATIC).balanceOf(address((this))));
             winner = address(msg.sender);
         }
 
-    return isHacked;
+        return isHacked;
     }
-
 }
