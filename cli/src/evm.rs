@@ -266,8 +266,7 @@ enum EVMTargetType {
     Config
 }
 
-pub fn evm_main(args: EvmArgs) {
-    ityfuzz::telemetry::report_campaign(args.onchain, args.target.clone());
+pub fn evm_main(args: EvmArgs) { 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => EVMTargetType::Glob,
