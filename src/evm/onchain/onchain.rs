@@ -171,7 +171,7 @@ where
     ) {
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
-            ($ty: expr, $target: expr) => {
+            ($ty: expr, $target: expr) => {{
                 let pc = interp.program_counter();
                 match $ty.get_mut(&(interp.contract.address, pc)) {
                     None => {
@@ -187,7 +187,7 @@ where
                         }
                     }
                 }
-            };
+            }};
         }
         #[cfg(not(feature = "force_cache"))]
         macro_rules! force_cache {
