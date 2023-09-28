@@ -8,7 +8,7 @@ use libafl::events::EventFirer;
 use libafl::executors::ExitKind;
 use libafl::feedbacks::Feedback;
 use libafl::observers::ObserversTuple;
-use libafl::prelude::{HasCorpus, HasMetadata, HasRand, State, UsesInput, Input};
+use libafl::prelude::{HasCorpus, HasMetadata, HasRand, State, UsesInput, Input, Testcase};
 use libafl::schedulers::Scheduler;
 use libafl_bolts::Named;
 use libafl::state::HasClientPerfMonitor;
@@ -84,6 +84,20 @@ where
         } else {
             self.inner_feedback.is_interesting(state, manager, input, observers, exit_kind)
         }
+    }
+
+    #[inline]
+    #[allow(unused_variables)]
+    fn append_metadata<OT>(
+        &mut self,
+        state: &mut S,
+        observers: &OT,
+        testcase: &mut Testcase<S::Input>,
+    ) -> Result<(), Error>
+    where
+        OT: ObserversTuple<S>,
+    {
+        self.inner_feedback.as_mut().append_metadata(state, observers, testcase)
     }
 }
 

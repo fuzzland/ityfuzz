@@ -222,6 +222,7 @@ where
             .unwrap();
 
         meta.interesting_idx.push(idx);
-        Ok(())
+
+        self.inner.append_metadata(state, observers, testcase)
     }
 }
