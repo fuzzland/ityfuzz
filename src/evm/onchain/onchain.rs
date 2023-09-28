@@ -237,12 +237,14 @@ where
                 };
             }
             // BALANCE
+            #[cfg(feature = "real_balance")]
             0x31 => {
                 let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
                 println!("onchain balance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
+            #[cfg(feature = "real_balance")]
             // 	SELFBALANCE
             0x47 => {
                 let address = interp.contract.address;
@@ -256,8 +258,11 @@ where
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 => {
                         // CALL | CALLCODE
-                        // Get balance of the callee
-                        host.next_slot = self.endpoint.get_balance(caller);
+                        #[cfg(feature = "real_balance")]
+                        {
+                            // Get balance of the callee
+                            host.next_slot = self.endpoint.get_balance(caller);
+                        }
 
                         interp.stack.peek(1).unwrap()
                     }

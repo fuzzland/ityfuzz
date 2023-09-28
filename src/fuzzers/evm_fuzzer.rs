@@ -428,10 +428,12 @@ pub fn evm_fuzzer(
                     if txn.len() < 4 {
                         continue;
                     }
+                    println!("============ Execution {} ===============", idx);
 
                     // [is_step] [caller] [target] [input] [value]
-                    let (inp, call_until) = ConciseEVMInput::deserialize_concise(txn.as_bytes())
-                        .to_input(vm_state.clone());
+                    let temp = txn.as_bytes();
+                    let temp = ConciseEVMInput::deserialize_concise(temp);
+                    let (inp, call_until) = temp.to_input(vm_state.clone());
                     printer.borrow_mut().cleanup();
 
                     unsafe {
@@ -457,9 +459,9 @@ pub fn evm_fuzzer(
                     //     "new_state: {:?}",
                     //     state.get_execution_result().clone().new_state.state
                     // );
-                    println!("================================================");
 
                     vm_state = state.get_execution_result().new_state.clone();
+                    println!("================================================");
                 }
             }
 

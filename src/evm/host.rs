@@ -1030,11 +1030,18 @@ where
     }
 
     fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
-        if let Some(balance) = self.evmstate.get_balance(&address) {
-            return Some((*balance, true));
+        #[cfg(feature = "real_balance")]
+        {
+            if let Some(balance) = self.evmstate.get_balance(&address) {
+                return Some((*balance, true));
+            }
+            self.evmstate.set_balance(address, self.next_slot);
+            Some((self.next_slot, true))
         }
-        self.evmstate.set_balance(address, self.next_slot);
-        Some((self.next_slot, true))
+        #[cfg(not(feature = "real_balance"))]
+        {
+            Some((EVMU256::MAX, true))
+        }
     }
 
     fn code(&mut self, address: EVMAddress) -> Option<(Arc<BytecodeLocked>, bool)> {
@@ -1060,10 +1067,6 @@ where
             }
         }
         Some((self.next_slot, true))
-        // match self.data.get(&address) {
-        //     Some(account) => Some((account.get(&index).unwrap_or(&EVMU256::zero()).clone(), true)),
-        //     None => Some((EVMU256::zero(), true)),
-        // }
     }
 
     fn sstore(
@@ -1262,9 +1265,9 @@ where
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
         let value = EVMU256::from(input.transfer.value);
-        if value != EVMU256::ZERO {
+        if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
             let sender = input.transfer.source;
-            // println!("call sender: {:?}", sender);
+            println!("call sender: {:?}", sender);
             let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
                 *balance
             } else {
