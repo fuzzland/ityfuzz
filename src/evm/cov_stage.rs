@@ -111,8 +111,12 @@ where
                manager: &mut EM,
                corpus_idx: CorpusId,
     ) -> Result<(), Error> {
-        let total = state.corpus().count();
-        if self.last_corpus_idx == total {
+        let last_idx = state.corpus().last();
+        if last_idx.is_none() {
+            return Ok(());
+        }
+        let last_idx = last_idx.unwrap().into();
+        if self.last_corpus_idx == last_idx {
             return Ok(());
         }
 
@@ -120,9 +124,10 @@ where
         exec.host.add_middlewares(self.call_printer.clone());
 
         let meta = state.metadata_map().get::<BugMetadata>().unwrap().clone();
-        for i in self.last_corpus_idx..total {
+        let mut current_idx = CorpusId::from(self.last_corpus_idx);
+        while let Some(i) = state.corpus().next(current_idx) {
             self.call_printer.deref().borrow_mut().cleanup();
-            let testcase = state.corpus().get(i.into()).unwrap().borrow().clone();
+            let testcase = state.corpus().get(i).unwrap().borrow().clone();
             let last_input = testcase.input().as_ref().expect("Input should be present");
 
             let mut last_state: EVMStagedVMState = Default::default();
@@ -151,21 +156,24 @@ where
             }
 
             self.call_printer.deref().borrow_mut().save_trace(format!("{}/{}", self.trace_dir, i).as_str());
-            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i) {
+            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i.into()) {
                 for id in bug_idx {
                     fs::copy(format!("{}/{}.json", self.trace_dir, i), format!("{}/bug_{}.json", self.trace_dir, id)).unwrap();
                 }
             }
             unsafe { EVAL_COVERAGE = false; }
+
+            current_idx = i;
         }
+
         exec.host.remove_middlewares_by_ty(&MiddlewareType::CallPrinter);
 
-        if self.last_corpus_idx == total {
+        if self.last_corpus_idx == last_idx {
             return Ok(());
         }
 
         self.coverage.deref().borrow_mut().record_instruction_coverage();
-        self.last_corpus_idx = total;
+        self.last_corpus_idx = last_idx;
         Ok(())
     }
 }
