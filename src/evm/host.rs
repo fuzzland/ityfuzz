@@ -265,9 +265,8 @@ where
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
 {
-
     pub fn new(scheduler: SC, workdir: String) -> Self {
-        let ret = Self {
+        Self {
             evmstate: EVMState::new(),
             env: Env::default(),
             code: HashMap::new(),
@@ -313,7 +312,9 @@ where
     /// custom spec id run_inspect
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
+            SpecId::LATEST => {
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state)
+            }
             SpecId::FRONTIER => {
                 interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, FrontierSpec>(self, state)
             }
@@ -338,8 +339,12 @@ where
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
                 interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, BerlinSpec>(self, state)
             }
-            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state),
-            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state),
+            SpecId::LONDON => {
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state)
+            }
+            SpecId::MERGE => {
+                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state)
+            }
             SpecId::SHANGHAI => {
                 interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ShanghaiSpec>(self, state)
             }
@@ -1185,7 +1190,7 @@ where
                     let mut unknown_sigs: usize = 0;
                     let mut parsed_abi = vec![];
                     for sig in &sigs {
-                        if let Some(abi) = state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
                             parsed_abi.push(abi.clone());
                         } else {
                             unknown_sigs += 1;
@@ -1197,8 +1202,11 @@ where
                         let abis = fetch_abi_heimdall(contract_code_str)
                             .iter()
                             .map(|abi| {
-                                if let Some(known_abi) =
-                                    state.metadata().get::<ABIMap>().unwrap().get(&abi.function)
+                                if let Some(known_abi) = state
+                                    .metadata_map()
+                                    .get::<ABIMap>()
+                                    .unwrap()
+                                    .get(&abi.function)
                                 {
                                     known_abi
                                 } else {

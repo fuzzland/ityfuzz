@@ -13,21 +13,19 @@ use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
-use glob::glob;
 use itertools::Itertools;
 use libafl::feedbacks::Feedback;
 use libafl::prelude::HasMetadata;
-use libafl_bolts::bolts_prelude::ShMemProvider;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
     prelude::{MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
+use libafl_bolts::bolts_prelude::ShMemProvider;
 
-use libafl_bolts::tuples::tuple_list;
 use glob::glob;
-use itertools::Itertools;
+use libafl_bolts::tuples::tuple_list;
 
 use crate::evm::host::CALL_UNTIL;
 use crate::evm::host::{
@@ -44,15 +42,6 @@ use crate::evm::config::Config;
 use crate::evm::corpus_initializer::EVMCorpusInitializer;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
-
-use crate::evm::mutator::{AccessPattern, FuzzMutator};
-use crate::evm::onchain::flashloan::Flashloan;
-use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
-use crate::evm::presets::pair::PairPreset;
-use crate::evm::types::{EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256, fixed_address, EVMQueueExecutor};
-use primitive_types::{H160, U256};
-use revm_primitives::{BlockEnv, Bytecode, Env};
-use revm_primitives::bitvec::view::BitViewSized;
 use crate::evm::abi::ABIAddressToInstanceMap;
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
 use crate::evm::concolic::concolic_host::ConcolicHost;
@@ -73,7 +62,9 @@ use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::srcmap::parser::BASE_PATH;
-use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256};
+use crate::evm::types::{
+    fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
+};
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
@@ -265,7 +256,10 @@ pub fn evm_fuzzer(
         state.metadata_map_mut().insert(ArtifactInfoMetadata::new());
     }
 
-    let meta = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().unwrap();
+    let meta = state
+        .metadata_map_mut()
+        .get_mut::<ArtifactInfoMetadata>()
+        .unwrap();
     for (addr, build_artifact) in &artifacts.build_artifacts {
         meta.add(*addr, build_artifact.clone());
     }
@@ -311,7 +305,8 @@ pub fn evm_fuzzer(
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
-    let infant_feedback = CmpFeedback::new(cmps, infant_scheduler.clone(), evm_executor_ref.clone());
+    let infant_feedback =
+        CmpFeedback::new(cmps, infant_scheduler.clone(), evm_executor_ref.clone());
     let infant_result_feedback = DataflowFeedback::new(reads, writes);
 
     let mut oracles = config.oracle;

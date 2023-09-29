@@ -32,13 +32,11 @@ use crate::input::ConciseSerde;
 use hex;
 use itertools::Itertools;
 
-use std::rc::Rc;
-use std::time::Duration;
 use crypto::sha3::Sha3Mode::Keccak256;
-use libafl_bolts::impl_serdeany;
 use libafl::prelude::HasMetadata;
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
+use libafl_bolts::impl_serdeany;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -167,11 +165,14 @@ where
     }
 
     #[cfg(feature = "use_presets")]
-    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>) {
+    pub fn register_preset(
+        &mut self,
+        preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>,
+    ) {
         self.presets.push(preset);
     }
 
-    pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts{
+    pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         self.state.metadata_map_mut().insert(ABIMap::new());
         self.setup_default_callers();
         self.setup_contract_callers();
@@ -254,7 +255,13 @@ where
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()
                         .map(|abi| {
-                            if let Some(known_abi) = self.state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function) {
+                            if let Some(known_abi) = self
+                                .state
+                                .metadata_map()
+                                .get::<ABIMap>()
+                                .unwrap()
+                                .get(&abi.function)
+                            {
                                 known_abi
                             } else {
                                 abi
