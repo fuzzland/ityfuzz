@@ -13,16 +13,19 @@ use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
-use glob::glob;
 use itertools::Itertools;
 use libafl::feedbacks::Feedback;
-use libafl::prelude::{HasMetadata, ShMemProvider};
+use libafl::prelude::HasMetadata;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
 use libafl::stages::{CalibrationStage, StdMutationalStage};
 use libafl::{
-    prelude::{tuple_list, MaxMapFeedback, SimpleMonitor, StdMapObserver},
+    prelude::{MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
 };
+use libafl_bolts::bolts_prelude::ShMemProvider;
+
+use glob::glob;
+use libafl_bolts::tuples::tuple_list;
 
 use crate::evm::host::CALL_UNTIL;
 use crate::evm::host::{
@@ -59,7 +62,9 @@ use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::presets::pair::PairPreset;
 use crate::evm::srcmap::parser::BASE_PATH;
-use crate::evm::types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMU256};
+use crate::evm::types::{
+    fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
+};
 use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
@@ -102,17 +107,17 @@ pub fn evm_fuzzer(
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let infant_scheduler = SortedDroppingScheduler::new();
+    let mut infant_scheduler = SortedDroppingScheduler::new();
     let mut scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
     let reads = unsafe { &mut READ_MAP };
     let writes = unsafe { &mut WRITE_MAP };
-    let jmp_observer = StdMapObserver::new("jmp", jmps);
+    let jmp_observer = unsafe { StdMapObserver::new("jmp", jmps) };
 
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new(Arc::new(scheduler.clone()), config.work_dir.clone());
+    let mut fuzz_host = FuzzHost::new(scheduler.clone(), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
 
     let onchain_middleware = match config.onchain.clone() {
@@ -202,8 +207,7 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
-    let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
-        EVMExecutor::new(fuzz_host, deployer);
+    let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
 
     if config.replay_file.is_some() {
         // add coverage middleware for replay
@@ -214,8 +218,8 @@ pub fn evm_fuzzer(
 
     let mut corpus_initializer = EVMCorpusInitializer::new(
         &mut evm_executor,
-        &mut scheduler,
-        &infant_scheduler,
+        scheduler.clone(),
+        infant_scheduler.clone(),
         state,
         config.work_dir.clone(),
     );
@@ -248,11 +252,12 @@ pub fn evm_fuzzer(
     // now evm executor is ready, we can clone it
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
-    if !state.metadata().contains::<ArtifactInfoMetadata>() {
-        state.metadata_mut().insert(ArtifactInfoMetadata::new());
+    if !state.metadata_map().contains::<ArtifactInfoMetadata>() {
+        state.metadata_map_mut().insert(ArtifactInfoMetadata::new());
     }
+
     let meta = state
-        .metadata_mut()
+        .metadata_map_mut()
         .get_mut::<ArtifactInfoMetadata>()
         .unwrap();
     for (addr, build_artifact) in &artifacts.build_artifacts {
@@ -278,7 +283,7 @@ pub fn evm_fuzzer(
         config.concolic_caller,
         evm_executor_ref.clone(),
     );
-    let mutator: EVMFuzzMutator<'_> = FuzzMutator::new(&infant_scheduler);
+    let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
     let std_stage = StdMutationalStage::new(mutator);
 
@@ -300,7 +305,8 @@ pub fn evm_fuzzer(
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
-    let infant_feedback = CmpFeedback::new(cmps, &infant_scheduler, evm_executor_ref.clone());
+    let infant_feedback =
+        CmpFeedback::new(cmps, infant_scheduler.clone(), evm_executor_ref.clone());
     let infant_result_feedback = DataflowFeedback::new(reads, writes);
 
     let mut oracles = config.oracle;
@@ -384,7 +390,7 @@ pub fn evm_fuzzer(
 
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
-        &infant_scheduler,
+        infant_scheduler,
         wrapped_feedback,
         infant_feedback,
         infant_result_feedback,

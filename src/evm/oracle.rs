@@ -10,7 +10,7 @@ use crate::oracle::{Oracle, OracleCtx};
 use crate::state::HasExecutionResult;
 
 use bytes::Bytes;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use revm_primitives::Bytecode;
@@ -88,4 +88,3 @@ impl EVMBugResult {
         }
     }
 }
-

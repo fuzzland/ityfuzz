@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use libafl::state::HasMetadata;
 use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_binary_format::file_format::Bytecode;
@@ -416,8 +416,8 @@ impl<I, S>
         ConciseMoveInput
     > for MoveVM<I, S>
 where
-    I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT,
-    S: HasMetadata + HasCaller<MoveAddress>,
+    I: VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> + MoveFunctionInputT + 'static,
+    S: HasMetadata + HasCaller<MoveAddress> + 'static,
 {
     fn deploy(
         &mut self,
@@ -428,11 +428,11 @@ where
     ) -> Option<AccountAddress> {
         // println!("deploying module dep: {:?}", module.self_id());
 
-        if !state.metadata_mut().contains::<TypeTagInfoMeta>() {
-            state.metadata_mut().insert(TypeTagInfoMeta::new());
+        if !state.metadata_map_mut().contains::<TypeTagInfoMeta>() {
+            state.metadata_map_mut().insert(TypeTagInfoMeta::new());
         }
 
-        let meta = state.metadata_mut().get_mut::<TypeTagInfoMeta>().unwrap();
+        let meta = state.metadata_map_mut().get_mut::<TypeTagInfoMeta>().unwrap();
 
         let func_off = self.loader.module_cache.read().functions.len();
         let module_name = module.name().to_owned();

@@ -6,7 +6,7 @@ use std::time::Duration;
 use glob::glob;
 use itertools::Itertools;
 use libafl::corpus::{Corpus, Testcase};
-use libafl::prelude::Rand;
+use libafl_bolts::prelude::Rand;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, HasRand, State};
 use move_binary_format::access::ModuleAccess;
@@ -40,11 +40,15 @@ pub enum MoveInputStatus {
     DependentOnStructs(Value, Vec<Type>),
 }
 
-pub struct MoveCorpusInitializer<'a> {
+pub struct MoveCorpusInitializer<'a, SC, ISC>
+where
+    SC: Scheduler<State = MoveFuzzState>,
+    ISC: Scheduler<State = MoveInfantStateState>,
+{
     pub state: &'a mut MoveFuzzState,
     pub executor: &'a mut movevm::MoveVM<MoveFunctionInput, MoveFuzzState>,
-    pub scheduler: &'a dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
-    pub infant_scheduler: &'a dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
+    pub scheduler: SC,
+    pub infant_scheduler: ISC,
     pub default_state: MoveStagedVMState,
 }
 
@@ -55,14 +59,17 @@ pub fn is_tx_context(struct_tag: &StructTag) -> bool {
     ) && struct_tag.module == TX_CONTEXT_MODULE_NAME.into() && struct_tag.name == TX_CONTEXT_STRUCT_NAME.into()
 }
 
-impl<'a> MoveCorpusInitializer<'a>
+impl<'a, SC, ISC> MoveCorpusInitializer<'a, SC, ISC>
+where
+    SC: Scheduler<State = MoveFuzzState>,
+    ISC: Scheduler<State = MoveInfantStateState>,
 {
 
     pub fn new(
         state: &'a mut MoveFuzzState,
         executor: &'a mut movevm::MoveVM<MoveFunctionInput, MoveFuzzState>,
-        scheduler: &'a dyn Scheduler<MoveFunctionInput, MoveFuzzState>,
-        infant_scheduler: &'a dyn Scheduler<MoveStagedVMState, MoveInfantStateState>,
+        scheduler: SC,
+        infant_scheduler: ISC,
     ) -> Self {
         Self {
             state,
@@ -87,9 +94,9 @@ impl<'a> MoveCorpusInitializer<'a>
         self.state.add_caller(&AccountAddress::random());
 
         // add metadata
-        self.state.metadata_mut().insert(StructAbilities::new());
-        self.state.metadata_mut().insert(ConstantPoolMetadata::new());
-        self.state.infant_states_state.metadata_mut().insert(MoveSchedulerMeta::new());
+        self.state.metadata_map_mut().insert(StructAbilities::new());
+        self.state.metadata_map_mut().insert(ConstantPoolMetadata::new());
+        self.state.infant_states_state.metadata_map_mut().insert(MoveSchedulerMeta::new());
 
         // setup infant scheduler & corpus
         self.default_state = StagedVMState::new_with_state(
@@ -137,7 +144,7 @@ impl<'a> MoveCorpusInitializer<'a>
     }
 
     fn extract_constants(&mut self, module: &CompiledModule) {
-        let constant_pool = self.state.metadata_mut()
+        let constant_pool = self.state.metadata_map_mut()
             .get_mut::<ConstantPoolMetadata>()
             .expect("failed to get constant pool metadata");
 
@@ -440,7 +447,7 @@ impl<'a> MoveCorpusInitializer<'a>
         let mut resolved = true;
         let mut deps = HashMap::new();
         let type_tag_info = self.state
-            .metadata()
+            .metadata_map()
             .get::<TypeTagInfoMeta>()
             .expect("type tag info not found")
             .clone();

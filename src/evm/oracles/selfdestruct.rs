@@ -71,7 +71,7 @@ for SelfdestructOracle
                     .clone();
 
                 let srcmap = BuildJobResult::get_sourcemap_executor(
-                    ctx.fuzz_state.metadata_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
+                    ctx.fuzz_state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
                             .get_mut(addr),
                     ctx.executor,
                     addr,

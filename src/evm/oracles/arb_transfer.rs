@@ -8,7 +8,7 @@ use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use libafl::prelude::HasMetadata;
 use revm_primitives::{Bytecode, HashSet};
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ Oracle<
                     .clone();
 
                 let srcmap = BuildJobResult::get_sourcemap_executor(
-                    ctx.fuzz_state.metadata_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
+                    ctx.fuzz_state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
                         .get_mut(caller),
                     ctx.executor,
                     caller,

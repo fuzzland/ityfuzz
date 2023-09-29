@@ -10,6 +10,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_primitives::Bytecode;
@@ -132,23 +133,24 @@ impl CallPrinter {
 }
 
 
-impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
-    where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for CallPrinter
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
+    + HasCaller<EVMAddress>
+    + HasCorpus
+    + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+    + HasMetadata
+    + HasCurrentInputIdx
+    + Debug
+    + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         if self.entry {
@@ -168,7 +170,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
                     && let Some(source) = source.get(&interp.program_counter()) {
                     Some(source.clone())
-                } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
+                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
                     if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
                         Some(srcmap.clone())
                     } else {
@@ -256,7 +258,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
                 && let Some(source) = source.get(&interp.program_counter()) {
                 Some(source.clone())
-            } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
+            } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
                 if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
                     Some(srcmap.clone())
                 } else {
@@ -272,7 +274,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
     unsafe fn on_return(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
         by: &Bytes
     ) {
@@ -284,7 +286,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         self.current_layer -= 1;
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
 
     }
 
@@ -292,4 +294,3 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         MiddlewareType::CallPrinter
     }
 }
-

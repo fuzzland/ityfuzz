@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use libafl::schedulers::Scheduler;
 
 use crate::evm::abi::BoxedABI;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
@@ -682,23 +683,24 @@ fn str_to_bytes(s: &str) -> Vec<u8> {
     bytes
 }
 
-impl<I, VS, S> Middleware<VS, I, S> for ConcolicHost<I, VS>
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for ConcolicHost<I, VS>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
     S: State
         + HasCaller<EVMAddress>
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCurrentInputIdx
         + Debug
         + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         macro_rules! fast_peek {
@@ -1313,7 +1315,7 @@ where
         //     .clone();
 
         if solutions.len() > 0 {
-            let meta = state.metadata_mut().get_mut::<ConcolicPrioritizationMetadata>().expect("Failed to get metadata");
+            let meta = state.metadata_map_mut().get_mut::<ConcolicPrioritizationMetadata>().expect("Failed to get metadata");
             for solution in solutions {
                 meta.solutions.push((solution, self.testcase_ref.clone()));
             }
@@ -1324,14 +1326,14 @@ where
     unsafe fn on_return(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
         by: &Bytes
     ) {
         self.pop_ctx();
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
 
     }
 

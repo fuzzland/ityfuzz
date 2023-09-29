@@ -31,10 +31,12 @@ use crate::fuzzer::REPLAY;
 use crate::input::ConciseSerde;
 use hex;
 use itertools::Itertools;
-use libafl::impl_serdeany;
+
+use crypto::sha3::Sha3Mode::Keccak256;
 use libafl::prelude::HasMetadata;
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
+use libafl_bolts::impl_serdeany;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -48,13 +50,17 @@ use std::time::Duration;
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
-pub struct EVMCorpusInitializer<'a> {
-    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
-    scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
-    infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
+pub struct EVMCorpusInitializer<'a, SC, ISC>
+where
+    SC: Scheduler<State = EVMFuzzState> + Clone,
+    ISC: Scheduler<State = EVMInfantStateState>,
+{
+    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+    scheduler: SC,
+    infant_scheduler: ISC,
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
-    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState>>,
+    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>>,
     work_dir: String,
 }
 
@@ -100,7 +106,9 @@ macro_rules! handle_contract_insertion {
             None => (false, false),
         };
         if is_erc20 {
-            register_borrow_txn(&$host, $state, $deployed_address);
+            // scheduler should be mutable but host cannot be borrowed as mutable
+            let scheduler = $host.scheduler.clone();
+            register_borrow_txn(scheduler, $state, $deployed_address);
         }
         if is_pair {
             let mut mid = $host
@@ -133,11 +141,15 @@ macro_rules! add_input_to_corpus {
     };
 }
 
-impl<'a> EVMCorpusInitializer<'a> {
+impl<'a, SC, ISC> EVMCorpusInitializer<'a, SC, ISC>
+where
+    SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    ISC: Scheduler<State = EVMInfantStateState>,
+{
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>,
-        scheduler: &'a dyn Scheduler<EVMInput, EVMFuzzState>,
-        infant_scheduler: &'a dyn Scheduler<EVMStagedVMState, EVMInfantStateState>,
+        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+        scheduler: SC,
+        infant_scheduler: ISC,
         state: &'a mut EVMFuzzState,
         work_dir: String,
     ) -> Self {
@@ -153,12 +165,15 @@ impl<'a> EVMCorpusInitializer<'a> {
     }
 
     #[cfg(feature = "use_presets")]
-    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState>) {
+    pub fn register_preset(
+        &mut self,
+        preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>,
+    ) {
         self.presets.push(preset);
     }
 
     pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
-        self.state.metadata_mut().insert(ABIMap::new());
+        self.state.metadata_map_mut().insert(ABIMap::new());
         self.setup_default_callers();
         self.setup_contract_callers();
         self.initialize_contract(loader);
@@ -228,7 +243,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                 let sigs = extract_sig_from_contract(&contract_code);
                 let mut unknown_sigs: usize = 0;
                 for sig in &sigs {
-                    if let Some(abi) = self.state.metadata().get::<ABIMap>().unwrap().get(sig) {
+                    if let Some(abi) = self.state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
                         contract.abi.push(abi.clone());
                     } else {
                         unknown_sigs += 1;
@@ -242,7 +257,7 @@ impl<'a> EVMCorpusInitializer<'a> {
                         .map(|abi| {
                             if let Some(known_abi) = self
                                 .state
-                                .metadata()
+                                .metadata_map()
                                 .get::<ABIMap>()
                                 .unwrap()
                                 .get(&abi.function)
@@ -314,12 +329,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             }
 
             for abi in contract.abi.clone() {
-                self.add_abi(
-                    &abi,
-                    self.scheduler,
-                    contract.deployed_address,
-                    &mut artifacts,
-                );
+                self.add_abi(&abi, contract.deployed_address, &mut artifacts);
             }
             // add transfer txn
             {
@@ -400,7 +410,6 @@ impl<'a> EVMCorpusInitializer<'a> {
     fn add_abi(
         &mut self,
         abi: &ABIConfig,
-        scheduler: &dyn Scheduler<EVMInput, EVMFuzzState>,
         deployed_address: EVMAddress,
         artifacts: &mut EVMInitializationArtifacts,
     ) {
@@ -456,7 +465,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             randomness: vec![0],
             repeat: 1,
         };
-        add_input_to_corpus!(self.state, scheduler, input.clone());
+        add_input_to_corpus!(self.state, &mut self.scheduler, input.clone());
         #[cfg(feature = "print_txn_corpus")]
         {
             let corpus_dir = format!("{}/corpus", self.work_dir.as_str());
@@ -468,7 +477,7 @@ impl<'a> EVMCorpusInitializer<'a> {
             for p in presets {
                 let mut presets = p.presets(abi.function, &input, self.executor);
                 presets.iter().for_each(|preset| {
-                    add_input_to_corpus!(self.state, scheduler, preset.clone());
+                    add_input_to_corpus!(self.state, &mut self.scheduler, preset.clone());
                 });
             }
         }

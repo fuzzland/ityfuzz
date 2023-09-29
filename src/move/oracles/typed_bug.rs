@@ -2,6 +2,7 @@ use crate::oracle::{Oracle, OracleCtx, Producer};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
+use serde_json::json;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
@@ -42,11 +43,11 @@ for TypedBugOracle {
     ) -> Vec<u64> {
         if ctx.post_state.typed_bug.len() > 0 {
             unsafe {
-                ORACLE_OUTPUT += format!(
-                    "[typed_bug] {:?} hit at module {:?}\n",
-                    ctx.post_state.typed_bug,
-                    ctx.input.module
-                ).as_str();
+                let msg = json!({
+                        "typed_bug": ctx.post_state.typed_bug,
+                        "module": ctx.input.module,
+                });
+                ORACLE_OUTPUT.push(msg);
             }
             ctx.post_state.typed_bug.iter().map(|bug_id| {
                 let mut hasher = DefaultHasher::new();

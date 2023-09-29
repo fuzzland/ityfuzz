@@ -49,7 +49,7 @@ where
     S: HasMetadata + State,
 {
     let constants = find_constants(bytecode);
-    match state.metadata_mut().get_mut::<ConstantPoolMetadata>() {
+    match state.metadata_map_mut().get_mut::<ConstantPoolMetadata>() {
         Some(meta) => {
             for constant in constants {
                 if !meta.constants.contains(&constant) {
@@ -58,7 +58,7 @@ where
             }
         }
         None => {
-            state.metadata_mut().insert(ConstantPoolMetadata {
+            state.metadata_map_mut().insert(ConstantPoolMetadata {
                 constants: constants.into_iter().collect(),
             });
         }

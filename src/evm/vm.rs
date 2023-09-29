@@ -24,7 +24,7 @@ use crate::input::{ConciseSerde, VMInputT};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 
-use libafl::prelude::{HasMetadata, HasRand};
+use libafl::prelude::{HasMetadata, HasRand, UsesInput};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 
@@ -390,14 +390,15 @@ pub static mut IS_FAST_CALL_STATIC: bool = false;
 
 /// EVM executor, wrapper of revm
 #[derive(Debug, Clone)]
-pub struct EVMExecutor<I, S, VS, CI>
+pub struct EVMExecutor<I, S, VS, CI, SC>
 where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
-    pub host: FuzzHost<VS, I, S>,
+    pub host: FuzzHost<VS, I, S, SC>,
     /// [Depreciated] Deployer address
     pub deployer: EVMAddress,
     /// Known arbitrary (caller,pc)
@@ -432,12 +433,12 @@ pub struct IntermediateExecutionResult {
     pub memory: Vec<u8>,
 }
 
-impl<VS, I, S, CI> EVMExecutor<I, S, VS, CI>
+impl<VS, I, S, CI, SC> EVMExecutor<I, S, VS, CI, SC>
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
@@ -445,12 +446,14 @@ where
         + Default
         + Clone
         + Debug
+        + UsesInput<Input = I>
         + 'static,
     VS: Default + VMStateT + 'static,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+    SC: Scheduler<State = S> + Clone + 'static,
 {
     /// Create a new EVM executor given a host and deployer address
-    pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
+    pub fn new(fuzz_host: FuzzHost<VS, I, S, SC>, deployer: EVMAddress) -> Self {
         Self {
             host: fuzz_host,
             deployer,
@@ -478,7 +481,7 @@ where
         data: Bytes,
         input: &I,
         post_exec: Option<SinglePostExecution>,
-        mut state: &mut S,
+        state: &mut S,
         cleanup: bool,
     ) -> IntermediateExecutionResult {
         // Initial setups
@@ -830,7 +833,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-        middleware: Rc<RefCell<dyn Middleware<VS, I, S>>>,
+        middleware: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>,
     ) {
         self.host.add_middlewares(middleware.clone());
         self.execute(input, state);
@@ -840,14 +843,14 @@ where
 
 pub static mut IN_DEPLOY: bool = false;
 
-impl<VS, I, S, CI>
+impl<VS, I, S, CI, SC>
     GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
-    for EVMExecutor<I, S, VS, CI>
+    for EVMExecutor<I, S, VS, CI, SC>
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
@@ -855,9 +858,11 @@ where
         + Default
         + Clone
         + Debug
+        + UsesInput<Input = I>
         + 'static,
     VS: VMStateT + Default + 'static,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+    SC: Scheduler<State = S> + Clone + 'static,
 {
     /// Deploy a contract
     fn deploy(
@@ -1084,7 +1089,8 @@ mod tests {
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
     use bytes::Bytes;
-    use libafl::prelude::{tuple_list, StdScheduler};
+    use libafl::prelude::StdScheduler;
+    use libafl_bolts::tuples::tuple_list;
     use revm_primitives::Bytecode;
     use std::cell::RefCell;
     use std::path::Path;
@@ -1098,9 +1104,9 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> =
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
             EVMExecutor::new(
-                FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
+                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
                 generate_random_address(&mut state),
             );
         let mut observers = tuple_list!();

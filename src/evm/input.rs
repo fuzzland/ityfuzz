@@ -7,10 +7,10 @@ use crate::input::{ConciseSerde, VMInputT};
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
 
-use libafl::bolts::HasLen;
+use libafl_bolts::{HasLen, prelude::Rand};
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, Rand, State};
+use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, State};
 use primitive_types::U512;
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};

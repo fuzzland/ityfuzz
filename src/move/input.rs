@@ -5,7 +5,7 @@ use crate::r#move::vm_state::{Gate, MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
 
 use libafl::inputs::Input;
-use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, MutationResult, Rand, State};
+use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, MutationResult, State};
 use libafl::state::HasRand;
 use std::rc::Rc;
 use move_core_types::account_address::AccountAddress;
@@ -23,7 +23,7 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::{impl_serdeany, prelude::Rand};
 use move_binary_format::file_format::AbilitySet;
 use move_vm_runtime::loader::Function;
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -286,7 +286,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
         for (arg, ty) in self.args.iter_mut()
             .zip(self.function_info.get_function().parameter_types.iter()) {
 
-            if state.metadata().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
+            if state.metadata_map().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
                 continue;
             }
 
@@ -731,7 +731,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
         }
         let nth = _state.rand_mut().below(self.args.len() as u64) as usize;
         let ty = self.function_info.get_function().parameter_types[nth].clone();
-        if _state.metadata().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
+        if _state.metadata_map().get::<TypeTagInfoMeta>().expect("type tag info").is_tx_context(&ty) {
             return MutationResult::Skipped;
         }
 
@@ -856,6 +856,7 @@ mod tests {
     use libafl::prelude::HasMetadata;
     use move_binary_format::file_format::{Ability, AbilitySet};
     use crate::r#move::types::MoveStagedVMState;
+
 
     macro_rules! get_dummy_func {
         ($tys: expr) => {
@@ -992,7 +993,7 @@ mod tests {
         ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr) => {
             {
                 let mut state: MoveFuzzState = Default::default();
-                state.metadata_mut().insert($struct_abilities);
+                state.metadata_map_mut().insert($struct_abilities);
 
                 let (v, res) = {
                     let mut v = dummy_input!($init_v, $sstate, $tys);
@@ -1199,4 +1200,3 @@ mod tests {
 
 
 }
-

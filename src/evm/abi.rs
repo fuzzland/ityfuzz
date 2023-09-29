@@ -7,10 +7,11 @@ use crate::input::ConciseSerde;
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::{HasCaller, HasItyState};
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMetadata, Rand};
+use libafl::prelude::HasMetadata;
+use libafl_bolts::bolts_prelude::Rand;
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
@@ -87,7 +88,7 @@ impl ABIAddressToInstanceMap {
 
 pub fn register_abi_instance<S: HasMetadata>(address: EVMAddress, abi: BoxedABI, state: &mut S) {
     let abi_map = state
-        .metadata_mut()
+        .metadata_map_mut()
         .get_mut::<ABIAddressToInstanceMap>()
         .expect("ABIAddressToInstanceMap not found");
     abi_map.add(address, abi);

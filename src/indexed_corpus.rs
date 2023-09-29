@@ -1,21 +1,21 @@
 /// A corpus in memory with self-incementing indexes for items.
 
 use core::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Ref, RefMut};
 
 use serde::{Deserialize, Serialize};
 
 use libafl::{
     corpus::{Corpus, Testcase},
-    inputs::Input,
-    Error,
+    inputs::{Input, UsesInput},
+    Error, prelude::{HasTestcase, CorpusId},
 };
 
 pub trait HasIndexed {}
 impl<I> HasIndexed for IndexedInMemoryCorpus<I> where I: Input {}
 
 /// A corpus in memory with self-incementing indexes for items.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(bound = "I: Input")]
 pub struct IndexedInMemoryCorpus<I>
 where
@@ -28,11 +28,17 @@ where
     /// Current index
     current_idx: usize,
     /// Current testcase scheduled
-    current: Option<usize>,
+    current: Option<CorpusId>,
 }
 
+impl<I> UsesInput for IndexedInMemoryCorpus<I>
+where
+    I: Input,
+{
+    type Input = I;
+}
 
-impl<I> Corpus<I> for IndexedInMemoryCorpus<I>
+impl<I> Corpus for IndexedInMemoryCorpus<I>
 where
     I: Input,
 {
@@ -44,14 +50,15 @@ where
 
     /// Add an entry to the corpus and return its index
     #[inline]
-    fn add(&mut self, testcase: Testcase<I>) -> Result<usize, Error> {
+    fn add(&mut self, testcase: Testcase<I>) -> Result<CorpusId, Error> {
         self.entries.push(RefCell::new(testcase));
-        Ok(self.entries.len() - 1)
+        Ok(CorpusId::from(self.entries.len() - 1))
     }
 
     /// Replaces the testcase at the given idx
     #[inline]
-    fn replace(&mut self, idx: usize, testcase: Testcase<I>) -> Result<Testcase<I>, Error> {
+    fn replace(&mut self, idx: CorpusId, testcase: Testcase<I>) -> Result<Testcase<I>, Error> {
+        let idx = usize::from(idx);
         if idx >= self.entries.len() {
             return Err(Error::key_not_found(format!("Index {idx} out of bounds")));
         }
@@ -61,15 +68,15 @@ where
 
     /// Removes an entry from the corpus, returning it if it was present.
     #[inline]
-    fn remove(&mut self, idx: usize) -> Result<Option<Testcase<I>>, Error> {
-        self.entries[idx] = self.dummy.clone();
-        Ok(None)
+    fn remove(&mut self, idx: CorpusId) -> Result<Testcase<I>, Error> {
+        let dummy = self.dummy.borrow().clone();
+        self.replace(idx, dummy)
     }
 
     /// Get by id
     #[inline]
-    fn get(&self, idx: usize) -> Result<&RefCell<Testcase<I>>, Error> {
-        match self.entries.get(idx) {
+    fn get(&self, idx: CorpusId) -> Result<&RefCell<Testcase<I>>, Error> {
+        match self.entries.get(usize::from(idx)) {
             Some(entry) => Ok(entry),
             _ => Err(Error::key_not_found(format!("Index {idx} out of bounds"))),
         }
@@ -77,14 +84,84 @@ where
 
     /// Current testcase scheduled
     #[inline]
-    fn current(&self) -> &Option<usize> {
+    fn current(&self) -> &Option<CorpusId> {
         &self.current
     }
 
     /// Current testcase scheduled (mutable)
     #[inline]
-    fn current_mut(&mut self) -> &mut Option<usize> {
+    fn current_mut(&mut self) -> &mut Option<CorpusId> {
         &mut self.current
+    }
+
+    #[inline]
+    fn next(&self, idx: CorpusId) -> Option<CorpusId> {
+        let idx = usize::from(idx);
+        if idx < self.count() - 1 {
+            Some(CorpusId::from(idx + 1))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn prev(&self, idx: CorpusId) -> Option<CorpusId> {
+        let idx = usize::from(idx);
+        if idx > 0 && idx < self.count(){
+            Some(CorpusId::from(idx - 1))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn first(&self) -> Option<CorpusId> {
+        if self.count() > 0 {
+            Some(CorpusId::from(0usize))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn last(&self) -> Option<CorpusId> {
+        if self.count() > 0 {
+            Some(CorpusId::from(self.count() - 1))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn nth(&self, nth: usize) -> CorpusId {
+        CorpusId::from(nth)
+    }
+
+    #[inline]
+    fn load_input_into(&self, _: &mut Testcase<Self::Input>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    #[inline]
+    fn store_input_from(&self, _: &Testcase<Self::Input>) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl<I> HasTestcase for IndexedInMemoryCorpus<I>
+where
+    I: Input,
+{
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.get(id)?.borrow())
+    }
+
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.get(id)?.borrow_mut())
     }
 }
 
