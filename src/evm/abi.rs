@@ -110,7 +110,8 @@ pub enum ABILossyType {
 }
 
 /// Traits of ABI types (encoding, decoding, etc.)
-pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize {
+#[typetag::serde(tag = "type")]
+pub trait ABI: CloneABI {
     /// Is the args static (i.e., fixed size)
     fn is_static(&self) -> bool;
     /// Get the ABI-encoded bytes of args
@@ -160,7 +161,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BoxedABI {
     /// ABI wrapper
-    #[serde(with = "serde_traitobject")]
+    // #[serde(with = "serde_traitobject")]
     pub b: Box<dyn ABI>,
     /// Function hash, if it is 0x00000000, it means the function hash is not set or
     /// this is to resume execution from a previous control leak
@@ -502,6 +503,7 @@ impl Input for AEmpty {
     }
 }
 
+#[typetag::serde]
 impl ABI for AEmpty {
     fn is_static(&self) -> bool {
         true
@@ -567,6 +569,7 @@ impl HasBytesVec for A256 {
     }
 }
 
+#[typetag::serde]
 impl ABI for A256 {
     fn is_static(&self) -> bool {
         // 256-bit args are always static
@@ -649,6 +652,7 @@ impl HasBytesVec for ADynamic {
     }
 }
 
+#[typetag::serde]
 impl ABI for ADynamic {
     fn is_static(&self) -> bool {
         false
@@ -742,6 +746,7 @@ fn set_size_concolic(bytes: *mut Box<Expr>, len: usize) {
     }
 }
 
+#[typetag::serde]
 impl ABI for AArray {
     fn is_static(&self) -> bool {
         if self.dynamic_size {
@@ -987,6 +992,7 @@ impl Input for AUnknown {
     }
 }
 
+#[typetag::serde]
 impl ABI for AUnknown {
     fn is_static(&self) -> bool {
         self.concrete.is_static()

@@ -1,7 +1,7 @@
 use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
-use crate::evm::contract_utils::{ABIConfig, ContractLoader, extract_sig_from_contract};
+use crate::evm::contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
@@ -23,23 +23,21 @@ use libafl::prelude::{HasCorpus, HasMetadata, Input, UsesInput};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasRand, State};
 
-
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
+use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::onchain::flashloan::register_borrow_txn;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::sync::Arc;
-use bytes::Bytes;
+use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use itertools::Itertools;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
-use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
-use crate::evm::corpus_initializer::ABIMap;
-use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
+use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
 pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
@@ -146,17 +144,17 @@ where
 pub fn keccak_hex(data: EVMU256) -> String {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let mut input: [u8; 32] = data.to_be_bytes();
+    let input: [u8; 32] = data.to_be_bytes();
     hasher.input(input.as_ref());
     hasher.result(&mut output);
-    hex::encode(&output).to_string()
+    hex::encode(output)
 }
 
 impl<VS, I, S, SC> Middleware<VS, I, S, SC> for OnChain<VS, I, S>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
-        +HasRand
+        + HasRand
         + Debug
         + HasCaller<EVMAddress>
         + HasCorpus
@@ -174,10 +172,10 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
-        let pc = interp.program_counter();
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
-            ($ty: expr, $target: expr) => {
+            ($ty: expr, $target: expr) => {{
+                let pc = interp.program_counter();
                 match $ty.get_mut(&(interp.contract.address, pc)) {
                     None => {
                         $ty.insert((interp.contract.address, pc), HashSet::from([$target]));
@@ -192,7 +190,7 @@ where
                         }
                     }
                 }
-            };
+            }};
         }
         #[cfg(not(feature = "force_cache"))]
         macro_rules! force_cache {
@@ -202,6 +200,7 @@ where
         }
 
         match *interp.instruction_pointer {
+            // SLOAD
             0x54 => {
                 let address = interp.contract.address;
                 let slot_idx = interp.stack.peek(0).unwrap();
@@ -209,9 +208,8 @@ where
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
                         if !self.$stor.contains_key(&address) {
-                            let storage = self.endpoint.$func(address);
-                            if storage.is_some() {
-                                self.$stor.insert(address, storage.unwrap());
+                            if let Some(storage) = self.endpoint.$func(address) {
+                                self.$stor.insert(address, storage);
                             }
                         }
                         match self.$stor.get(&address) {
@@ -225,50 +223,55 @@ where
                     }};
                     () => {};
                 }
-                macro_rules! slot_val {
-                    () => {{
-                        match self.storage_fetching {
-                            StorageFetchingMode::Dump => {
-                                load_data!(fetch_storage_dump, storage_dump, slot_idx)
-                            }
-                            StorageFetchingMode::All => {
-                                // the key is in keccak256 format
-                                let key = keccak_hex(slot_idx);
-                                load_data!(fetch_storage_all, storage_all, key)
-                            }
-                            StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
-                                address,
-                                slot_idx,
-                                force_cache!(self.locs, slot_idx),
-                            ),
-                        }
-                    }};
-                }
-                //
-                // match host.data.get_mut(&address) {
-                //     Some(data) => {
-                //         if data.get(&slot_idx).is_none() {
-                //             data.insert(slot_idx, slot_val!());
-                //         }
-                //     }
-                //     None => {
-                //         let mut data = HashMap::new();
-                //         data.insert(slot_idx, slot_val!());
-                //         host.data.insert(address, data);
-                //     }
-                // }
-
-                host.next_slot = slot_val!();
+                host.next_slot = match self.storage_fetching {
+                    StorageFetchingMode::Dump => {
+                        load_data!(fetch_storage_dump, storage_dump, slot_idx)
+                    }
+                    StorageFetchingMode::All => {
+                        // the key is in keccak256 format
+                        let key = keccak_hex(slot_idx);
+                        load_data!(fetch_storage_all, storage_all, key)
+                    }
+                    StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
+                        address,
+                        slot_idx,
+                        force_cache!(self.locs, slot_idx),
+                    ),
+                };
             }
-
+            // BALANCE
+            #[cfg(feature = "real_balance")]
+            0x31 => {
+                let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
+                println!("onchain balance for {:?}", address);
+                // std::thread::sleep(std::time::Duration::from_secs(3));
+                host.next_slot = self.endpoint.get_balance(address);
+            }
+            #[cfg(feature = "real_balance")]
+            // 	SELFBALANCE
+            0x47 => {
+                let address = interp.contract.address;
+                println!("onchain selfbalance for {:?}", address);
+                // std::thread::sleep(std::time::Duration::from_secs(3));
+                host.next_slot = self.endpoint.get_balance(address);
+            }
+            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
                 let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
-                    0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
-                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
-                    _ => {
-                        unreachable!()
+                    0xf1 | 0xf2 => {
+                        // CALL | CALLCODE
+                        #[cfg(feature = "real_balance")]
+                        {
+                            // Get balance of the callee
+                            host.next_slot = self.endpoint.get_balance(caller);
+                        }
+
+                        interp.stack.peek(1).unwrap()
                     }
+                    0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
+                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                    _ => unreachable!(),
                 };
                 let address_h160 = convert_u256_to_h160(address);
                 if self.loaded_abi.contains(&address_h160) {
@@ -281,32 +284,33 @@ where
                     self.loaded_abi.insert(address_h160);
                     return;
                 }
-                if !self.loaded_code.contains(&address_h160) && !host.code.contains_key(&address_h160) {
+                if !self.loaded_code.contains(&address_h160)
+                    && !host.code.contains_key(&address_h160)
+                {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                     host.set_codedata(address_h160, contract_code.clone());
-                    println!("fetching code from {:?} due to call by {:?}",
-                             address_h160, caller);
+                    println!(
+                        "fetching code from {:?} due to call by {:?}",
+                        address_h160, caller
+                    );
                 }
-                if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) ||
-                    *interp.instruction_pointer == 0x3b ||
-                    *interp.instruction_pointer == 0x3c {
+                if unsafe { IS_FAST_CALL }
+                    || self.blacklist.contains(&address_h160)
+                    || *interp.instruction_pointer == 0x3b
+                    || *interp.instruction_pointer == 0x3c
+                {
                     return;
                 }
 
                 // setup abi
                 self.loaded_abi.insert(address_h160);
-                let is_proxy_call = match *interp.instruction_pointer {
-                    0xf2 | 0xf4 => true,
-                    _ => false,
-                };
+                let is_proxy_call = matches!(*interp.instruction_pointer, 0xf2 | 0xf4);
 
                 let mut abi = None;
                 if let Some(builder) = &self.builder {
                     println!("onchain job {:?}", address_h160);
-                    let build_job = builder.onchain_job(
-                        self.endpoint.chain_name.clone(),
-                        address_h160,
-                    );
+                    let build_job =
+                        builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
 
                     if let Some(job) = build_job {
                         abi = Some(job.abi.clone());
@@ -325,9 +329,7 @@ where
 
                 let mut parsed_abi = vec![];
                 match abi {
-                    Some(ref abi_ins) => {
-                        parsed_abi = ContractLoader::parse_abi_str(abi_ins)
-                    }
+                    Some(ref abi_ins) => parsed_abi = ContractLoader::parse_abi_str(abi_ins),
                     None => {
                         // 1. Extract abi from bytecode, and see do we have any function sig available in state
                         // 2. Use Heimdall to extract abi
@@ -368,64 +370,65 @@ where
                     // check caller's hash and see what is missing
                     let caller_hashes = match host.address_to_hash.get(&caller) {
                         Some(v) => v.clone(),
-                        None => vec![]
+                        None => vec![],
                     };
                     let caller_hashes_set = caller_hashes.iter().cloned().collect::<HashSet<_>>();
-                    let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                    let new_hashes = parsed_abi
+                        .iter()
+                        .map(|abi| abi.function)
+                        .collect::<HashSet<_>>();
                     for hash in new_hashes {
                         if !caller_hashes_set.contains(&hash) {
                             abi_hashes_to_add.insert(hash);
                             host.add_one_hashes(caller, hash);
                         }
                     }
-                    println!("Propagating hashes {:?} for proxy {:?}",
-                             abi_hashes_to_add
-                                 .iter()
-                                .map(|x| hex::encode(x))
-                                 .collect::<Vec<_>>(),
-                             caller
+                    println!(
+                        "Propagating hashes {:?} for proxy {:?}",
+                        abi_hashes_to_add
+                            .iter()
+                            .map(hex::encode)
+                            .collect::<Vec<_>>(),
+                        caller
                     );
-
                 } else {
-                    abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+                    abi_hashes_to_add = parsed_abi
+                        .iter()
+                        .map(|abi| abi.function)
+                        .collect::<HashSet<_>>();
                     host.add_hashes(
                         address_h160,
                         parsed_abi.iter().map(|abi| abi.function).collect(),
                     );
                 }
-                let target = if is_proxy_call {
-                    caller
-                } else {
-                    address_h160
-                };
+                let target = if is_proxy_call { caller } else { address_h160 };
                 state.add_address(&target);
 
                 // notify flashloan and blacklisting flashloan addresses
                 #[cfg(feature = "flashloan_v2")]
                 {
-                    handle_contract_insertion!(state, host, target,
-                        parsed_abi.iter().filter(
-                            |x| abi_hashes_to_add.contains(&x.function)
-                        ).cloned().collect::<Vec<ABIConfig>>()
+                    handle_contract_insertion!(
+                        state,
+                        host,
+                        target,
+                        parsed_abi
+                            .iter()
+                            .filter(|x| abi_hashes_to_add.contains(&x.function))
+                            .cloned()
+                            .collect::<Vec<ABIConfig>>()
                     );
                 }
                 // add abi to corpus
-
-                unsafe {
-                    match WHITELIST_ADDR.as_ref() {
-                        Some(whitelist) => {
-                            if !whitelist.contains(&target) {
-                                return;
-                            }
-                        }
-                        None => {}
+                if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
+                    if !whitelist.contains(&target) {
+                        return;
                     }
                 }
 
                 parsed_abi
                     .iter()
                     .filter(|v| !v.is_constructor)
-                    .filter( |v| abi_hashes_to_add.contains(&v.function))
+                    .filter(|v| abi_hashes_to_add.contains(&v.function))
                     .for_each(|abi| {
                         #[cfg(not(feature = "fuzz_static"))]
                         if abi.is_static {
@@ -433,8 +436,7 @@ where
                         }
 
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance
-                            .set_func_with_name(abi.function, abi.function_name.clone());
+                        abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
                         register_abi_instance(target, abi_instance.clone(), state);
 
                         let input = EVMInput {
@@ -462,7 +464,6 @@ where
                         };
                         add_corpus(host, state, &input);
                     });
-
             }
             _ => {}
         }

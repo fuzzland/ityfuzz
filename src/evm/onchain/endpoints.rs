@@ -222,10 +222,6 @@ pub struct GetPairResponseDataPairToken {
 #[derive(Clone, Debug, Default)]
 pub struct OnChainConfig {
     pub endpoint_url: String,
-    // pub cache_len: usize,
-    //
-    // code_cache: HashMap<EVMAddress, Bytecode>,
-    // slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
     pub block_number: String,
@@ -236,6 +232,7 @@ pub struct OnChainConfig {
 
     pub chain_name: String,
 
+    balance_cache: HashMap<EVMAddress, EVMU256>,
     pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     code_cache: HashMap<EVMAddress, Bytecode>,
@@ -621,6 +618,34 @@ impl OnChainConfig {
                 None
             }
         }
+    }
+
+    pub fn get_balance(&mut self, address: EVMAddress) -> EVMU256 {
+        if self.balance_cache.contains_key(&address) {
+            return self.balance_cache[&address];
+        }
+
+        let resp_string = {
+            let mut params = String::from("[");
+            params.push_str(&format!("\"0x{:x}\",", address));
+            params.push_str(&format!("\"{}\"", self.block_number));
+            params.push(']');
+            let resp = self._request("eth_getBalance".to_string(), params);
+            match resp {
+                Some(resp) => {
+                    let balance = resp.as_str().unwrap();
+                    balance.to_string()
+                }
+                None => "".to_string(),
+            }
+        };
+        let balance = EVMU256::from_str(&resp_string).unwrap();
+        println!(
+            "balance of {address:?} at {} is {balance}",
+            self.block_number
+        );
+        self.balance_cache.insert(address, balance);
+        balance
     }
 
     pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
@@ -1151,6 +1176,7 @@ fn get_header() -> HeaderMap {
 mod tests {
     use super::*;
     use crate::evm::onchain::endpoints::Chain::{BSC, ETH};
+    use crate::evm::types::EVMAddress;
 
     #[test]
     fn test_onchain_config() {
@@ -1238,6 +1264,16 @@ mod tests {
         assert!(v.swaps.len() > 0);
         assert!(!v.weth_address.is_zero());
         assert!(!v.address.is_zero());
+    }
+
+    #[test]
+    fn test_get_balance() {
+        let mut config = OnChainConfig::new(ETH, 18168677);
+        let v = config.get_balance(
+            EVMAddress::from_str("0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326").unwrap(),
+        );
+        println!("{:?}", v);
+        assert!(v == EVMU256::from(439351222497229612i64));
     }
 
     // #[test]

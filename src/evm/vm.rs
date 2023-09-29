@@ -1,6 +1,6 @@
 /// EVM executor implementation
 use itertools::Itertools;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -32,8 +32,11 @@ use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory, Stack};
 use revm_interpreter::InstructionResult::{ArbitraryExternalCallAddressBounded, ControlLeak};
+use revm_interpreter::{
+    BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory,
+    Stack,
+};
 use revm_primitives::{Bytecode, LatestSpec};
 
 use core::ops::Range;
@@ -49,13 +52,13 @@ use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMAddress, EVMU256};
 use crate::evm::uniswap::generate_uniswap_router_call;
+use crate::evm::vm::Constraint::{NoLiquidation, Value};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::invoke_middlewares;
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::de::DeserializeOwned;
-use crate::evm::vm::Constraint::{NoLiquidation, Value};
 use serde::{Deserialize, Serialize};
 
 pub const MEM_LIMIT: u64 = 10 * 1024;
@@ -225,10 +228,13 @@ impl PostExecutionCtx {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct EVMState {
     /// State of the EVM, which is mapping of EVMU256 slot to EVMU256 value for each contract
     pub state: HashMap<EVMAddress, HashMap<EVMU256, EVMU256>>,
+
+    /// Balance of addresses
+    pub balance: HashMap<EVMAddress, EVMU256>,
 
     /// Post execution context
     /// If control leak happens, we add the post execution context to the VM state,
@@ -266,14 +272,6 @@ impl EVMStateT for EVMState {
             Some(i) => i.constraints.clone(),
             None => vec![],
         }
-    }
-}
-
-impl Default for EVMState {
-    /// Default VM state, containing empty state, no post execution context,
-    /// and no flashloan usage
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -354,15 +352,7 @@ impl VMStateT for EVMState {
 impl EVMState {
     /// Create a new EVM state, containing empty state, no post execution context
     pub(crate) fn new() -> Self {
-        Self {
-            state: HashMap::new(),
-            post_execution: vec![],
-            flashloan_data: FlashloanData::new(),
-            bug_hit: false,
-            self_destruct: Default::default(),
-            typed_bug: Default::default(),
-            arbitrary_calls: Default::default(),
-        }
+        Self::default()
     }
 
     /// Get all storage slots of a specific contract
@@ -378,6 +368,16 @@ impl EVMState {
     /// Insert all storage slots of a specific contract
     pub fn insert(&mut self, address: EVMAddress, storage: HashMap<EVMU256, EVMU256>) {
         self.state.insert(address, storage);
+    }
+
+    /// Get balance of a specific address
+    pub fn get_balance(&self, address: &EVMAddress) -> Option<&EVMU256> {
+        self.balance.get(address)
+    }
+
+    /// Set balance of a specific address
+    pub fn set_balance(&mut self, address: EVMAddress, balance: EVMU256) {
+        self.balance.insert(address, balance);
     }
 }
 
@@ -400,7 +400,7 @@ where
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
     pub host: FuzzHost<VS, I, S, SC>,
     /// [Depreciated] Deployer address
-    deployer: EVMAddress,
+    pub deployer: EVMAddress,
     /// Known arbitrary (caller,pc)
     pub _known_arbitrary: HashSet<(EVMAddress, usize)>,
     phandom: PhantomData<(I, S, VS, CI)>,
@@ -755,14 +755,22 @@ where
                     pes: leak_ctx,
                     must_step: match r.ret {
                         ControlLeak => false,
-                        InstructionResult::ArbitraryExternalCallAddressBounded(_, _,_) => true,
+                        InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => true,
                         _ => unreachable!(),
                     },
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
-                        InstructionResult::ArbitraryExternalCallAddressBounded(caller, target, value) => {
-                            vec![Constraint::Caller(caller), Constraint::Contract(target), Value(value), NoLiquidation,
+                        InstructionResult::ArbitraryExternalCallAddressBounded(
+                            caller,
+                            target,
+                            value,
+                        ) => {
+                            vec![
+                                Constraint::Caller(caller),
+                                Constraint::Contract(target),
+                                Value(value),
+                                NoLiquidation,
                             ]
                         }
                         _ => unreachable!(),
@@ -787,9 +795,11 @@ where
                 .chain(self.host.current_self_destructs.iter().cloned()),
         );
         r.new_state.arbitrary_calls = HashSet::from_iter(
-            vm_state.arbitrary_calls.iter().cloned().chain(
-                self.host.current_arbitrary_calls.iter().cloned()
-            )
+            vm_state
+                .arbitrary_calls
+                .iter()
+                .cloned()
+                .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
         // println!("r.ret: {:?}", r.ret);
@@ -802,7 +812,7 @@ where
                     | InstructionResult::Stop
                     | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _,_ ) => false,
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => false,
                     _ => true,
                 },
                 new_state: StagedVMState::new_with_state(
@@ -862,6 +872,7 @@ where
         deployed_address: EVMAddress,
         state: &mut S,
     ) -> Option<EVMAddress> {
+        println!("deployer = 0x{} ", hex::encode(self.deployer));
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
