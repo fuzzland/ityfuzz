@@ -1220,7 +1220,7 @@ where
                 vec![]
             }
             // PUSH
-            0x60..=0x7f => {
+            0x5f..=0x7f => {
                 // push n bytes into stack
                 // Concolic push n bytes is equivalent to concrete push, because the bytes
                 // being pushed are always concrete, we can just push None to the stack
