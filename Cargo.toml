@@ -63,6 +63,7 @@ permutator = "0.4.3"
 either = "1.8.0"
 regex = "1"
 typetag = "0.2.13"
+lazy_static = "1.4.0"
 
 # external fuzzing-based abi decompiler
 heimdall = { path = "./externals/heimdall-rs/heimdall" }
