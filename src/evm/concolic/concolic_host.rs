@@ -1197,7 +1197,7 @@ where
                 #[cfg(feature = "z3_debug")]
                 println!("to solve {:?} / {:?}", idx, nth);
 
-                if !real_path_constraint.is_concrete() {
+                if !real_path_constraint.is_concrete() && !ALREADY_SOLVED.read().expect("concolic crashed").contains(&(idx, nth)) {
                     let intended_path_constraint = real_path_constraint.clone().lnot();
                     #[cfg(feature = "z3_debug")]
                     println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
