@@ -1,29 +1,33 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::process::id;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
+use std::collections::hash_map::DefaultHasher;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::cache::{Cache, FileSystemCache};
 use crate::evm::blaz::get_client;
 use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation};
-use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy};
+use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMQueueExecutor};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
 #[derive(Clone)]
 pub struct BuildJob {
     pub build_server: String,
-    pub replacements: HashMap<EVMAddress, Option<BuildJobResult>>
+    pub replacements: HashMap<EVMAddress, Option<BuildJobResult>>,
+    cache: FileSystemCache,
 }
 
 pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
@@ -31,9 +35,11 @@ const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources";
 
 impl BuildJob {
     pub fn new(build_server: String, replacements: HashMap<EVMAddress, Option<BuildJobResult>>) -> Self {
+        let cache = FileSystemCache::new("./cache");
         Self {
             build_server,
-            replacements
+            replacements,
+            cache
         }
     }
 
@@ -58,6 +64,16 @@ impl BuildJob {
             return replacement.clone();
         }
 
+        let mut hasher = DefaultHasher::new();
+        let key = format!("onchain_{}_{}", chain.as_str(), addr.to_string().as_str());
+        key.hash(&mut hasher);
+        let hash = hasher.finish().to_string();
+        if let Ok(t) = self.cache.load(hash.as_str()) {
+            if let Ok(deserialized_result) = serde_json::from_str::<BuildJobResult>(&t) {
+                return Some(deserialized_result);
+            }
+        }
+
         let job = self.async_submit_onchain_job(chain, addr);
         if job.is_none() {
             return None;
@@ -67,6 +83,9 @@ impl BuildJob {
         if result.is_none() {
             return None;
         }
+        if let Some(res) = &result {
+        self.cache.save(hash.as_str(), &serde_json::to_string(res).unwrap()).unwrap();
+    }
         return result;
     }
 }
@@ -238,7 +257,7 @@ impl BuildJobResult {
             let bytecode = Vec::from((**executor)
                 .borrow_mut()
                 .as_any()
-                .downcast_ref::<EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>>()
+                .downcast_ref::<EVMQueueExecutor>()
                 .unwrap()
                 .host
                 .code

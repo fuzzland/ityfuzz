@@ -18,7 +18,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Index;
-use libafl::prelude::{HasMetadata, Rand};
+use libafl::prelude::HasMetadata;
+use libafl_bolts::prelude::Rand;
 use libafl::state::HasRand;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::identifier::IdentStr;
@@ -190,10 +191,10 @@ impl MoveVMState {
         }
 
         if !state.has_metadata::<StructAbilities>() {
-            state.metadata_mut().insert(StructAbilities::new());
+            state.metadata_map_mut().insert(StructAbilities::new());
         }
 
-        state.metadata_mut().get_mut::<StructAbilities>().unwrap().set_ability(
+        state.metadata_map_mut().get_mut::<StructAbilities>().unwrap().set_ability(
             ty.clone(),
             abilities,
         );
@@ -243,7 +244,7 @@ impl MoveVMState {
                         self.ref_in_use.push((ty.clone(), val.clone()));
                     } else {
                         let struct_abilities = state
-                            .metadata()
+                            .metadata_map()
                             .get::<StructAbilities>()
                             .expect("StructAbilities not found")
                             .get_ability(ty)
@@ -264,7 +265,7 @@ impl MoveVMState {
     /// Used by mutator when trying to mutate a struct.
     pub fn restock_args<S>(&mut self, ty: &Type, value: GatedValue, is_ref: bool, state: &mut S)
     where S: HasMetadata {
-        if state.metadata().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
+        if state.metadata_map().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
             return;
         }
 
@@ -276,7 +277,7 @@ impl MoveVMState {
             self.ref_in_use.remove(offset);
         }
         let struct_abilities = state
-            .metadata()
+            .metadata_map()
             .get::<StructAbilities>()
             .expect("StructAbilities not found")
             .get_ability(ty)
@@ -299,7 +300,7 @@ impl MoveVMState {
 
     pub fn restock_struct<S>(&mut self, ty: &Type, value: Value, ret_ty: &Gate, state: &mut S)
         where S: HasMetadata {
-        if state.metadata().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
+        if state.metadata_map().get::<TypeTagInfoMeta>().unwrap().is_tx_context(ty) {
             return;
         }
 
@@ -320,7 +321,7 @@ impl MoveVMState {
         if !ret_ty.is_ref() {
             println!("looking for struct abilities for {:?} {:?}", value, ty);
             let struct_abilities = state
-                .metadata()
+                .metadata_map()
                 .get::<StructAbilities>()
                 .expect("StructAbilities not found")
                 .get_ability(ty)

@@ -7,10 +7,11 @@ use crate::input::ConciseSerde;
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::{HasCaller, HasItyState};
 use itertools::Itertools;
-use libafl::impl_serdeany;
+use libafl_bolts::impl_serdeany;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
-use libafl::prelude::{HasMetadata, Rand};
+use libafl::prelude::HasMetadata;
+use libafl_bolts::bolts_prelude::Rand;
 use libafl::state::{HasMaxSize, HasRand, State};
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
@@ -87,7 +88,7 @@ impl ABIAddressToInstanceMap {
 
 pub fn register_abi_instance<S: HasMetadata>(address: EVMAddress, abi: BoxedABI, state: &mut S) {
     let abi_map = state
-        .metadata_mut()
+        .metadata_map_mut()
         .get_mut::<ABIAddressToInstanceMap>()
         .expect("ABIAddressToInstanceMap not found");
     abi_map.add(address, abi);
@@ -109,7 +110,8 @@ pub enum ABILossyType {
 }
 
 /// Traits of ABI types (encoding, decoding, etc.)
-pub trait ABI: CloneABI + serde_traitobject::Serialize + serde_traitobject::Deserialize {
+#[typetag::serde(tag = "type")]
+pub trait ABI: CloneABI {
     /// Is the args static (i.e., fixed size)
     fn is_static(&self) -> bool;
     /// Get the ABI-encoded bytes of args
@@ -159,7 +161,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BoxedABI {
     /// ABI wrapper
-    #[serde(with = "serde_traitobject")]
+    // #[serde(with = "serde_traitobject")]
     pub b: Box<dyn ABI>,
     /// Function hash, if it is 0x00000000, it means the function hash is not set or
     /// this is to resume execution from a previous control leak
@@ -501,6 +503,7 @@ impl Input for AEmpty {
     }
 }
 
+#[typetag::serde]
 impl ABI for AEmpty {
     fn is_static(&self) -> bool {
         true
@@ -566,6 +569,7 @@ impl HasBytesVec for A256 {
     }
 }
 
+#[typetag::serde]
 impl ABI for A256 {
     fn is_static(&self) -> bool {
         // 256-bit args are always static
@@ -648,6 +652,7 @@ impl HasBytesVec for ADynamic {
     }
 }
 
+#[typetag::serde]
 impl ABI for ADynamic {
     fn is_static(&self) -> bool {
         false
@@ -741,6 +746,7 @@ fn set_size_concolic(bytes: *mut Box<Expr>, len: usize) {
     }
 }
 
+#[typetag::serde]
 impl ABI for AArray {
     fn is_static(&self) -> bool {
         if self.dynamic_size {
@@ -986,6 +992,7 @@ impl Input for AUnknown {
     }
 }
 
+#[typetag::serde]
 impl ABI for AUnknown {
     fn is_static(&self) -> bool {
         self.concrete.is_static()

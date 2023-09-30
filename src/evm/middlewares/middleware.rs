@@ -7,6 +7,7 @@ use crate::state::{HasCaller, HasItyState};
 use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
+use libafl::prelude::UsesInput;
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, HasMetadata, State};
 use primitive_types::U512;
@@ -15,10 +16,10 @@ use serde::{Deserialize, Serialize};
 use std::clone::Clone;
 use std::fmt::Debug;
 
-use std::time::Duration;
+use crate::evm::types::{EVMAddress, EVMU256};
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
-use crate::evm::types::{EVMAddress, EVMU256};
+use std::time::Duration;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
@@ -60,18 +61,20 @@ pub enum MiddlewareOp {
     MakeSubsequentCallSuccess(Bytes),
 }
 
-pub fn add_corpus<VS, I, S>(host: &FuzzHost<VS, I, S>, state: &mut S, input: &EVMInput)
+pub fn add_corpus<VS, I, S, SC>(host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, input: &EVMInput)
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
         + Clone
         + Debug
+        + UsesInput<Input = I>
         + 'static,
     VS: VMStateT + Default,
+    SC: Scheduler<State = S> + Clone,
 {
     let mut tc = Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
     tc.set_exec_time(Duration::from_secs(0));
@@ -81,30 +84,34 @@ where
         .expect("failed to call scheduler on_add");
 }
 
-pub trait Middleware<VS, I, S>: Debug
+pub trait Middleware<VS, I, S, SC>: Debug
 where
-    S: State + HasCaller<EVMAddress> + Clone + Debug,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Clone + Debug,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     );
 
     unsafe fn on_return(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
-    );
+        ret: &Bytes,
+    ) {
+    }
+
 
     unsafe fn on_insert(&mut self,
                         bytecode: &mut Bytecode,
                         address: EVMAddress,
-                        host: &mut FuzzHost<VS, I, S>,
+                        host: &mut FuzzHost<VS, I, S, SC>,
                         state: &mut S);
     fn get_type(&self) -> MiddlewareType;
 }

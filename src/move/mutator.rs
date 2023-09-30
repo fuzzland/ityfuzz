@@ -2,7 +2,8 @@ use std::fmt::Debug;
 use libafl::Error;
 use libafl::inputs::Input;
 use libafl::mutators::{MutationResult, Mutator};
-use libafl::prelude::{HasMaxSize, HasMetadata, HasRand, Rand, Scheduler, State};
+use libafl::prelude::{HasMaxSize, HasMetadata, HasRand, Scheduler, State};
+use libafl_bolts::{Named, prelude::Rand};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::generic_vm::vm_state::VMStateT;
@@ -12,27 +13,27 @@ use crate::r#move::vm_state::MoveVMStateT;
 use crate::state::{HasCaller, HasItyState, InfantStateState};
 use crate::state_input::StagedVMState;
 
-pub struct MoveFuzzMutator<'a, VS, Loc, Addr, SC, CI>
+pub struct MoveFuzzMutator<VS, Loc, Addr, SC, CI>
     where
         VS: Default + VMStateT,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
         Addr: Serialize + DeserializeOwned + Debug + Clone,
         Loc: Serialize + DeserializeOwned + Debug + Clone,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    pub infant_scheduler: &'a SC,
+    pub infant_scheduler: SC,
     pub phantom: std::marker::PhantomData<(VS, Loc, Addr, CI)>,
 }
 
-impl<'a, VS, Loc, Addr, SC, CI> MoveFuzzMutator<'a, VS, Loc, Addr, SC, CI>
+impl<VS, Loc, Addr, SC, CI> MoveFuzzMutator<VS, Loc, Addr, SC, CI>
     where
         VS: Default + VMStateT,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
         Addr: Serialize + DeserializeOwned + Debug + Clone,
         Loc: Serialize + DeserializeOwned + Debug + Clone,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    pub fn new(infant_scheduler: &'a SC) -> Self {
+    pub fn new(infant_scheduler: SC) -> Self {
         Self {
             infant_scheduler,
             phantom: Default::default(),
@@ -40,11 +41,24 @@ impl<'a, VS, Loc, Addr, SC, CI> MoveFuzzMutator<'a, VS, Loc, Addr, SC, CI>
     }
 }
 
-impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, Loc, Addr, SC, CI>
+impl<VS, Loc, Addr, SC, CI> Named for MoveFuzzMutator<VS, Loc, Addr, SC, CI>
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn name(&self) -> &str {
+        "MoveFuzzMutator"
+    }
+}
+
+impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<VS, Loc, Addr, SC, CI>
     where
         I: VMInputT<VS, Loc, Addr, CI> + Input + MoveFunctionInputT,
         S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata,
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
         VS: Default + VMStateT + MoveVMStateT,
         Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
         Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -58,7 +72,7 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
     ) -> Result<MutationResult, Error> {
         // If the state is not initialized, initialize it
         if !input.get_staged_state().initialized {
-            let concrete = state.get_infant_state(self.infant_scheduler).unwrap();
+            let concrete = state.get_infant_state(&mut self.infant_scheduler).unwrap();
             input.set_staged_state(concrete.1, concrete.0);
         }
 
@@ -75,7 +89,7 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
                     // cross over infant state
                     // we need power schedule here for infant states
                     let old_idx = input.get_state_idx();
-                    let (idx, new_state) = state.get_infant_state(self.infant_scheduler).unwrap();
+                    let (idx, new_state) = state.get_infant_state(&mut self.infant_scheduler).unwrap();
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
@@ -110,15 +124,5 @@ impl<'a, VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for MoveFuzzMutator<'a, VS, 
             tries += 1;
         }
         Ok(res)
-    }
-
-    fn post_exec(
-        &mut self,
-        _state: &mut S,
-        _stage_idx: i32,
-        _corpus_idx: Option<usize>,
-    ) -> Result<(), Error> {
-        // todo!()
-        Ok(())
     }
 }

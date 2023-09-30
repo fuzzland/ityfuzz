@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_primitives::Bytecode;
@@ -264,29 +265,30 @@ impl Coverage {
 }
 
 
-impl<I, VS, S> Middleware<VS, I, S> for Coverage
-    where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Coverage
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
+    + HasCaller<EVMAddress>
+    + HasCorpus
+    + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+    + HasMetadata
+    + HasCurrentInputIdx
+    + Debug
+    + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
-        let address = interp.contract.address;
+        let address = interp.contract.code_address;
         let pc = interp.program_counter();
         self.pc_coverage.entry(address).or_default().insert(pc);
 
@@ -296,11 +298,11 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
-        let meta = state.metadata_mut().get_mut::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
+        let meta = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().expect("ArtifactInfoMetadata not found");
         if let Some(build_artifact) = meta.get_mut(&address) {
             self.sources.insert(address, build_artifact.sources.clone());
 
@@ -346,13 +348,6 @@ impl<I, VS, S> Middleware<VS, I, S> for Coverage
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::InstructionCoverage
     }
-
-    unsafe fn on_return(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
-        state: &mut S,
-    ) {}
 }
 
 

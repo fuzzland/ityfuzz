@@ -3,10 +3,12 @@
 
 use libafl::corpus::Corpus;
 use libafl::corpus::Testcase;
-use libafl::prelude::{HasMetadata, HasRand, Input, Rand};
-use libafl::schedulers::Scheduler;
+use libafl::prelude::{HasMetadata, HasRand, Input, UsesInput, HasTestcase, CorpusId};
+use libafl::schedulers::{Scheduler, RemovableScheduler};
 use libafl::state::HasCorpus;
-use libafl::{impl_serdeany, Error};
+use libafl::Error;
+use libafl::state::UsesState;
+use libafl_bolts::{impl_serdeany, prelude::Rand};
 
 use serde::{Deserialize, Serialize};
 
@@ -20,10 +22,9 @@ use crate::input::ConciseSerde;
 use crate::state::HasParent;
 
 /// A trait providing functions necessary for voting mechanisms
-pub trait HasVote<I, S>
+pub trait HasVote<S>
 where
-    S: HasCorpus<I> + HasRand + HasMetadata,
-    I: Input,
+    S: HasCorpus + HasRand + HasMetadata,
 {
     fn vote(&self, state: &mut S, idx: usize, amount: usize);
 }
@@ -37,11 +38,11 @@ pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 
 /// A scheduler that drops inputs (or VMState) based on a voting mechanism
 #[derive(Debug, Clone)]
-pub struct SortedDroppingScheduler<I, S> {
-    phantom: std::marker::PhantomData<(I, S)>,
+pub struct SortedDroppingScheduler<S> {
+    phantom: std::marker::PhantomData<S>,
 }
 
-impl<I, S> SortedDroppingScheduler<I, S> {
+impl<S> SortedDroppingScheduler<S> {
     /// Create a new SortedDroppingScheduler
     pub fn new() -> Self {
         Self {
@@ -49,6 +50,14 @@ impl<I, S> SortedDroppingScheduler<I, S> {
         }
     }
 }
+
+impl<S> UsesState for SortedDroppingScheduler<S>
+where
+    S: UsesInput,
+{
+    type State = S;
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Node {
     parent: usize, // 0 for root node
@@ -145,14 +154,13 @@ pub trait HasReportCorpus<S>
     fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize);
 }
 
-impl<I, S> HasReportCorpus<S> for SortedDroppingScheduler<I, S>
-    where
-        S: HasCorpus<I> + HasRand + HasMetadata + HasParent,
-        I: Input + Debug,
+impl<S> HasReportCorpus<S> for SortedDroppingScheduler<S>
+where
+    S: HasCorpus + HasRand + HasMetadata + HasParent,
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
         self.vote(state, state_idx, 3);
-        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
 
         #[cfg(feature = "full_trace")]
         data.deps.mark_never_delete(state_idx);
@@ -171,17 +179,18 @@ impl_serdeany!(VoteData);
 #[cfg(feature = "full_trace")]
 pub static mut REMOVED_CORPUS: usize = 0;
 
-impl<I, S> Scheduler<I, S> for SortedDroppingScheduler<I, S>
+impl<S> Scheduler for SortedDroppingScheduler<S>
 where
-    S: HasCorpus<I> + HasRand + HasMetadata + HasParent,
-    I: Input + Debug,
+    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent,
 {
     /// Hooks called every time an input (or VMState) is added to the corpus
     /// Set up the metadata for the input (or VMState)
-    fn on_add(&self, state: &mut S, idx: usize) -> Result<(), Error> {
+    fn on_add(&mut self, state: &mut Self::State, idx: CorpusId) -> Result<(), Error> {
+        let idx = usize::from(idx);
+
         // Initialize metadata if it doesn't exist
         if !state.has_metadata::<VoteData>() {
-            state.metadata_mut().insert(VoteData {
+            state.metadata_map_mut().insert(VoteData {
                 votes_and_visits: HashMap::new(),
                 sorted_votes: vec![],
                 visits_total: 1,
@@ -194,7 +203,7 @@ where
         // Setup metadata for the input (or VMState)
         {
             let parent_idx = state.get_parent_idx();
-            let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+            let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
             data.votes_and_visits.insert(idx, (3, 1));
             data.visits_total += 1;
             data.votes_total += 3;
@@ -211,7 +220,7 @@ where
         {
             let mut corpus_size = state.corpus().count();
             let _corpus_mut = state.corpus_mut();
-            let data = state.metadata().get::<VoteData>().unwrap();
+            let data = state.metadata_map().get::<VoteData>().unwrap();
             #[cfg(feature = "full_trace")]
             {
                 corpus_size -= unsafe { REMOVED_CORPUS };
@@ -235,24 +244,24 @@ where
 
                 // Remove inputs (or VMState) from metadata and corpus
                 to_remove.iter().for_each(|x| {
-                    self.on_remove(state, *x, &None);
+                    self.on_remove(state, (*x).into(), &None);
                     #[cfg(feature = "full_trace")]
                     {
-                        state.metadata_mut().get_mut::<VoteData>().unwrap().deps.remove_node(*x);
+                        state.metadata_map_mut().get_mut::<VoteData>().unwrap().deps.remove_node(*x);
                         unsafe {
                             REMOVED_CORPUS += 1;
                         }
                     }
                     #[cfg(not(feature = "full_trace"))]
                     {
-                        state.corpus_mut().remove(*x).expect("failed to remove");
+                        state.corpus_mut().remove((*x).into()).expect("failed to remove");
                     }
                 });
-                state.metadata_mut().get_mut::<VoteData>().unwrap().to_remove = to_remove;
+                state.metadata_map_mut().get_mut::<VoteData>().unwrap().to_remove = to_remove;
                 #[cfg(feature = "full_trace")]
                 {
-                    for idx in state.metadata_mut().get_mut::<VoteData>().unwrap().deps.garbage_collection() {
-                        state.corpus_mut().remove(idx).expect("failed to remove");
+                    for idx in state.metadata_map_mut().get_mut::<VoteData>().unwrap().deps.garbage_collection() {
+                        state.corpus_mut().remove(idx.into()).expect("failed to remove");
                     }
                 }
             }
@@ -260,29 +269,13 @@ where
         Ok(())
     }
 
-    /// Hooks called every time an input (or VMState) is removed from the corpus
-    /// Update the metadata caches for the input (or VMState)
-    fn on_remove(
-        &self,
-        state: &mut S,
-        idx: usize,
-        _testcase: &Option<Testcase<I>>,
-    ) -> Result<(), Error> {
-        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
-        data.votes_total -= data.votes_and_visits.get(&idx).unwrap().0;
-        data.visits_total -= data.votes_and_visits.get(&idx).unwrap().1;
-        data.votes_and_visits.remove(&idx);
-        data.sorted_votes.retain(|x| *x != idx);
-        Ok(())
-    }
-
     /// Selects next input (or VMState) to run
-    fn next(&self, state: &mut S) -> Result<usize, Error> {
+    fn next(&mut self, state: &mut Self::State) -> Result<CorpusId, Error> {
         // Debugging prints
         #[cfg(feature = "print_infant_corpus")]
         {
             let corpus_size = state.corpus().count();
-            let data = state.metadata().get::<VoteData>().unwrap();
+            let data = state.metadata_map().get::<VoteData>().unwrap();
             use crate::r#const::DEBUG_PRINT_PERCENT;
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
                 println!(
@@ -291,7 +284,7 @@ where
                 );
                 for idx in &data.sorted_votes {
                     let (votes, visits) = data.votes_and_visits.get(&idx).unwrap();
-                    let inp = state.corpus().get(*idx).unwrap().clone();
+                    let inp = state.corpus().get((*idx).into()).unwrap().clone();
                     match inp.into_inner().input() {
                         Some(x) => {
                             println!(
@@ -308,8 +301,8 @@ where
 
         // Conduct a probabilistic sampling from votes and visits (weighted by votes)
         let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
-            * state.metadata().get::<VoteData>().unwrap().votes_total as f64;
-        let mut data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+            * state.metadata_map().get::<VoteData>().unwrap().votes_total as f64;
+        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
         let mut idx = usize::MAX;
 
         let mut s: f64 = 0.0; // sum of votes so far
@@ -332,18 +325,39 @@ where
             data.visits_total += 1;
         }
 
-        Ok(idx)
+        Ok(idx.into())
     }
 }
 
-impl<I, S> HasVote<I, S> for SortedDroppingScheduler<I, S>
+impl<S> RemovableScheduler for SortedDroppingScheduler<S>
 where
-    S: HasCorpus<I> + HasRand + HasMetadata,
-    I: Input,
+    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent,
+{
+    /// Hooks called every time an input (or VMState) is removed from the corpus
+    /// Update the metadata caches for the input (or VMState)
+    fn on_remove(
+        &mut self,
+        state: &mut Self::State,
+        idx: CorpusId,
+        _testcase: &Option<Testcase<<Self::State as UsesInput>::Input>>,
+    ) -> Result<(), Error> {
+        let idx = usize::from(idx);
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+        data.votes_total -= data.votes_and_visits.get(&idx).unwrap().0;
+        data.visits_total -= data.votes_and_visits.get(&idx).unwrap().1;
+        data.votes_and_visits.remove(&idx);
+        data.sorted_votes.retain(|x| *x != idx);
+        Ok(())
+    }
+}
+
+impl<S> HasVote<S> for SortedDroppingScheduler<S>
+where
+    S: HasCorpus + HasRand + HasMetadata,
 {
     /// Vote for an input (or VMState)
     fn vote(&self, state: &mut S, idx: usize, increment: usize) {
-        let data = state.metadata_mut().get_mut::<VoteData>().unwrap();
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
 
         // increment votes for the input (or VMState)
         data.votes_total += increment;

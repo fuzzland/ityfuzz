@@ -6,14 +6,15 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 use itertools::Itertools;
-use libafl::{Error, Evaluator, Fuzzer, impl_serdeany};
+use libafl::{Error, Evaluator, Fuzzer};
+use libafl_bolts::{impl_serdeany, Named};
 use libafl::corpus::{Corpus, Testcase};
 use libafl::events::{EventFirer, ProgressReporter};
 use libafl::executors::ExitKind;
 use libafl::feedbacks::Feedback;
 use libafl::inputs::Input;
-use libafl::prelude::{HasClientPerfMonitor, HasMetadata, Named, ObserversTuple, Stage};
-use libafl::state::HasCorpus;
+use libafl::prelude::{HasClientPerfMonitor, HasMetadata, ObserversTuple, Stage, CorpusId};
+use libafl::state::{HasCorpus, UsesState};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
 use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution};
@@ -22,7 +23,7 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::MiddlewareType;
-use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMStagedVMState};
+use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMStagedVMState, EVMQueueExecutor};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::executor::FuzzExecutor;
 use crate::generic_vm::vm_executor::GenericVM;
@@ -33,16 +34,20 @@ use crate::state::HasInfantStateState;
 
 pub struct CoverageStage<OT> {
     pub last_corpus_idx: usize,
-    executor: Rc<RefCell<EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>>>,
+    executor: Rc<RefCell<EVMQueueExecutor>>,
     coverage: Rc<RefCell<Coverage>>,
     call_printer: Rc<RefCell<CallPrinter>>,
     trace_dir: String,
-    pub phantom: std::marker::PhantomData<(OT)>,
+    pub phantom: std::marker::PhantomData<OT>,
+}
+
+impl<OT> UsesState for CoverageStage<OT> {
+    type State = EVMFuzzState;
 }
 
 impl <OT> CoverageStage<OT> {
     pub fn new(
-        executor: Rc<RefCell<EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput>>>,
+        executor: Rc<RefCell<EVMQueueExecutor>>,
         coverage: Rc<RefCell<Coverage>>,
         call_printer: Rc<RefCell<CallPrinter>>,
         work_dir: String,
@@ -63,7 +68,7 @@ impl <OT> CoverageStage<OT> {
 
     fn get_call_seq(vm_state: &EVMStagedVMState, state: &mut EVMFuzzState) -> Vec<(EVMInput, u32)> {
         if let Some(from_idx) = vm_state.trace.from_idx {
-            let corpus_item = state.get_infant_state_state().corpus().get(from_idx);
+            let corpus_item = state.get_infant_state_state().corpus().get(from_idx.into());
             // This happens when full_trace feature is not enabled, the corpus item may be discarded
             if corpus_item.is_err() {
                 return vec![];
@@ -93,28 +98,34 @@ impl <OT> CoverageStage<OT> {
     }
 }
 
-impl<EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, EVMFuzzState, Z> for CoverageStage<OT>
-    where Z: Evaluator<EVMFuzzExecutor<OT>, EM, EVMInput, EVMFuzzState>,
-          EM: ProgressReporter<EVMInput>,
-          OT: ObserversTuple<EVMInput, EVMFuzzState>
+impl <EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, Z> for CoverageStage<OT>
+where
+    Z: Evaluator<EVMFuzzExecutor<OT>, EM, State = Self::State>,
+    EM: ProgressReporter + UsesState<State = Self::State>,
+    OT: ObserversTuple<Self::State>,
 {
     fn perform(&mut self,
                fuzzer: &mut Z,
                executor: &mut EVMFuzzExecutor<OT>,
-               state: &mut EVMFuzzState,
+               state: &mut Self::State,
                manager: &mut EM,
-               corpus_idx: usize
+               corpus_idx: CorpusId,
     ) -> Result<(), Error> {
-        let total = state.corpus().count();
-        if self.last_corpus_idx == total {
+        let last_idx = state.corpus().last();
+        if last_idx.is_none() {
+            return Ok(());
+        }
+        let last_idx = last_idx.unwrap().into();
+        if self.last_corpus_idx == last_idx {
             return Ok(());
         }
 
         let mut exec = self.executor.deref().borrow_mut();
         exec.host.add_middlewares(self.call_printer.clone());
 
-        let meta = state.metadata().get::<BugMetadata>().unwrap().clone();
-        for i in self.last_corpus_idx..total {
+        let meta = state.metadata_map().get::<BugMetadata>().unwrap().clone();
+        let mut current_idx = CorpusId::from(self.last_corpus_idx);
+        while let Some(i) = state.corpus().next(current_idx) {
             self.call_printer.deref().borrow_mut().cleanup();
             let testcase = state.corpus().get(i).unwrap().borrow().clone();
             let last_input = testcase.input().as_ref().expect("Input should be present");
@@ -145,22 +156,24 @@ impl<EM, Z, OT> Stage<EVMFuzzExecutor<OT>, EM, EVMFuzzState, Z> for CoverageStag
             }
 
             self.call_printer.deref().borrow_mut().save_trace(format!("{}/{}", self.trace_dir, i).as_str());
-            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i) {
+            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i.into()) {
                 for id in bug_idx {
                     fs::copy(format!("{}/{}.json", self.trace_dir, i), format!("{}/bug_{}.json", self.trace_dir, id)).unwrap();
                 }
             }
             unsafe { EVAL_COVERAGE = false; }
+
+            current_idx = i;
         }
+
         exec.host.remove_middlewares_by_ty(&MiddlewareType::CallPrinter);
 
-        if self.last_corpus_idx == total {
+        if self.last_corpus_idx == last_idx {
             return Ok(());
         }
 
         self.coverage.deref().borrow_mut().record_instruction_coverage();
-        self.last_corpus_idx = total;
+        self.last_corpus_idx = last_idx;
         Ok(())
     }
 }
-

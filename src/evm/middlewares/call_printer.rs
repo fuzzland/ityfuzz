@@ -6,9 +6,11 @@ use std::io::Write;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_primitives::Bytecode;
@@ -49,6 +51,7 @@ pub struct SingleCall {
     pub input: String,
     pub value: String,
     pub source: Option<SourceMapLocation>,
+    pub results: String
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
@@ -62,6 +65,7 @@ pub struct CallPrinter {
     pub sourcemaps: ProjectSourceMapTy,
     pub current_layer: usize,
     pub results: CallPrinterResult,
+    pub offsets: usize,
 
     entry: bool
 }
@@ -77,6 +81,7 @@ impl CallPrinter {
             current_layer: 0,
             results: Default::default(),
             entry: true,
+            offsets: 0
         }
     }
 
@@ -99,7 +104,7 @@ impl CallPrinter {
     pub fn get_trace(&self) -> String {
         self.results.data.iter().map(|(layer, call)| {
             let padding = (0..*layer).map(|_| "  ").join("");
-            format!("{}[{} -> {}] ({})", padding, call.caller, call.contract, call.input)
+            format!("{}[{} -> {}] ({}) > ({})", padding, call.caller, call.contract, call.input, call.results)
         }).join("\n")
     }
 
@@ -128,23 +133,24 @@ impl CallPrinter {
 }
 
 
-impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
-    where
-        I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-        VS: VMStateT,
-        S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus<I>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for CallPrinter
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    VS: VMStateT,
+    S: State
+    + HasCaller<EVMAddress>
+    + HasCorpus
+    + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+    + HasMetadata
+    + HasCurrentInputIdx
+    + Debug
+    + Clone,
+    SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
         if self.entry {
@@ -164,7 +170,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
                     && let Some(source) = source.get(&interp.program_counter()) {
                     Some(source.clone())
-                } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
+                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
                     if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
                         Some(srcmap.clone())
                     } else {
@@ -173,6 +179,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
                 } else {
                     None
                 },
+                results: "".to_string(),
             }));
         }
 
@@ -241,6 +248,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             },
         ).unwrap_or(vec![]);
 
+        self.offsets = 0;
         self.results.data.push((self.current_layer, SingleCall {
             call_type,
             caller: self.translate_address(caller),
@@ -250,7 +258,7 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
                 && let Some(source) = source.get(&interp.program_counter()) {
                 Some(source.clone())
-            } else if let Some(artifact) = state.metadata_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
+            } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
                 if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
                     Some(srcmap.clone())
                 } else {
@@ -259,19 +267,26 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
             } else {
                 None
             },
+            results: "".to_string(),
         }));
     }
 
     unsafe fn on_return(
         &mut self,
         interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S>,
+        host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
+        by: &Bytes
     ) {
+        self.offsets += 1;
+        let l = self.results.data.len();
+        self.results.data[l - self.offsets]
+            .1.results = hex::encode(by);
+
         self.current_layer -= 1;
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S>, state: &mut S) {
+    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
 
     }
 
@@ -279,4 +294,3 @@ impl<I, VS, S> Middleware<VS, I, S> for CallPrinter
         MiddlewareType::CallPrinter
     }
 }
-

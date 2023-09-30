@@ -6,16 +6,17 @@ use crate::state_input::StagedVMState;
 use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
 use libafl::inputs::Input;
 use libafl::monitors::ClientPerfMonitor;
-use libafl::prelude::{
-    current_nanos, HasMetadata, NamedSerdeAnyMap, Rand, RomuDuoJrRand, Scheduler, SerdeAnyMap,
-    StdRand,
-};
+use libafl::prelude::{HasMetadata, Scheduler, UsesInput, HasTestcase, CorpusId};
+use libafl_bolts::{current_nanos, bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand}};
+use std::borrow::BorrowMut;
+use std::cell::{Ref, RefMut};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::time::Duration;
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
-    HasSolutions, State,
+    HasSolutions, State, HasLastReportTime,
 };
 
 use primitive_types::H160;
@@ -46,15 +47,15 @@ where
     /// If the corpus is not empty, return Some((index of VMState in corpus, VMState))
     fn get_infant_state<SC>(
         &mut self,
-        scheduler: &SC,
+        scheduler: &mut SC,
     ) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
     where
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>;
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>;
 
     /// Add a VMState to the infant state corpus
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC, parent_idx: usize) -> usize
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &mut SC, parent_idx: usize) -> usize
     where
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>;
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>;
 }
 
 /// Trait providing caller/address functions
@@ -181,7 +182,45 @@ where
     /// Mapping between function hash with the contract addresses that have the function, required for implementing [`HasHashToAddress`] trait
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>,
 
+    /// The last time we reported progress (if available/used).
+    /// This information is used by fuzzer `maybe_report_progress` and updated by event_manager.
+    last_report_time: Option<Duration>,
+
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
+}
+
+impl<VI, VS, Loc, Addr, Out, CI> UsesInput for FuzzState<VI, VS, Loc, Addr, Out, CI>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr, CI> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    type Input = VI;
+}
+
+impl<VI, VS, Loc, Addr, Out, CI> HasTestcase for FuzzState<VI, VS, Loc, Addr, Out, CI>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr, CI> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.corpus().get(id)?.borrow())
+    }
+
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.corpus().get(id)?.borrow_mut())
+    }
 }
 
 impl<VI, VS, Loc, Addr, Out, CI> FuzzState<VI, VS, Loc, Addr, Out, CI>
@@ -217,12 +256,13 @@ where
             rand_generator: RomuDuoJrRand::with_seed(seed),
             max_size: 20,
             hash_to_address: Default::default(),
+            last_report_time: None,
             phantom: Default::default(),
         }
     }
 
     /// Add an input testcase to the input corpus
-    pub fn add_tx_to_corpus(&mut self, input: Testcase<VI>) -> Result<usize, Error> {
+    pub fn add_tx_to_corpus(&mut self, input: Testcase<VI>) -> Result<CorpusId, Error> {
         self.txn_corpus.add(input)
     }
 }
@@ -301,6 +341,36 @@ where
     pub rand_generator: StdRand,
 }
 
+impl<Loc, Addr, VS, CI> UsesInput for InfantStateState<Loc, Addr, VS, CI>
+where
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    type Input = StagedVMState<Loc, Addr, VS, CI>;
+}
+
+impl<Loc, Addr, VS, CI> HasTestcase for InfantStateState<Loc, Addr, VS, CI>
+where
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.corpus().get(id)?.borrow())
+    }
+
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
+    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
+        Ok(self.corpus().get(id)?.borrow_mut())
+    }
+}
+
 pub trait HasParent {
     fn get_parent_idx(&self) -> usize;
     fn set_parent_idx(&mut self, idx: usize);
@@ -364,7 +434,7 @@ where
 {
 }
 
-impl<Loc, Addr, VS, CI> HasCorpus<StagedVMState<Loc, Addr, VS, CI>> for InfantStateState<Loc, Addr, VS, CI>
+impl<Loc, Addr, VS, CI> HasCorpus for InfantStateState<Loc, Addr, VS, CI>
 where
     VS: Default + VMStateT + DeserializeOwned,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -389,11 +459,11 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    fn metadata(&self) -> &SerdeAnyMap {
+    fn metadata_map(&self) -> &SerdeAnyMap {
         &self.metadata
     }
 
-    fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
+    fn metadata_map_mut(&mut self) -> &mut SerdeAnyMap {
         &mut self.metadata
     }
 }
@@ -428,10 +498,10 @@ where
     /// Get a infant state from the infant state corpus using the scheduler
     fn get_infant_state<SC>(
         &mut self,
-        scheduler: &SC,
+        scheduler: &mut SC,
     ) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
     where
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
@@ -443,14 +513,14 @@ where
             .unwrap()
             .borrow_mut();
 
-        Some((idx, state.input().clone().unwrap()))
+        Some((idx.into(), state.input().clone().unwrap()))
     }
 
     /// Add a new infant state to the infant state corpus
     /// and setup the scheduler
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &SC, parent_idx: usize) -> usize
+    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &mut SC, parent_idx: usize) -> usize
     where
-        SC: Scheduler<StagedVMState<Loc, Addr, VS, CI>, InfantStateState<Loc, Addr, VS, CI>>,
+        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     {
         let idx = self
             .infant_states_state
@@ -461,7 +531,7 @@ where
         scheduler
             .on_add(&mut self.infant_states_state, idx)
             .expect("Failed to setup scheduler");
-        idx
+        idx.into()
     }
 }
 
@@ -573,17 +643,17 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the metadata
-    fn metadata(&self) -> &SerdeAnyMap {
+    fn metadata_map(&self) -> &SerdeAnyMap {
         &self.metadata
     }
 
     /// Get the mutable metadata
-    fn metadata_mut(&mut self) -> &mut SerdeAnyMap {
+    fn metadata_map_mut(&mut self) -> &mut SerdeAnyMap {
         &mut self.metadata
     }
 }
 
-impl<VI, VS, Loc, Addr, Out, CI> HasCorpus<VI> for FuzzState<VI, VS, Loc, Addr, Out, CI>
+impl<VI, VS, Loc, Addr, Out, CI> HasCorpus for FuzzState<VI, VS, Loc, Addr, Out, CI>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
@@ -608,7 +678,7 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr, Out, CI> HasSolutions<VI> for FuzzState<VI, VS, Loc, Addr, Out, CI>
+impl<VI, VS, Loc, Addr, Out, CI> HasSolutions for FuzzState<VI, VS, Loc, Addr, Out, CI>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
@@ -690,12 +760,12 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the named metadata
-    fn named_metadata(&self) -> &NamedSerdeAnyMap {
+    fn named_metadata_map(&self) -> &NamedSerdeAnyMap {
         &self.named_metadata
     }
 
     /// Get the mutable named metadata
-    fn named_metadata_mut(&mut self) -> &mut NamedSerdeAnyMap {
+    fn named_metadata_map_mut(&mut self) -> &mut NamedSerdeAnyMap {
         &mut self.named_metadata
     }
 }
@@ -709,4 +779,26 @@ where
     Out: Serialize + DeserializeOwned + Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
+}
+
+impl<VI, VS, Loc, Addr, Out, CI> HasLastReportTime for FuzzState<VI, VS, Loc, Addr, Out, CI>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr, CI> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    /// The last time we reported progress,if available/used.
+    /// This information is used by fuzzer `maybe_report_progress`.
+    fn last_report_time(&self) -> &Option<Duration> {
+        &self.last_report_time
+    }
+
+    /// The last time we reported progress,if available/used (mutable).
+    /// This information is used by fuzzer `maybe_report_progress`.
+    fn last_report_time_mut(&mut self) -> &mut Option<Duration> {
+        &mut self.last_report_time
+    }
 }

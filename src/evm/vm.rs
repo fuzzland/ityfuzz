@@ -1,6 +1,6 @@
 /// EVM executor implementation
 use itertools::Itertools;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -24,7 +24,7 @@ use crate::input::{ConciseSerde, VMInputT};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
 
-use libafl::prelude::{HasMetadata, HasRand};
+use libafl::prelude::{HasMetadata, HasRand, UsesInput};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State};
 
@@ -32,8 +32,11 @@ use primitive_types::{H256, U512};
 use rand::random;
 
 use revm::db::BenchmarkDB;
-use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory, Stack};
-use revm_interpreter::InstructionResult::ControlLeak;
+use revm_interpreter::InstructionResult::{ArbitraryExternalCallAddressBounded, ControlLeak};
+use revm_interpreter::{
+    BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory,
+    Stack,
+};
 use revm_primitives::{Bytecode, LatestSpec};
 
 use core::ops::Range;
@@ -41,23 +44,24 @@ use std::any::Any;
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
-    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP,
-    RET_OFFSET, RET_SIZE, STATE_CHANGE, WRITE_MAP,
+    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP, RET_OFFSET, RET_SIZE, STATE_CHANGE,
+    WRITE_MAP,
 };
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMAddress, EVMU256};
 use crate::evm::uniswap::generate_uniswap_router_call;
+use crate::evm::vm::Constraint::{NoLiquidation, Value};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
+use crate::invoke_middlewares;
 use crate::r#const::DEBUG_PRINT_PERCENT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use crate::evm::vm::Constraint::NoLiquidation;
-use crate::{invoke_middlewares};
+use serde::{Deserialize, Serialize};
 
+pub const MEM_LIMIT: u64 = 10 * 1024;
 const MAX_POST_EXECUTION: usize = 10;
 
 /// Get the token context from the flashloan middleware,
@@ -75,12 +79,24 @@ macro_rules! get_token_ctx {
     };
 }
 
+/// Determine whether a call is successful
+#[macro_export]
+macro_rules! is_call_success {
+    ($ret: expr) => {
+        $ret == InstructionResult::Return
+            || $ret == InstructionResult::Stop
+            || $ret == ControlLeak
+            || $ret == InstructionResult::SelfDestruct
+    };
+}
+
 /// A post execution constraint
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Constraint {
     Caller(EVMAddress),
     Contract(EVMAddress),
-    NoLiquidation
+    Value(EVMU256),
+    NoLiquidation,
 }
 
 /// A post execution context
@@ -119,14 +135,12 @@ pub struct SinglePostExecution {
     /// Value send to contract.
     pub value: EVMU256,
 
-
     /// Post execution related information
     /// Output Length
     pub output_len: usize,
     /// Output Offset
     pub output_offset: usize,
 }
-
 
 impl SinglePostExecution {
     pub fn hash(&self, hasher: &mut impl Hasher) {
@@ -156,22 +170,16 @@ impl SinglePostExecution {
     }
 
     fn get_interpreter(&self, bytecode: Arc<BytecodeLocked>) -> Interpreter {
-        let contract = Contract::new_with_context_analyzed(
-            self.input.clone(),
-            bytecode,
-            &self.get_call_ctx(),
-        );
+        let contract =
+            Contract::new_with_context_analyzed(self.input.clone(), bytecode, &self.get_call_ctx());
 
         let mut stack = Stack::new();
         for v in &self.stack.data {
             stack.push(v.clone());
         }
 
-
         Interpreter {
-            instruction_pointer: unsafe {
-                contract.bytecode.as_ptr().add(self.program_counter)
-            },
+            instruction_pointer: unsafe { contract.bytecode.as_ptr().add(self.program_counter) },
             instruction_result: self.instruction_result,
             gas: Gas::new(0),
             memory: self.memory.clone(),
@@ -180,6 +188,8 @@ impl SinglePostExecution {
             return_range: self.return_range.clone(),
             is_static: self.is_static,
             contract,
+            #[cfg(feature = "memory_limit")]
+            memory_limit: MEM_LIMIT,
         }
     }
 
@@ -218,10 +228,13 @@ impl PostExecutionCtx {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct EVMState {
     /// State of the EVM, which is mapping of EVMU256 slot to EVMU256 value for each contract
     pub state: HashMap<EVMAddress, HashMap<EVMU256, EVMU256>>,
+
+    /// Balance of addresses
+    pub balance: HashMap<EVMAddress, EVMU256>,
 
     /// Post execution context
     /// If control leak happens, we add the post execution context to the VM state,
@@ -245,8 +258,9 @@ pub struct EVMState {
     /// bug type call in solidity type
     #[serde(skip)]
     pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
+    #[serde(skip)]
+    pub arbitrary_calls: HashSet<(EVMAddress, EVMAddress, usize)>,
 }
-
 
 pub trait EVMStateT {
     fn get_constraints(&self) -> Vec<Constraint>;
@@ -257,22 +271,6 @@ impl EVMStateT for EVMState {
         match self.post_execution.last() {
             Some(i) => i.constraints.clone(),
             None => vec![],
-        }
-    }
-}
-
-
-impl Default for EVMState {
-    /// Default VM state, containing empty state, no post execution context,
-    /// and no flashloan usage
-    fn default() -> Self {
-        Self {
-            state: HashMap::new(),
-            post_execution: Vec::new(),
-            flashloan_data: FlashloanData::new(),
-            bug_hit: false,
-            self_destruct: Default::default(),
-            typed_bug: Default::default(),
         }
     }
 }
@@ -303,7 +301,13 @@ impl VMStateT for EVMState {
 
     /// Get length needed for return data length of the call that leads to control leak
     fn get_post_execution_needed_len(&self) -> usize {
-        self.post_execution.last().unwrap().pes.first().unwrap().output_len
+        self.post_execution
+            .last()
+            .unwrap()
+            .pes
+            .first()
+            .unwrap()
+            .output_len
     }
 
     /// Get the PC of last post execution context
@@ -339,9 +343,7 @@ impl VMStateT for EVMState {
     fn is_subset_of(&self, other: &Self) -> bool {
         self.state.iter().all(|(k, v)| {
             other.state.get(k).map_or(false, |v2| {
-                v.iter().all(|(k, v)| {
-                    v2.get(k).map_or(false, |v2| v == v2)
-                })
+                v.iter().all(|(k, v)| v2.get(k).map_or(false, |v2| v == v2))
             })
         })
     }
@@ -350,14 +352,7 @@ impl VMStateT for EVMState {
 impl EVMState {
     /// Create a new EVM state, containing empty state, no post execution context
     pub(crate) fn new() -> Self {
-        Self {
-            state: HashMap::new(),
-            post_execution: vec![],
-            flashloan_data: FlashloanData::new(),
-            bug_hit: false,
-            self_destruct: Default::default(),
-            typed_bug: Default::default(),
-        }
+        Self::default()
     }
 
     /// Get all storage slots of a specific contract
@@ -374,6 +369,16 @@ impl EVMState {
     pub fn insert(&mut self, address: EVMAddress, storage: HashMap<EVMU256, EVMU256>) {
         self.state.insert(address, storage);
     }
+
+    /// Get balance of a specific address
+    pub fn get_balance(&self, address: &EVMAddress) -> Option<&EVMU256> {
+        self.balance.get(address)
+    }
+
+    /// Set balance of a specific address
+    pub fn set_balance(&mut self, address: EVMAddress, balance: EVMU256) {
+        self.balance.insert(address, balance);
+    }
 }
 
 /// Is current EVM execution fast call
@@ -385,26 +390,27 @@ pub static mut IS_FAST_CALL_STATIC: bool = false;
 
 /// EVM executor, wrapper of revm
 #[derive(Debug, Clone)]
-pub struct EVMExecutor<I, S, VS, CI>
+pub struct EVMExecutor<I, S, VS, CI, SC>
 where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
 {
     /// Host providing the blockchain environment (e.g., writing/reading storage), needed by revm
-    pub host: FuzzHost<VS, I, S>,
+    pub host: FuzzHost<VS, I, S, SC>,
     /// [Depreciated] Deployer address
-    deployer: EVMAddress,
+    pub deployer: EVMAddress,
     /// Known arbitrary (caller,pc)
     pub _known_arbitrary: HashSet<(EVMAddress, usize)>,
     phandom: PhantomData<(I, S, VS, CI)>,
 }
 
-
 pub fn is_reverted_or_control_leak(ret: &InstructionResult) -> bool {
     match *ret {
-        InstructionResult::Return | InstructionResult::Stop
-        | InstructionResult::SelfDestruct => false,
+        InstructionResult::Return | InstructionResult::Stop | InstructionResult::SelfDestruct => {
+            false
+        }
         _ => true,
     }
 }
@@ -427,12 +433,12 @@ pub struct IntermediateExecutionResult {
     pub memory: Vec<u8>,
 }
 
-impl<VS, I, S, CI> EVMExecutor<I, S, VS, CI>
+impl<VS, I, S, CI, SC> EVMExecutor<I, S, VS, CI, SC>
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
@@ -440,12 +446,14 @@ where
         + Default
         + Clone
         + Debug
+        + UsesInput<Input = I>
         + 'static,
     VS: Default + VMStateT + 'static,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+    SC: Scheduler<State = S> + Clone + 'static,
 {
     /// Create a new EVM executor given a host and deployer address
-    pub fn new(fuzz_host: FuzzHost<VS, I, S>, deployer: EVMAddress) -> Self {
+    pub fn new(fuzz_host: FuzzHost<VS, I, S, SC>, deployer: EVMAddress) -> Self {
         Self {
             host: fuzz_host,
             deployer,
@@ -473,15 +481,17 @@ where
         data: Bytes,
         input: &I,
         post_exec: Option<SinglePostExecution>,
-        mut state: &mut S,
-        cleanup: bool
+        state: &mut S,
+        cleanup: bool,
     ) -> IntermediateExecutionResult {
         // Initial setups
         if cleanup {
             self.host.coverage_changed = false;
             self.host.bug_hit = false;
             self.host.current_typed_bug = vec![];
+            self.host.jumpi_trace = 37;
             self.host.current_self_destructs = vec![];
+            self.host.current_arbitrary_calls = vec![];
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -496,13 +506,13 @@ where
         let mut repeats = input.get_repeat();
 
         // Get the bytecode
-        let mut bytecode = match self
-            .host
-            .code
-            .get(&call_ctx.code_address) {
+        let mut bytecode = match self.host.code.get(&call_ctx.code_address) {
             Some(i) => i.clone(),
             None => {
-                println!("no code @ {:?}, did you forget to deploy?", call_ctx.code_address);
+                println!(
+                    "no code @ {:?}, did you forget to deploy?",
+                    call_ctx.code_address
+                );
                 return IntermediateExecutionResult {
                     output: Bytes::new(),
                     new_state: EVMState::default(),
@@ -526,17 +536,17 @@ where
                 // we remove the first 4 bytes because the first 4 bytes is the function hash (00000000 here)
                 interp.return_data_buffer = data.slice(4..);
                 let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
-                interp
-                    .memory
-                    .set(post_exec_ctx.output_offset, &interp.return_data_buffer[..target_len]);
+                interp.memory.set(
+                    post_exec_ctx.output_offset,
+                    &interp.return_data_buffer[..target_len],
+                );
                 interp
             }
         } else {
-
             // if there is no post execution context, then we create the interpreter from the
             // beginning
             let call = Contract::new_with_context_analyzed(data, bytecode, call_ctx);
-            Interpreter::new(call, 1e10 as u64, false)
+            Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT)
         };
 
         // Execute the contract for `repeats` times or until revert
@@ -547,12 +557,12 @@ where
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
-            if r == InstructionResult::Revert {
+            if !is_call_success!(r) {
                 interp.return_range = 0..0;
                 break;
             }
         }
-        if r != InstructionResult::Revert {
+        if is_call_success!(r) {
             r = self.host.run_inspect(&mut interp, state);
         }
 
@@ -629,7 +639,7 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new(call, 1e10 as u64, false);
+        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
         let ret = self.host.run_inspect(&mut interp, state);
         unsafe {
             IS_FAST_CALL = false;
@@ -684,7 +694,7 @@ where
                         input,
                         Some(pe),
                         state,
-                        cleanup
+                        cleanup,
                     );
                     data = Bytes::from([vec![0; 4], res.output.to_vec()].concat());
                     local_res = Some(res);
@@ -711,11 +721,15 @@ where
                     input,
                     None,
                     state,
-                    cleanup
+                    cleanup,
                 )
             };
-            let need_step = exec_res.new_state.post_execution.len() > 0 && exec_res.new_state.post_execution.last().unwrap().must_step;
-            if (exec_res.ret == InstructionResult::Return || exec_res.ret == InstructionResult::Stop) && need_step {
+            let need_step = exec_res.new_state.post_execution.len() > 0
+                && exec_res.new_state.post_execution.last().unwrap().must_step;
+            if (exec_res.ret == InstructionResult::Return
+                || exec_res.ret == InstructionResult::Stop)
+                && need_step
+            {
                 is_step = true;
                 data = Bytes::from([vec![0; 4], exec_res.output.to_vec()].concat());
                 // we dont need to clean up bug info and state info
@@ -727,7 +741,7 @@ where
         }
         let mut r = r.unwrap();
         match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => unsafe {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => unsafe {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -736,38 +750,56 @@ where
                         additional_info: None,
                     };
                 }
-                let leak_ctx = self.host.leak_ctx
-                    .clone();
+                let leak_ctx = self.host.leak_ctx.clone();
                 r.new_state.post_execution.push(PostExecutionCtx {
                     pes: leak_ctx,
                     must_step: match r.ret {
                         ControlLeak => false,
-                        InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => true,
+                        InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => true,
                         _ => unreachable!(),
                     },
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
-                        InstructionResult::ArbitraryExternalCallAddressBounded(caller, target) => {
-                            vec![Constraint::Caller(caller), Constraint::Contract(target), NoLiquidation]
+                        InstructionResult::ArbitraryExternalCallAddressBounded(
+                            caller,
+                            target,
+                            value,
+                        ) => {
+                            vec![
+                                Constraint::Caller(caller),
+                                Constraint::Contract(target),
+                                Value(value),
+                                NoLiquidation,
+                            ]
                         }
                         _ => unreachable!(),
                     },
-
                 });
             },
             _ => {}
         }
 
         r.new_state.typed_bug = HashSet::from_iter(
-            vm_state.typed_bug.iter().cloned().chain(
-                self.host.current_typed_bug.iter().cloned()
-            )
+            vm_state
+                .typed_bug
+                .iter()
+                .cloned()
+                .chain(self.host.current_typed_bug.iter().cloned()),
         );
         r.new_state.self_destruct = HashSet::from_iter(
-            vm_state.self_destruct.iter().cloned().chain(
-                self.host.current_self_destructs.iter().cloned()
-            )
+            vm_state
+                .self_destruct
+                .iter()
+                .cloned()
+                .chain(self.host.current_self_destructs.iter().cloned()),
+        );
+        r.new_state.arbitrary_calls = HashSet::from_iter(
+            vm_state
+                .arbitrary_calls
+                .iter()
+                .cloned()
+                .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
         // println!("r.ret: {:?}", r.ret);
@@ -776,9 +808,11 @@ where
             ExecutionResult {
                 output: r.output.to_vec(),
                 reverted: match r.ret {
-                    InstructionResult::Return | InstructionResult::Stop | InstructionResult::ControlLeak
+                    InstructionResult::Return
+                    | InstructionResult::Stop
+                    | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_,_) => false,
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => false,
                     _ => true,
                 },
                 new_state: StagedVMState::new_with_state(
@@ -799,7 +833,7 @@ where
         &mut self,
         input: &I,
         state: &mut S,
-        middleware: Rc<RefCell<dyn Middleware<VS, I, S>>>,
+        middleware: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>,
     ) {
         self.host.add_middlewares(middleware.clone());
         self.execute(input, state);
@@ -809,13 +843,14 @@ where
 
 pub static mut IN_DEPLOY: bool = false;
 
-impl<VS, I, S, CI> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
-    for EVMExecutor<I, S, VS, CI>
+impl<VS, I, S, CI, SC>
+    GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
+    for EVMExecutor<I, S, VS, CI, SC>
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
-        + HasCorpus<I>
+        + HasCorpus
         + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
         + HasMetadata
         + HasCaller<EVMAddress>
@@ -823,9 +858,11 @@ where
         + Default
         + Clone
         + Debug
+        + UsesInput<Input = I>
         + 'static,
     VS: VMStateT + Default + 'static,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+    SC: Scheduler<State = S> + Clone + 'static,
 {
     /// Deploy a contract
     fn deploy(
@@ -835,6 +872,7 @@ where
         deployed_address: EVMAddress,
         state: &mut S,
     ) -> Option<EVMAddress> {
+        println!("deployer = 0x{} ", hex::encode(self.deployer));
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
@@ -847,7 +885,8 @@ where
         unsafe {
             IN_DEPLOY = true;
         }
-        let mut interp = Interpreter::new(deployer, 1e10 as u64, false);
+        let mut interp =
+            Interpreter::new_with_memory_limit(deployer, 1e10 as u64, false, MEM_LIMIT);
         let mut dummy_state = S::default();
         let r = self.host.run_inspect(&mut interp, &mut dummy_state);
         unsafe {
@@ -865,7 +904,13 @@ where
         let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
         unsafe {
-            invoke_middlewares!(&mut contract_code, deployed_address, &mut self.host, state, on_insert);
+            invoke_middlewares!(
+                &mut contract_code,
+                deployed_address,
+                &mut self.host,
+                state,
+                on_insert
+            );
         }
         self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
@@ -932,9 +977,7 @@ where
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: res.ret != InstructionResult::Return
-                                    && res.ret != InstructionResult::Stop
-                                    && res.ret != InstructionResult::ControlLeak,
+                                reverted: !is_call_success!(res.ret),
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
@@ -957,9 +1000,7 @@ where
                 unreachable!("liquidate should be handled by middleware");
             }
             EVMInputTy::ABI => self.execute_abi(input, state),
-            EVMInputTy::ArbitraryCallBoundedAddr => {
-                self.execute_abi(input, state)
-            },
+            EVMInputTy::ArbitraryCallBoundedAddr => self.execute_abi(input, state),
         }
     }
 
@@ -977,12 +1018,15 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
             self.host.current_self_destructs = vec![];
+            self.host.current_arbitrary_calls = vec![];
             self.host.call_count = 0;
+            self.host.jumpi_trace = 37;
             self.host.current_typed_bug = vec![];
             self.host.randomness = vec![9];
         }
 
-        let res = data.iter()
+        let res = data
+            .iter()
             .map(|(address, by)| {
                 let ctx = CallContext {
                     address: *address,
@@ -993,9 +1037,10 @@ where
                 };
                 let code = self.host.code.get(&address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
-                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let mut interp =
+                    Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if ret == InstructionResult::Revert {
+                if !is_call_success!(ret) {
                     vec![]
                 } else {
                     interp.return_value().to_vec()
@@ -1044,7 +1089,8 @@ mod tests {
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
     use bytes::Bytes;
-    use libafl::prelude::{tuple_list, StdScheduler};
+    use libafl::prelude::StdScheduler;
+    use libafl_bolts::tuples::tuple_list;
     use revm_primitives::Bytecode;
     use std::cell::RefCell;
     use std::path::Path;
@@ -1058,10 +1104,11 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput> = EVMExecutor::new(
-            FuzzHost::new(Arc::new(StdScheduler::new()), "work_dir".to_string()),
-            generate_random_address(&mut state),
-        );
+        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(
+                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
+                generate_random_address(&mut state),
+            );
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 

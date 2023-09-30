@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IWMATIC} from "./interfaces/IWMATIC.sol";
@@ -65,7 +65,6 @@ abstract contract ReentrancyGuard {
         return _status == _ENTERED;
     }
 }
-
 
 contract WMATICV2 is IWMATICV2, ReentrancyGuard {
     /*
@@ -218,5 +217,4 @@ contract WMATICV2 is IWMATICV2, ReentrancyGuard {
     function _updateBalanceOfMatic(uint256 amount, bool add) internal {
         _balanceOfMatic = add ? _balanceOfMatic += amount : _balanceOfMatic -= amount;
     }
-
 }
