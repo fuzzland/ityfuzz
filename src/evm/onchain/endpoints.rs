@@ -225,6 +225,9 @@ pub struct OnChainConfig {
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
     pub block_number: String,
+    pub timestamp: Option<String>,
+    pub coinbase: Option<String>,
+    pub gaslimit: Option<String>,
     pub block_hash: Option<String>,
 
     pub etherscan_api_key: Vec<String>,
@@ -274,6 +277,9 @@ impl OnChainConfig {
             } else {
                 format!("0x{:x}", block_number)
             },
+            timestamp: None,
+            coinbase: None,
+            gaslimit: None,
             block_hash: None,
             etherscan_api_key: vec![],
             etherscan_base,
@@ -646,6 +652,75 @@ impl OnChainConfig {
         );
         self.balance_cache.insert(address, balance);
         balance
+    }
+
+    pub fn fetch_blk_timestamp(&mut self) -> EVMU256 {
+        if self.timestamp == None {
+            self.timestamp = {
+                let mut params = String::from("[");
+                params.push_str(&format!("\"{}\",false", self.block_number));
+                params.push_str("]");
+                let res = self._request("eth_getBlockByNumber".to_string(), params);
+                match res {
+                    Some(res) => {
+                        let blk_timestamp = res["timestamp"]
+                            .as_str()
+                            .expect("fail to find block timestamp")
+                            .to_string();
+                        Some(blk_timestamp)
+                    }
+                    None => panic!("fail to get block timestamp"),
+                }
+            }
+        }
+        let timestamp = EVMU256::from_str(&self.timestamp.as_ref().unwrap()).unwrap();
+        timestamp
+    }
+
+    pub fn fetch_blk_coinbase(&mut self) -> EVMAddress {
+        if self.coinbase == None {
+            self.coinbase = {
+                let mut params = String::from("[");
+                params.push_str(&format!("\"{}\",false", self.block_number));
+                params.push_str("]");
+                let res = self._request("eth_getBlockByNumber".to_string(), params);
+                match res {
+                    Some(res) => {
+                        let blk_coinbase = res["miner"]
+                            .as_str()
+                            .expect("fail to find block coinbase")
+                            .to_string();
+                        Some(blk_coinbase)
+                    }
+                    None => panic!("fail to get block coinbase"),
+                }
+            }
+        }
+        let coinbase = EVMAddress::from_str(&self.coinbase.as_ref().unwrap()).unwrap();
+        coinbase
+    }
+
+    pub fn fetch_blk_gaslimit(&mut self) -> EVMU256 {
+        if self.gaslimit == None {
+            self.gaslimit = {
+                let mut params = String::from("[");
+                params.push_str(&format!("\"{}\",false", self.block_number));
+                params.push_str("]");
+                let res = self._request("eth_getBlockByNumber".to_string(), params);
+                match res {
+                    Some(res) => {
+                        let blk_gaslimit = res["gasLimit"]
+                            .as_str()
+                            .expect("fail to find block coinbase")
+                            .to_string();
+                        Some(blk_gaslimit)
+                    }
+                    None => panic!("fail to get block coinbase"),
+                }
+            }
+        }
+        let gaslimit = EVMU256::from_str(&self.gaslimit.as_ref().unwrap()).unwrap();
+        gaslimit
     }
 
     pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {

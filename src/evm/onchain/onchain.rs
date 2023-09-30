@@ -33,8 +33,8 @@ use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use itertools::Itertools;
-use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
+use revm_interpreter::{Interpreter, Host};
+use revm_primitives::{Bytecode, U256};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -239,8 +239,8 @@ where
                     ),
                 };
             }
-            // BALANCE
             #[cfg(feature = "real_balance")]
+            // BALANCE
             0x31 => {
                 let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
                 println!("onchain balance for {:?}", address);
@@ -254,6 +254,39 @@ where
                 println!("onchain selfbalance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
+            }
+            #[cfg(feature = "real_block_env")]
+            // COINBASE
+            0x41 => {
+                if host.env().block.coinbase == EVMAddress::zero() {
+                    host.env().block.coinbase = self.endpoint.fetch_blk_coinbase();
+                }
+            }
+            #[cfg(feature = "real_block_env")]
+            // TIMESTAMP
+            0x42 => {
+                if host.env().block.timestamp == EVMU256::from(1){
+                    host.env().block.timestamp = self.endpoint.fetch_blk_timestamp();
+                }
+            }
+            #[cfg(feature = "real_block_env")]
+            // NUMBER
+            0x43 => {
+                if host.env().block.number == EVMU256::ZERO{
+                    host.env().block.number = EVMU256::from_str(&self.endpoint.block_number).unwrap();
+                }
+            }
+            #[cfg(feature = "real_block_env")]
+            // GASLIMIT
+            0x45 => {
+                if host.env().block.gas_limit == U256::MAX {
+                    host.env().block.gas_limit = self.endpoint.fetch_blk_gaslimit();
+                }
+            }
+            #[cfg(feature = "real_block_env")]
+            // CHAINID
+            0x46 => {
+                host.env().tx.chain_id = Some(self.endpoint.chain_id as u64);
             }
             // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
