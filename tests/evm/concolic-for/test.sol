@@ -5,9 +5,9 @@ import "../../../solidity_utils/lib.sol";
 
 contract main {
     // solution: a = 1
-    function process(uint256[16] calldata x) public {
-        for (uint256 i = 0; i < 16; i++) {
-            require(x[i] == (i + 1) * 255);
+    function pwn(uint256[7] calldata code) public {
+        for (uint i = 0; i < 7; i++) {
+            assert(1337 * i < code[i] && code[i] < 1337 * (i + 1));
         }
         typed_bug("0x3322");
     }

@@ -40,7 +40,7 @@ use lazy_static::lazy_static;
 
 
 lazy_static! {
-    static ref ALREADY_SOLVED: RwLock<HashSet<(usize, usize)>> = RwLock::new(HashSet::new());
+    static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -570,7 +570,6 @@ pub struct ConcolicHost<I, VS> {
 
     pub ctxs: Vec<ConcolicCallCtx>,
     // For current PC, the number of times it has been visited
-    pub solve_map: HashMap<usize, usize>,
     pub phantom: PhantomData<(I, VS)>,
 }
 
@@ -585,7 +584,6 @@ impl<I, VS> ConcolicHost<I, VS> {
             testcase_ref,
             phantom: Default::default(),
             ctxs: vec![],
-            solve_map: Default::default(),
         }
     }
 
@@ -1191,25 +1189,23 @@ where
                     stack_bv!(1)
                 };
 
-                let idx = interp.program_counter() % MAP_SIZE;
-                let nth = *self.solve_map.entry(idx).and_modify(|e| *e += 1).or_insert(1);
-
-                #[cfg(feature = "z3_debug")]
-                println!("to solve {:?} / {:?}", idx, nth);
-
-                if !real_path_constraint.is_concrete() && !ALREADY_SOLVED.read().expect("concolic crashed").contains(&(idx, nth)) {
+                if !real_path_constraint.is_concrete() {
                     let intended_path_constraint = real_path_constraint.clone().lnot();
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
-                    self.constraints.push(intended_path_constraint);
+                    let constraint_hash = intended_path_constraint.pretty_print_str();
 
-                    solutions.extend(self.solve());
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] Solutions: {:?}", solutions);
-                    self.constraints.pop();
+                    if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
+                        self.constraints.push(intended_path_constraint);
+
+                        solutions.extend(self.solve());
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] Solutions: {:?}", solutions);
+                        self.constraints.pop();
+
+                        ALREADY_SOLVED.write().expect("concolic crashed").insert(constraint_hash);
+                    }
                 }
-
-                ALREADY_SOLVED.write().expect("concolic crashed").insert((idx, nth));
 
                 // jumping only happens if the second element is false
                 if !real_path_constraint.is_concrete() {
