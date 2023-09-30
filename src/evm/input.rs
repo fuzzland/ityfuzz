@@ -532,6 +532,7 @@ impl EVMInput {
             return MutationResult::Skipped;
         } else {
             input.set_caller(caller);
+            input.get_vm_env_mut().tx.caller = caller;
             MutationResult::Mutated
         }
     }
