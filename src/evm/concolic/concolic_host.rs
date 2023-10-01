@@ -17,7 +17,8 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::state::{HasCorpus, State};
 
 use revm_interpreter::{Interpreter, Host};
-use revm_primitives::{Bytecode, HashMap};
+use revm_primitives::{Bytecode};
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -25,7 +26,7 @@ use std::borrow::Borrow;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use itertools::Itertools;
 
@@ -35,8 +36,12 @@ use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
 use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
+use lazy_static::lazy_static;
 
-pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
+
+lazy_static! {
+    static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
@@ -564,6 +569,7 @@ pub struct ConcolicHost<I, VS> {
     pub testcase_ref: Arc<EVMInput>,
 
     pub ctxs: Vec<ConcolicCallCtx>,
+    // For current PC, the number of times it has been visited
     pub phantom: PhantomData<(I, VS)>,
 }
 
@@ -1183,18 +1189,24 @@ where
                     stack_bv!(1)
                 };
 
-                let idx = (interp.program_counter() * (intended_jmp_dest as usize)) % MAP_SIZE;
-                if JMP_MAP[idx] == 0 && !real_path_constraint.is_concrete() {
+                if !real_path_constraint.is_concrete() {
                     let intended_path_constraint = real_path_constraint.clone().lnot();
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
-                    self.constraints.push(intended_path_constraint);
+                    let constraint_hash = intended_path_constraint.pretty_print_str();
 
-                    solutions.extend(self.solve());
-                    #[cfg(feature = "z3_debug")]
-                    println!("[concolic] Solutions: {:?}", solutions);
-                    self.constraints.pop();
+                    if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
+                        self.constraints.push(intended_path_constraint);
+
+                        solutions.extend(self.solve());
+                        #[cfg(feature = "z3_debug")]
+                        println!("[concolic] Solutions: {:?}", solutions);
+                        self.constraints.pop();
+
+                        ALREADY_SOLVED.write().expect("concolic crashed").insert(constraint_hash);
+                    }
                 }
+
                 // jumping only happens if the second element is false
                 if !real_path_constraint.is_concrete() {
                     self.constraints.push(real_path_constraint);
