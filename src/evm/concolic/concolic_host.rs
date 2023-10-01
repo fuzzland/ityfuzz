@@ -39,7 +39,9 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 use lazy_static::lazy_static;
 
 
-pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
+lazy_static! {
+    static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
+}
 
 // 1s
 pub static mut CONCOLIC_TIMEOUT : u32 = 1000;
