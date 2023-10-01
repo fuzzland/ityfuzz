@@ -1216,7 +1216,7 @@ where
                         self.constraints.push(intended_path_constraint);
 
                         solutions.extend(self.solve());
-                        // #[cfg(feature = "z3_debug")]
+                        #[cfg(feature = "z3_debug")]
                         println!("[concolic] Solutions: {:?}", solutions);
                         self.constraints.pop();
 
