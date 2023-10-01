@@ -39,9 +39,7 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 use lazy_static::lazy_static;
 
 
-lazy_static! {
-    static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-}
+pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
 // 1s
 pub static mut CONCOLIC_TIMEOUT : u32 = 1000;
@@ -1213,7 +1211,7 @@ where
                     let constraint_hash = intended_path_constraint.pretty_print_str();
 
                     if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
-                        // #[cfg(feature = "z3_debug")]
+                        #[cfg(feature = "z3_debug")]
                         println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
                         self.constraints.push(intended_path_constraint);
 
@@ -1251,7 +1249,7 @@ where
                 vec![]
             }
             // PUSH
-            0x60..=0x7f => {
+            0x5f..=0x7f => {
                 // push n bytes into stack
                 // Concolic push n bytes is equivalent to concrete push, because the bytes
                 // being pushed are always concrete, we can just push None to the stack
