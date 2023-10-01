@@ -53,6 +53,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub flashloan: bool,
     pub concolic: bool,
     pub concolic_caller: bool,
+    pub concolic_timeout: u32,
     pub fuzzer_type: FuzzerTypes,
     pub contract_loader: ContractLoader,
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
