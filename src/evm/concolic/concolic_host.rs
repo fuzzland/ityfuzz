@@ -36,7 +36,7 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero, ProjectSourceMapTy};
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
 use lazy_static::lazy_static;
 
@@ -1243,16 +1243,16 @@ where
                     // panic!("source line: None");
                 }
 
+                let real_path_constraint = if br {
+                    // path_condition = false
+                    stack_bv!(1).lnot()
+                } else {
+                    // path_condition = true
+                    stack_bv!(1)
+                };
+
                 if need_solve {
                     // println!("[concolic] still need to solve");
-                    let real_path_constraint = if br {
-                        // path_condition = false
-                        stack_bv!(1).lnot()
-                    } else {
-                        // path_condition = true
-                        stack_bv!(1)
-                    };
-
                     if !real_path_constraint.is_concrete() {
                         let intended_path_constraint = real_path_constraint.clone().lnot();
                         let constraint_hash = intended_path_constraint.pretty_print_str();
