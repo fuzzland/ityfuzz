@@ -644,6 +644,9 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
     // panic!("{:?}", orginal);
     for (addr, source_map) in orginal {
         // println!("{:?}", addr);
+        if source_map.is_none() {
+            continue;
+        }
         let srcmap = source_map.clone().unwrap();
         for (pc, loc) in srcmap {
             // println!("\t{:?}", loc);
