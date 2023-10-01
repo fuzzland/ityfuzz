@@ -500,6 +500,7 @@ where
 
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
+        self.host.env.tx.caller = input.get_caller();
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.call_count = 0;
         self.host.randomness = input.get_randomness();

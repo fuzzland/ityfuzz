@@ -18,7 +18,8 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::state::{HasCorpus, State};
 
 use revm_interpreter::{Interpreter, Host};
-use revm_primitives::{Bytecode, HashMap};
+use revm_primitives::{Bytecode};
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -26,7 +27,7 @@ use std::borrow::Borrow;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use itertools::Itertools;
 
@@ -35,10 +36,14 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero, ProjectSourceMapTy};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
+use lazy_static::lazy_static;
 
-pub static mut CONCOLIC_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
+lazy_static! {
+    static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
+}// 1s
+pub static mut CONCOLIC_TIMEOUT : u32 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
@@ -269,11 +274,17 @@ impl<'a> Solving<'a> {
         }
     }
 
-    pub fn solve(&mut self) -> Vec<Solution> {
+    pub fn solve(&mut self, optimistic: bool) -> Vec<Solution> {
         let context = self.context;
         let solver = Solver::new(&context);
         // println!("Constraints: {:?}", self.constraints);
-        for cons in self.constraints {
+        for (nth, cons) in self.constraints.iter().enumerate() {
+
+            // only solve the last constraint
+            if optimistic && nth != self.constraints.len() - 1 {
+                continue;
+            }
+
             let bv = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
 
             macro_rules! expect_bv_or_continue {
@@ -328,7 +339,11 @@ impl<'a> Solving<'a> {
 
         // println!("Solver: {:?}", solver);
         let mut p = Params::new(&context);
-        p.set_u32("timeout", 1000);
+
+        if unsafe { CONCOLIC_TIMEOUT > 0 } {
+            p.set_u32("timeout", unsafe { CONCOLIC_TIMEOUT });
+        }
+
         solver.set_params(&p);
         let result = solver.check();
         match result {
@@ -355,8 +370,14 @@ impl<'a> Solving<'a> {
                     fields: self.constrained_field.clone(),
                 }]
             }
-            z3::SatResult::Unsat => vec![],
-            z3::SatResult::Unknown => vec![],
+            z3::SatResult::Unsat | z3::SatResult::Unknown => {
+                if optimistic || self.constraints.len() <= 1 {
+                    return vec![];
+                } else {
+                    // optimistic solving
+                    self.solve(true)
+                }
+            },
         }
     }
 }
@@ -495,7 +516,7 @@ impl SymbolicMemory {
             all_bytes = Box::new(
                 Expr {
                     lhs: Some(all_bytes),
-                    rhs: if let Some(by) = self.memory[idx + i].clone() {
+                    rhs: if self.memory.len() > idx + i && let Some(by) = self.memory[idx + i].clone() {
                         Some(by)
                     } else {
                         Some(Box::new(Expr {
@@ -566,6 +587,7 @@ pub struct ConcolicHost<I, VS> {
     pub testcase_ref: Arc<EVMInput>,
 
     pub ctxs: Vec<ConcolicCallCtx>,
+    // For current PC, the number of times it has been visited
     pub phantom: PhantomData<(I, VS)>,
 
     pub source_map: ProjectSourceMapTy
@@ -662,7 +684,7 @@ impl<I, VS> ConcolicHost<I, VS> {
         let balance = BV::new_const(&context, "balance", 256);
 
         let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &caller, &self.constraints);
-        solving.solve()
+        solving.solve(false)
     }
 
     pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
@@ -1231,22 +1253,28 @@ where
                         stack_bv!(1)
                     };
 
-                    let idx = (interp.program_counter() * (intended_jmp_dest as usize)) % MAP_SIZE;
-                    if JMP_MAP[idx] == 0 && !real_path_constraint.is_concrete() {
-                        let intended_path_constraint = real_path_constraint.clone().lnot();
-                        #[cfg(feature = "z3_debug")]
-                        println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
-                        self.constraints.push(intended_path_constraint);
-
-                        solutions.extend(self.solve());
-                        #[cfg(feature = "z3_debug")]
-                        println!("[concolic] Solutions: {:?}", solutions);
-                        self.constraints.pop();
-                    }
-                    // jumping only happens if the second element is false
                     if !real_path_constraint.is_concrete() {
-                        self.constraints.push(real_path_constraint);
+                        let intended_path_constraint = real_path_constraint.clone().lnot();
+                        let constraint_hash = intended_path_constraint.pretty_print_str();
+
+                        if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
+                            #[cfg(feature = "z3_debug")]
+                            println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
+                            self.constraints.push(intended_path_constraint);
+
+                            solutions.extend(self.solve());
+                            #[cfg(feature = "z3_debug")]
+                            println!("[concolic] Solutions: {:?}", solutions);
+                            self.constraints.pop();
+
+                            ALREADY_SOLVED.write().expect("concolic crashed").insert(constraint_hash);
+                        }
                     }
+                }
+
+                // jumping only happens if the second element is false
+                if !real_path_constraint.is_concrete() {
+                    self.constraints.push(real_path_constraint);
                 }
                 self.symbolic_stack.pop();
                 self.symbolic_stack.pop();
@@ -1269,7 +1297,7 @@ where
                 vec![]
             }
             // PUSH
-            0x60..=0x7f => {
+            0x5f..=0x7f => {
                 // push n bytes into stack
                 // Concolic push n bytes is equivalent to concrete push, because the bytes
                 // being pushed are always concrete, we can just push None to the stack
