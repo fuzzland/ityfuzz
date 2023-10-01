@@ -43,6 +43,9 @@ lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
 }
 
+// 1s
+pub static mut CONCOLIC_TIMEOUT : u32 = 1000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
     Caller, CallDataValue
@@ -272,11 +275,17 @@ impl<'a> Solving<'a> {
         }
     }
 
-    pub fn solve(&mut self) -> Vec<Solution> {
+    pub fn solve(&mut self, optimistic: bool) -> Vec<Solution> {
         let context = self.context;
         let solver = Solver::new(&context);
         // println!("Constraints: {:?}", self.constraints);
-        for cons in self.constraints {
+        for (nth, cons) in self.constraints.iter().enumerate() {
+
+            // only solve the last constraint
+            if optimistic && nth != self.constraints.len() - 1 {
+                continue;
+            }
+
             let bv = self.generate_z3_bv(&cons.lhs.as_ref().unwrap(), &context);
 
             macro_rules! expect_bv_or_continue {
@@ -331,7 +340,11 @@ impl<'a> Solving<'a> {
 
         // println!("Solver: {:?}", solver);
         let mut p = Params::new(&context);
-        p.set_u32("timeout", 1000);
+
+        if unsafe { CONCOLIC_TIMEOUT > 0 } {
+            p.set_u32("timeout", unsafe { CONCOLIC_TIMEOUT });
+        }
+
         solver.set_params(&p);
         let result = solver.check();
         match result {
@@ -358,8 +371,14 @@ impl<'a> Solving<'a> {
                     fields: self.constrained_field.clone(),
                 }]
             }
-            z3::SatResult::Unsat => vec![],
-            z3::SatResult::Unknown => vec![],
+            z3::SatResult::Unsat | z3::SatResult::Unknown => {
+                if optimistic || self.constraints.len() <= 1 {
+                    return vec![];
+                } else {
+                    // optimistic solving
+                    self.solve(true)
+                }
+            },
         }
     }
 }
@@ -498,7 +517,7 @@ impl SymbolicMemory {
             all_bytes = Box::new(
                 Expr {
                     lhs: Some(all_bytes),
-                    rhs: if let Some(by) = self.memory[idx + i].clone() {
+                    rhs: if self.memory.len() > idx + i && let Some(by) = self.memory[idx + i].clone() {
                         Some(by)
                     } else {
                         Some(Box::new(Expr {
@@ -663,7 +682,7 @@ impl<I, VS> ConcolicHost<I, VS> {
         let balance = BV::new_const(&context, "balance", 256);
 
         let mut solving = Solving::new(&context, &self.input_bytes, &balance, &callvalue, &caller, &self.constraints);
-        solving.solve()
+        solving.solve(false)
     }
 
     pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
@@ -1194,12 +1213,12 @@ where
                     let constraint_hash = intended_path_constraint.pretty_print_str();
 
                     if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
-                        #[cfg(feature = "z3_debug")]
+                        // #[cfg(feature = "z3_debug")]
                         println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
                         self.constraints.push(intended_path_constraint);
 
                         solutions.extend(self.solve());
-                        #[cfg(feature = "z3_debug")]
+                        // #[cfg(feature = "z3_debug")]
                         println!("[concolic] Solutions: {:?}", solutions);
                         self.constraints.pop();
 

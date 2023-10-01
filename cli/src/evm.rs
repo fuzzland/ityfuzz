@@ -153,6 +153,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "false")]
     concolic_caller: bool,
 
+    /// Time limit for concolic execution (ms) (Default: 1000, 0 for no limit)
+    #[arg(long, default_value = "1000")]
+    concolic_timeout: u32,
+
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
@@ -532,6 +536,7 @@ pub fn evm_main(args: EvmArgs) {
         onchain,
         concolic: args.concolic,
         concolic_caller: args.concolic_caller,
+        concolic_timeout: args.concolic_timeout,
         oracle: oracles,
         producers,
         flashloan: args.flashloan,

@@ -44,7 +44,7 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::abi::ABIAddressToInstanceMap;
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
-use crate::evm::concolic::concolic_host::ConcolicHost;
+use crate::evm::concolic::concolic_host::{ConcolicHost, CONCOLIC_TIMEOUT};
 use crate::evm::concolic::concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage};
 use crate::evm::cov_stage::CoverageStage;
 use crate::evm::feedbacks::Sha3WrappedFeedback;
@@ -278,6 +278,13 @@ pub fn evm_fuzzer(
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     feedback.init_state(state).expect("Failed to init state");
     // let calibration = CalibrationStage::new(&feedback);
+
+    if config.concolic {
+        unsafe {
+            unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
+        }
+    }
+
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
