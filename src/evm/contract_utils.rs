@@ -757,10 +757,15 @@ pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, ad
                 Some(file) => {
                     // copy file to work_dir/sources/addr/file
                     if !files_copied.contains(&file) {
-                        let file_path = if base_path.len() > 0 {
-                            format!("{}{}/{}", source_dir_pattern.replace("*", ""), base_path, file)
-                        } else {
-                            format!("{}/{}", source_dir_pattern.replace("*", ""), file)
+                        let file_path = match Path::new(file.as_str()).exists() {
+                            true => file.to_string(),
+                            false => {
+                                if base_path.len() > 0 {
+                                    format!("{}{}/{}", source_dir_pattern.replace("*", ""), base_path, file)
+                                } else {
+                                    format!("{}/{}", source_dir_pattern.replace("*", ""), file)
+                                }
+                            }
                         };
 
                         if Path::new(&file_path).exists() {
