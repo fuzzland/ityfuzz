@@ -23,7 +23,7 @@ def test_one(path):
     # compile with solc
     p = subprocess.run(
         " ".join(["solc", f"{path}/*.sol", "-o", f"{path}/",
-                  "--bin", "--abi", "--overwrite", "--base-path", "."]),
+                  "--bin", "--abi", "--overwrite", "--base-path", ".", "--combined-json", "bin-runtime,srcmap-runtime"]),
         shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if b"Error" in p.stderr or b"Error" in p.stdout:
