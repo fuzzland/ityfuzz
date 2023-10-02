@@ -1,20 +1,21 @@
 import glob
+import os
 import random
 import subprocess
-import os
 import time
 
-
 TIMEOUT_BIN = "timeout" if os.name == "posix" else "gtimeout"
+
 
 def read_onchain_tests():
     tests = ""
     with open("onchain_tests.txt", "r") as file:
         tests = file.read()
-    
+
     tests = tests.split("\n")
     tests = [test.split("\t") for test in tests]
     return tests
+
 
 def test_one(path):
     # cleanup
@@ -22,9 +23,23 @@ def test_one(path):
 
     # compile with solc
     p = subprocess.run(
-        " ".join(["solc", f"{path}/*.sol", "-o", f"{path}/",
-                  "--bin", "--abi", "--overwrite", "--base-path", "."]),
-        shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        " ".join(
+            [
+                "solc",
+                f"{path}/*.sol",
+                "-o",
+                f"{path}/",
+                "--bin",
+                "--abi",
+                "--overwrite",
+                "--base-path",
+                ".",
+            ]
+        ),
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
     if b"Error" in p.stderr or b"Error" in p.stdout:
         print(f"Error compiling {path}")
@@ -32,23 +47,32 @@ def test_one(path):
 
     # run fuzzer and check whether the stdout has string success
     start_time = time.time()
-    cmd = [TIMEOUT_BIN, "3m", "./cli/target/release/cli", "evm", "-t", f"'{path}/*'",  "-f", "--panic-on-bug"]
+    cmd = [
+        TIMEOUT_BIN,
+        "3m",
+        "./cli/target/release/cli",
+        "evm",
+        "-t",
+        f"'{path}/*'",
+        "-f",
+        "--panic-on-bug",
+    ]
 
     if "concolic" in path:
         cmd.append("--concolic --concolic-caller")
 
-    p = subprocess.run(" ".join(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=True
+    p = subprocess.run(
+        " ".join(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
 
-    if b"target bug found" not in p.stderr \
-            and b"bug() hit" not in p.stdout \
-            and b"[typed_bug]" not in p.stdout \
-            and b"[selfdestruct]" not in p.stdout \
-            and b"[echidna_bug]" not in p.stdout\
-            and b"Found violations!" not in p.stdout:
+    if (
+        b"target bug found" not in p.stderr
+        and b"bug() hit" not in p.stdout
+        and b"[typed_bug]" not in p.stdout
+        and b"[selfdestruct]" not in p.stdout
+        and b"[echidna_bug]" not in p.stdout
+        and b"Found violations!" not in p.stdout
+    ):
         print("================ STDERR =================")
         print(p.stderr.decode("utf-8"))
         print("================ STDOUT =================")
@@ -63,7 +87,6 @@ def test_one(path):
 
 
 def test_onchain(test):
-
     if len(test) != 4:
         print(f"=== Invalid test: {test}")
         return
@@ -71,12 +94,12 @@ def test_onchain(test):
     # randomly sleep for 0 - 30s to avoid peak traffic
     time.sleep(60 * random.random())
 
-    contract_addresses, block_number, chain, name= test[3], test[2], test[1], test[0]
-    
+    contract_addresses, block_number, chain, name = test[3], test[2], test[1], test[0]
+
     if chain not in ["eth", "bsc", "polygon"]:
         print(f"=== Unsupported chain: {chain}")
         return
-    
+
     etherscan_key = os.getenv(f"{chain.upper()}_ETHERSCAN_API_KEY")
     if etherscan_key is None:
         print(f"=== No etherscan api key for {chain}")
@@ -85,44 +108,65 @@ def test_onchain(test):
     my_env["ETH_RPC_URL"] = os.getenv(f"{chain.upper()}_RPC_URL")
 
     cmd = [
-        TIMEOUT_BIN, 
+        TIMEOUT_BIN,
         # set timeout to 5m because it takes longer time to sync the chain
         "5m",
-        "./cli/target/release/cli", "evm", "-o", 
-        "-t", contract_addresses, 
-        "-c", chain, 
-        "--onchain-block-number", str(block_number), 
-        "-f", "-i", "-p", 
-        "--onchain-etherscan-api-key", etherscan_key,  
-        "--work-dir", f"w_{name}", 
-        #"--run-forever"
+        "./cli/target/release/cli",
+        "evm",
+        "-o",
+        "-t",
+        contract_addresses,
+        "-c",
+        chain,
+        "--onchain-block-number",
+        str(block_number),
+        "-f",
+        "-i",
+        "-p",
+        "--onchain-etherscan-api-key",
+        etherscan_key,
+        "--work-dir",
+        f"w_{name}",
+        # "--run-forever"
     ]
 
     start_time = time.time()
 
     # try 3 times in case of rpc failure
     for i in range(3):
-        
-        p = subprocess.run(" ".join(cmd),
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=True, env=my_env)
+        p = subprocess.run(
+            " ".join(cmd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            env=my_env,
+        )
 
         if b"Found violations!" in p.stdout:
-            print(f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s")
-            open(f"res_{name}.txt", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
+            print(
+                f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s"
+            )
+            open(f"res_{name}.txt", "w+").write(
+                p.stderr.decode("utf-8")
+                + " ".join(cmd)
+                + "\n"
+                + p.stdout.decode("utf-8")
+            )
             return
         time.sleep(30)
 
-
     print(f"=== Failed to test onchain for contracts: {name}")
-    open(f"res_{name}.txt", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
+    open(f"res_{name}.txt", "w+").write(
+        p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8")
+    )
+
 
 def build_fuzzer():
     # build fuzzer
-    os.chdir("cli")
+    # os.chdir("cli")
     subprocess.run(["cargo", "build", "--release"])
-    os.chdir("..")
+    # os.chdir("..")
+
 
 def update_cargo_toml():
     with open("Cargo.toml", "r") as file:
@@ -139,17 +183,17 @@ def update_cargo_toml():
 
     print("Cargo.toml has been updated!")
 
+
 def build_flash_loan_v2_fuzzer():
     update_cargo_toml()
     # build fuzzer
-    os.chdir("cli")
+    # os.chdir("cli")
     subprocess.run(["cargo", "build", "--release"])
-    os.chdir("..")
+    # os.chdir("..")
 
 
 import multiprocessing
 import sys
-
 
 if __name__ == "__main__":
     actions = []

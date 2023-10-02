@@ -1,48 +1,35 @@
+[workspace]
+resolver = "2"
+members = ["core"]
+
+
 [package]
 name = "ityfuzz"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[dev-dependencies]
-criterion = "0.4.0"
 
 [[bench]]
 name = "ityfuzz"
 harness = false
 
-[features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "memory_limit"]
-evm = []
-cmp = []
-dataflow = []
-evaluation = []
-ondisk_corpus = []
-# need to turn off when running DV contracts
-deployer_is_attacker = []
-print_infant_corpus = []
-print_txn_corpus = []
-fuzz_static = []
-flashloan_v2 = []
-real_balance = []
-full_trace = []
-force_cache = []
-use_presets = []
-print_logs = []
-z3_debug = []
-sui_support = ["dep:move-binary-format", "dep:move-core-types", "dep:move-stdlib", "dep:move-vm-runtime", "dep:move-vm-types", "dep:sui-move-natives-latest", "dep:sui-protocol-config", "dep:sui-types"]
-debug = []
-memory_limit = [
-    "revm-primitives/memory_limit",
-    "revm-interpreter/memory_limit",
-    "revm/memory_limit",
-]
-
-[dependencies]
+[workspace.dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { path = "./externals/revm/crates/revm", features = ["no_gas_measuring", "serde"] }
-revm-primitives = { path = "./externals/revm/crates/primitives", features = ["no_gas_measuring", "serde"] }
-revm-interpreter = { path = "./externals/revm/crates/interpreter", features = ["no_gas_measuring", "serde"] }
+revm = { path = "./externals/revm/crates/revm", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
+revm-primitives = { path = "./externals/revm/crates/primitives", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
+revm-interpreter = { path = "./externals/revm/crates/interpreter", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.11.1"
@@ -52,7 +39,7 @@ nix = "0.24"
 serde = "1.0.147"
 serde_traitobject = "0.2.7"
 serde_json = "1.0.73"
-z3 = {version="0.11.2", features = ["static-link-z3"]}
+z3 = { version = "0.11.2", features = ["static-link-z3"] }
 z3-sys = "0.7.1"
 glob = "0.3.0"
 rust-crypto = "0.2"
@@ -66,18 +53,6 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 
 # external fuzzing-based abi decompiler
-heimdall = { path = "./externals/heimdall-rs/heimdall" }
-
-# from https://github.com/aptos-labs/aptos-core/blob/main/Cargo.toml#L452
-move-binary-format = { path = "./externals/sui/external-crates/move/move-binary-format", optional = true }
-move-core-types = { path = "./externals/sui/external-crates/move/move-core/types", features = ["address32"], optional = true }
-move-stdlib = { path = "./externals/sui/external-crates/move/move-stdlib", optional = true }
-move-vm-runtime = { path = "./externals/sui/external-crates/move/move-vm/runtime", features = ["lazy_natives"], optional = true }
-move-vm-types = { path = "./externals/sui/external-crates/move/move-vm/types", optional = true }
-sui-move-natives-latest = { path = "./externals/sui/sui-execution/latest/sui-move-natives", optional = true }
-sui-protocol-config = { path = "./externals/sui/crates/sui-protocol-config", optional = true  }
-sui-types = { path = "./externals/sui/crates/sui-types", optional = true  }
-
 
 
 retry = "2.0.0"

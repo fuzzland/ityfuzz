@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ityfuzz = {path = "../", version = "0.1.0"}
-clap = {version = "4.4.4", features = ["derive"]}
+clap = { version = "4.4.4", features = ["derive"] }
+ityfuzz = { path = "../core", version = "0.1.0", package = "core" }
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 sentry = "0.29.1"
 reqwest = "0.11.6"

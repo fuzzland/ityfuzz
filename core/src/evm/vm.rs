@@ -183,12 +183,11 @@ impl SinglePostExecution {
             instruction_result: self.instruction_result,
             gas: Gas::new(0),
             memory: self.memory.clone(),
-            stack: stack,
+            stack,
             return_data_buffer: Bytes::new(),
             return_range: self.return_range.clone(),
             is_static: self.is_static,
             contract,
-            #[cfg(feature = "memory_limit")]
             memory_limit: MEM_LIMIT,
         }
     }
@@ -1105,11 +1104,16 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
-            EVMExecutor::new(
-                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
-                generate_random_address(&mut state),
-            );
+        let mut evm_executor: EVMExecutor<
+            EVMInput,
+            EVMFuzzState,
+            EVMState,
+            ConciseEVMInput,
+            StdScheduler<EVMFuzzState>,
+        > = EVMExecutor::new(
+            FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
+            generate_random_address(&mut state),
+        );
         let mut observers = tuple_list!();
         let mut vm_state = EVMState::new();
 
