@@ -8,7 +8,15 @@ edition = "2021"
 criterion = "0.4.0"
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace"]
+default = [
+    "cmp",
+    "flashloan_v2",
+    "force_cache",
+    "dataflow",
+    "evm",
+    "print_txn_corpus",
+    "full_trace",
+]
 evm = []
 cmp = []
 dataflow = []
@@ -41,21 +49,13 @@ debug = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
-revm = { path = "./externals/revm/crates/revm", features = [
-    "no_gas_measuring",
-    "serde",
-    "memory_limit",
-] }
-revm-primitives = { path = "./externals/revm/crates/primitives", features = [
-    "no_gas_measuring",
-    "serde",
-    "memory_limit",
-] }
-revm-interpreter = { path = "./externals/revm/crates/interpreter", features = [
-    "no_gas_measuring",
-    "serde",
-    "memory_limit",
-] }
+retry = "2.0.0"
+serde_cbor = "0.11.2"
+clap = { version = "4.4.4", features = ["derive"] }
+sentry = "0.29.1"
+rlp = "0.5.2"
+ethers = "2.0.7"
+
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
 libafl = "0.11.1"
@@ -78,6 +78,21 @@ regex = "1"
 typetag = "0.2.13"
 lazy_static = "1.4.0"
 
+revm = { path = "./externals/revm/crates/revm", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
+revm-primitives = { path = "./externals/revm/crates/primitives", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
+revm-interpreter = { path = "./externals/revm/crates/interpreter", features = [
+    "no_gas_measuring",
+    "serde",
+    "memory_limit",
+] }
 # external fuzzing-based abi decompiler
 heimdall = { git = "https://github.com/fuzzland/heimdall-rs", rev = "32363c9c59cf14c6839e48e5548cc862dfc54842" }
 
@@ -96,12 +111,3 @@ sui = { git = "https://github.com/MystenLabs/sui.git", rev = "a0e136a04c5c09371f
 # sui-move-natives-latest = { path = "../externals/sui/sui-execution/latest/sui-move-natives", optional = true }
 # sui-protocol-config = { path = "../externals/sui/crates/sui-protocol-config", optional = true }
 # sui-types = { path = "../externals/sui/crates/sui-types", optional = true }
-
-
-retry = "2.0.0"
-serde_cbor = "0.11.2"
-
-clap = { version = "4.4.4", features = ["derive"] }
-sentry = "0.29.1"
-rlp = "0.5.2"
-ethers = "2.0.7"
