@@ -7,6 +7,8 @@ import time
 
 TIMEOUT_BIN = "timeout" if os.name == "posix" else "gtimeout"
 
+failed_any = False
+
 def read_onchain_tests():
     tests = ""
     with open("onchain_tests.txt", "r") as file:
@@ -17,6 +19,7 @@ def read_onchain_tests():
     return tests
 
 def test_one(path):
+    global failed_any
     # cleanup
     os.system(f"rm -rf {path}/build")
 
@@ -28,6 +31,7 @@ def test_one(path):
 
     if b"Error" in p.stderr or b"Error" in p.stdout:
         print(f"Error compiling {path}")
+        failed_any = True
         return
 
     # run fuzzer and check whether the stdout has string success
@@ -54,6 +58,7 @@ def test_one(path):
         print("================ STDOUT =================")
         print(p.stdout.decode("utf-8"))
         print(f"=== Failed to fuzz {path}")
+        failed_any = True
     else:
         print(f"=== Success: {path}, Finished in {time.time() - start_time}s")
 
@@ -63,9 +68,10 @@ def test_one(path):
 
 
 def test_onchain(test):
-
+    global failed_any
     if len(test) != 4:
         print(f"=== Invalid test: {test}")
+        failed_any = True
         return
 
     # randomly sleep for 0 - 30s to avoid peak traffic
@@ -75,11 +81,13 @@ def test_onchain(test):
     
     if chain not in ["eth", "bsc", "polygon"]:
         print(f"=== Unsupported chain: {chain}")
+        failed_any = True
         return
     
     etherscan_key = os.getenv(f"{chain.upper()}_ETHERSCAN_API_KEY")
     if etherscan_key is None:
         print(f"=== No etherscan api key for {chain}")
+        failed_any = True
         return
     my_env = os.environ.copy()
     my_env["ETH_RPC_URL"] = os.getenv(f"{chain.upper()}_RPC_URL")
@@ -116,6 +124,7 @@ def test_onchain(test):
 
 
     print(f"=== Failed to test onchain for contracts: {name}")
+    failed_any = True
     open(f"res_{name}.txt", "w+").write(p.stderr.decode("utf-8") + " ".join(cmd) + "\n" + p.stdout.decode("utf-8"))
 
 def build_fuzzer():
@@ -172,3 +181,6 @@ if __name__ == "__main__":
         tests = read_onchain_tests()
         with multiprocessing.Pool(10) as p:
             p.map(test_onchain, tests)
+
+    if failed_any:
+        exit(1)
