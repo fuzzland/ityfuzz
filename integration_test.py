@@ -50,7 +50,7 @@ def test_one(path):
     cmd = [
         TIMEOUT_BIN,
         "3m",
-        "./cli/target/release/cli",
+        "./target/release/core",
         "evm",
         "-t",
         f"'{path}/*'",
@@ -111,7 +111,7 @@ def test_onchain(test):
         TIMEOUT_BIN,
         # set timeout to 5m because it takes longer time to sync the chain
         "5m",
-        "./cli/target/release/cli",
+        "./target/release/core",
         "evm",
         "-o",
         "-t",

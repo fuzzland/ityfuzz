@@ -24,7 +24,7 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
       - name: Run integration tests (Offchain)
-        run: NO_TELEMETRY=1 python3 integration_test.py offchain
+        run: python3 integration_test.py offchain
       - name: Run integration tests (Onchain)
         env:
           BSC_ETHERSCAN_API_KEY: ${{ secrets.BSC_ETHERSCAN_API_KEY }}
@@ -33,7 +33,7 @@ jobs:
           ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
           POLYGON_ETHERSCAN_API_KEY: ${{ secrets.POLYGON_ETHERSCAN_API_KEY }}
           POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
-        run: NO_TELEMETRY=1 python3 integration_test.py onchain
+        run: python3 integration_test.py onchain
       - name: Report onchain tests
         env:
           BOT_GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
