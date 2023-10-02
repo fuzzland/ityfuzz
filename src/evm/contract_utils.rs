@@ -700,7 +700,10 @@ pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &E
     let mut files_downloaded = HashSet::<String>::new();
 
     let addr_dir = format!("{}/sources/{:?}", work_dir, addr);
-    std::fs::create_dir_all(addr_dir.clone()).unwrap();
+    let path = Path::new(addr_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir_all(path).unwrap();
+    }
 
     for (_pc, loc) in src_map {
         match loc.file.clone() {
@@ -709,7 +712,11 @@ pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &E
                     if file.contains("/") {
                         // we make the parent directory
                         let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
-                        std::fs::create_dir_all(parent_dir).unwrap();
+                        let path = Path::new(parent_dir.as_str());
+                        // same as above, it's okay to skip
+                        if !path.exists() {
+                            std::fs::create_dir_all(path).unwrap();
+                        }
                     }
                     let file_path = format!("{}/{}", addr_dir, file);
                     println!("Downloading {} to {}", &file, &file_path);
@@ -733,11 +740,17 @@ pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &E
 pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, addr_map: &ProjectSourceMapTy, base_path: &String) {
     for (addr, src_map) in addr_map.clone() {
         // each addr has its own source map
+        if src_map.is_none() {
+            continue;
+        }
         let src_map = src_map.unwrap();
         let mut files_copied = HashSet::<String>::new();
         // mkdir -p work_dir/addr
         let addr_dir = format!("{}/sources/{:?}", work_dir, addr);
-        std::fs::create_dir_all(addr_dir.clone()).unwrap();
+        let path = Path::new(addr_dir.as_str());
+        if !path.exists() {
+            std::fs::create_dir_all(path).unwrap();
+        }
 
         for (_pc, loc) in src_map {
             match loc.file {
@@ -753,7 +766,10 @@ pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, ad
                         if Path::new(&file_path).exists() {
                             // NOTICE, HERE PATH TRAVERSAL IS POSSIBLE
                             println!("Copying {} to {}", &file_path, &addr_dir);
-                            std::fs::create_dir_all(addr_dir.clone()).unwrap();
+                            let path = Path::new(&addr_dir);
+                            if !path.exists() {
+                                std::fs::create_dir_all(path).unwrap();
+                            }
                             if file.contains("/") {
                                 // we make the parent directory
                                 let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
