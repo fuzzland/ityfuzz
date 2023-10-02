@@ -16,3 +16,4 @@ work_dir
 .z3-trace
 *.code-workspace
 *.txt
+combined.json
