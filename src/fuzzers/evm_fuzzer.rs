@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
+    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy},
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use itertools::Itertools;
@@ -61,7 +61,7 @@ use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::presets::pair::PairPreset;
-use crate::evm::srcmap::parser::BASE_PATH;
+use crate::evm::srcmap::parser::{BASE_PATH, SourceMapLocation};
 use crate::evm::types::{
     fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
 };
@@ -131,7 +131,7 @@ pub fn evm_fuzzer(
                     ),
                 ));
 
-                if let Some(builder) = config.builder {
+                if let Some(builder) = config.builder.clone() {
                     mid.borrow_mut().add_builder(builder);
                 }
 
@@ -155,7 +155,7 @@ pub fn evm_fuzzer(
     }
 
     unsafe {
-        BASE_PATH = config.base_path;
+        BASE_PATH = config.base_path.clone();
     }
 
     if config.run_forever {
@@ -170,7 +170,7 @@ pub fn evm_fuzzer(
 
     if config.only_fuzz.len() > 0 {
         unsafe {
-            WHITELIST_ADDR = Some(config.only_fuzz);
+            WHITELIST_ADDR = Some(config.only_fuzz.clone());
         }
     }
 
@@ -278,17 +278,44 @@ pub fn evm_fuzzer(
     let mut feedback = MaxMapFeedback::new(&jmp_observer);
     feedback.init_state(state).expect("Failed to init state");
     // let calibration = CalibrationStage::new(&feedback);
-
     if config.concolic {
         unsafe {
             unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
         }
     }
 
+    let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
+    for (addr, build_job_result) in &artifacts.build_artifacts {
+        let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
+        remote_addr_sourcemaps.insert(addr.clone(), Some(sourcemap));
+    }
+
+    // check if we use the remote or local
+    let mut srcmap = if remote_addr_sourcemaps.len() > 0 {
+        save_builder_source_code(
+            &artifacts.build_artifacts,
+            &config.work_dir,
+        );
+        remote_addr_sourcemaps
+    } else {
+        match config.local_files_basedir_pattern {
+            Some(pattern) => {
+                // we copy the source files to the work dir
+                copy_local_source_code(&pattern, &config.work_dir, &artifacts.address_to_sourcemap, &config.base_path);
+            },
+            None => {
+                // no local files, so we won't skip any concolic
+            }
+        }
+        artifacts.address_to_sourcemap.clone()
+    };
+
+    modify_concolic_skip(&mut srcmap, config.work_dir.clone());
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
         evm_executor_ref.clone(),
+        srcmap,
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::MiddlewareType;
-use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor};
+use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::executor::FuzzExecutor;
 use crate::generic_vm::vm_executor::GenericVM;
@@ -30,6 +30,7 @@ pub struct ConcolicStage<OT> {
     pub known_state_input: HashSet<(usize, usize)>,
     pub vm_executor: Rc<RefCell<EVMQueueExecutor>>,
     pub phantom: std::marker::PhantomData<OT>,
+    pub sourcemap: ProjectSourceMapTy,
 }
 
 impl<OT> UsesState for ConcolicStage<OT> {
@@ -39,13 +40,16 @@ impl<OT> UsesState for ConcolicStage<OT> {
 impl <OT> ConcolicStage<OT> {
     pub fn new(enabled: bool,
                allow_symbolic_addresses: bool,
-               vm_executor: Rc<RefCell<EVMQueueExecutor>>) -> Self {
+               vm_executor: Rc<RefCell<EVMQueueExecutor>>,
+               source_map: ProjectSourceMapTy,
+            ) -> Self {
         Self {
             enabled,
             allow_symbolic_addresses,
             known_state_input: HashSet::new(),
             vm_executor,
             phantom: std::marker::PhantomData,
+            sourcemap: source_map,
         }
     }
 }
@@ -112,7 +116,8 @@ where
                 vm.host.add_middlewares(
                     Rc::new(RefCell::new(
                         ConcolicHost::new(
-                            testcase_ref.clone()
+                            testcase_ref.clone(),
+                            self.sourcemap.clone()
                         )
                     ))
                 );

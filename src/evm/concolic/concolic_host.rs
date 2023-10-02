@@ -7,6 +7,7 @@ use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
 use crate::evm::middlewares::middleware::{add_corpus, Middleware, MiddlewareType};
 
 use crate::evm::host::{FuzzHost, JMP_MAP};
+use crate::evm::srcmap::parser::SourceMapLocation;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
@@ -35,15 +36,13 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 use crate::bv_from_u256;
 use crate::evm::concolic::concolic_stage::ConcolicPrioritizationMetadata;
 use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero};
+use crate::evm::types::{as_u64, EVMAddress, EVMU256, is_zero, ProjectSourceMapTy};
+use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
 use lazy_static::lazy_static;
-
 
 lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-}
-
-// 1s
+}// 1s
 pub static mut CONCOLIC_TIMEOUT : u32 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -590,10 +589,12 @@ pub struct ConcolicHost<I, VS> {
     pub ctxs: Vec<ConcolicCallCtx>,
     // For current PC, the number of times it has been visited
     pub phantom: PhantomData<(I, VS)>,
+
+    pub source_map: ProjectSourceMapTy
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -603,6 +604,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             testcase_ref,
             phantom: Default::default(),
             ctxs: vec![],
+            source_map: sourcemap
         }
     }
 
@@ -1200,6 +1202,47 @@ where
                     as_u64(fast_peek!(0))
                 };
 
+                /*
+                 * Skip rules:
+                 * 1. r"^(library|contract|function)(.|\n)*\}$" // skip library, contract, function
+                 * TODO: 2. global variable signature?
+                 */
+
+                // Get the source map of current pc
+                let mut need_solve = true;
+                let pc = interp.program_counter();
+                let address = interp.contract.address;
+                // println!("[concolic] address: {:?} pc: {:x}", address, pc);
+                // println!("input: {:?}", self.input_bytes);
+                if let Some(Some(srcmap)) = self.source_map.get(&address) {
+                    // println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                    let source_map_loc = if srcmap.get(&pc).is_some() {
+                        srcmap.get(&pc).unwrap()
+                    } else {
+                        &SourceMapLocation {
+                            file: None,
+                            file_idx: None,
+                            offset: 0,
+                            length: 0,
+                            skip_on_concolic :false
+                        }
+                    };
+                    if let Some(_file) = &source_map_loc.file {
+                        if source_map_loc.skip_on_concolic {
+                            need_solve = false;
+                        }
+                    }
+                    else {
+                        // FIXME: This might not hold true for all cases
+                        println!("[concolic] skip solve for None file");
+                        need_solve = false;
+                    }
+                }
+                else {
+                    // Is this possible?
+                    // panic!("source line: None");
+                }
+
                 let real_path_constraint = if br {
                     // path_condition = false
                     stack_bv!(1).lnot()
@@ -1208,21 +1251,24 @@ where
                     stack_bv!(1)
                 };
 
-                if !real_path_constraint.is_concrete() {
-                    let intended_path_constraint = real_path_constraint.clone().lnot();
-                    let constraint_hash = intended_path_constraint.pretty_print_str();
+                if need_solve {
+                    // println!("[concolic] still need to solve");
+                    if !real_path_constraint.is_concrete() {
+                        let intended_path_constraint = real_path_constraint.clone().lnot();
+                        let constraint_hash = intended_path_constraint.pretty_print_str();
 
-                    if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
-                        #[cfg(feature = "z3_debug")]
-                        println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
-                        self.constraints.push(intended_path_constraint);
+                        if !ALREADY_SOLVED.read().expect("concolic crashed").contains(&constraint_hash) {
+                            #[cfg(feature = "z3_debug")]
+                            println!("[concolic] to solve {:?}", intended_path_constraint.pretty_print_str());
+                            self.constraints.push(intended_path_constraint);
 
-                        solutions.extend(self.solve());
-                        #[cfg(feature = "z3_debug")]
-                        println!("[concolic] Solutions: {:?}", solutions);
-                        self.constraints.pop();
+                            solutions.extend(self.solve());
+                            #[cfg(feature = "z3_debug")]
+                            println!("[concolic] Solutions: {:?}", solutions);
+                            self.constraints.pop();
 
-                        ALREADY_SOLVED.write().expect("concolic crashed").insert(constraint_hash);
+                            ALREADY_SOLVED.write().expect("concolic crashed").insert(constraint_hash);
+                        }
                     }
                 }
 

@@ -37,6 +37,7 @@ pub struct SourceMapLocation {
     pub file_idx: Option<usize>,
     pub offset: usize,
     pub length: usize,
+    pub skip_on_concolic: bool,
 }
 
 impl SourceMapLocation {
@@ -46,6 +47,7 @@ impl SourceMapLocation {
             file_idx,
             offset,
             length,
+            skip_on_concolic: false,
         }
     }
 }
@@ -57,6 +59,7 @@ impl Default for SourceMapLocation {
             file_idx: None,
             offset: 0,
             length: 0,
+            skip_on_concolic: false,
         }
     }
 }
