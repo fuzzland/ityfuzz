@@ -224,10 +224,10 @@ if __name__ == "__main__":
     else:
         actions = ["onchain", "offchain"]
 
-    # if "offchain" in actions:
-    #     build_fuzzer()
-    #     with multiprocessing.Pool(3) as p:
-    #         p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
+    if "offchain" in actions:
+        build_fuzzer()
+        with multiprocessing.Pool(3) as p:
+            p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
 
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
