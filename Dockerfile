@@ -29,13 +29,13 @@ RUN cargo build --release
 RUN cp target/release/ityfuzz /bins/cli_offchain
 
 # build onchain binary
-RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ../Cargo.toml
+RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ./Cargo.toml
 RUN cargo build --release
 RUN cp target/release/ityfuzz /bins/cli_onchain
 
-RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ../Cargo.toml
-RUN sed -i -e 's/"print_txn_corpus",//g' ../Cargo.toml
-RUN sed -i -e 's/"full_trace",//g' ../Cargo.toml
+RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ./Cargo.toml
+RUN sed -i -e 's/"print_txn_corpus",//g' ./Cargo.toml
+RUN sed -i -e 's/"full_trace",//g' ./Cargo.toml
 RUN cargo build --release
 RUN cp target/release/ityfuzz /bins/cli_print_logs
 
