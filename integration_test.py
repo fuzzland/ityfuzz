@@ -21,6 +21,7 @@ def read_onchain_tests():
 
 def test_one(path):
     global crashed_any
+    print(path)
     # cleanup
     os.system(f"rm -rf {path}/build")
 
@@ -63,6 +64,8 @@ def test_one(path):
         "-f",
         "--panic-on-bug",
     ]
+    print(" ".join(cmd))
+    # exit(0)
 
     if "concolic" in path:
         cmd.append("--concolic --concolic-caller")
@@ -181,9 +184,7 @@ def test_onchain(test):
 
 def build_fuzzer():
     # build fuzzer
-    # os.chdir("cli")
     subprocess.run(["cargo", "build", "--release"])
-    # os.chdir("..")
 
 
 def update_cargo_toml():
@@ -205,9 +206,7 @@ def update_cargo_toml():
 def build_flash_loan_v2_fuzzer():
     update_cargo_toml()
     # build fuzzer
-    # os.chdir("cli")
     subprocess.run(["cargo", "build", "--release"])
-    # os.chdir("..")
 
 
 import multiprocessing
@@ -227,7 +226,7 @@ if __name__ == "__main__":
     if "offchain" in actions:
         build_fuzzer()
         with multiprocessing.Pool(3) as p:
-            p.map(test_one, glob.glob("./tests/evm/*/", recursive=True))
+            p.map(test_one, glob.glob("./tests/evm/*", recursive=True))
 
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
