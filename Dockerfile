@@ -21,25 +21,23 @@ WORKDIR /builder
 COPY Cargo.toml .
 COPY rust-toolchain.toml .
 COPY src ./src
-COPY cli ./cli
 COPY benches ./benches
 COPY externals ./externals
 
 # build offchain binary
-WORKDIR /builder/cli
 RUN cargo build --release
-RUN cp target/release/cli /bins/cli_offchain
+RUN cp target/release/ityfuzz /bins/cli_offchain
 
 # build onchain binary
 RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ../Cargo.toml
 RUN cargo build --release
-RUN cp target/release/cli /bins/cli_onchain
+RUN cp target/release/ityfuzz /bins/cli_onchain
 
 RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ../Cargo.toml
 RUN sed -i -e 's/"print_txn_corpus",//g' ../Cargo.toml
 RUN sed -i -e 's/"full_trace",//g' ../Cargo.toml
 RUN cargo build --release
-RUN cp target/release/cli /bins/cli_print_logs
+RUN cp target/release/ityfuzz /bins/cli_print_logs
 
 FROM run_environment
 WORKDIR /app
