@@ -1,37 +1,55 @@
+pub mod abi;
+pub mod blaz;
+pub mod bytecode_analyzer;
+pub mod bytecode_iterator;
+pub mod concolic;
+pub mod config;
+pub mod contract_utils;
+pub mod corpus_initializer;
+pub mod cov_stage;
+pub mod feedbacks;
+pub mod host;
+pub mod input;
+pub mod middlewares;
+pub mod mutator;
+pub mod onchain;
+pub mod oracle;
+pub mod oracles;
+pub mod presets;
+pub mod producers;
+pub mod srcmap;
+pub mod types;
+pub mod uniswap;
+pub mod vm;
+
+use crate::fuzzers::evm_fuzzer::evm_fuzzer;
+use crate::oracle::{Oracle, Producer};
+use crate::state::FuzzState;
+use blaz::builder::{BuildJob, BuildJobResult};
+use blaz::offchain_artifacts::OffChainArtifact;
+use blaz::offchain_config::OffchainConfig;
 use clap::Parser;
+use config::{Config, FuzzerTypes, StorageFetchingMode};
+use contract_utils::{set_hash, ContractLoader};
 use ethers::types::Transaction;
 use hex::{decode, encode};
-use ityfuzz::evm::blaz::builder::{BuildJob, BuildJobResult};
-use ityfuzz::evm::blaz::offchain_artifacts::OffChainArtifact;
-use ityfuzz::evm::blaz::offchain_config::OffchainConfig;
-use ityfuzz::evm::config::{Config, FuzzerTypes, StorageFetchingMode};
-use ityfuzz::evm::contract_utils::{set_hash, ContractLoader};
-use ityfuzz::evm::host::PANIC_ON_BUG;
-use ityfuzz::evm::input::{ConciseEVMInput, EVMInput};
-use ityfuzz::evm::middlewares::middleware::Middleware;
-use ityfuzz::evm::onchain::endpoints::{Chain, OnChainConfig};
-use ityfuzz::evm::onchain::flashloan::{DummyPriceOracle, Flashloan};
-use ityfuzz::evm::oracles::echidna::EchidnaOracle;
-use ityfuzz::evm::oracles::erc20::IERC20OracleFlashloan;
-use ityfuzz::evm::oracles::function::FunctionHarnessOracle;
-use ityfuzz::evm::oracles::selfdestruct::SelfdestructOracle;
-use ityfuzz::evm::oracles::typed_bug::TypedBugOracle;
-use ityfuzz::evm::oracles::v2_pair::PairBalanceOracle;
-use ityfuzz::evm::producers::erc20::ERC20Producer;
-use ityfuzz::evm::producers::pair::PairProducer;
-use ityfuzz::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
-use ityfuzz::evm::vm::EVMState;
-use ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer;
-use ityfuzz::oracle::{Oracle, Producer};
-use ityfuzz::r#const;
-use ityfuzz::state::FuzzState;
+use host::PANIC_ON_BUG;
+use input::{ConciseEVMInput, EVMInput};
+use middlewares::middleware::Middleware;
+use onchain::endpoints::{Chain, OnChainConfig};
+use onchain::flashloan::{DummyPriceOracle, Flashloan};
+use oracles::erc20::IERC20OracleFlashloan;
+use oracles::v2_pair::PairBalanceOracle;
+use producers::erc20::ERC20Producer;
+use producers::pair::PairProducer;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
+use types::{EVMAddress, EVMFuzzState, EVMU256};
+use vm::EVMState;
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -269,7 +287,7 @@ enum EVMTargetType {
     Config,
 }
 
-pub fn evm_main(args: EvmArgs) { 
+pub fn evm_main(args: EvmArgs) {
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => EVMTargetType::Glob,
@@ -581,7 +599,7 @@ pub fn evm_main(args: EvmArgs) {
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
-            _ => None
+            _ => None,
         },
     };
 
