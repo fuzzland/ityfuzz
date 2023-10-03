@@ -54,7 +54,6 @@ docker run -p 8000:8000 fuzzland/ityfuzz:stable
 ```bash
 # 下载依赖
 git submodule update --recursive --init
-cd cli/
 cargo build --release
 ```
 
@@ -72,7 +71,6 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 运行 Fuzzer：
 
 ```bash
-cd ./cli/
 ./cli -t '../tests/multi-contract/*'
 ```
 
@@ -98,7 +96,7 @@ cd ./cli/
 # 在tests/verilog-2/中构建合约
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # 运行fuzzer
-./cli -f -t "./tests/verilog-2/*"
+./target/release/ityfuzz evm -f -t "../tests/evm/verilog-2/*"
 ```
 
 `-f` 标志启用自动闪电贷款，它会 hook 所有 ERC20 外部调用，使任何用户都具有无限余额。
@@ -108,7 +106,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 您可以通过提供项目目录的路径（glob）来 Fuzz 一个项目。
 
 ```bash
-./cli -t '[DIR_PATH]/*'
+./target/release/ityfuzz evm -t '[DIR_PATH]/*'
 ```
 
 ItyFuzz 将尝试将目录中的所有工件部署到没有其他智能合约的区块链中。
@@ -134,21 +132,20 @@ Ityfuzz 将优先读取 `ETH_RPC_URL` 环境变量作为 RPC 地址，如果没�
 
 ```bash
 sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
-cd ./cli/
 cargo build --release
 ```
 
 您可以通过提供地址，块和链来 fuzz 一个项目。
 
 ```bash
-./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE]
+./target/release/ityfuzz evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 示例：
 在以太坊主网最新区块上 fuzz WETH 合约（`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`）。
 
 ```bash
-./cli -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH
+./target/release/ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz 将从 Etherscan 拉取合约的 ABI 并 fuzz 它。如果 ItyFuzz 遇到 Storage 中未知的槽，它将从 RPC 同步槽。
@@ -177,13 +174,13 @@ ItyFuzz 提供两种方法来传入构造函数参数。这些参数对于在部
 格式如下：
 
 ```
-cli -t 'tests/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 例如，如果你有两个合约，`main` 和 `main2`，它们都有一个 `bytes32` 和一个 `uint256` 作为构造函数参数，你可以这样传入它们：
 
 ```bash
-cli -t 'tests/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **方法 2：服务器转发**
@@ -221,7 +218,7 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 最后，你可以使用`--fetch-tx-data`标志获取构造函数参数：
 
 ```bash
-cli -t 'tests/multi-contract/*' --fetch-tx-data
+./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz 将从通过服务器转发到 RPC 的交易中获取构造函数参数。
@@ -242,30 +239,6 @@ cd build && make -j64 && sudo make install
 
 ```bash
 apt install libz3-dev
-```
-
-### 数据收集
-
-ItyFuzz 收集遥测数据以帮助我们改进模糊器。这些数据对我们非常有价值，我们非常感谢你让我们收集它们！
-
-ItyFuzz 收集以下类型的数据：
-
-- ItyFuzz 的版本
-- 运行模糊器的操作系统和版本
-- 模糊器运行的时间
-- 使用的命令行参数（不包括你的输入目录）
-- 生成的目标列表和数量
-- 发现的漏洞类型和数量
-- 测试生成器和模糊器的统计数据
-
-收集的数据不包括任何可以用来识别你的信息，例如 IP 地址，目录名或文件名。
-
-默认情况下，ItyFuzz 将在每次运行结束时将遥测数据发送到我们的服务器。你可以在每次运行结束时看到一个摘要，显示发送了哪些数据。
-
-如果你不希望 ItyFuzz 收集遥测数据，你可以在运行模糊器时使用`--no-telemetry`标志。
-
-```bash
-./cli -t '[DIR_PATH]/*' --no-telemetry
 ```
 
 ### Citation
