@@ -22,7 +22,6 @@ COPY Cargo.toml .
 COPY rust-toolchain.toml .
 COPY src ./src
 COPY benches ./benches
-COPY externals ./externals
 
 # build offchain binary
 RUN cargo build --release
