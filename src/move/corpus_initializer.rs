@@ -335,6 +335,7 @@ where
             }
 
             Type::StructInstantiation(_, tys) => {
+                let types = tys.clone();
                 let mut values = Vec::new();
                 for ty in tys {
                     let default_value = Self::gen_default_value(state, Box::new(ty));
@@ -348,9 +349,12 @@ where
                         }
                     }
                 }
-                MoveInputStatus::Complete(Value(ValueImpl::Container(
-                    Container::Struct(Rc::new(RefCell::new(values)))
-                )))
+                MoveInputStatus::DependentOnStructs(
+                    Value(ValueImpl::Container(
+                        Container::Struct(Rc::new(RefCell::new(values.clone())))
+                    )),
+                    types
+                )
             }
 
             Type::Reference(ty) => {
