@@ -1,0 +1,255 @@
+name: Release version
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+    branches:
+      - master
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+env:
+  IS_NIGHTLY: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-20.04
+    timeout-minutes: 30
+    outputs:
+      tag_name: ${{ steps.release_info.outputs.tag_name }}
+      release_name: ${{ steps.release_info.outputs.release_name }}
+      changelog: ${{ steps.build_changelog.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Compute release name and tag
+        id: release_info
+        run: |
+          if [[ $IS_NIGHTLY ]]; then
+            echo "tag_name=nightly-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+            echo "release_name=Nightly ($(date '+%Y-%m-%d'))" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "release_name=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      # Creates a `nightly-SHA` tag for this specific nightly
+      # This tag is used for this specific nightly version's release
+      # which allows users to roll back. It is also used to build
+      # the changelog.
+      - name: Create build-specific nightly tag
+        if: ${{ env.IS_NIGHTLY }}
+        uses: actions/github-script@v6
+        env:
+          TAG_NAME: ${{ steps.release_info.outputs.tag_name }}
+        with:
+          script: |
+            const createTag = require('./.github/scripts/create-tag.js')
+            await createTag({ github, context }, process.env.TAG_NAME)
+
+      - name: Build changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: "./.github/changelog.json"
+          fromTag: ${{ env.IS_NIGHTLY && 'nightly' || '' }}
+          toTag: ${{ steps.release_info.outputs.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    runs-on: ${{ matrix.job.os }}
+    needs: prepare
+    strategy:
+      matrix:
+        job:
+          # The OS is used for the runner
+          # The platform is a generic platform name
+          # The target is used by Cargo
+          # The arch is either 386, arm64 or amd64
+          # The svm target platform to use for the binary https://github.com/roynalnaruto/svm-rs/blob/84cbe0ac705becabdc13168bae28a45ad2299749/svm-builds/build.rs#L4-L24
+          - os: ubuntu-20.04
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+            svm_target_platform: linux-amd64
+          - os: self-hosted-arm64
+            platform: linux
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
+            svm_target_platform: linux-aarch64
+          - os: macos-latest
+            platform: darwin
+            target: x86_64-apple-darwin
+            arch: amd64
+            svm_target_platform: macosx-amd64
+          - os: macos-latest
+            platform: darwin
+            target: aarch64-apple-darwin
+            arch: arm64
+            svm_target_platform: macosx-aarch64
+          - os: windows-latest
+            platform: win32
+            target: x86_64-pc-windows-msvc
+            arch: amd64
+            svm_target_platform: windows-amd64
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: "nightly-2023-09-09"
+          targets: ${{ matrix.job.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          prefix-key: "v1"
+          key: ${{ matrix.job.target }}
+
+      - name: MacOS setup Z3
+        if: ${{ matrix.job.platform == 'darwin' }}
+        run: |
+          brew install z3
+          # git clone https://github.com/Z3Prover/z3
+          # cd z3
+          # python scripts/mk_make.py --prefix=/usr/local
+          # cd build 
+          # make -j64
+          # sudo make install
+
+      - name: Apple M1 setup
+        if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
+        run: |
+          brew install llvm
+          echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
+          echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
+          echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx --show-sdk-platform-version)" >> $GITHUB_ENV
+
+      - name: Linux ARM setup
+        if: ${{ matrix.job.target == 'aarch64-unknown-linux-gnu' }}
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y g++-aarch64-linux-gnu
+          sudo apt-get install -y gcc-multilib-arm-linux-gnueabi
+          sudo apt-get install -y gcc-arm-linux-gnueabi
+          sudo apt-get install -y g++
+          sudo apt-get install -y build-essential
+          sudo apt-get install -y libclang-dev
+          sudo apt-get install -y libz3-dev
+          sudo apt-get install -y libssl-dev
+          sudo apt-get install -y pkg-config
+          sudo apt-get install -y libudev-dev
+          sudo apt-get install -y clang
+          sudo apt-get install -y cmake
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build binaries
+        env:
+          SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
+        run: cargo build --release --bins --target ${{ matrix.job.target }}
+
+      - name: Build binaries with flashloan
+        env:
+          SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
+        run: cargo build --release --bins --target ${{ matrix.job.target }} --target-dir "target_f" --features "default flashloan_v2 force_cache"
+
+      - name: Archive binaries
+        id: artifacts
+        env:
+          PLATFORM_NAME: ${{ matrix.job.platform }}
+          TARGET: ${{ matrix.job.target }}
+          ARCH: ${{ matrix.job.arch }}
+          VERSION_NAME: ${{ (env.IS_NIGHTLY && 'nightly') || needs.prepare.outputs.tag_name }}
+        shell: bash
+        run: |
+          if [ "$PLATFORM_NAME" == "linux" ]; then
+            mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
+            tar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_f
+            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" >> $GITHUB_OUTPUT
+          elif [ "$PLATFORM_NAME" == "darwin" ]; then
+            mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
+            # We need to use gtar here otherwise the archive is corrupt.
+            # See: https://github.com/actions/virtual-environments/issues/2619
+            gtar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_f
+            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" >> $GITHUB_OUTPUT
+          else
+            mv "./target_f/${TARGET}/release/ityfuzz.exe" "./target/${TARGET}/release/ityfuzz_f.exe"
+            cd ./target/${TARGET}/release
+            7z a -tzip "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" ityfuzz.exe ityfuzz_f.exe
+            mv "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" ../../../
+            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" >> $GITHUB_OUTPUT
+          fi
+
+      # Creates the release for this specific version
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ needs.prepare.outputs.release_name }}
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
+          prerelease: ${{ env.IS_NIGHTLY }}
+          body: ${{ needs.prepare.outputs.changelog }}
+          files: |
+            ${{ steps.artifacts.outputs.file_name }}
+
+      # If this is a nightly release, it also updates the release
+      # tagged `nightly` for compatibility with `ityfuzzup`
+      - name: Update nightly release
+        if: ${{ env.IS_NIGHTLY }}
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Nightly"
+          tag_name: "nightly"
+          prerelease: true
+          body: ${{ needs.prepare.outputs.changelog }}
+          files: |
+            ${{ steps.artifacts.outputs.file_name }}
+
+  cleanup:
+    name: Release cleanup
+    runs-on: ubuntu-20.04
+    timeout-minutes: 30
+    needs: release
+    steps:
+      - uses: actions/checkout@v3
+
+      # Moves the `nightly` tag to `HEAD`
+      - name: Move nightly tag
+        if: ${{ env.IS_NIGHTLY }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const moveTag = require('./.github/scripts/move-tag.js')
+            await moveTag({ github, context }, 'nightly')
+
+      - name: Delete old nightlies
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prunePrereleases = require('./.github/scripts/prune-prereleases.js')
+            await prunePrereleases({github, context})
+
+  # If any of the jobs fail, this will create a high-priority issue to signal so.
+  issue:
+    name: Open an issue
+    runs-on: ubuntu-latest
+    needs: [prepare, release, cleanup]
+    if: ${{ failure() }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: JasonEtco/create-an-issue@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_URL: |
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          update_existing: true
+          filename: .github/RELEASE_FAILURE_ISSUE_TEMPLATE.md

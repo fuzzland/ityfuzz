@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -e
+
+echo Installing ityfuzzup...
+
+BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
+ITYFUZZ_DIR=${ITYFUZZ_DIR-"$BASE_DIR/.ityfuzz"}
+ITYFUZZ_BIN_DIR="$ITYFUZZ_DIR/bin"
+
+BIN_URL="https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup"
+BIN_PATH="$ITYFUZZ_BIN_DIR/ityfuzzup"
+
+
+# Create the .ityfuzz bin directory and ityfuzzup binary if it doesn't exist.
+mkdir -p $ITYFUZZ_BIN_DIR
+curl -# -L $BIN_URL -o $BIN_PATH
+chmod +x $BIN_PATH
+
+
+# Store the correct profile file (i.e. .profile for bash or .zshenv for ZSH).
+case $SHELL in
+*/zsh)
+    PROFILE=${ZDOTDIR-"$HOME"}/.zshenv
+    PREF_SHELL=zsh
+    ;;
+*/bash)
+    PROFILE=$HOME/.bashrc
+    PREF_SHELL=bash
+    ;;
+*/fish)
+    PROFILE=$HOME/.config/fish/config.fish
+    PREF_SHELL=fish
+    ;;
+*/ash)
+    PROFILE=$HOME/.profile
+    PREF_SHELL=ash
+    ;;
+*)
+    echo "ityfuzzup: could not detect shell, manually add ${ITYFUZZ_BIN_DIR} to your PATH."
+    exit 1
+esac
+
+# Only add ityfuzzup if it isn't already in PATH.
+if [[ ":$PATH:" != *":${ITYFUZZ_BIN_DIR}:"* ]]; then
+    # Add the ityfuzzup directory to the path and ensure the old PATH variables remain.
+    echo >> $PROFILE && echo "export PATH=\"\$PATH:$ITYFUZZ_BIN_DIR\"" >> $PROFILE
+fi
+
+# Warn MacOS users that they may need to manually install libusb via Homebrew:
+# if [[ "$OSTYPE" =~ ^darwin ]] && [[ ! -f /usr/local/opt/libusb/lib/libusb-1.0.0.dylib && ! -f /opt/homebrew/opt/libusb/lib/libusb-1.0.0.dylib ]]; then
+#     echo && echo "warning: libusb not found. You may need to install it manually on MacOS via Homebrew (brew install libusb)."
+# fi
+
+echo && echo "Detected your preferred shell is ${PREF_SHELL} and added ityfuzzup to PATH. Run 'source ${PROFILE}' or start a new terminal session to use ityfuzzup."
+echo "Then, simply run 'ityfuzzup' to install ityfuzz."
