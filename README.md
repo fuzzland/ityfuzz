@@ -36,18 +36,14 @@ Test Coverage:
 ---
 
 # Installation
-## 1. ityfuzzup **(Recommended)**
+## ityfuzzup **(Recommended)**
 
 ityfuzzup is a script that automatically installs all dependencies and builds ItyFuzz.
 ```bash
-curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/install | bash
+curl -L https://ity.fuzz.land/ | bash
 ```
 
-## 2. Release
-
-Download the latest release from [here](https://github.com/fuzzland/ityfuzz/releases/latest).
-
-## 3. Docker
+## Docker
 
 Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
 
@@ -60,7 +56,7 @@ Then, you can visit the interface at http://localhost:8000
 
 <sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
 
-## 4. Build from Source
+## Build from Source
 
 You first need to install Rust through https://rustup.rs/
 
@@ -75,7 +71,6 @@ cargo build --release
 You can enable certain debug gates in `Cargo.toml`
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
-
 
 # Run (EVM)
 
