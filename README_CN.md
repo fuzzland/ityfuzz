@@ -7,20 +7,8 @@ ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP�
 
 [英文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README.md) / [研究论文](https://scf.so/ityfuzz.pdf) / [开发信息](#development)
 
-### 通过 UI 运行 ItyFuzz
 
-安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
-
-```
-docker pull fuzzland/ityfuzz:stable
-docker run -p 8000:8000 fuzzland/ityfuzz:stable
-```
-
-然后，您可以在 http://localhost:8000 访问 UI。
-
-<sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
-
-### 统计
+# 统计
 
 发现漏洞/生成攻击所花费的时间：
 
@@ -45,9 +33,32 @@ docker run -p 8000:8000 fuzzland/ityfuzz:stable
 
 <sub>\* B1 和 B2 包含 72 个合约。Tests 是 `tests` 目录中的项目。覆盖率计算为 `（覆盖的指令）/（总指令 - 无效代码）`。 </sub>
 
-# 开发
+# 安装
 
-### 构建
+## ityfuzzup (推荐)
+
+```bash
+curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+```
+
+## Release
+
+下载最新的 [release](https://github.com/fuzzland/ityfuzz/releases/latest)
+
+##  Docker
+
+安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
+
+```
+docker pull fuzzland/ityfuzz:stable
+docker run -p 8000:8000 fuzzland/ityfuzz:stable
+```
+
+然后，您可以在 http://localhost:8000 访问 UI。
+
+<sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
+
+## 从源码构建
 
 您需要安装 `libssl-dev`（OpenSSL）和 `libz3-dev`（参见[Z3 安装](#z3-installation)章节中的说明）。
 
@@ -59,7 +70,7 @@ cargo build --release
 
 你需要`solc`来编译智能合约。你可以使用`solc-select`工具来管理`solc`的版本。
 
-### 运行
+# 运行
 
 编译智能合约：
 
@@ -96,7 +107,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # 在tests/verilog-2/中构建合约
 solc *.sol -o . --bin --abi --overwrite --base-path ../../
 # 运行fuzzer
-./target/release/ityfuzz evm -f -t "../tests/evm/verilog-2/*"
+ityfuzz evm -f -t "../tests/evm/verilog-2/*"
 ```
 
 `-f` 标志启用自动闪电贷款，它会 hook 所有 ERC20 外部调用，使任何用户都具有无限余额。
@@ -106,7 +117,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 您可以通过提供项目目录的路径（glob）来 Fuzz 一个项目。
 
 ```bash
-./target/release/ityfuzz evm -t '[DIR_PATH]/*'
+ityfuzz evm -t '[DIR_PATH]/*'
 ```
 
 ItyFuzz 将尝试将目录中的所有工件部署到没有其他智能合约的区块链中。
@@ -138,14 +149,14 @@ cargo build --release
 您可以通过提供地址，块和链来 fuzz 一个项目。
 
 ```bash
-./target/release/ityfuzz evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
+ityfuzz evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 示例：
 在以太坊主网最新区块上 fuzz WETH 合约（`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`）。
 
 ```bash
-./target/release/ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz 将从 Etherscan 拉取合约的 ABI 并 fuzz 它。如果 ItyFuzz 遇到 Storage 中未知的槽，它将从 RPC 同步槽。
@@ -174,13 +185,13 @@ ItyFuzz 提供两种方法来传入构造函数参数。这些参数对于在部
 格式如下：
 
 ```
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 例如，如果你有两个合约，`main` 和 `main2`，它们都有一个 `bytes32` 和一个 `uint256` 作为构造函数参数，你可以这样传入它们：
 
 ```bash
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **方法 2：服务器转发**
@@ -218,7 +229,7 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 最后，你可以使用`--fetch-tx-data`标志获取构造函数参数：
 
 ```bash
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
+ityfuzz evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz 将从通过服务器转发到 RPC 的交易中获取构造函数参数。
@@ -234,6 +245,11 @@ cd build && make -j64 && sudo make install
 ```
 
 如果构建命令仍然因找不到`z3.h`而失败，执行`export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h`
+
+或者你可以使用
+```bash
+brew install z3
+```
 
 **Ubuntu**
 
