@@ -35,17 +35,17 @@ ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP�
 
 # 安装
 
-## ityfuzzup (推荐)
+## 1. ityfuzzup (推荐)
 
 ```bash
 curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
 ```
 
-## Release
+## 2. Release
 
 下载最新的 [release](https://github.com/fuzzland/ityfuzz/releases/latest)
 
-##  Docker
+## 3. Docker
 
 安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
 
@@ -58,7 +58,7 @@ docker run -p 8000:8000 fuzzland/ityfuzz:stable
 
 <sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
 
-## 从源码构建
+## 4. 从源码构建
 
 您需要安装 `libssl-dev`（OpenSSL）和 `libz3-dev`（参见[Z3 安装](#z3-installation)章节中的说明）。
 
