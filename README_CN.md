@@ -7,20 +7,8 @@ ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP�
 
 [英文版 README](https://github.com/fuzzland/ityfuzz/blob/master/README.md) / [研究论文](https://scf.so/ityfuzz.pdf) / [开发信息](#development)
 
-### 通过 UI 运行 ItyFuzz
 
-安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
-
-```
-docker pull fuzzland/ityfuzz:stable
-docker run -p 8000:8000 fuzzland/ityfuzz:stable
-```
-
-然后，您可以在 http://localhost:8000 访问 UI。
-
-<sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
-
-### 统计
+# 统计
 
 发现漏洞/生成攻击所花费的时间：
 
@@ -45,9 +33,32 @@ docker run -p 8000:8000 fuzzland/ityfuzz:stable
 
 <sub>\* B1 和 B2 包含 72 个合约。Tests 是 `tests` 目录中的项目。覆盖率计算为 `（覆盖的指令）/（总指令 - 无效代码）`。 </sub>
 
-# 开发
+# 安装
 
-### 构建
+## ityfuzzup (推荐)
+
+```bash
+curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+```
+
+## Release
+
+下载最新的 [release](https://github.com/fuzzland/ityfuzz/releases/latest)
+
+##  Docker
+
+安装 [Docker](https://www.docker.com/) 并运行适用于你的系统架构的 docker 镜像：
+
+```
+docker pull fuzzland/ityfuzz:stable
+docker run -p 8000:8000 fuzzland/ityfuzz:stable
+```
+
+然后，您可以在 http://localhost:8000 访问 UI。
+
+<sub>注意：容器使用公共 ETH RPC，可能超时或运行缓慢</sub>
+
+## 从源码构建
 
 您需要安装 `libssl-dev`（OpenSSL）和 `libz3-dev`（参见[Z3 安装](#z3-installation)章节中的说明）。
 
@@ -59,7 +70,7 @@ cargo build --release
 
 你需要`solc`来编译智能合约。你可以使用`solc-select`工具来管理`solc`的版本。
 
-### 运行
+# 运行
 
 编译智能合约：
 
