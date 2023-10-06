@@ -38,7 +38,7 @@ ItyFuzz 是一款快速的混合模糊测试工具，用于 EVM、MoveVM（WIP�
 ## 1. ityfuzzup (推荐)
 
 ```bash
-curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/install | bash
 ```
 
 ## 2. Release

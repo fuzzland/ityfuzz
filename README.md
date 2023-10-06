@@ -40,7 +40,7 @@ Test Coverage:
 
 ityfuzzup is a script that automatically installs all dependencies and builds ItyFuzz.
 ```bash
-curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/install | bash
 ```
 
 ## 2. Release
