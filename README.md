@@ -33,24 +33,21 @@ Test Coverage:
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
-<br/>
-<br/>
-
 ---
 
 # Installation
-## ityfuzzup **(Recommended)**
+## 1. ityfuzzup **(Recommended)**
 
 ityfuzzup is a script that automatically installs all dependencies and builds ItyFuzz.
 ```bash
-curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/install | bash
 ```
 
-## Release
+## 2. Release
 
 Download the latest release from [here](https://github.com/fuzzland/ityfuzz/releases/latest).
 
-## Docker
+## 3. Docker
 
 Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
 
@@ -63,8 +60,7 @@ Then, you can visit the interface at http://localhost:8000
 
 <sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
 
-
-## Build from Source
+## 4. Build from Source
 
 You first need to install Rust through https://rustup.rs/
 
