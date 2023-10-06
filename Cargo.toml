@@ -8,7 +8,7 @@ edition = "2021"
 criterion = "0.4.0"
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace"]
+default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "sui_support", "flashloan_v2"]
 evm = []
 cmp = []
 dataflow = []
@@ -27,15 +27,14 @@ use_presets = []
 print_logs = []
 z3_debug = []
 sui_support = [
-    # "dep:move-binary-format",
-    # "dep:move-core-types",
-    # "dep:move-stdlib",
-    # "dep:move-vm-runtime",
-    # "dep:move-vm-types",
-    # "dep:sui-move-natives-latest",
-    # "dep:sui-protocol-config",
-    # "dep:sui-types",
-    "dep:sui",
+    "dep:move-binary-format",
+    "dep:move-core-types",
+    "dep:move-stdlib",
+    "dep:move-vm-runtime",
+    "dep:move-vm-types",
+    "dep:sui-move-natives-latest",
+    "dep:sui-protocol-config",
+    "dep:sui-types",
 ]
 debug = []
 
@@ -88,18 +87,11 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "f9fdf3e66f
 # external fuzzing-based abi decompiler
 heimdall = { git = "https://github.com/fuzzland/heimdall-rs", rev = "32363c9c59cf14c6839e48e5548cc862dfc54842" }
 
-sui = { git = "https://github.com/MystenLabs/sui.git", rev = "a0e136a04c5c09371f30255f7d4dac1793504ecb", optional = true }
-
-# # from https://github.com/aptos-labs/aptos-core/blob/main/Cargo.toml#L452
-# move-binary-format = { path = "../externals/sui/external-crates/move/move-binary-format", optional = true }
-# move-core-types = { path = "../externals/sui/external-crates/move/move-core/types", features = [
-#     "address32",
-# ], optional = true }
-# move-stdlib = { path = "../externals/sui/external-crates/move/move-stdlib", optional = true }
-# move-vm-runtime = { path = "../externals/sui/external-crates/move/move-vm/runtime", features = [
-#     "lazy_natives",
-# ], optional = true }
-# move-vm-types = { path = "../externals/sui/external-crates/move/move-vm/types", optional = true }
-# sui-move-natives-latest = { path = "../externals/sui/sui-execution/latest/sui-move-natives", optional = true }
-# sui-protocol-config = { path = "../externals/sui/crates/sui-protocol-config", optional = true }
-# sui-types = { path = "../externals/sui/crates/sui-types", optional = true }
+move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-binary-format", optional = true }
+move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-core-types", features = ["address32"], optional = true }
+move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-stdlib", optional = true }
+move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-runtime", features = ["lazy_natives"], optional = true }
+move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-types", optional = true }
+sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-move-natives-latest", optional = true }
+sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-protocol-config", optional = true }
+sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-types", optional = true }
