@@ -201,7 +201,6 @@ impl BuildJobResult {
                 Value::String(v) => { v.parse::<usize>().unwrap() }
                 _ => {
                     println!("{:?} is not a valid source id", v["id"]);
-                    panic!("get source id failed");
                     return None;
                 }
             };
