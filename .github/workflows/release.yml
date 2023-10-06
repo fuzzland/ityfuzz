@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*.*.*"
+    branches:
+      - master
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -169,22 +171,40 @@ jobs:
           VERSION_NAME: ${{ (env.IS_NIGHTLY && 'nightly') || needs.prepare.outputs.tag_name }}
         shell: bash
         run: |
-          if [ "$PLATFORM_NAME" == "linux" ]; then
-            mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
-            tar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_f
-            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" >> $GITHUB_OUTPUT
-          elif [ "$PLATFORM_NAME" == "darwin" ]; then
-            mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
-            # We need to use gtar here otherwise the archive is corrupt.
-            # See: https://github.com/actions/virtual-environments/issues/2619
-            gtar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_f
-            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" >> $GITHUB_OUTPUT
-          else
+          if [ "$PLATFORM_NAME" == "win32" ]; then
+            mv "./target/${TARGET}/release/ityfuzz.exe" "./target/${TARGET}/release/ityfuzz_.exe"
             mv "./target_f/${TARGET}/release/ityfuzz.exe" "./target/${TARGET}/release/ityfuzz_f.exe"
+            (
+            echo @echo off
+            echo setlocal enabledelayedexpansion
+            echo set containsF=false
+            echo for %%a in (%*) do (
+            echo    if "%%a"=="-f" (
+            echo        set containsF=true
+            echo    )
+            echo )
+            echo if "%%containsF%%"=="true" (
+            echo    call ityfuzz_f.exe %%*
+            echo ) else (
+            echo    call ityfuzz_.exe %%*
+            echo )
+            ) >  "./target/${TARGET}/release/ityfuzz.bat"
             cd ./target/${TARGET}/release
-            7z a -tzip "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" ityfuzz.exe ityfuzz_f.exe
+            7z a -tzip "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" ityfuzz.bat ityfuzz_.exe ityfuzz_f.exe
             mv "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" ../../../
             echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.zip" >> $GITHUB_OUTPUT
+          else
+            mv "./target/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_"
+            mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
+            echo -e '#!/bin/bash\nif [[ "$@" == *"-f"* ]]; then\n  ./ityfuzz_f "$@"\nelse\n  ./ityfuzz_ "$@"\nfi' > "./target/${TARGET}/release/ityfuzz"
+            if [ "$PLATFORM_NAME" == "linux" ]; then
+              tar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_ ityfuzz_f
+            else
+              # We need to use gtar here otherwise the archive is corrupt.
+              # See: https://github.com/actions/virtual-environments/issues/2619
+              gtar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_ ityfuzz_f
+            fi
+            echo "file_name=ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" >> $GITHUB_OUTPUT
           fi
 
       # Creates the release for this specific version
