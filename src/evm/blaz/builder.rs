@@ -194,7 +194,16 @@ impl BuildJobResult {
         let source_objs = json["sources"].as_object().expect("get sources failed");
         let mut sources = vec![(String::new(), String::new()); source_objs.len()];
         for (k, v) in source_objs {
-            let idx = v["id"].as_u64().expect("get source id failed") as usize;
+
+
+            let idx = match &v["id"] {
+                Value::Number(v) => { v.as_u64().unwrap() as usize }
+                Value::String(v) => { v.parse::<usize>().unwrap() }
+                _ => {
+                    println!("{:?} is not a valid source id", v["id"]);
+                    return None;
+                }
+            };
             let code = v["source"].as_str().expect("get source code failed");
             sources[idx] = (k.clone(), code.to_string());
         }
