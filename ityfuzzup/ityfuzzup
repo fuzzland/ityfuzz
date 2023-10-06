@@ -69,7 +69,7 @@ main() {
     exit 0
   fi
 
-  ITYFUZZ_REPO=${ITYFUZZ_REPO:fuzzland/ityfuzz}
+  ITYFUZZ_REPO=${ITYFUZZ_REPO:-fuzzland/ityfuzz}
 
   # Install by downloading binaries
   if [[ "$ITYFUZZ_REPO" == "fuzzland/ityfuzz" && -z "$ITYFUZZ_BRANCH" && -z "$ITYFUZZ_COMMIT" ]]; then
@@ -94,7 +94,7 @@ main() {
       ITYFUZZ_TAG="${ITYFUZZ_VERSION}"
     fi
 
-    say "installing ITYFUZZ (version ${ITYFUZZ_VERSION}, tag ${ITYFUZZ_TAG})"
+    say "installing ityfuzz (version ${ITYFUZZ_VERSION}, tag ${ITYFUZZ_TAG})"
 
     PLATFORM="$(uname -s)"
     EXT="tar.gz"
@@ -128,15 +128,14 @@ main() {
       ARCHITECTURE="amd64" # Amd.
     fi
 
-    # Compute the URL of the release tarball in the ITYFUZZ repository.
+    # Compute the URL of the release tarball in the ityfuzz repository.
     RELEASE_URL="https://github.com/${ITYFUZZ_REPO}/releases/download/${ITYFUZZ_TAG}/"
-    BIN_ARCHIVE_URL="${RELEASE_URL}ITYFUZZ_${ITYFUZZ_VERSION}_${PLATFORM}_${ARCHITECTURE}.$EXT"
-    MAN_TARBALL_URL="${RELEASE_URL}ITYFUZZ_man_${ITYFUZZ_VERSION}.tar.gz"
+    BIN_ARCHIVE_URL="${RELEASE_URL}ityfuzz_${ITYFUZZ_VERSION}_${PLATFORM}_${ARCHITECTURE}.$EXT"
 
     # Download and extract the binaries archive
-    say "downloading latest forge, cast, anvil, and chisel"
+    say "downloading latest ityfuzz binaries"
     if [ "$PLATFORM" = "win32" ]; then
-      tmp="$(mktemp -d 2>/dev/null || echo ".")/ITYFUZZ.zip"
+      tmp="$(mktemp -d 2>/dev/null || echo ".")/ityfuzz.zip"
       ensure download "$BIN_ARCHIVE_URL" "$tmp"
       ensure unzip "$tmp" -d "$ITYFUZZ_BIN_DIR"
       rm -f "$tmp"
@@ -173,7 +172,7 @@ EOF
     ITYFUZZ_BRANCH=${ITYFUZZ_BRANCH:-master}
     REPO_PATH="$ITYFUZZ_DIR/$ITYFUZZ_REPO"
 
-    # If repo path does not exist, grab the author from the repo, make a directory in .ITYFUZZ, cd to it and clone.
+    # If repo path does not exist, grab the author from the repo, make a directory in .ityfuzz, cd to it and clone.
     if [ ! -d "$REPO_PATH" ]; then
       AUTHOR="$(echo "$ITYFUZZ_REPO" | cut -d'/' -f1 -)"
       ensure mkdir -p "$ITYFUZZ_DIR/$AUTHOR"
@@ -192,7 +191,7 @@ EOF
       ensure git checkout "$ITYFUZZ_COMMIT"
     fi
 
-    # Build the repo and install the binaries locally to the .ITYFUZZ bin directory.
+    # Build the repo and install the binaries locally to the .ityfuzz bin directory.
     ensure cargo build --bins --release
     for bin in "${BINS[@]}"; do
       for try_path in target/release/$bin target/release/$bin.exe; do
@@ -209,7 +208,7 @@ EOF
 
 usage() {
   cat 1>&2 <<EOF
-The installer for ITYFUZZ.
+The installer for ityfuzz.
 
 Update or revert to a specific ITYFUZZ version with ease.
 
@@ -228,7 +227,7 @@ EOF
 }
 
 say() {
-  printf "ITYFUZZ: %s\n" "$1"
+  printf "ityfuzz: %s\n" "$1"
 }
 
 warn() {

@@ -60,7 +60,6 @@ Then, you can visit the interface at http://localhost:8000
 
 <sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
 
-
 ## 4. Build from Source
 
 You first need to install Rust through https://rustup.rs/
