@@ -452,7 +452,7 @@ where
             .expect("type tag info not found")
             .clone();
         for parameter_type in &function.parameter_types {
-            let tag = type_tag_info.get_type_tag(&parameter_type);
+            let tag = type_tag_info.get_type_tag(parameter_type);
             let default_val = if let Some(tag) = tag && is_tx_context(&tag) {
                 MoveInputStatus::Complete(self.gen_tx_context(parameter_type.clone()))
             } else {

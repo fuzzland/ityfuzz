@@ -843,14 +843,16 @@ mod tests {
     use move_core_types::u256;
     use crate::input::VMInputT;
     use crate::r#move::input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, MoveFunctionInputT, StructAbilities};
+    use crate::r#move::movevm::{self, TypeTagInfoMeta};
     use crate::r#move::types::MoveFuzzState;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
     use std::rc::Rc;
     use std::cell::RefCell;
-    use move_vm_runtime::loader::{Function, Scope};
+    use move_vm_runtime::loader::{Function, Scope, Loader};
     use move_vm_types::loaded_data::runtime_types::{CachedStructIndex, Type};
-    use crate::r#move::vm_state::MoveVMState;
+    use move_vm_types::values::{Container, ContainerRef, Value, ValueImpl, values_impl};
+    use crate::r#move::vm_state::{MoveVMState, GatedValue, Gate};
     use std::collections::HashMap;
     use libafl::mutators::MutationResult;
     use libafl::prelude::HasMetadata;
@@ -862,28 +864,7 @@ mod tests {
         ($tys: expr) => {
             {
                 let mut f = FunctionDefaultable::default();
-                f.function = Some(
-                    Arc::new(
-
-                        Function {
-                            file_format_version: 0,
-                            index: Default::default(),
-                            code: vec![],
-                            parameters: Default::default(),
-                            return_: Default::default(),
-                            locals: Default::default(),
-                            type_parameters: vec![],
-                            native: None,
-                            def_is_native: false,
-                            def_is_friend_or_private: false,
-                            scope: Scope::Module(ModuleId::new(AccountAddress::from([0; 32]), Identifier::new("test").unwrap())),
-                            name: Identifier::new("test").unwrap(),
-                            return_types: vec![],
-                            local_types: vec![],
-                            parameter_types: $tys,
-                        }
-                    )
-                );
+                f.function = Some(Arc::new(Function::new_dummy($tys)));
                 f
             }
         };
@@ -895,7 +876,7 @@ mod tests {
     macro_rules! dummy_input {
         ($init_v: expr, $sstate: expr, $tys: expr) => {
             {
-                let dummy_addr = AccountAddress::from([0; 32]);
+                let dummy_addr = AccountAddress::ZERO;
                 MoveFunctionInput {
                     module: ModuleId::new(dummy_addr.clone(), Identifier::new("test").unwrap()),
                     function: Identifier::new("test").unwrap(),
@@ -910,6 +891,7 @@ mod tests {
                     vm_state: $sstate,
                     vm_state_idx: 0,
                     _deps: Default::default(),
+                    _resolved: true,
                 }
             }
         };
@@ -921,8 +903,11 @@ mod tests {
 
     macro_rules! test_lb {
         ($init_v: expr, $tys: expr) => {
+            let mut state = MoveFuzzState::new(0);
+            state.metadata_map_mut().insert(TypeTagInfoMeta::new());
+
             let mut v = dummy_input!($init_v, $tys);
-            v.mutate::<MoveFuzzState>(&mut Default::default());
+            v.mutate::<MoveFuzzState>(&mut state);
             // println!("{:?}", v.args[0]);
             let o = (v.args[0].value.equals(&Value($init_v)).expect("failed to compare"));
             assert!(!o, "value was not mutated");
@@ -990,14 +975,11 @@ mod tests {
     }
 
     macro_rules! test_struct {
-        ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr) => {
+        ($init_v: expr, $tys: expr, $sstate: expr, $struct_abilities: expr, $state: expr) => {
             {
-                let mut state: MoveFuzzState = Default::default();
-                state.metadata_map_mut().insert($struct_abilities);
-
                 let (v, res) = {
                     let mut v = dummy_input!($init_v, $sstate, $tys);
-                    let res = v.mutate::<MoveFuzzState>(&mut state);
+                    let res = v.mutate::<MoveFuzzState>($state);
                     (v, res)
                 };
                 // println!("{:?}", v.args[0]);
@@ -1013,8 +995,8 @@ mod tests {
             MoveVMState::new()
         );
 
-        sstate.state.add_new_value(
-            Value(ValueImpl::Container(
+        let value = GatedValue {
+            v: Value(ValueImpl::Container(
                 Container::Struct(
                     Rc::new(RefCell::new(vec![
                         ValueImpl::U8(5),
@@ -1022,9 +1004,11 @@ mod tests {
                     ]))
                 )
             )),
-            &Type::Struct(CachedStructIndex(1)),
-            false,
-        );
+            gate: Gate::Own,
+        };
+
+        let mut state = setup_state();
+        sstate_add_new_value(&mut sstate, &mut state, value, &Type::Struct(CachedStructIndex(0)));
 
         let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
             ValueImpl::Container(
@@ -1035,18 +1019,17 @@ mod tests {
                     ]))
                 )
             ),
-            vec![Type::Struct(CachedStructIndex(1))],
+            vec![Type::Struct(CachedStructIndex(0))],
             sstate,
             {
                 let mut abilities = StructAbilities::new();
-                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities.set_ability(Type::Struct(CachedStructIndex(0)), AbilitySet(Ability::Copy as u8));
                 abilities
-            }
+            },
+            &mut state
         );
         println!("initial value {:?}", init_v);
         println!("mutated value {:?}", mutated_v);
-        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
-        println!("remaining useful_value {:?}", vm_state.state.useful_value);
         println!("ref in use {:?}", vm_state.state.ref_in_use);
         assert_eq!(mutation_result, MutationResult::Mutated);
     }
@@ -1057,8 +1040,8 @@ mod tests {
             MoveVMState::new()
         );
 
-        sstate.state.add_new_value(
-            Value(ValueImpl::Container(
+        let value = GatedValue {
+            v: Value(ValueImpl::Container(
                 Container::Struct(
                     Rc::new(RefCell::new(vec![
                         ValueImpl::U8(5),
@@ -1066,24 +1049,26 @@ mod tests {
                     ]))
                 )
             )),
-            &Type::Struct(CachedStructIndex(1)),
-            false,
-        );
-        sstate.state.ref_in_use.push(
-            (
-                Type::Struct(CachedStructIndex(1)),
-                Value(
-                    ValueImpl::Container(
-                        Container::Struct(
-                            Rc::new(RefCell::new(vec![
-                                ValueImpl::U8(0),
-                                ValueImpl::U8(0),
-                            ]))
-                        )
+            gate: Gate::Own,
+        };
+
+        let mut state = setup_state();
+        sstate_add_new_value(&mut sstate, &mut state, value, &Type::Struct(CachedStructIndex(0)));
+
+        let new_value = GatedValue {
+            v: Value(
+                ValueImpl::Container(
+                    Container::Struct(
+                        Rc::new(RefCell::new(vec![
+                            ValueImpl::U8(0),
+                            ValueImpl::U8(0),
+                        ]))
                     )
                 )
-            )
-        );
+            ),
+            gate: Gate::Ref,
+        };
+        sstate.state.ref_in_use.push((Type::Struct(CachedStructIndex(0)), new_value));
 
         let (mutation_result, init_v, mutated_v, vm_state) = test_struct!(
             ValueImpl::ContainerRef(
@@ -1096,18 +1081,17 @@ mod tests {
                     )
                 )
             ),
-            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))],
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(0))))],
             sstate,
             {
                 let mut abilities = StructAbilities::new();
-                abilities.set_ability(Type::Struct(CachedStructIndex(1)), AbilitySet(Ability::Copy as u8));
+                abilities.set_ability(Type::Struct(CachedStructIndex(0)), AbilitySet(Ability::Copy as u8));
                 abilities
-            }
+            },
+            &mut state
         );
         println!("initial value {:?}", init_v);
         println!("mutated value {:?}", mutated_v);
-        println!("remaining value to drop {:?}", vm_state.state.value_to_drop);
-        println!("remaining useful_value {:?}", vm_state.state.useful_value);
         println!("ref in use {:?}", vm_state.state.ref_in_use);
         assert!(vm_state.state.ref_in_use.len() > 0);
         assert_eq!(mutation_result, MutationResult::Mutated);
@@ -1118,8 +1102,9 @@ mod tests {
         let mut sstate = MoveStagedVMState::new_with_state(
             MoveVMState::new()
         );
-        sstate.state.add_new_value(
-            Value(ValueImpl::Container(
+
+        let value = GatedValue {
+            v: Value(ValueImpl::Container(
                 Container::Struct(
                     Rc::new(RefCell::new(vec![
                         ValueImpl::U8(123),
@@ -1127,9 +1112,11 @@ mod tests {
                     ]))
                 )
             )),
-            &Type::Struct(CachedStructIndex(1)),
-            false,
-        );
+            gate: Gate::Own,
+        };
+
+        let mut state = setup_state();
+        sstate_add_new_value(&mut sstate, &mut state, value, &Type::Struct(CachedStructIndex(0)));
 
         let mut inp = dummy_input!(
             ValueImpl::ContainerRef(
@@ -1143,9 +1130,9 @@ mod tests {
                 )
             ),
             sstate,
-            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))]
+            vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(0))))]
         );
-        inp.slash(&mut MoveFuzzState::default());
+        inp.slash(&mut state);
         println!("{:?}", inp.args[0].value);
     }
 
@@ -1154,8 +1141,9 @@ mod tests {
         let mut sstate = MoveStagedVMState::new_with_state(
             MoveVMState::new()
         );
-        sstate.state.add_new_value(
-            Value(ValueImpl::Container(
+
+        let value = GatedValue {
+            v: Value(ValueImpl::Container(
                 Container::Struct(
                     Rc::new(RefCell::new(vec![
                         ValueImpl::U8(123),
@@ -1163,9 +1151,11 @@ mod tests {
                     ]))
                 )
             )),
-            &Type::Struct(CachedStructIndex(1)),
-            false,
-        );
+            gate: Gate::Own,
+        };
+
+        let mut state = setup_state();
+        sstate_add_new_value(&mut sstate, &mut state, value, &Type::Struct(CachedStructIndex(0)));
 
         let mut inp = dummy_input!(
             ValueImpl::Container(
@@ -1185,9 +1175,9 @@ mod tests {
                 )
             ),
             sstate,
-            vec![Type::Vector(Box::new(Type::Reference(Box::new(Type::Struct(CachedStructIndex(1))))))]
+            vec![Type::Vector(Box::new(Type::Reference(Box::new(Type::Struct(CachedStructIndex(0))))))]
         );
-        inp.slash(&mut MoveFuzzState::default());
+        inp.slash(&mut state);
         assert!(
             inp.args[0].value.equals(
                 &Value(
@@ -1198,5 +1188,16 @@ mod tests {
         )
     }
 
+    fn setup_state() -> MoveFuzzState {
+        let mut state = MoveFuzzState::new(0);
+        state.metadata_map_mut().insert(TypeTagInfoMeta::new());
+        state.metadata_map_mut().insert(StructAbilities::new());
+        state
+    }
 
+    fn sstate_add_new_value(sstate: &mut MoveStagedVMState, state: &mut MoveFuzzState, value: GatedValue, ty: &Type) {
+        let loader = movevm::dummy_loader(state);
+        let resolver = movevm::dummy_resolver(&loader);
+        sstate.state.add_new_value(value, ty, &resolver, state);
+    }
 }
