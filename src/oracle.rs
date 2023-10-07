@@ -89,6 +89,24 @@ where
             self.fuzz_state,
         )
     }
+
+    /// Conduct a batch of dynamic calls on the state before the execution
+    pub(crate) fn call_pre_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<Out>, VS) {
+        self.executor.deref().borrow_mut().fast_call(
+            data,
+            self.pre_state,
+            self.fuzz_state,
+        )
+    }
+
+    /// Conduct a batch of dynamic calls on the state after the execution
+    pub(crate) fn call_post_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<Out>, VS) {
+        self.executor.deref().borrow_mut().fast_call(
+            data,
+            &self.post_state,
+            self.fuzz_state,
+        )
+    }
 }
 
 

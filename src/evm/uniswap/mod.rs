@@ -16,6 +16,8 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use super::vm::EVMState;
+
 pub enum UniswapVer {
     V1,
     V2,
@@ -347,6 +349,127 @@ pub fn generate_uniswap_router_call(
     }
 }
 
+
+pub fn generate_uniswap_router_sell(
+    token: &TokenContext,
+    path_idx: usize,
+    amount_in: EVMU256,
+    to: EVMAddress,
+) -> Option<Vec<(BoxedABI, EVMU256, EVMAddress)>> {
+    unsafe {
+        WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
+    }
+    // function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    //     uint amountIn,
+    //     uint amountOutMin,
+    //     address[] calldata path,
+    //     address to,
+    //     uint deadline
+    // )
+    let amount: [u8; 32] = amount_in.to_be_bytes();
+    let mut abi_amount = BoxedABI::new(Box::new(A256 {
+        data: amount.to_vec(),
+        is_address: false,
+        dont_mutate: false,
+    }));
+
+    if token.is_weth {
+        abi_amount.function = [0x2e, 0x1a, 0x7d, 0x4d]; // withdraw
+        Some(vec![(abi_amount, EVMU256::ZERO, token.weth_address)])
+    } else {
+        if token.swaps.len() == 0 {
+            return None;
+        }
+        let path_ctx = &token.swaps[path_idx % token.swaps.len()];
+        // let amount_in = path_ctx.get_amount_in(perct, reserve);
+        let mut path: Vec<EVMAddress> = path_ctx
+            .route
+            .iter()
+            .map(|pair| pair.deref().borrow().next_hop)
+            .collect();
+        // when it is pegged token or weth
+        if path.len() == 0 || *path.last().unwrap() != token.weth_address {
+            path.push(token.weth_address);
+        }
+        path.insert(0, token.address);
+        let mut sell_abi = BoxedABI::new(Box::new(AArray {
+            data: vec![
+                abi_amount,
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(AArray {
+                    data: path
+                        .iter()
+                        .map(|addr| {
+                            BoxedABI::new(Box::new(A256 {
+                                data: addr.as_bytes().to_vec(),
+                                is_address: true,
+                                dont_mutate: false,
+                            }))
+                        })
+                        .collect(),
+                    dynamic_size: true,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: to.0.to_vec(),
+                    is_address: true,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0xff; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+            ],
+            dynamic_size: false,
+        }));
+        sell_abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
+
+        
+
+        let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
+            None => {
+                path_ctx
+                    .route
+                    .last()
+                    .unwrap()
+                    .deref()
+                    .borrow()
+                    .uniswap_info
+                    .router
+            }
+            Some(info) =>info.uniswap_info.router,
+        };
+
+        let mut approve_abi = BoxedABI::new(Box::new(AArray {
+            data: vec![
+                BoxedABI::new(Box::new(A256 {
+                    data: router.0.to_vec(),
+                    is_address: true,
+                    dont_mutate: false,
+                })),
+                BoxedABI::new(Box::new(A256 {
+                    data: vec![0xff; 32],
+                    is_address: false,
+                    dont_mutate: false,
+                })),
+            ],
+            dynamic_size: false,
+        }));
+
+        approve_abi.function = [0x09, 0x5e, 0xa7, 0xb3]; // approve
+
+        Some(vec![
+            (approve_abi, EVMU256::ZERO, token.address),
+            (sell_abi, EVMU256::ZERO, router),
+        ])
+    }
+}
+
+
 pub fn liquidate_all_token(
     tokens: Vec<(&TokenContext, EVMU256)>,
     initial_reserve_data: HashMap<EVMAddress, (EVMU256, EVMU256)>,
@@ -397,6 +520,32 @@ pub fn liquidate_all_token(
         best_reserve_data.unwrap_or(initial_reserve_data),
     )
 }
+
+fn reserve_encoder(reserves: &(EVMU256, EVMU256), original: &EVMU256) -> EVMU256 {
+    let mut res: [u8; 32] = original.to_be_bytes();
+    let reserve_0_bytes: [u8; 32] = reserves.0.to_be_bytes();
+    let reserve_1_bytes: [u8; 32] = reserves.1.to_be_bytes();
+    res[4..18].copy_from_slice(&reserve_0_bytes[18..32]);
+    res[18..32].copy_from_slice(&reserve_1_bytes[18..32]);
+    EVMU256::from_be_bytes(res)
+}
+
+pub fn update_reserve_on_state(
+    state: &mut EVMState, 
+    reserves: &HashMap<EVMAddress, (EVMU256, EVMU256)>
+) {
+    for (addr, reserves) in reserves {
+        state
+            .state
+            .entry(*addr).or_insert(HashMap::new())
+            .entry(EVMU256::from(8)).and_modify(|f| {
+                *f = reserve_encoder(reserves, f);
+            }).or_insert(
+                reserve_encoder(reserves, &EVMU256::ZERO)
+            );
+    }
+}
+
 
 pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
     match (provider, chain) {
@@ -922,6 +1071,59 @@ mod tests {
         assert_eq!(
             r1,
             EVMU256::from_str_radix("00000016e7f19fdf1ede2902b6ae", 16).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reserve_encoder() {
+        let (r0, r1) = reserve_parser(
+            &EVMU256::from_str_radix(
+                "63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
+                16,
+            )
+            .unwrap(),
+        );
+
+        let res = reserve_encoder(&(r0, r1), &EVMU256::from_str_radix(
+            "63cebab4000000004b702d24750df9f77b8500000016e7f19fdf1ede2902b6af",
+            16,
+        ).unwrap());
+        assert!(res == EVMU256::from_str_radix("63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae", 16).unwrap());
+    }
+
+    #[test]
+    fn test_uniswap_sell() {
+        let t1 = TokenContext {
+            swaps: vec![
+                PathContext {
+                    route: vec![wrap!(PairContext {
+                        pair_address: EVMAddress::from_str(
+                            "0x0000000000000000000000000000000000000000"
+                        )
+                        .unwrap(),
+                        side: 0,
+                        uniswap_info: Arc::new(get_uniswap_info(
+                            &UniswapProvider::PancakeSwap,
+                            &Chain::BSC
+                        )),
+                        initial_reserves: (Default::default(), Default::default()),
+                        next_hop: EVMAddress::from_str("0x1100000000000000000000000000000000000000").unwrap(),
+                    })],
+                    final_pegged_ratio: EVMU256::from(1),
+                    final_pegged_pair: Rc::new(RefCell::new(None)),
+                },
+            ],
+            is_weth: false,
+            weth_address: EVMAddress::from_str("0xee00000000000000000000000000000000000000").unwrap(),
+            address: EVMAddress::from_str("0xff00000000000000000000000000000000000000").unwrap(),
+        };
+
+        let plan = generate_uniswap_router_sell(&t1, 0, EVMU256::from(10000), EVMAddress::from_str(
+            "0x2300000000000000000000000000000000000000"
+        ).unwrap());
+        println!(
+            "plan: {:?}",
+            plan.unwrap().iter().map(|x| hex::encode(x.0.get_bytes())).collect::<Vec<_>>()
         );
     }
 }

@@ -477,9 +477,9 @@ where
         S: HasCaller<EVMAddress>,
     {
         // if simply static call, we dont care
-        if unsafe { IS_FAST_CALL_STATIC } {
-            return;
-        }
+        // if unsafe { IS_FAST_CALL_STATIC } {
+        //     return;
+        // }
 
 
         match *interp.instruction_pointer {
