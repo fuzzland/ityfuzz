@@ -7,20 +7,8 @@ You can generate exploits **instantly** by just providing the contract address:
 
 [Tool](https://github.com/fuzzland/ityfuzz/) / [Research Paper](https://scf.so/ityfuzz.pdf) / [Fuzzing EVM Contracts](#building-evm) / [Fuzzing Move Contracts](#building-with-move-sui-support)
 
-### Run ItyFuzz with UI
 
-Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
-
-```
-docker pull fuzzland/ityfuzz:stable
-docker run -p 8000:8000 fuzzland/ityfuzz:stable
-```
-
-Then, you can visit the interface at http://localhost:8000
-
-<sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
-
-### Statistics & Comparison
+# Statistics & Comparison
 
 Time taken for finding vulnerabilities / generating exploits:
 
@@ -45,8 +33,30 @@ Test Coverage:
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
+---
 
-# Building (EVM)
+# Installation
+## ityfuzzup **(Recommended)**
+
+ityfuzzup is a script that automatically installs all dependencies and builds ItyFuzz.
+```bash
+curl -L https://ity.fuzz.land/ | bash
+```
+
+## Docker
+
+Install [Docker](https://www.docker.com/) and run docker image suitable for your system architecture:
+
+```
+docker pull fuzzland/ityfuzz:stable
+docker run -p 8000:8000 fuzzland/ityfuzz:stable
+```
+
+Then, you can visit the interface at http://localhost:8000
+
+<sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
+
+## Build from Source
 
 You first need to install Rust through https://rustup.rs/
 
@@ -75,8 +85,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../../
 Run Fuzzer:
 
 ```bash
-# after building, there should be a binary in ./target/release/ityfuzz
-./target/release/ityfuzz evm -t '../tests/evm/multi-contract/*'
+ityfuzz evm -t '../tests/evm/multi-contract/*'
 ```
 
 ### Demo
@@ -100,10 +109,8 @@ Use fuzzer to detect the vulnerability and generate the exploit (takes 0 - 200s)
 ```bash
 # build contracts in tests/evm/verilog-2/
 solc *.sol -o . --bin --abi --overwrite --base-path ../../../
-# after building, there should be a binary in ./target/release/ityfuzz
-
 # run fuzzer 
-./target/release/ityfuzz evm -f -t "../tests/evm/verilog-2/*"
+ityfuzz evm -f -t "../tests/evm/verilog-2/*"
 ```
 
 `-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
@@ -113,7 +120,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../../
 You can fuzz a project by providing a path to the project directory.
 
 ```bash
-./target/release/ityfuzz evm -t '[DIR_PATH]/*'
+ityfuzz evm -t '[DIR_PATH]/*'
 ```
 
 ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain with no other smart contracts.
@@ -147,20 +154,20 @@ cargo build --release
 You can fuzz a project by providing an address, a block, and a chain type.
 
 ```bash
-./target/release/ityfuzz evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
+ityfuzz evm -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] --onchain-etherscan-api-key [Etherscan API Key]
 ```
 
 Example:
 Fuzzing WETH contract (`0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2`) on Ethereum mainnet at latest block.
 
 ```bash
-./target/release/ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 Fuzzing with flashloan and oracles enabled:
 
 ```bash
-./target/release/ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
+ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-number 0 -c ETH -f -i -p --onchain-etherscan-api-key PXUUKVEQ7Y4VCQYPQC2CEK4CAKF8SG7MVF
 ```
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
@@ -183,13 +190,13 @@ When you run ItyFuzz using the CLI, you can include the `--constructor-args` fla
 The format is as follows:
 
 ```
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
+ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "ContractName:arg1,arg2,...;AnotherContract:arg1,arg2,..;"
 ```
 
 For example, if you have two contracts, `main` and `main2`, both having a `bytes32` and a `uint256` as constructor arguments, you would pass them in like this:
 
 ```bash
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
+ityfuzz evm -t 'tests/evm/multi-contract/*' --constructor-args "main:1,0x6100000000000000000000000000000000000000000000000000000000000000;main2:2,0x6200000000000000000000000000000000000000000000000000000000000000;"
 ```
 
 **Method 2: Server Forwarding**
@@ -227,7 +234,7 @@ forge create src/flashloan.sol:main2 --rpc-url http://127.0.0.1:5001 --private-k
 Finally, you can fetch the constructor arguments using the `--fetch-tx-data` flag:
 
 ```bash
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
+ityfuzz evm -t 'tests/evm/multi-contract/*' --fetch-tx-data
 ```
 
 ItyFuzz will fetch the constructor arguments from the transactions forwarded to the RPC through the server.
@@ -240,7 +247,7 @@ if-conditions. You can add `--concolic` to args to make fuzzer conduct concolic 
 Example:
 ```
 cd tests/evm/concolic-1/ && solc *.sol -o . --bin --abi --overwrite --base-path ../../../ && ../../../
-./target/release/ityfuzz evm -t 'tests/evm/concolic-1/*' --concolic --concolic-caller
+ityfuzz evm -t 'tests/evm/concolic-1/*' --concolic --concolic-caller
 ```
 
 
@@ -320,7 +327,7 @@ scribble test.sol --output-mode flat --output compiled.sol --no-assert
 Then compile with `solc` and run ItyFuzz:
 ```bash
 solc compiled.sol --bin --abi --overwrite -o build
-./target/release/ityfuzz evm -t "build/*" [More Arguments]
+ityfuzz evm -t "build/*" [More Arguments]
 ```
 
 # Test Coverage
@@ -328,12 +335,12 @@ solc compiled.sol --bin --abi --overwrite -o build
 ItyFuzz can collect instruction and branch coverage information for all the contracts it fuzzes. You simply
 need to append `--replay-file [WORKDIR]/corpus/*_replayable` to collect all these information.
 ```bash
-./target/release/ityfuzz evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
+ityfuzz evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable'
 ```
 
 Example:
 ```bash
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
+ityfuzz evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable'
 ```
 
 You may add source map information to the targets to get more accurate coverage information and uncovered source code.
@@ -352,13 +359,13 @@ Rarely, ItyFuzz has trouble to figure out the source code location.
 You may supply the **absolute** path to the base location (what you passed to solc's --base-path or if you didn't pass anything, it is the building directory)
 to ItyFuzz.
 ```bash
-./target/release/ityfuzz evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
+ityfuzz evm -t [Targets] [Options Used During Fuzzing] --replay-file '[WORKDIR]/corpus/*_replayable' --base-path [ABSOLUTE PATH TO BASE LOCATION]
 ```
 
 Example:
 ```bash
 # note that we used --base-path ../../ when building the targets so it is /home/user/ityfuzz/tests/evm/verilog-2/../../
-./target/release/ityfuzz evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
+ityfuzz evm -t 'tests/evm/multi-contract/*' --replay-file 'work_dir/corpus/*_replayable' --base-path /home/user/ityfuzz
 ```
 
 We do not track coverage of static calls (view, pure functions) by default!
@@ -385,7 +392,7 @@ sui move build
 
 # get back to ItyFuzz and run fuzzing on the built contract
 cd ../../../
-./target/release/ityfuzz move -t "./tests/move/share_object/build"
+ityfuzz move -t "./tests/move/share_object/build"
 ```
 
 # Reporting Bugs (Move)
@@ -419,6 +426,11 @@ cd build && make -j64 && sudo make install
 ```
 
 If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h`
+
+Or you can use
+```bash
+brew install z3
+```
 
 **Ubuntu**
 
