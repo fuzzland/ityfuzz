@@ -8,7 +8,7 @@ edition = "2021"
 criterion = "0.4.0"
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace", "sui_support", "flashloan_v2"]
+default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace"]
 evm = []
 cmp = []
 dataflow = []
