@@ -33,9 +33,6 @@ Test Coverage:
 
 <sub>\* B1 and B2 contain 72 single-contract projects from SMARTIAN artifacts. Tests are the projects in `tests` directory. The coverage is calculated as `(instruction covered) / (total instruction - dead code)`. </sub>
 
-<br/>
-<br/>
-
 ---
 
 # Installation
@@ -43,12 +40,8 @@ Test Coverage:
 
 ityfuzzup is a script that automatically installs all dependencies and builds ItyFuzz.
 ```bash
-curl -L https://raw.githubusercontent.com/fuzzland/ityfuzz/master/ityfuzzup/ityfuzzup | bash
+curl -L https://ity.fuzz.land/ | bash
 ```
-
-## Release
-
-Download the latest release from [here](https://github.com/fuzzland/ityfuzz/releases/latest).
 
 ## Docker
 
@@ -62,7 +55,6 @@ docker run -p 8000:8000 fuzzland/ityfuzz:stable
 Then, you can visit the interface at http://localhost:8000
 
 <sub>Note: The container uses public ETH RPC, may time out / be slow</sub>
-
 
 ## Build from Source
 
@@ -79,7 +71,6 @@ cargo build --release
 You can enable certain debug gates in `Cargo.toml`
 
 `solc` is needed for compiling smart contracts. You can use `solc-select` tool to manage the version of `solc`.
-
 
 # Run (EVM)
 
