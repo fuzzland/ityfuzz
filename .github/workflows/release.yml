@@ -181,6 +181,7 @@ jobs:
             mv "./target/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_"
             mv "./target_f/${TARGET}/release/ityfuzz" "./target/${TARGET}/release/ityfuzz_f"
             echo -e '#!/bin/bash\nif [[ "$@" == *"-o "* ]] || [[ "$@" =~ "-o"$ ]] || [[ "$@" == *"--onchain "* ]] || [[ "$@" =~ "--onchain"$ ]]; then\n  ./ityfuzz_f "$@"\nelse\n  ./ityfuzz_ "$@"\nfi' > "./target/${TARGET}/release/ityfuzz"
+            chmod +x "./target/${TARGET}/release/ityfuzz"
             if [ "$PLATFORM_NAME" == "linux" ]; then
               tar -czvf "ityfuzz_${VERSION_NAME}_${PLATFORM_NAME}_${ARCH}.tar.gz" -C ./target/${TARGET}/release ityfuzz ityfuzz_ ityfuzz_f
             else
