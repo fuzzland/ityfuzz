@@ -12,10 +12,10 @@ pub mod vm_state;
 
 use clap::Parser;
 use hex::{decode, encode};
-use ityfuzz::fuzzers::move_fuzzer::{move_fuzzer, MoveFuzzConfig};
-use ityfuzz::oracle::{Oracle, Producer};
-use ityfuzz::r#const;
-use ityfuzz::state::FuzzState;
+use crate::fuzzers::move_fuzzer::{move_fuzzer, MoveFuzzConfig};
+use crate::oracle::{Oracle, Producer};
+use crate::r#const;
+use crate::state::FuzzState;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
