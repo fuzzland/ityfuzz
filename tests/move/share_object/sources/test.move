@@ -1,8 +1,8 @@
 module share_object::test {
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
     use sui::event;
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     struct AAAA__fuzzland_move_bug has drop, copy, store {
         info: u64
