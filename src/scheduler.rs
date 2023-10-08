@@ -237,7 +237,8 @@ where
                 });
 
                 for i in sorted.iter().take(PRUNE_AMT) {
-                    if *i.0 >= 3 {
+                    // Ignore the artifacts (*i.0 < 3) and the currently executing corpus (*i.0 == idx).
+                    if *i.0 >= 3 && *i.0 != idx {
                         to_remove.push(*i.0);
                     }
                 }

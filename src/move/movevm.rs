@@ -49,6 +49,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::ChildObjectResolver;
 use crate::r#move::corpus_initializer::is_tx_context;
 use crate::state::HasCaller;
+use super::types::MoveFuzzState;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -765,6 +766,35 @@ impl ChildObjectResolver for DummyChildObjectResolver {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID, child_version_upper_bound: SequenceNumber) -> SuiResult<Option<Object>> {
         todo!()
     }
+}
+
+pub fn dummy_loader(state: &mut MoveFuzzState) -> Loader {
+    // module 0x3::TestMod {
+    //     resource struct TestStruct {
+    //         data: u64
+    //     }
+    //     public fun test1(data: u64) : TestStruct {
+    //         TestStruct { data };
+    //     }
+    // }
+    let bytecode = "a11ceb0b0500000008010002020204030605050b0607111e082f200a4f050c540b000000010200000200010001030108000007546573744d6f640a546573745374727563740574657374310464617461000000000000000000000000000000000000000000000000000000000000000300020103030001000002030b0012000200";
+
+    let module_bytecode = hex::decode(bytecode).unwrap();
+    let module = CompiledModule::deserialize_no_check_bounds(&module_bytecode).unwrap();
+
+    let mut vm = MoveVM::<MoveFunctionInput, MoveFuzzState>::new();
+    let deployed_address = AccountAddress::ZERO;
+    let _ = vm.deploy(module, None, deployed_address, state);
+
+    vm.loader
+}
+
+pub fn dummy_resolver(loader: &Loader) -> Resolver {
+    let compiled = loader.module_cache.read().compiled_modules.binaries.first().unwrap().clone();
+    let loaded = loader.module_cache.read().loaded_modules.binaries.first().unwrap().clone();
+    let binary = Module { compiled, loaded };
+
+    Resolver { loader, binary }
 }
 
 
