@@ -1,9 +1,9 @@
 [package]
-name = "hello_world"
+name = "generic_struct"
 version = "0.0.1"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
 
 [addresses]
-hello_world = "0x0"
+generic_struct = "0x0"

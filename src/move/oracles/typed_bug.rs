@@ -42,16 +42,16 @@ for TypedBugOracle {
         stage: u64,
     ) -> Vec<u64> {
         if ctx.post_state.typed_bug.len() > 0 {
-            unsafe {
-                let msg = json!({
-                        "typed_bug": ctx.post_state.typed_bug,
-                        "module": ctx.input.module,
-                });
-                ORACLE_OUTPUT.push(msg);
-            }
             ctx.post_state.typed_bug.iter().map(|bug_id| {
                 let mut hasher = DefaultHasher::new();
                 bug_id.hash(&mut hasher);
+                let msg = json!({
+                    "bug_type": ctx.post_state.typed_bug,
+                    "bug_info": format!("{:?} violated", bug_id),
+                    "module": ctx.input.module,
+                });
+                unsafe { ORACLE_OUTPUT.push(msg); }
+
                 (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX
             }).collect_vec()
         } else {

@@ -17,3 +17,5 @@ work_dir
 *.code-workspace
 *.txt
 combined.json
+/**/build/
+Move.lock

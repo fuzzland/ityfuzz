@@ -1,4 +1,4 @@
-module hello_world::hello_world {
+module hello_world::test {
     use sui::event;
 
     struct AAAA__fuzzland_move_bug has drop, copy, store {

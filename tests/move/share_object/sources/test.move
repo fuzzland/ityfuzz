@@ -1,4 +1,4 @@
-module hello_world::hello_world {
+module share_object::test {
     use sui::object::{Self, ID, UID};
     use sui::event;
     use sui::transfer;
