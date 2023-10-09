@@ -305,7 +305,7 @@ where
                     Type::U256 => { wrap!(VecU256, vec![U256::zero()]) }
                     Type::Address => { wrap!(VecAddress, vec![state.get_rand_address()]) }
                     Type::Signer => { unreachable!("cannot initialize signer vector") }
-                    Type::Reference(_) | Type::MutableReference(_) | Type::Vector(_) | Type::Struct(_) => {
+                    Type::Reference(_) | Type::MutableReference(_) | Type::StructInstantiation(_, _) | Type::Struct(_) => {
                         let default_inner = Self::gen_default_value(state, v);
                         if let MoveInputStatus::Complete(Value(inner)) = default_inner {
                             wrap!(Vec, vec![inner])
@@ -323,7 +323,7 @@ where
                     _ => unreachable!()
                 }
             }
-
+            
 
             Type::Struct(_) => {
                 MoveInputStatus::DependentOnStructs(
@@ -334,27 +334,17 @@ where
                 )
             }
 
-            Type::StructInstantiation(_, tys) => {
-                let types = tys.clone();
-                let mut values = Vec::new();
-                for ty in tys {
-                    let default_value = Self::gen_default_value(state, Box::new(ty));
-                    match default_value {
-                        MoveInputStatus::Complete(Value(inner)) => {
-                            values.push(inner);
-                        }
-                        MoveInputStatus::DependentOnStructs(_, _) => {
-                            // todo!("DependentOnStructs")
-                            return default_value;
-                        }
-                    }
-                }
+            Type::StructInstantiation(_, _) => {
                 MoveInputStatus::DependentOnStructs(
                     Value(ValueImpl::Container(
-                        Container::Struct(Rc::new(RefCell::new(values.clone())))
+                        Container::Struct(Rc::new(RefCell::new(vec![])))
                     )),
-                    types
+                    vec![*ty]
                 )
+            }
+
+            Type::TyParam(_) => {
+                todo!("type parameter")
             }
 
             Type::Reference(ty) => {

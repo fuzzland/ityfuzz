@@ -300,7 +300,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
                         final_ty = inner_ty;
                     }
                     match *final_ty {
-                        Type::Struct(_) | Type::MutableReference(_) | Type::Reference(_) => {
+                        Type::Struct(_) | Type::MutableReference(_) | Type::Reference(_) | Type::StructInstantiation(_, _) => {
                             if let Value(ValueImpl::Container(Container::Vec(inner))) = &mut arg.value {
                                 (**inner).borrow_mut().clear()
                             } else {
@@ -311,7 +311,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
                     }
                 }
                 // resample all the structs in the input
-                Type::Struct(_) => {
+                Type::Struct(_) | Type::StructInstantiation(_, _)=> {
                     let new_struct = self.vm_state.state.sample_value(state, ty, &Gate::Own);
                     arg.value = new_struct;
                 }
@@ -323,7 +323,6 @@ impl MoveFunctionInputT for MoveFunctionInput {
                     let new_struct = self.vm_state.state.sample_value(state, inner_ty.as_ref(), &Gate::MutRef);
                     arg.value = convert_ref(new_struct);
                 }
-                Type::StructInstantiation(_, _) => todo!("StructInstantiation"),
                 _ => {}
             }
 
