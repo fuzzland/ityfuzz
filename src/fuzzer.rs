@@ -45,6 +45,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
+use crate::minimizer::{SequentialMinimizer};
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
@@ -63,7 +64,7 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 /// Addr: The address type (e.g., H160)
 /// Loc: The call target location type (e.g., H160)
 #[derive(Debug)]
-pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
@@ -93,13 +94,14 @@ where
     /// Map from hash of a testcase can do (e.g., coverage map) to the (testcase idx, fav factor)
     /// Used to minimize the corpus
     minimizer_map: HashMap<u64, (usize, f64)>,
-    phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out, CI)>,
+    sequential_minimizer: SM,
+    phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out, CI, SM)>,
     /// work dir path
     work_dir: String,
 }
 
-impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
-    ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
+    ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
@@ -122,6 +124,7 @@ where
         infant_feedback: IF,
         infant_result_feedback: IFR,
         objective: OF,
+        sequential_minimizer: SM,
         work_dir: String,
     ) -> Self {
         Self {
@@ -133,6 +136,7 @@ where
             objective,
             work_dir,
             minimizer_map: Default::default(),
+            sequential_minimizer,
             phantom: PhantomData,
         }
     }
@@ -189,8 +193,8 @@ where
 }
 
 
-impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI> UsesState
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM> UsesState
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
@@ -209,8 +213,8 @@ where
 }
 
 /// Implement fuzzer trait for ItyFuzzer
-impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI> Fuzzer<E, EM, ST>
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI, SM> Fuzzer<E, EM, ST>
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
@@ -360,8 +364,8 @@ macro_rules! dump_txn {
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI> Evaluator<E, EM>
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI, SM> Evaluator<E, EM>
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
@@ -389,6 +393,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    SM: SequentialMinimizer<S, E, Loc, Addr, CI>
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -548,16 +553,20 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
+                let minimized = self.sequential_minimizer.minimize(
+                    state, executor, &state
+                        .get_execution_result()
+                        .new_state
+                        .trace.clone()
+                );
+                let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
+                let txn_json = minimized.iter().map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed")).join("\n");
+
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
-                    state
-                        .get_execution_result()
-                        .new_state
-                        .trace
-                        .clone()
-                        .to_string(state)
+                    txn_text
                 );
                 println!("{}", cur_report);
 
@@ -584,7 +593,34 @@ where
                 #[cfg(feature = "print_txn_corpus")]
                 {
                     let vulns_dir = format!("{}/vulnerabilities", self.work_dir.as_str());
-                    dump_file!(state, vulns_dir, false);
+
+                    if !unsafe { REPLAY } {
+                        unsafe {
+                            DUMP_FILE_COUNT += 1;
+                        }
+                        let data = format!(
+                            "Reverted? {} \n Txn: {}",
+                            state.get_execution_result().reverted,
+                            txn_text
+                        );
+                        // write to file
+                        let path = Path::new(vulns_dir.as_str());
+                        if !path.exists() {
+                            std::fs::create_dir_all(path).unwrap();
+                        }
+                        let mut file =
+                            File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                        file.write_all(data.as_bytes()).unwrap();
+                        let mut replayable_file =
+                            File::create(format!("{}/{}_replayable", vulns_dir, unsafe {
+                                DUMP_FILE_COUNT
+                            }))
+                            .unwrap();
+                        replayable_file
+                            .write_all(txn_json.as_bytes())
+                            .unwrap();
+                    }
+                    // dump_file!(state, vulns_dir, false);
                 }
 
                 if !unsafe { RUN_FOREVER } {

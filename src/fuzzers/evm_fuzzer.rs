@@ -32,6 +32,7 @@ use crate::evm::host::{
     ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS,
 };
 use crate::evm::vm::EVMState;
+use crate::evm::minimizer::EVMMinimizer;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
@@ -422,13 +423,14 @@ pub fn evm_fuzzer(
         config.sha3_bypass,
     ));
 
-    let mut fuzzer = ItyFuzzer::new(
+    let mut fuzzer: ItyFuzzer<_,_,_, _, _, _, _, _,_, _, _, _, _, _, EVMMinimizer> = ItyFuzzer::new(
         scheduler,
         infant_scheduler,
         wrapped_feedback,
         infant_feedback,
         infant_result_feedback,
         objective,
+        EVMMinimizer::new(evm_executor_ref.clone()),
         config.work_dir,
     );
     match config.replay_file {

@@ -21,6 +21,7 @@ pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
+pub mod minimizer;
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
