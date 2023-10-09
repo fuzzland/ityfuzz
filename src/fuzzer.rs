@@ -21,13 +21,16 @@ use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
     prelude::{
-        Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
-        ObserversTuple, Testcase, CorpusId, UsesInput,
+        Corpus, CorpusId, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
+        ObserversTuple, Testcase, UsesInput,
     },
     schedulers::Scheduler,
     stages::StagesTuple,
     start_timer,
-    state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions, UsesState, HasLastReportTime},
+    state::{
+        HasClientPerfMonitor, HasCorpus, HasExecutions, HasLastReportTime, HasMetadata,
+        HasSolutions, UsesState,
+    },
     Error, Evaluator, ExecuteInputResult,
 };
 use libafl_bolts::current_time;
@@ -36,6 +39,7 @@ use crate::evm::host::JMP_MAP;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
+use crate::minimizer::SequentialMinimizer;
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
 use itertools::Itertools;
@@ -45,7 +49,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
-use crate::minimizer::{SequentialMinimizer};
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
@@ -67,7 +70,8 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -104,7 +108,8 @@ impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
     ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -192,12 +197,12 @@ where
     }
 }
 
-
 impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM> UsesState
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -217,7 +222,8 @@ impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI, SM> Fu
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     E: Executor<EM, Self, State = S>,
     EM: EventManager<E, Self, State = S>,
     F: Feedback<S>,
@@ -368,7 +374,8 @@ impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI, SM> Evalua
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -393,7 +400,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
-    SM: SequentialMinimizer<S, E, Loc, Addr, CI>
+    SM: SequentialMinimizer<S, E, Loc, Addr, CI>,
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -402,7 +409,7 @@ where
         executor: &mut E,
         manager: &mut EM,
         input: <Self::State as UsesInput>::Input,
-        send_events: bool
+        send_events: bool,
     ) -> Result<(ExecuteInputResult, Option<CorpusId>), Error> {
         start_timer!(state);
         executor.observers_mut().pre_exec_all(state, &input)?;
@@ -452,7 +459,7 @@ where
             state_idx = state.add_infant_state(
                 &state.get_execution_result().new_state.clone(),
                 &mut self.infant_scheduler,
-                input.get_state_idx()
+                input.get_state_idx(),
             );
 
             if self
@@ -488,7 +495,8 @@ where
         if res == ExecuteInputResult::Corpus || res == ExecuteInputResult::Solution {
             // Add the input to the main corpus
             let mut testcase = Testcase::new(input.clone());
-            self.feedback.append_metadata(state, observers, &mut testcase)?;
+            self.feedback
+                .append_metadata(state, observers, &mut testcase)?;
             corpus_idx = state.corpus_mut().add(testcase)?;
             self.infant_scheduler
                 .report_corpus(state.get_infant_state_state(), state_idx);
@@ -554,13 +562,15 @@ where
             // find the solution
             ExecuteInputResult::Solution => {
                 let minimized = self.sequential_minimizer.minimize(
-                    state, executor, &state
-                        .get_execution_result()
-                        .new_state
-                        .trace.clone()
+                    state,
+                    executor,
+                    &state.get_execution_result().new_state.trace.clone(),
                 );
                 let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
-                let txn_json = minimized.iter().map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed")).join("\n");
+                let txn_json = minimized
+                    .iter()
+                    .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
+                    .join("\n");
 
                 println!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
@@ -586,9 +596,11 @@ where
                 .expect("Unable to write data");
                 f.write_all(b"\n").expect("Unable to write data");
 
-                state.metadata_map_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
-                    corpus_idx.into()
-                );
+                state
+                    .metadata_map_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap()
+                    .register_corpus_idx(corpus_idx.into());
 
                 #[cfg(feature = "print_txn_corpus")]
                 {
@@ -609,16 +621,15 @@ where
                             std::fs::create_dir_all(path).unwrap();
                         }
                         let mut file =
-                            File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                            File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT }))
+                                .unwrap();
                         file.write_all(data.as_bytes()).unwrap();
                         let mut replayable_file =
                             File::create(format!("{}/{}_replayable", vulns_dir, unsafe {
                                 DUMP_FILE_COUNT
                             }))
                             .unwrap();
-                        replayable_file
-                            .write_all(txn_json.as_bytes())
-                            .unwrap();
+                        replayable_file.write_all(txn_json.as_bytes()).unwrap();
                     }
                     // dump_file!(state, vulns_dir, false);
                 }
@@ -633,7 +644,8 @@ where
 
                 // The input is a solution, add it to the respective corpus
                 let mut testcase = Testcase::new(input.clone());
-                self.objective.append_metadata(state, observers, &mut testcase)?;
+                self.objective
+                    .append_metadata(state, observers, &mut testcase)?;
                 state.solutions_mut().add(testcase)?;
 
                 if send_events {
@@ -660,7 +672,7 @@ where
         _state: &mut Self::State,
         _executor: &mut E,
         _manager: &mut EM,
-        _input: <Self::State as UsesInput>::Input
+        _input: <Self::State as UsesInput>::Input,
     ) -> Result<CorpusId, Error> {
         todo!()
     }

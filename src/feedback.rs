@@ -1,6 +1,5 @@
 /// Implements the feedback mechanism needed by ItyFuzz.
 /// Implements Oracle, Comparison, Dataflow feedbacks.
-
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::{ConciseSerde, VMInputT};
@@ -32,6 +31,7 @@ use std::rc::Rc;
 /// OracleFeedback is a wrapper around a set of oracles and producers.
 /// It executes the producers and then oracles after each successful execution. If any of the oracle
 /// returns true, then it returns true and report a vulnerability found.
+
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -41,12 +41,37 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// A set of producers that produce data needed by oracles
-    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+    producers:
+        &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// A set of oracles that check for vulnerabilities
     oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// VM executor
     executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     phantom: PhantomData<Out>,
+}
+
+// impl Clone for OracleFeedback
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Clone
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+where
+    I: VMInputT<VS, Loc, Addr, CI>,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn clone(&self) -> Self {
+        Self {
+            producers: self.producers,
+            oracle: self.oracle,
+            executor: self.executor.clone(),
+            phantom: Default::default(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        *self = source.clone()
+    }
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
@@ -90,7 +115,9 @@ where
 {
     /// Create a new [`OracleFeedback`]
     pub fn new(
-        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+        oracle: &'a mut Vec<
+            Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>,
+        >,
         producers: &'a mut Vec<
             Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>,
         >,
@@ -151,8 +178,12 @@ where
                 state.metadata_map_mut().insert(BugMetadata::default());
             }
 
-            state.metadata_map_mut().get_mut::<BugMetadata>().unwrap().current_bugs.clear();
-
+            state
+                .metadata_map_mut()
+                .get_mut::<BugMetadata>()
+                .unwrap()
+                .current_bugs
+                .clear();
         }
 
         // set up oracle context
@@ -173,14 +204,13 @@ where
             producer.deref().borrow_mut().produce(&mut oracle_ctx);
         });
 
-
         let mut is_any_bug_hit = false;
-        let has_post_exec = oracle_ctx.fuzz_state
+        let has_post_exec = oracle_ctx
+            .fuzz_state
             .get_execution_result()
             .new_state
             .state
             .has_post_execution();
-
 
         // execute oracles and update stages if needed
         for idx in 0..self.oracle.len() {
@@ -193,8 +223,13 @@ where
             for bug_idx in self.oracle[idx]
                 .deref()
                 .borrow()
-                .oracle(&mut oracle_ctx, original_stage) {
-                let metadata = oracle_ctx.fuzz_state.metadata_map_mut().get_mut::<BugMetadata>().unwrap();
+                .oracle(&mut oracle_ctx, original_stage)
+            {
+                let metadata = oracle_ctx
+                    .fuzz_state
+                    .metadata_map_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap();
                 if metadata.known_bugs.contains(&bug_idx) || has_post_exec {
                     continue;
                 }
@@ -208,7 +243,6 @@ where
         if has_post_exec {
             before_exit!();
             return Ok(false);
-
         }
 
         before_exit!();
@@ -266,12 +300,15 @@ impl<'a, VS, Loc, Addr, Out, CI> DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
 impl<'a, VS, Loc, Addr, S, Out, CI, I> Feedback<S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI> + UsesInput<Input = I>,
+    S: State
+        + HasClientPerfMonitor
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>
+        + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
         Ok(())
@@ -294,7 +331,6 @@ where
         for i in 0..MAP_SIZE {
             // if the global read map slot is true, and that slot in write map is also true
             if self.read_map[i] && self.write_map[i] != 0 {
-
                 // bucketing
                 let category = if self.write_map[i] < (2 << 2) {
                     0
@@ -321,7 +357,6 @@ where
         return Ok(interesting);
     }
 }
-
 
 /// CmpFeedback is a feedback that uses cmp analysis to determine
 /// whether a state is interesting or not.
@@ -361,13 +396,14 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
     CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
-    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT,
     SlotTy: PartialOrd + Copy + TryFrom<u128>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     <SlotTy as TryFrom<u128>>::Error: std::fmt::Debug,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new CmpFeedback.
     pub(crate) fn new(
@@ -414,13 +450,14 @@ where
         + HasInfantStateState<Loc, Addr, VS, CI>
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + UsesInput<Input = I0>,
-    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
         Ok(())
@@ -469,7 +506,13 @@ where
         }
 
         unsafe {
-            if self.vm.deref().borrow_mut().state_changed() || state.get_execution_result().new_state.state.has_post_execution() {
+            if self.vm.deref().borrow_mut().state_changed()
+                || state
+                    .get_execution_result()
+                    .new_state
+                    .state
+                    .has_post_execution()
+            {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {
                     return Ok(false);
