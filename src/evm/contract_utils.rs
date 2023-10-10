@@ -1,11 +1,11 @@
 use crate::evm::types::{
     fixed_address, generate_random_address, EVMAddress, EVMFuzzMutator, EVMFuzzState,
 };
+use core::panic;
 /// Load contract from file system or remote
 use glob::glob;
 use revm::precompile::B160;
 use serde_json::Value;
-use core::panic;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
@@ -19,7 +19,9 @@ extern crate crypto;
 
 use crate::evm::abi::get_abi_type_boxed_with_address;
 use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation};
+use crate::evm::srcmap::parser::{
+    decode_instructions, decode_instructions_with_replacement, SourceMapLocation,
+};
 
 use self::crypto::digest::Digest;
 use self::crypto::sha3::Sha3;
@@ -114,7 +116,8 @@ impl ContractLoader {
         }
     }
 
-    pub fn parse_abi_str(data: &String) -> Vec<ABIConfig> {
+    pub fn parse_abi_str(data: &str) -> Vec<ABIConfig> {
+        println!("Parsing ABI: {}", data);
         let json: Vec<Value> = serde_json::from_str(data).expect("failed to parse abis file");
         json.iter()
             .flat_map(|abi| {
@@ -139,9 +142,8 @@ impl ContractLoader {
                         abi: format!("({})", abi_name.join(",")),
                         function: [0; 4],
                         function_name: name.to_string(),
-                        is_static: abi["stateMutability"].as_str().unwrap_or_default() == "view",
-                        is_payable: abi["stateMutability"].as_str().unwrap_or_default()
-                            == "payable",
+                        is_static: abi["stateMutability"] == "view",
+                        is_payable: abi["stateMutability"] == "payable",
                         is_constructor: abi["type"] == "constructor",
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
@@ -150,7 +152,28 @@ impl ContractLoader {
 
                     set_hash(function_to_hash.as_str(), &mut abi_config.function);
                     Some(abi_config)
+                } else if abi["type"] == "receive" && abi["stateMutability"] == "payable" {
+                    println!("{} is payable", abi["type"]);
+                    Some(ABIConfig {
+                        abi: String::from("()"),
+                        function: [0; 4],
+                        function_name: String::from("!receive!"),
+                        is_static: false,
+                        is_payable: true,
+                        is_constructor: false,
+                    })
+                } else if abi["type"] == "fallback" {
+                    println!("{} {}", abi["type"], abi["stateMutability"]);
+                    Some(ABIConfig {
+                        abi: String::from("(bytes)"),
+                        function: [0; 4],
+                        function_name: String::from("!fallback!"),
+                        is_static: false,
+                        is_payable: abi["stateMutability"] == "payable",
+                        is_constructor: false,
+                    })
                 } else {
+                    println!("{} abi type", abi["type"]);
                     None
                 }
             })
@@ -634,7 +657,11 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
         build_job_result.bytecodes.to_vec(),
         &build_job_result.source_maps_replacements,
         build_job_result.source_maps.clone(),
-        &build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec()
+        &build_job_result
+            .sources
+            .iter()
+            .map(|(k, _)| k.clone())
+            .collect_vec(),
     )
 }
 
@@ -673,30 +700,46 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
             // println!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
             if re.is_match(&mapped_source) {
                 // update loc's skip_on_concolic to true
-                source_map.as_mut().unwrap().insert(pc, SourceMapLocation {
-                    offset: loc.offset,
-                    length: loc.length,
-                    file: match loc.file {
-                        Some(file) => Some(file),
-                        None => None,
+                source_map.as_mut().unwrap().insert(
+                    pc,
+                    SourceMapLocation {
+                        offset: loc.offset,
+                        length: loc.length,
+                        file: match loc.file {
+                            Some(file) => Some(file),
+                            None => None,
+                        },
+                        file_idx: loc.file_idx,
+                        skip_on_concolic: true,
                     },
-                    file_idx: loc.file_idx,
-                    skip_on_concolic: true,
-                });
+                );
                 // println!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
             }
         }
     }
 }
 
-pub fn save_builder_source_code(build_artifact: &HashMap<EVMAddress, BuildJobResult>, work_dir: &String) {
+pub fn save_builder_source_code(
+    build_artifact: &HashMap<EVMAddress, BuildJobResult>,
+    work_dir: &String,
+) {
     for (addr, build_job_result) in build_artifact {
-        save_builder_addr_source_code(build_job_result, addr, work_dir, &parse_buildjob_result_sourcemap(&build_job_result));
+        save_builder_addr_source_code(
+            build_job_result,
+            addr,
+            work_dir,
+            &parse_buildjob_result_sourcemap(&build_job_result),
+        );
     }
 }
 
 // Save the code of contract at 'addr'
-pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &EVMAddress, work_dir: &String, src_map: &ContractSourceMap) {
+pub fn save_builder_addr_source_code(
+    build_job_result: &BuildJobResult,
+    addr: &EVMAddress,
+    work_dir: &String,
+    src_map: &ContractSourceMap,
+) {
     let mut files_downloaded = HashSet::<String>::new();
 
     let addr_dir = format!("{}/sources/{:?}", work_dir, addr);
@@ -711,7 +754,14 @@ pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &E
                 if !files_downloaded.contains(&file) {
                     if file.contains("/") {
                         // we make the parent directory
-                        let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
+                        let parent_dir = format!(
+                            "{}/{}",
+                            addr_dir,
+                            file.split("/")
+                                .take(file.split("/").count() - 1)
+                                .collect::<Vec<&str>>()
+                                .join("/")
+                        );
                         let path = Path::new(parent_dir.as_str());
                         // same as above, it's okay to skip
                         if !path.exists() {
@@ -731,13 +781,18 @@ pub fn save_builder_addr_source_code(build_job_result: &BuildJobResult, addr: &E
                     std::fs::write(file_path, file_content).unwrap();
                     files_downloaded.insert(file);
                 }
-            },
+            }
             None => {}
         }
     }
 }
 
-pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, addr_map: &ProjectSourceMapTy, base_path: &String) {
+pub fn copy_local_source_code(
+    source_dir_pattern: &String,
+    work_dir: &String,
+    addr_map: &ProjectSourceMapTy,
+    base_path: &String,
+) {
     for (addr, src_map) in addr_map.clone() {
         // each addr has its own source map
         if src_map.is_none() {
@@ -761,7 +816,12 @@ pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, ad
                             true => file.to_string(),
                             false => {
                                 if base_path.len() > 0 {
-                                    format!("{}{}/{}", source_dir_pattern.replace("*", ""), base_path, file)
+                                    format!(
+                                        "{}{}/{}",
+                                        source_dir_pattern.replace("*", ""),
+                                        base_path,
+                                        file
+                                    )
                                 } else {
                                     format!("{}/{}", source_dir_pattern.replace("*", ""), file)
                                 }
@@ -777,14 +837,20 @@ pub fn copy_local_source_code(source_dir_pattern: &String, work_dir: &String, ad
                             }
                             if file.contains("/") {
                                 // we make the parent directory
-                                let parent_dir = format!("{}/{}", addr_dir, file.split("/").take(file.split("/").count() - 1).collect::<Vec<&str>>().join("/"));
+                                let parent_dir = format!(
+                                    "{}/{}",
+                                    addr_dir,
+                                    file.split("/")
+                                        .take(file.split("/").count() - 1)
+                                        .collect::<Vec<&str>>()
+                                        .join("/")
+                                );
                                 std::fs::create_dir_all(parent_dir).unwrap();
                             }
                             std::fs::copy(&file_path, format!("{}/{}", addr_dir, file)).unwrap();
                             println!("Copied {} to {}", &file_path, &addr_dir);
                             files_copied.insert(file);
-                        }
-                        else {
+                        } else {
                             println!("File {} not found", &file_path);
                         }
                     }
