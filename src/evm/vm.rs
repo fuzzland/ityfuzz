@@ -1010,7 +1010,7 @@ where
         data: &Vec<(EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> Vec<Vec<u8>> {
+    ) -> (Vec<Vec<u8>>) {
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state
@@ -1027,7 +1027,7 @@ where
 
         let res = data
             .iter()
-            .map(|(address, by)| {
+            .map(|( address, by)| {
                 let ctx = CallContext {
                     address: *address,
                     caller: Default::default(),
@@ -1052,6 +1052,60 @@ where
             IS_FAST_CALL_STATIC = false;
         }
         res
+    }
+
+    /// Execute a static call
+    fn fast_call(
+        &mut self,
+        data: &Vec<(EVMAddress, EVMAddress, Bytes)>,
+        vm_state: &VS,
+        state: &mut S,
+    ) -> (Vec<Vec<u8>>, VS) {
+        unsafe {
+            IS_FAST_CALL_STATIC = true;
+            self.host.evmstate = vm_state
+                .as_any()
+                .downcast_ref_unchecked::<EVMState>()
+                .clone();
+            self.host.current_self_destructs = vec![];
+            self.host.current_arbitrary_calls = vec![];
+            self.host.call_count = 0;
+            self.host.jumpi_trace = 37;
+            self.host.current_typed_bug = vec![];
+            self.host.randomness = vec![9];
+        }
+
+        let res = data
+            .iter()
+            .map(|(caller, address, by)| {
+                let ctx = CallContext {
+                    address: *address,
+                    caller: *caller,
+                    code_address: *address,
+                    apparent_value: Default::default(),
+                    scheme: CallScheme::Call,
+                };
+                let code = self.host.code.get(&address).expect("no code").clone();
+                let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
+                let mut interp =
+                    Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                let ret = self.host.run_inspect(&mut interp, state);
+                if !is_call_success!(ret) {
+                    vec![]
+                } else {
+                    interp.return_value().to_vec()
+                }
+
+                
+            })
+            .collect::<Vec<Vec<u8>>>();
+
+        unsafe {
+            IS_FAST_CALL_STATIC = false;
+        }
+        (res, unsafe {
+            self.host.evmstate.as_any().downcast_ref_unchecked::<VS>().clone()
+        })
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {

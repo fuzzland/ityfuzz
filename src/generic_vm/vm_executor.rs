@@ -65,6 +65,13 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default;
+    
+    fn fast_call(&mut self, data: &Vec<(Addr,Addr, By)>, vm_state: &VS, state: &mut S) -> (Vec<Out>, VS)
+    where
+        VS: VMStateT,
+        Addr: Serialize + DeserializeOwned + Debug,
+        Loc: Serialize + DeserializeOwned + Debug,
+        Out: Default;
 
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.

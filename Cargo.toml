@@ -37,6 +37,7 @@ sui_support = [
     "dep:sui-types",
 ]
 debug = []
+flashloan_debug = []
 
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }

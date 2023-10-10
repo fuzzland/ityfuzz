@@ -472,6 +472,21 @@ where
         todo!()
     }
 
+    fn fast_call(
+        &mut self,
+        _data: &Vec<(AccountAddress, AccountAddress, MoveFunctionInput)>,
+        _vm_state: &MoveVMState,
+        _state: &mut S,
+    ) -> (Vec<MoveOutput>, MoveVMState)
+    where
+        MoveVMState: VMStateT,
+        AccountAddress: Serialize + DeserializeOwned + Debug,
+        ModuleId: Serialize + DeserializeOwned + Debug,
+        MoveOutput: Default,
+    {
+        todo!()
+    }
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
