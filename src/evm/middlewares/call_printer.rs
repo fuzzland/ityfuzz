@@ -202,7 +202,10 @@ where
         if *interp.instruction_pointer >= 0xa0 && *interp.instruction_pointer <= 0xa4 {
             let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
             let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
-            let arg = if interp.memory.len() < offset + len {
+            let arg = if interp.memory.len() < offset {
+                println!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
+                "unknown".to_string()
+            } else if interp.memory.len() < offset + len {
                 hex::encode(interp.memory.data[offset..].to_vec())
             } else {
                 hex::encode(interp.memory.get_slice(offset, len))
