@@ -43,7 +43,7 @@ pub enum Chain {
     BASE,
     CELO,
     ZKEVM,
-    ZKEVM_TESTNET,
+    ZkevmTestnet,
     LOCAL,
 }
 
@@ -71,7 +71,7 @@ impl Chain {
             "BASE" | "base" => Some(Self::BASE),
             "CELO" | "celo" => Some(Self::CELO),
             "ZKEVM" | "zkevm" => Some(Self::ZKEVM),
-            "ZKEVM_TESTNET" | "zkevm_testnet" => Some(Self::ZKEVM_TESTNET),
+            "ZKEVM_TESTNET" | "zkevm_testnet" => Some(Self::ZkevmTestnet),
             "LOCAL" | "local" => Some(Self::LOCAL),
             _ => None,
         }
@@ -94,7 +94,7 @@ impl Chain {
             Chain::BASE => 8453,
             Chain::CELO => 42220,
             Chain::ZKEVM => 1101,
-            Chain::ZKEVM_TESTNET => 1442,
+            Chain::ZkevmTestnet => 1442,
             Chain::LOCAL => 31337,
         }
     }
@@ -116,7 +116,7 @@ impl Chain {
             Chain::BASE => "base",
             Chain::CELO => "celo",
             Chain::ZKEVM => "zkevm",
-            Chain::ZKEVM_TESTNET => "zkevm_testnet",
+            Chain::ZkevmTestnet => "zkevm_testnet",
             Chain::LOCAL => "local",
         }
         .to_string()
@@ -142,7 +142,7 @@ impl Chain {
             Chain::BASE => "https://developer-access-mainnet.base.org",
             Chain::CELO => "https://rpc.ankr.com/celo",
             Chain::ZKEVM => "https://rpc.ankr.com/polygon_zkevm",
-            Chain::ZKEVM_TESTNET => "https://rpc.ankr.com/polygon_zkevm_testnet",
+            Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -165,7 +165,7 @@ impl Chain {
             Chain::BASE => "https://api.basescan.org/api",
             Chain::CELO => "https://api.celoscan.io/api",
             Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
-            Chain::ZKEVM_TESTNET => "https://api-testnet-zkevm.polygonscan.com/api",
+            Chain::ZkevmTestnet => "https://api-testnet-zkevm.polygonscan.com/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
         }
         .to_string()
@@ -180,7 +180,6 @@ pub struct PairData {
     next: String,
     src_exact: String,
     rate: u32,
-    token: String,
     initial_reserves_0: String,
     initial_reserves_1: String,
 }
@@ -224,7 +223,7 @@ pub struct OnChainConfig {
     pub endpoint_url: String,
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
-    pub block_number: String,
+    pub block_number: u64,
     pub timestamp: Option<String>,
     pub coinbase: Option<String>,
     pub gaslimit: Option<String>,
@@ -241,7 +240,6 @@ pub struct OnChainConfig {
     code_cache: HashMap<EVMAddress, Bytecode>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
-    storage_all_cache: HashMap<EVMAddress, Option<Arc<HashMap<String, EVMU256>>>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
     uniswap_path_cache: HashMap<EVMAddress, TokenContext>,
     rpc_cache: FileSystemCache,
@@ -265,18 +263,14 @@ impl OnChainConfig {
         etherscan_base: String,
         chain_name: String,
     ) -> Self {
-        Self {
+        let mut s = Self {
             endpoint_url,
             client: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(20))
                 .build()
                 .expect("build client failed"),
             chain_id,
-            block_number: if block_number == 0 {
-                "latest".to_string()
-            } else {
-                format!("0x{:x}", block_number)
-            },
+            block_number,
             timestamp: None,
             coinbase: None,
             gaslimit: None,
@@ -286,7 +280,11 @@ impl OnChainConfig {
             chain_name,
             rpc_cache: FileSystemCache::new("./cache"),
             ..Default::default()
+        };
+        if block_number == 0 {
+            s.set_latest_block_number();
         }
+        s
     }
 
     fn get(&self, url: String) -> Option<String> {
@@ -313,20 +311,20 @@ impl OnChainConfig {
                         Ok(t) => {
                             if t.contains("Max rate limit reached") {
                                 println!("Etherscan max rate limit reached, retrying...");
-                                return OperationResult::Retry("Rate limit reached".to_string());
+                                OperationResult::Retry("Rate limit reached".to_string())
                             } else {
-                                return OperationResult::Ok(t);
+                                OperationResult::Ok(t)
                             }
                         }
                         Err(e) => {
                             println!("{:?}", e);
-                            return OperationResult::Retry("failed to parse response".to_string());
+                            OperationResult::Retry("failed to parse response".to_string())
                         }
                     }
                 }
                 Err(e) => {
                     println!("Error: {}", e);
-                    return OperationResult::Retry("failed to send request".to_string());
+                    OperationResult::Retry("failed to send request".to_string())
                 }
             }
         }) {
@@ -367,18 +365,16 @@ impl OnChainConfig {
                 Ok(resp) => {
                     let text = resp.text();
                     match text {
-                        Ok(t) => {
-                            return OperationResult::Ok(t);
-                        }
+                        Ok(t) => OperationResult::Ok(t),
                         Err(e) => {
                             println!("{:?}", e);
-                            return OperationResult::Retry("failed to parse response".to_string());
+                            OperationResult::Retry("failed to parse response".to_string())
                         }
                     }
                 }
                 Err(e) => {
                     println!("Error: {}", e);
-                    return OperationResult::Retry("failed to send request".to_string());
+                    OperationResult::Retry("failed to send request".to_string())
                 }
             }
         }) {
@@ -395,55 +391,22 @@ impl OnChainConfig {
         }
     }
 
-    pub fn add_etherscan_api_key(&mut self, key: String) {
-        self.etherscan_api_key.push(key);
-    }
-
-    pub fn fetch_storage_all(
-        &mut self,
-        address: EVMAddress,
-    ) -> Option<Arc<HashMap<String, EVMU256>>> {
-        if let Some(storage) = self.storage_all_cache.get(&address) {
-            return storage.clone();
-        } else {
-            let storage = self.fetch_storage_all_uncached(address);
-            self.storage_all_cache.insert(address, storage.clone());
-            storage
-        }
-    }
-
-    pub fn fetch_storage_all_uncached(
-        &self,
-        address: EVMAddress,
-    ) -> Option<Arc<HashMap<String, EVMU256>>> {
-        assert_eq!(
-            self.block_number, "latest",
-            "fetch_full_storage only works with latest block"
-        );
-        let resp = {
-            let mut params = String::from("[");
-            params.push_str(&format!("\"0x{:x}\",", address));
-            params.push_str(&format!("\"{}\"", self.block_number));
-            params.push_str("]");
-            self._request("eth_getStorageAll".to_string(), params)
-        };
-
+    pub fn set_latest_block_number(&mut self) {
+        let resp = self._request("eth_blockNumber".to_string(), "[]".to_string());
         match resp {
             Some(resp) => {
-                let mut map = HashMap::new();
-                for (k, v) in resp.as_object()
-                    .expect("failed to convert resp to array, are you using a node that supports eth_getStorageAll?")
-                    .iter()
-                {
-                    map.insert(
-                        k.trim_start_matches("0x").to_string(),
-                        EVMU256::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap(),
-                    );
-                }
-                Some(Arc::new(map))
+                let block_number = resp.as_str().unwrap();
+                let block_number: u64 =
+                    u64::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap();
+                println!("latest block number is {}", block_number);
+                self.block_number = block_number;
             }
-            None => None,
+            None => panic!("fail to get latest block number"),
         }
+    }
+
+    pub fn add_etherscan_api_key(&mut self, key: String) {
+        self.etherscan_api_key.push(key);
     }
 
     pub fn fetch_blk_hash(&mut self) -> &String {
@@ -799,14 +762,9 @@ impl OnChainConfig {
         slot_value
     }
 
-    pub fn fetch_uniswap_path(
-        &mut self,
-        network: &str,
-        token_address: EVMAddress,
-        block: &str,
-    ) -> TokenContext {
+    pub fn fetch_uniswap_path(&mut self, network: &str, token_address: EVMAddress) -> TokenContext {
         let token = format!("{:?}", token_address);
-        let info: Info = self.find_path_subgraph(network, &token, block);
+        let info: Info = self.find_path_subgraph(network, &token);
 
         let basic_info = info.basic_info;
         let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
@@ -898,8 +856,7 @@ impl OnChainConfig {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
 
-        let path =
-            self.fetch_uniswap_path(&self.chain_name.clone(), token, &self.block_number.clone());
+        let path = self.fetch_uniswap_path(&self.chain_name.clone(), token);
         self.uniswap_path_cache.insert(token, path);
         self.uniswap_path_cache.get(&token).unwrap()
     }
@@ -943,7 +900,6 @@ impl OnChainConfig {
                     next: if token == token0 { token1 } else { token0 },
                     src_exact: item["interface"].as_str().unwrap().to_string(),
                     rate: 0,
-                    token: token.to_string(),
                     initial_reserves_0: "".to_string(),
                     initial_reserves_1: "".to_string(),
                 };
@@ -1012,19 +968,14 @@ impl OnChainConfig {
         }
     }
 
-    fn fetch_reserve(&self, pair: &str, block: &str) -> (String, String) {
-        let block = if block.parse::<u64>().is_ok() {
-            format!("0x{:x}", block.parse::<u64>().unwrap())
-        } else {
-            block.to_string()
-        };
+    fn fetch_reserve(&self, pair: &str) -> (String, String) {
         let result = {
             let params = json!([{
             "to": pair,
             "data": "0x0902f1ac",
             "id": 1
-        }, block]);
-            println!("fetching reserve for {pair} {block} {params}");
+        }, self.block_number]);
+            println!("fetching reserve for {pair} {} {params}", self.block_number);
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
@@ -1072,12 +1023,11 @@ impl OnChainConfig {
         hops
     }
 
-    fn get_pegged_next_hop(&mut self, token: &str, network: &str, block: &str) -> PairData {
+    fn get_pegged_next_hop(&mut self, token: &str, network: &str) -> PairData {
         if token == self.get_weth(network) {
             return PairData {
                 src: "pegged_weth".to_string(),
                 rate: 1_000_000,
-                token: token.to_string(),
                 in_: 0,
                 next: "".to_string(),
                 pair: "".to_string(),
@@ -1092,7 +1042,7 @@ impl OnChainConfig {
             .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
             .clone();
 
-        self.add_reserve_info(&mut peg_info, block);
+        self.add_reserve_info(&mut peg_info);
         let p0 = i128::from_str_radix(&peg_info.initial_reserves_0, 16).unwrap();
         let p1 = i128::from_str_radix(&peg_info.initial_reserves_1, 16).unwrap();
 
@@ -1108,12 +1058,12 @@ impl OnChainConfig {
         }
     }
 
-    fn add_reserve_info(&self, pair_data: &mut PairData, block: &str) {
+    fn add_reserve_info(&self, pair_data: &mut PairData) {
         if pair_data.src == "pegged_weth" {
             return;
         }
 
-        let reserves = self.fetch_reserve(&pair_data.pair, block);
+        let reserves = self.fetch_reserve(&pair_data.pair);
         pair_data.initial_reserves_0 = reserves.0;
         pair_data.initial_reserves_1 = reserves.1;
     }
@@ -1133,7 +1083,6 @@ impl OnChainConfig {
         &mut self,
         token: &str,
         network: &str,
-        block: &str,
         path: &mut Vec<PairData>,
         visited: &mut HashSet<String>,
         pegged_tokens: &HashMap<String, String>,
@@ -1142,7 +1091,7 @@ impl OnChainConfig {
     ) {
         if pegged_tokens.values().any(|v| v == token) {
             let mut new_path = path.clone();
-            new_path.push(self.get_pegged_next_hop(token, network, block));
+            new_path.push(self.get_pegged_next_hop(token, network));
             routes.push(new_path);
             return;
         }
@@ -1158,7 +1107,6 @@ impl OnChainConfig {
             self.dfs(
                 &hop.next,
                 network,
-                block,
                 path,
                 visited,
                 pegged_tokens,
@@ -1169,11 +1117,11 @@ impl OnChainConfig {
         }
     }
 
-    fn find_path_subgraph(&mut self, network: &str, token: &str, block: &str) -> Info {
+    fn find_path_subgraph(&mut self, network: &str, token: &str) -> Info {
         let pegged_tokens = self.get_pegged_token(network);
 
         if pegged_tokens.values().any(|v| v == token) {
-            let hop = self.get_pegged_next_hop(token, network, block);
+            let hop = self.get_pegged_next_hop(token, network);
             return self.with_info(vec![vec![hop]], network, token);
         }
 
@@ -1185,7 +1133,6 @@ impl OnChainConfig {
         self.dfs(
             token,
             network,
-            block,
             &mut vec![],
             &mut HashSet::new(),
             &pegged_tokens,
@@ -1195,7 +1142,7 @@ impl OnChainConfig {
 
         for route in &mut routes {
             for hop in route {
-                self.add_reserve_info(hop, block);
+                self.add_reserve_info(hop);
             }
         }
 
@@ -1296,7 +1243,7 @@ mod tests {
     fn test_get_pegged_next_hop() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
-        let v = config.get_pegged_next_hop(token, "bsc", "latest");
+        let v = config.get_pegged_next_hop(token, "bsc");
         assert!(v.src == "pegged_weth");
         assert!(v.token == token.to_lowercase());
     }
@@ -1334,7 +1281,6 @@ mod tests {
         let v = config.fetch_uniswap_path(
             "bsc",
             EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
-            "22055611",
         );
         assert!(v.swaps.len() > 0);
         assert!(!v.weth_address.is_zero());

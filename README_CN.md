@@ -167,7 +167,6 @@ ItyFuzz 将从 Etherscan 拉取合约的 ABI 并 fuzz 它。如果 ItyFuzz 遇�
 当遇到 SLOAD 与目标未初始化的时，ItyFuzz 尝试从区块链节点获取存储。有三种获取方式：
 
 - OneByOne：一次获取一个 slot 。这是默认模式。它很慢，但不会失败。
-- All：使用我们节点上的自定义 API `eth_getStorageAll` 一次性获取所有 slot 。这是最快的模式，但如果合约太大，可能会失败。
 - Dump：使用 debug API `debug_storageRangeAt` 来转储存储。这只适用于 ETH（目前），并且很容易失败。
 
 ### 构造函数参数
