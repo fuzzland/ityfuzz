@@ -2,17 +2,17 @@
 use crate::evm::contract_utils::{ContractInfo, ContractLoader};
 use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
 
-use crate::evm::oracles::erc20::IERC20OracleFlashloan;
-use crate::oracle::{Oracle, Producer};
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::fs::File;
-use std::rc::Rc;
-use std::fmt::{self, Debug};
 use crate::evm::blaz::builder::BuildJob;
 use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
 use crate::evm::blaz::offchain_config::OffchainConfig;
+use crate::evm::oracles::erc20::IERC20OracleFlashloan;
 use crate::evm::types::EVMAddress;
+use crate::oracle::{Oracle, Producer};
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::fmt::{self, Debug};
+use std::fs::File;
+use std::rc::Rc;
 
 pub enum FuzzerTypes {
     CMP,
@@ -23,7 +23,6 @@ pub enum FuzzerTypes {
 #[derive(Copy, Clone)]
 pub enum StorageFetchingMode {
     Dump,
-    All,
     OneByOne,
 }
 
@@ -31,7 +30,6 @@ impl StorageFetchingMode {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "dump" => Some(StorageFetchingMode::Dump),
-            "all" => Some(StorageFetchingMode::All),
             "onebyone" => Some(StorageFetchingMode::OneByOne),
             _ => None,
         }
@@ -82,10 +80,12 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub local_files_basedir_pattern: Option<String>,
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
+    for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
-         .field("onchain", &self.onchain)
+            .field("onchain", &self.onchain)
             // .field("onchain_storage_fetching", &self.onchain_storage_fetching)
             .field("flashloan", &self.flashloan)
             .field("concolic", &self.concolic)
@@ -112,6 +112,6 @@ impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug for Config<VS, Addr, 
             .field("typed_bug", &self.typed_bug)
             .field("selfdestruct_bug", &self.selfdestruct_bug)
             // .field("builder", &self.builder)
-         .finish()
+            .finish()
     }
 }

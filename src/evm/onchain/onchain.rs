@@ -33,7 +33,7 @@ use crate::evm::corpus_initializer::ABIMap;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use itertools::Itertools;
-use revm_interpreter::{Interpreter, Host};
+use revm_interpreter::{Host, Interpreter};
 use revm_primitives::{Bytecode, U256};
 use std::rc::Rc;
 use std::str::FromStr;
@@ -227,11 +227,6 @@ where
                     StorageFetchingMode::Dump => {
                         load_data!(fetch_storage_dump, storage_dump, slot_idx)
                     }
-                    StorageFetchingMode::All => {
-                        // the key is in keccak256 format
-                        let key = keccak_hex(slot_idx);
-                        load_data!(fetch_storage_all, storage_all, key)
-                    }
                     StorageFetchingMode::OneByOne => self.endpoint.get_contract_slot(
                         address,
                         slot_idx,
@@ -265,15 +260,16 @@ where
             #[cfg(feature = "real_block_env")]
             // TIMESTAMP
             0x42 => {
-                if host.env().block.timestamp == EVMU256::from(1){
+                if host.env().block.timestamp == EVMU256::from(1) {
                     host.env().block.timestamp = self.endpoint.fetch_blk_timestamp();
                 }
             }
             #[cfg(feature = "real_block_env")]
             // NUMBER
             0x43 => {
-                if host.env().block.number == EVMU256::ZERO{
-                    host.env().block.number = EVMU256::from_str(&self.endpoint.block_number).unwrap();
+                if host.env().block.number == EVMU256::ZERO {
+                    host.env().block.number =
+                        EVMU256::from_str(&self.endpoint.block_number).unwrap();
                 }
             }
             #[cfg(feature = "real_block_env")]
@@ -350,8 +346,11 @@ where
                         // replace the code with the one from builder
                         // println!("replace code for {:?} with builder's", address_h160);
                         // host.set_codedata(address_h160, contract_code.clone());
-                        state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>()
-                            .expect("artifact info metadata").add(address_h160, job);
+                        state
+                            .metadata_map_mut()
+                            .get_mut::<ArtifactInfoMetadata>()
+                            .expect("artifact info metadata")
+                            .add(address_h160, job);
                     }
                 }
 
@@ -372,7 +371,9 @@ where
                         let sigs = extract_sig_from_contract(&contract_code_str);
                         let mut unknown_sigs: usize = 0;
                         for sig in &sigs {
-                            if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
+                            if let Some(abi) =
+                                state.metadata_map().get::<ABIMap>().unwrap().get(sig)
+                            {
                                 parsed_abi.push(abi.clone());
                             } else {
                                 unknown_sigs += 1;
@@ -384,7 +385,12 @@ where
                             let abis = fetch_abi_heimdall(contract_code_str)
                                 .iter()
                                 .map(|abi| {
-                                    if let Some(known_abi) = state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function) {
+                                    if let Some(known_abi) = state
+                                        .metadata_map()
+                                        .get::<ABIMap>()
+                                        .unwrap()
+                                        .get(&abi.function)
+                                    {
                                         known_abi
                                     } else {
                                         abi
@@ -502,8 +508,13 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
-
+    unsafe fn on_insert(
+        &mut self,
+        bytecode: &mut Bytecode,
+        address: EVMAddress,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {
