@@ -223,7 +223,7 @@ pub struct OnChainConfig {
     pub endpoint_url: String,
     pub client: reqwest::blocking::Client,
     pub chain_id: u32,
-    pub block_number: u64,
+    pub block_number: String,
     pub timestamp: Option<String>,
     pub coinbase: Option<String>,
     pub gaslimit: Option<String>,
@@ -270,7 +270,7 @@ impl OnChainConfig {
                 .build()
                 .expect("build client failed"),
             chain_id,
-            block_number,
+            block_number: format!("0x{:x}", block_number),
             timestamp: None,
             coinbase: None,
             gaslimit: None,
@@ -396,10 +396,12 @@ impl OnChainConfig {
         match resp {
             Some(resp) => {
                 let block_number = resp.as_str().unwrap();
-                let block_number: u64 =
-                    u64::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap();
+                self.block_number = block_number.to_string();
+                let block_number =
+                    EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
+                        .unwrap()
+                        .to_string();
                 println!("latest block number is {}", block_number);
-                self.block_number = block_number;
             }
             None => panic!("fail to get latest block number"),
         }
@@ -1245,7 +1247,6 @@ mod tests {
         let token = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
         let v = config.get_pegged_next_hop(token, "bsc");
         assert!(v.src == "pegged_weth");
-        // assert!(v.token == token.to_lowercase());
     }
 
     #[test]
