@@ -203,7 +203,7 @@ impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<VS, Loc, Addr, S
 
         // determine whether we should conduct havoc
         // (a sequence of mutations in batch vs single mutation)
-        let should_havoc = state.rand_mut().below(100) < 60;
+        let should_havoc = state.rand_mut().below(100) < 10;
 
         // determine how many times we should mutate the input
         let havoc_times = if should_havoc {
