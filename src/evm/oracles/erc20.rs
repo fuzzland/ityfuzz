@@ -199,19 +199,19 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
         //         EVMU512::from(liquidation_owed - liquidation_earned);
         // }
 
-        let exec_res = ctx.fuzz_state.get_execution_result();
-        // exec_res
-        //     .new_state
-        //     .state
-        //     .flashloan_data
-        //     .oracle_recheck_balance
-        //     .clear();
-        // exec_res
-        //     .new_state
-        //     .state
-        //     .flashloan_data
-        //     .oracle_recheck_reserve
-        //     .clear();
+        let exec_res = ctx.fuzz_state.get_execution_result_mut();
+        exec_res
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_balance
+            .clear();
+        exec_res
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_reserve
+            .clear();
 
         if exec_res.new_state.state.flashloan_data.earned
             > exec_res.new_state.state.flashloan_data.owed
