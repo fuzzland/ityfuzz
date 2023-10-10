@@ -40,6 +40,7 @@ pub enum CallType {
     DelegateCall,
     StaticCall,
     FirstLevelCall,
+    Event,
 }
 
 impl Default for CallType {
@@ -113,8 +114,8 @@ impl CallPrinter {
             .map(|(layer, call)| {
                 let padding = (0..*layer).map(|_| "  ").join("");
                 format!(
-                    "{}[{} -> {}] ({}) > ({})",
-                    padding, call.caller, call.contract, call.input, call.results
+                    "{}[{:?}][{} -> {}] ({}) > ({})",
+                    padding, call.call_type, call.caller, call.contract, call.input, call.results
                 )
             })
             .join("\n")
@@ -197,79 +198,113 @@ where
             }));
         }
 
-        let (arg_offset, arg_len) = match unsafe { *interp.instruction_pointer } {
-            0xf1 | 0xf2 => (interp.stack.peek(3).unwrap(), interp.stack.peek(4).unwrap()),
-            0xf4 | 0xfa => (interp.stack.peek(2).unwrap(), interp.stack.peek(3).unwrap()),
-            _ => {
-                return;
+        // events
+        if *interp.instruction_pointer >= 0xa0 && *interp.instruction_pointer <= 0xa4 {
+            let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
+            let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
+            let arg = if interp.memory.len() < offset + len {
+                hex::encode(interp.memory.data[offset..].to_vec())
+            } else {
+                hex::encode(interp.memory.get_slice(offset, len))
+            };
+            let topic_amount = *interp.instruction_pointer - 0xa0;
+            let mut topics = Vec::new();
+            for i in 0..topic_amount {
+                let topic = interp.stack.peek(i as usize + 2).unwrap();
+                let topic = format!("{:x}", topic);
+                topics.push(topic);
             }
-        };
 
-        let call_type = match unsafe { *interp.instruction_pointer } {
-            0xf1 => CallType::Call,
-            0xf2 => CallType::CallCode,
-            0xf4 => CallType::DelegateCall,
-            0xfa => CallType::StaticCall,
-            _ => {
-                return;
-            }
-        };
+            let arg = format!("{}({})", arg, topics.join(","));
 
-        self.current_layer += 1;
+            self.results.data.push((self.current_layer, SingleCall {
+                call_type: CallType::Event,
+                caller: self.translate_address(interp.contract.caller),
+                contract: self.translate_address(interp.contract.address),
+                input: arg.clone(),
+                value: "".to_string(),
+                source: None,
+                results: "".to_string(),
+            }));
 
-        let arg_offset = as_u64(arg_offset) as usize;
-        let arg_len = as_u64(arg_len) as usize;
-
-        let arg = if interp.memory.len() < arg_offset + arg_len {
-            hex::encode(interp.memory.data[arg_len..].to_vec())
-        } else {
-            hex::encode(interp.memory.get_slice(arg_offset, arg_len))
-        };
-
-        let caller = interp.contract.address;
-        let address = match *interp.instruction_pointer {
-            0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
-            0x3b | 0x3c => interp.stack.peek(0).unwrap(),
-            _ => {
-                unreachable!()
-            }
-        };
-
-        let value = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
-            _ => EVMU256::ZERO,
-        };
-
-        let target = convert_u256_to_h160(address);
-
-        let caller_code_address = interp.contract.code_address;
-        let caller_code = host
-            .code
-            .get(&interp.contract.code_address)
-            .map(|code| Vec::from(code.bytecode()))
-            .unwrap_or(vec![]);
-
-        self.offsets = 0;
-        self.results.data.push((self.current_layer, SingleCall {
-            call_type,
-            caller: self.translate_address(caller),
-            contract: self.translate_address(target),
-            input: arg,
-            value: format!("{}", value),
-            source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
-                && let Some(source) = source.get(&interp.program_counter()) {
-                Some(source.clone())
-            } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
-                if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
-                    Some(srcmap.clone())
+        }
+        // external calls
+        else if *interp.instruction_pointer <= 0xfa && *interp.instruction_pointer >= 0xf1 {
+            let (arg_offset, arg_len) = match unsafe { *interp.instruction_pointer } {
+                0xf1 | 0xf2 => (interp.stack.peek(3).unwrap(), interp.stack.peek(4).unwrap()),
+                0xf4 | 0xfa => (interp.stack.peek(2).unwrap(), interp.stack.peek(3).unwrap()),
+                _ => {
+                    return;
+                }
+            };
+    
+            let call_type = match unsafe { *interp.instruction_pointer } {
+                0xf1 => CallType::Call,
+                0xf2 => CallType::CallCode,
+                0xf4 => CallType::DelegateCall,
+                0xfa => CallType::StaticCall,
+                _ => {
+                    return;
+                }
+            };
+    
+            self.current_layer += 1;
+    
+            let arg_offset = as_u64(arg_offset) as usize;
+            let arg_len = as_u64(arg_len) as usize;
+    
+            let arg = if interp.memory.len() < arg_offset + arg_len {
+                hex::encode(interp.memory.data[arg_len..].to_vec())
+            } else {
+                hex::encode(interp.memory.get_slice(arg_offset, arg_len))
+            };
+    
+            let caller = interp.contract.address;
+            let address = match *interp.instruction_pointer {
+                0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
+                0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                _ => {
+                    unreachable!()
+                }
+            };
+    
+            let value = match *interp.instruction_pointer {
+                0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
+                _ => EVMU256::ZERO,
+            };
+    
+            let target = convert_u256_to_h160(address);
+    
+            let caller_code_address = interp.contract.code_address;
+            let caller_code = host
+                .code
+                .get(&interp.contract.code_address)
+                .map(|code| Vec::from(code.bytecode()))
+                .unwrap_or(vec![]);
+    
+            self.offsets = 0;
+            self.results.data.push((self.current_layer, SingleCall {
+                call_type,
+                caller: self.translate_address(caller),
+                contract: self.translate_address(target),
+                input: arg,
+                value: format!("{}", value),
+                source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
+                    && let Some(source) = source.get(&interp.program_counter()) {
+                    Some(source.clone())
+                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
+                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
+                        Some(srcmap.clone())
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            },
-            results: "".to_string(),
-        }));
+                },
+                results: "".to_string(),
+            }));
+        }
+        
     }
 
     unsafe fn on_return(
