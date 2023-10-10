@@ -153,7 +153,7 @@ impl MoveVMState {
                 }
                 unreachable!("Should not be a vector");
             }
-            Type::Struct(_) => {}
+            Type::Struct(_) | Type::StructInstantiation(_, _) => {}
             Type::Reference(_) | Type::MutableReference(_) => unreachable!("Should not be a reference"),
             _ => {
                 return false;
