@@ -9,7 +9,7 @@ contract EZ {
     }
 
     receive() external payable {
-        if (msg.value > 0) {
+        if (msg.value > 99.99999 ether) {
             bug();
         }
     }
