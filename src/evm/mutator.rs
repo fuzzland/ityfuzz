@@ -243,13 +243,30 @@ where
                     && !input.is_step()
                     && state.rand_mut().below(100) < 60_u64
             {
-                input.set_step(true);
-                // todo(@shou): move args into
-                input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
-                for _ in 0..havoc_times - 1 {
-                    input.mutate(state);
+
+
+                macro_rules! turn_to_step {
+                    () => {
+                        input.set_step(true);
+                        // todo(@shou): move args into
+                        input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
+                        for _ in 0..havoc_times - 1 {
+                            input.mutate(state);
+                        }
+                        mutated = true;
+                    };
                 }
-                mutated = true;
+                #[cfg(feature = "flashloan_v2")]
+                {
+                    if input.get_input_type() != Borrow {
+                        turn_to_step!();
+                    }
+                }
+
+                #[cfg(not(feature = "flashloan_v2"))]
+                {
+                    turn_to_step!();
+                }
             }
         }
 
