@@ -1073,11 +1073,18 @@ where
     }
 
     fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
-        if let Some(account) = self.evmstate.get(&address) {
+        if let Some(account) = self.evmstate.get_mut(&address) {
             if let Some(slot) = account.get(&index) {
                 return Some((*slot, true));
+            } else {
+                account.insert(index, self.next_slot);
             }
+        } else {
+            let mut account = HashMap::new();
+            account.insert(index, self.next_slot);
+            self.evmstate.insert(address, account);
         }
+            
         Some((self.next_slot, true))
     }
 

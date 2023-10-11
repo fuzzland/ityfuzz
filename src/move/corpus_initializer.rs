@@ -305,7 +305,7 @@ where
                     Type::U256 => { wrap!(VecU256, vec![U256::zero()]) }
                     Type::Address => { wrap!(VecAddress, vec![state.get_rand_address()]) }
                     Type::Signer => { unreachable!("cannot initialize signer vector") }
-                    Type::Reference(_) | Type::MutableReference(_) | Type::Vector(_) | Type::Struct(_) => {
+                    Type::Reference(_) | Type::MutableReference(_) | Type::Struct(_) | Type::StructInstantiation(_, _) => {
                         let default_inner = Self::gen_default_value(state, v);
                         if let MoveInputStatus::Complete(Value(inner)) = default_inner {
                             wrap!(Vec, vec![inner])
@@ -323,9 +323,7 @@ where
                     _ => unreachable!()
                 }
             }
-
-
-            Type::Struct(_) => {
+            Type::Struct(_) | Type::StructInstantiation(_, _) => {
                 MoveInputStatus::DependentOnStructs(
                     Value(ValueImpl::Container(
                         Container::Struct(Rc::new(RefCell::new(vec![])))
@@ -333,7 +331,7 @@ where
                     vec![*ty]
                 )
             }
-            Type::Reference(ty) => {
+            Type::Reference(ty) | Type::MutableReference(ty) => {
                 let default_inner = Self::gen_default_value(state, ty);
                 if let MoveInputStatus::Complete(Value(inner)) = default_inner {
                     if let ValueImpl::Container(inner_v) = inner {
@@ -359,33 +357,7 @@ where
                     unreachable!()
                 }
             }
-            Type::MutableReference(ty)  => {
-                let default_inner = Self::gen_default_value(state, ty);
-                if let MoveInputStatus::Complete(Value(inner)) = default_inner {
-                    if let ValueImpl::Container(inner_v) = inner {
-                        MoveInputStatus::Complete(Value(ValueImpl::ContainerRef(
-                            ContainerRef::Local(inner_v)
-                        )))
-                    } else {
-                        MoveInputStatus::Complete(Value(ValueImpl::IndexedRef(
-                            IndexedRef {
-                                idx: 0,
-                                container_ref: ContainerRef::Local(Container::Locals(Rc::new(RefCell::new(vec![inner]))))
-                            }
-                        )))
-                    }
-                } else if let MoveInputStatus::DependentOnStructs(Value(ValueImpl::Container(cont)), deps) = default_inner {
-                    MoveInputStatus::DependentOnStructs(
-                        Value(ValueImpl::ContainerRef(
-                            ContainerRef::Local(cont)
-                        )),
-                        deps
-                    )
-                } else {
-                    unreachable!()
-                }
-            }
-            _ => unreachable!()
+            ty => todo!("gen_default_value failed: {:?}", ty)
         }
     }
 
@@ -472,6 +444,7 @@ where
                 }
             }
         }
+
         let input = MoveFunctionInput {
             module: module_id.clone(),
             function: function.name.clone(),
