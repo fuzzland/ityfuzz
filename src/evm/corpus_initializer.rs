@@ -329,7 +329,6 @@ where
             }
 
             for abi in contract.abi.clone() {
-                println!("Adding abi: {:?}", abi);
                 self.add_abi(&abi, contract.deployed_address, &mut artifacts);
             }
         }
