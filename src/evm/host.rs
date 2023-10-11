@@ -52,7 +52,7 @@ use revm_primitives::{
     PetersburgSpec, ShanghaiSpec, SpecId, SpuriousDragonSpec, TangerineSpec,
 };
 
-use super::vm::MEM_LIMIT;
+use super::vm::{MEM_LIMIT, IS_FAST_CALL};
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -1315,7 +1315,7 @@ where
 
         let res = if is_precompile(input.contract, self.precompiles.len()) {
             self.call_precompile(input, state)
-        } else if unsafe { IS_FAST_CALL_STATIC } {
+        } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
             self.call_forbid_control_leak(input, state)
         } else {
             self.call_allow_control_leak(input, interp, output_info, state)

@@ -115,7 +115,12 @@ where
         }
     }
 
-    fn ensures_constraint<I, S>(input: &mut I, state: &mut S, constraints: Vec<Constraint>)
+    fn ensures_constraint<I, S>(
+        input: &mut I, 
+        state: &mut S, 
+        new_vm_state: &VS,
+        constraints: Vec<Constraint>
+    ) -> bool
     where
         I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
         S: State
@@ -125,6 +130,21 @@ where
             + HasCaller<Addr>
             + HasMetadata,
     {
+        // precheck
+        for constraint in &constraints {
+            match constraint {
+                Constraint::MustStepNow => {
+                    #[cfg(feature = "flashloan_v2")]
+                    {
+                        if input.get_input_type() == Borrow {
+                            return false;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         for constraint in constraints {
             match constraint {
                 Constraint::Caller(caller) => {
@@ -162,11 +182,12 @@ where
                     input.set_step(true);
                     // todo(@shou): move args into
                     // println!("vm state: {:?}", input.get_state());
-                    input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
+                    input.set_as_post_exec(new_vm_state.get_post_execution_needed_len());
                     input.mutate(state);
                 }
             }
         }
+        return true;
     }
 }
 
@@ -230,13 +251,15 @@ where
                 let (idx, new_state) =
                     state.get_infant_state(&mut self.infant_scheduler).unwrap();
                 if idx != old_idx {
-                    mutated = true;
+                    if !state.has_caller(&input.get_caller()) {
+                        input.set_caller(state.get_rand_caller());
+                    }
+    
+                    if Self::ensures_constraint(input, state, &new_state.state, new_state.state.get_constraints()) {
+                        mutated = true;
+                        input.set_staged_state(new_state, idx);
+                    }
                 }
-                if !state.has_caller(&input.get_caller()) {
-                    input.set_caller(state.get_rand_caller());
-                }
-                input.set_staged_state(new_state, idx);
-                Self::ensures_constraint(input, state, input.get_state().get_constraints());
             }
     
             if input.get_staged_state().state.has_post_execution()
@@ -267,6 +290,8 @@ where
                 {
                     turn_to_step!();
                 }
+
+                return Ok(MutationResult::Mutated);
             }
         }
 
