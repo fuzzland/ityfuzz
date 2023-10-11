@@ -497,19 +497,20 @@ where
                 self.objective.discard_metadata(state, &input)?;
                 match self.should_replace(&input, unsafe { &JMP_MAP }) {
                     Some((hash, new_fav_factor, old_testcase_idx)) => {
-                        state.corpus_mut().remove(old_testcase_idx.into())?;
-
                         let mut testcase = Testcase::new(input.clone());
-                        let new_testcase_idx = state.corpus_mut().add(testcase)?;
+                        state.corpus_mut().replace(
+                            old_testcase_idx.into(),
+                            testcase
+                        )?;
                         self.infant_scheduler
                             .report_corpus(state.get_infant_state_state(), state_idx);
-                        self.scheduler.on_add(state, new_testcase_idx)?;
+                        // self.scheduler.on_add(state, new_testcase_idx)?;
                         self.on_replace_corpus(
                             (hash, new_fav_factor, old_testcase_idx),
-                            new_testcase_idx.into(),
+                            old_testcase_idx.into(),
                         );
 
-                        Ok((res, Some(new_testcase_idx)))
+                        Ok((res, Some(old_testcase_idx.into())))
                     }
                     None => {
                         self.feedback.discard_metadata(state, &input)?;
