@@ -588,9 +588,31 @@ where
 
         let input_seq = input.input.to_vec();
 
+        let is_target_address_unbounded = {
+            assert_ne!(self._pc, 0);
+            self.pc_to_addresses
+                .entry((input.context.caller, self._pc))
+                .or_insert_with(HashSet::new);
+            let addresses_at_pc = self
+                .pc_to_addresses
+                .get_mut(&(input.context.caller, self._pc))
+                .unwrap();
+            addresses_at_pc.insert(input.contract);
+            addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD
+        };
+
+        if input.context.scheme == CallScheme::StaticCall {
+            if state.has_caller(&input.contract) || is_target_address_unbounded {
+                record_func_hash!();
+                push_interp!();
+                // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
+            }
+        }
+
         if input.context.scheme == CallScheme::Call {
             // if calling sender, then definitely control leak
-            if state.has_caller(&input.contract) {
+            if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
@@ -628,26 +650,7 @@ where
                     Gas::new(0),
                     Bytes::new(),
                 );
-            }
-
-            // control leak check
-            assert_ne!(self._pc, 0);
-            self.pc_to_addresses
-                .entry((input.context.caller, self._pc))
-                .or_insert_with(HashSet::new);
-            let addresses_at_pc = self
-                .pc_to_addresses
-                .get_mut(&(input.context.caller, self._pc))
-                .unwrap();
-            addresses_at_pc.insert(input.contract);
-
-            // if control leak is enabled, return controlleak if it is unbounded call
-            if CONTROL_LEAK_DETECTION && addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD {
-                record_func_hash!();
-                push_interp!();
-                // println!("control leak {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (ControlLeak, Gas::new(0), Bytes::new());
-            }
+            }            
         }
 
         let input_bytes = Bytes::from(input_seq);
@@ -682,7 +685,7 @@ where
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
         match res.0 {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => {
                 self.leak_ctx.push(SinglePostExecution::from_interp(
                     interp,
                     (out_offset, out_len),

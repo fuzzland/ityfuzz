@@ -97,6 +97,7 @@ pub enum Constraint {
     Contract(EVMAddress),
     Value(EVMU256),
     NoLiquidation,
+    MustStepNow,
 }
 
 /// A post execution context
@@ -741,7 +742,7 @@ where
         }
         let mut r = r.unwrap();
         match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => unsafe {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => unsafe {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -756,11 +757,13 @@ where
                     must_step: match r.ret {
                         ControlLeak => false,
                         InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => true,
+                        InstructionResult::AddressUnboundedStaticCall => false,
                         _ => unreachable!(),
                     },
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
+                        InstructionResult::AddressUnboundedStaticCall => vec![Constraint::MustStepNow],
                         InstructionResult::ArbitraryExternalCallAddressBounded(
                             caller,
                             target,
@@ -812,6 +815,7 @@ where
                     | InstructionResult::Stop
                     | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
+                    | InstructionResult::AddressUnboundedStaticCall
                     | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => false,
                     _ => true,
                 },

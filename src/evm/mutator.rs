@@ -158,6 +158,13 @@ where
                         input.set_liquidation_percent(0);
                     }
                 }
+                Constraint::MustStepNow => {
+                    input.set_step(true);
+                    // todo(@shou): move args into
+                    // println!("vm state: {:?}", input.get_state());
+                    input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
+                    input.mutate(state);
+                }
             }
         }
     }
@@ -298,14 +305,20 @@ where
                     let (idx, new_state) =
                         state.get_infant_state(&mut self.infant_scheduler).unwrap();
                     if idx == old_idx {
+                        // println!("skipped");
                         return MutationResult::Skipped;
                     }
                     if !state.has_caller(&input.get_caller()) {
                         input.set_caller(state.get_rand_caller());
                     }
 
-                    Self::ensures_constraint(input, state, new_state.state.get_constraints());
+                    // println!("new state: {:?}", new_state.state);
+
                     input.set_staged_state(new_state, idx);
+                    Self::ensures_constraint(input, state, input.get_state().get_constraints());
+                    // println!("new state idx: {}", idx);
+        // println!("mutating input with constraints: {:?}", input.get_state().get_constraints());
+
                     MutationResult::Mutated
                 }
                 #[cfg(feature = "flashloan_v2")]
