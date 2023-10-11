@@ -1,5 +1,4 @@
 /// Mutation utilities for the EVM
-use crate::input::VMInputT;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::{
@@ -9,18 +8,18 @@ use libafl::prelude::{
     BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasMetadata, Mutator,
     QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
 };
-use libafl_bolts::{impl_serdeany, Named, prelude::Rand, tuples::tuple_list};
 use libafl::state::{HasMaxSize, HasRand, State};
 use libafl::Error;
+use libafl_bolts::{impl_serdeany, prelude::Rand, tuples::tuple_list, Named};
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
 use crate::evm::types::EVMU256;
+use std::collections::HashMap;
 
 /// Constants in the contracts
 ///
 /// This is metadata attached to the global fuzz state
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct ConstantPoolMetadata {
     /// Vector of constants in the contracts
     pub constants: Vec<Vec<u8>>,
@@ -29,9 +28,7 @@ pub struct ConstantPoolMetadata {
 impl ConstantPoolMetadata {
     /// Create a new [`ConstantPoolMetadata`]
     pub fn new() -> Self {
-        Self {
-            constants: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Add a constant to the pool
@@ -46,6 +43,7 @@ impl_serdeany!(ConstantPoolMetadata);
 ///
 /// We discover that sometimes directly setting the bytes to the constants allow us to increase
 /// test coverage.
+#[derive(Default)]
 pub struct ConstantHintedMutator;
 
 impl Named for ConstantHintedMutator {
@@ -56,7 +54,7 @@ impl Named for ConstantHintedMutator {
 
 impl ConstantHintedMutator {
     pub fn new() -> Self {
-        Self {}
+        Self
     }
 }
 
@@ -125,9 +123,9 @@ pub fn mutate_with_vm_slot<S: State + HasRand>(
     let key = vm_slots.keys().nth(idx).unwrap();
     if state.rand_mut().below(100) < 90 {
         let value = vm_slots.get(key).unwrap();
-        value.clone()
+        *value
     } else {
-        key.clone()
+        *key
     }
 }
 
@@ -149,13 +147,12 @@ where
         }
         let new_val = mutate_with_vm_slot(self.vm_slots, state);
 
-        let mut data: [u8; 32] = new_val.to_be_bytes();
+        let data: [u8; 32] = new_val.to_be_bytes();
 
         input.bytes_mut().copy_from_slice(&data[(32 - input_len)..]);
         Ok(MutationResult::Mutated)
     }
 }
-
 
 /// Mutator that mutates the `CONSTANT SIZE` input bytes (e.g., uint256) in various ways provided by
 /// [`libafl::mutators`]. It also uses the [`ConstantHintedMutator`] and [`VMStateHintedMutator`]

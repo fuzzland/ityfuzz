@@ -7,20 +7,21 @@ use crate::state::{HasCaller, InfantStateState};
 use libafl::inputs::Input;
 use libafl::mutators::MutationResult;
 use libafl::prelude::{HasMaxSize, HasRand, Mutator, State};
-use libafl_bolts::Named;
-use libafl_bolts::prelude::Rand;
 use libafl::schedulers::Scheduler;
 use libafl::state::HasMetadata;
 use libafl::Error;
+use libafl_bolts::prelude::Rand;
+use libafl_bolts::Named;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::evm::input::EVMInputTy::Borrow;
-use std::fmt::Debug;
-use revm_interpreter::Interpreter;
 use crate::evm::abi::ABIAddressToInstanceMap;
+#[cfg(feature = "flashloan_v2")]
+use crate::evm::input::EVMInputTy::Borrow;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use crate::evm::vm::{Constraint, EVMStateT};
+use revm_interpreter::Interpreter;
+use std::fmt::Debug;
 
 use crate::state::HasItyState;
 
@@ -32,7 +33,7 @@ use crate::state::HasItyState;
 /// if a new corpus item is added, it should inherit the access pattern of its source
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AccessPattern {
-    pub caller: bool,       // or origin
+    pub caller: bool,             // or origin
     pub balance: Vec<EVMAddress>, // balance queried for accounts
     pub call_value: bool,
     pub gas_price: bool,
@@ -70,12 +71,6 @@ impl AccessPattern {
                 .balance
                 .push(convert_u256_to_h160(interp.stack.peek(0).unwrap())),
             0x33 => self.caller = true,
-            0x34 => {
-                // prevent initial check of dispatch to fallback
-                if interp.program_counter() > 0xb {
-                    self.call_value = true;
-                }
-            }
             0x3a => self.gas_price = true,
             0x43 => self.number = true,
             0x41 => self.coinbase = true,
@@ -91,12 +86,12 @@ impl AccessPattern {
 
 /// [`FuzzMutator`] is a mutator that mutates the input based on the ABI and access pattern
 pub struct FuzzMutator<VS, Loc, Addr, SC, CI>
-    where
-        VS: Default + VMStateT,
-        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Scheduler for selecting the next VM state to use if we decide to mutate the VM state of
     /// the input
@@ -105,12 +100,12 @@ pub struct FuzzMutator<VS, Loc, Addr, SC, CI>
 }
 
 impl<VS, Loc, Addr, SC, CI> FuzzMutator<VS, Loc, Addr, SC, CI>
-    where
-        VS: Default + VMStateT,
-        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+where
+    VS: Default + VMStateT,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`FuzzMutator`] with the given scheduler
     pub fn new(infant_scheduler: SC) -> Self {
@@ -121,9 +116,15 @@ impl<VS, Loc, Addr, SC, CI> FuzzMutator<VS, Loc, Addr, SC, CI>
     }
 
     fn ensures_constraint<I, S>(input: &mut I, state: &mut S, constraints: Vec<Constraint>)
-        where
-            I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
-            S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata,{
+    where
+        I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
+        S: State
+            + HasRand
+            + HasMaxSize
+            + HasItyState<Loc, Addr, VS, CI>
+            + HasCaller<Addr>
+            + HasMetadata,
+    {
         for constraint in constraints {
             match constraint {
                 Constraint::Caller(caller) => {
@@ -141,15 +142,13 @@ impl<VS, Loc, Addr, SC, CI> FuzzMutator<VS, Loc, Addr, SC, CI>
                         .expect("ABIAddressToInstanceMap not found");
                     let abi = match abis.map.get(&target) {
                         Some(abi) => {
-                            if abi.len() > 0 && !always_none {
+                            if !abi.is_empty() && !always_none {
                                 Some((*abi)[rand_int as usize % abi.len()].clone())
                             } else {
                                 None
                             }
-                        },
-                        None => {
-                            None
                         }
+                        None => None,
                     };
                     input.set_contract_and_abi(target, abi);
                 }
@@ -159,7 +158,6 @@ impl<VS, Loc, Addr, SC, CI> FuzzMutator<VS, Loc, Addr, SC, CI>
                         input.set_liquidation_percent(0);
                     }
                 }
-                _ => {}
             }
         }
     }
@@ -171,7 +169,7 @@ where
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn name(&self) -> &str {
         "FuzzMutator"
@@ -179,14 +177,19 @@ where
 }
 
 impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<VS, Loc, Addr, SC, CI>
-    where
-        I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
-        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata,
-        SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
-        VS: Default + VMStateT + EVMStateT,
-        Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+where
+    I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
+    S: State
+        + HasRand
+        + HasMaxSize
+        + HasItyState<Loc, Addr, VS, CI>
+        + HasCaller<Addr>
+        + HasMetadata,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
+    VS: Default + VMStateT + EVMStateT,
+    Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Mutate the input
     fn mutate(
@@ -269,18 +272,17 @@ impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<VS, Loc, Addr, S
             }
 
             // potentially set the input to be a step input  (resume execution from a control leak)
-            if input.get_staged_state().state.has_post_execution() && !input.is_step() {
-                if state.rand_mut().below(100) < 60 as u64 {
-                    input.set_step(true);
-                    // todo(@shou): move args into
-                    input.set_as_post_exec(
-                        input.get_state().get_post_execution_needed_len() as usize
-                    );
-                    for _ in 0..havoc_times - 1 {
-                        input.mutate(state);
-                    }
-                    return MutationResult::Mutated;
+            if input.get_staged_state().state.has_post_execution()
+                && !input.is_step()
+                && state.rand_mut().below(100) < 60_u64
+            {
+                input.set_step(true);
+                // todo(@shou): move args into
+                input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
+                for _ in 0..havoc_times - 1 {
+                    input.mutate(state);
                 }
+                return MutationResult::Mutated;
             }
 
             // mutate the bytes or VM state or liquidation percent (percentage of token to liquidate)
@@ -293,7 +295,8 @@ impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<VS, Loc, Addr, S
                     already_crossed = true;
                     // cross over infant state
                     let old_idx = input.get_state_idx();
-                    let (idx, new_state) = state.get_infant_state(&mut self.infant_scheduler).unwrap();
+                    let (idx, new_state) =
+                        state.get_infant_state(&mut self.infant_scheduler).unwrap();
                     if idx == old_idx {
                         return MutationResult::Skipped;
                     }
@@ -301,7 +304,7 @@ impl<VS, Loc, Addr, I, S, SC, CI> Mutator<I, S> for FuzzMutator<VS, Loc, Addr, S
                         input.set_caller(state.get_rand_caller());
                     }
 
-                    Self::ensures_constraint(input, state,new_state.state.get_constraints());
+                    Self::ensures_constraint(input, state, new_state.state.get_constraints());
                     input.set_staged_state(new_state, idx);
                     MutationResult::Mutated
                 }
