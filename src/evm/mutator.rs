@@ -141,6 +141,14 @@ where
                         }
                     }
                 }
+                Constraint::Contract(_) => {
+                    #[cfg(feature = "flashloan_v2")]
+                    {
+                        if input.get_input_type() == Borrow {
+                            return false;
+                        }
+                    }
+                }
                 _ => {}
             }
         }
