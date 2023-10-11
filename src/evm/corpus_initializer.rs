@@ -331,28 +331,6 @@ where
             for abi in contract.abi.clone() {
                 self.add_abi(&abi, contract.deployed_address, &mut artifacts);
             }
-            // add transfer txn
-            {
-                let input = EVMInput {
-                    caller: self.state.get_rand_caller(),
-                    contract: contract.deployed_address,
-                    data: None,
-                    sstate: StagedVMState::new_uninitialized(),
-                    sstate_idx: 0,
-                    txn_value: Some(EVMU256::from(1)),
-                    step: false,
-                    env: Default::default(),
-                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    direct_data: Default::default(),
-                    #[cfg(feature = "flashloan_v2")]
-                    liquidation_percent: 0,
-                    #[cfg(feature = "flashloan_v2")]
-                    input_type: EVMInputTy::ABI,
-                    randomness: vec![0],
-                    repeat: 1,
-                };
-                add_input_to_corpus!(self.state, self.scheduler, input);
-            }
         }
         artifacts.initial_state =
             StagedVMState::new_with_state(self.executor.host.evmstate.clone());
@@ -441,12 +419,16 @@ where
         artifacts
             .address_to_abi_object
             .entry(deployed_address)
-            .or_insert(vec![])
+            .or_default()
             .push(abi_instance.clone());
         let input = EVMInput {
             caller: self.state.get_rand_caller(),
             contract: deployed_address,
-            data: Some(abi_instance),
+            data: if abi.function_name != "!receive!" {
+                Some(abi_instance)
+            } else {
+                None
+            },
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
             txn_value: if abi.is_payable {

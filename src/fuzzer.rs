@@ -4,11 +4,11 @@ use crate::{
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
     state_input::StagedVMState,
 };
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::{collections::hash_map::DefaultHasher, env};
 
 use std::path::Path;
 use std::process::exit;
@@ -21,13 +21,16 @@ use libafl::{
     fuzzer::Fuzzer,
     mark_feature_time,
     prelude::{
-        Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
-        ObserversTuple, Testcase, CorpusId, UsesInput,
+        Corpus, CorpusId, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
+        ObserversTuple, Testcase, UsesInput,
     },
     schedulers::Scheduler,
     stages::StagesTuple,
     start_timer,
-    state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions, UsesState, HasLastReportTime},
+    state::{
+        HasClientPerfMonitor, HasCorpus, HasExecutions, HasLastReportTime, HasMetadata,
+        HasSolutions, UsesState,
+    },
     Error, Evaluator, ExecuteInputResult,
 };
 use libafl_bolts::current_time;
@@ -46,7 +49,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
 
-const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 pub static mut RUN_FOREVER: bool = false;
 pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 
@@ -66,7 +68,8 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -102,7 +105,8 @@ impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
     ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -188,12 +192,12 @@ where
     }
 }
 
-
 impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI> UsesState
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -213,7 +217,8 @@ impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI> Fuzzer
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     E: Executor<EM, Self, State = S>,
     EM: EventManager<E, Self, State = S>,
     F: Feedback<S>,
@@ -264,11 +269,16 @@ where
         state: &mut EM::State,
         manager: &mut EM,
     ) -> Result<CorpusId, Error> {
-        // now report stats to manager every 0.1 sec
-        let monitor_timeout = STATS_TIMEOUT_DEFAULT;
+        // now report stats to manager every 1 sec
+        let reporting_interval = Duration::from_millis(
+            env::var("REPORTING_INTERVAL")
+                .unwrap_or("1000".to_string())
+                .parse::<u64>()
+                .unwrap(),
+        );
         loop {
             self.fuzz_one(stages, executor, state, manager)?;
-            manager.maybe_report_progress(state, monitor_timeout)?;
+            manager.maybe_report_progress(state, reporting_interval)?;
         }
     }
 }
@@ -364,7 +374,8 @@ impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI> Evaluator<
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
 where
     CS: Scheduler<State = S>,
-    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
+    IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
+        + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
     IF: Feedback<S>,
     IFR: Feedback<S>,
@@ -397,7 +408,7 @@ where
         executor: &mut E,
         manager: &mut EM,
         input: <Self::State as UsesInput>::Input,
-        send_events: bool
+        send_events: bool,
     ) -> Result<(ExecuteInputResult, Option<CorpusId>), Error> {
         start_timer!(state);
         executor.observers_mut().pre_exec_all(state, &input)?;
@@ -447,7 +458,7 @@ where
             state_idx = state.add_infant_state(
                 &state.get_execution_result().new_state.clone(),
                 &mut self.infant_scheduler,
-                input.get_state_idx()
+                input.get_state_idx(),
             );
 
             if self
@@ -483,7 +494,8 @@ where
         if res == ExecuteInputResult::Corpus || res == ExecuteInputResult::Solution {
             // Add the input to the main corpus
             let mut testcase = Testcase::new(input.clone());
-            self.feedback.append_metadata(state, observers, &mut testcase)?;
+            self.feedback
+                .append_metadata(state, observers, &mut testcase)?;
             corpus_idx = state.corpus_mut().add(testcase)?;
             self.infant_scheduler
                 .report_corpus(state.get_infant_state_state(), state_idx);
@@ -578,9 +590,11 @@ where
                 .expect("Unable to write data");
                 f.write_all(b"\n").expect("Unable to write data");
 
-                state.metadata_map_mut().get_mut::<BugMetadata>().unwrap().register_corpus_idx(
-                    corpus_idx.into()
-                );
+                state
+                    .metadata_map_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap()
+                    .register_corpus_idx(corpus_idx.into());
 
                 #[cfg(feature = "print_txn_corpus")]
                 {
@@ -598,7 +612,8 @@ where
 
                 // The input is a solution, add it to the respective corpus
                 let mut testcase = Testcase::new(input.clone());
-                self.objective.append_metadata(state, observers, &mut testcase)?;
+                self.objective
+                    .append_metadata(state, observers, &mut testcase)?;
                 state.solutions_mut().add(testcase)?;
 
                 if send_events {
@@ -625,7 +640,7 @@ where
         _state: &mut Self::State,
         _executor: &mut E,
         _manager: &mut EM,
-        _input: <Self::State as UsesInput>::Input
+        _input: <Self::State as UsesInput>::Input,
     ) -> Result<CorpusId, Error> {
         todo!()
     }
