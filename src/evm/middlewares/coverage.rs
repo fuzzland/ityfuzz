@@ -298,7 +298,13 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_insert(&mut self,
+        _: Option<&mut Interpreter>,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+        bytecode: &mut Bytecode,
+        address: EVMAddress,
+    ) {
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs

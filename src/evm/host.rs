@@ -3,6 +3,7 @@ use crate::evm::middlewares::middleware::{
     add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType,
 };
 use crate::evm::mutator::AccessPattern;
+use crate::invoke_middlewares;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::onchain::flashloan::Flashloan;
@@ -448,20 +449,7 @@ where
 
     pub fn set_code(&mut self, address: EVMAddress, mut code: Bytecode, state: &mut S) {
         unsafe {
-            if self.middlewares_enabled {
-                if let Some(m) = self.flashloan_middleware.clone() {
-                    let mut middleware = m.deref().borrow_mut();
-                    middleware.on_insert(&mut code, address, self, state);
-                }
-
-                for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut() {
-                    middleware
-                        .deref()
-                        .deref()
-                        .borrow_mut()
-                        .on_insert(&mut code, address, self, state);
-                }
-            }
+            invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
         self.code.insert(
             address,
@@ -771,55 +759,22 @@ macro_rules! u256_to_u8 {
 
 #[macro_export]
 macro_rules! invoke_middlewares {
-    ($host: expr, $interp: expr, $state: expr, $invoke: ident) => {
+    ($host:expr, $interp:expr, $state:expr, $invoke:ident $(, $arg:expr)*) => {
         if $host.middlewares_enabled {
-            match $host.flashloan_middleware.clone() {
-                Some(m) => {
-                    let mut middleware = m.deref().borrow_mut();
-                    middleware.$invoke($interp, $host, $state);
-                }
-                _ => {}
+            if let Some(m) = $host.flashloan_middleware.clone() {
+                let mut middleware = m.deref().borrow_mut();
+                middleware.$invoke($interp, $host, $state $(, $arg)*);
             }
-            if $host.setcode_data.len() > 0 {
+
+            if !$host.setcode_data.is_empty() {
                 $host.clear_codedata();
             }
+
             for middleware in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut() {
-                middleware
-                    .deref()
-                    .deref()
-                    .borrow_mut()
-                    .$invoke($interp, $host, $state);
+                middleware.deref().deref().borrow_mut().$invoke($interp, $host, $state $(, $arg)*);
             }
 
-            if $host.setcode_data.len() > 0 {
-                for (address, code) in &$host.setcode_data.clone() {
-                    $host.set_code(address.clone(), code.clone(), $state);
-                }
-            }
-        }
-    };
-
-    ($code: expr, $addr: expr, $host: expr, $state: expr, $invoke: ident) => {
-        if $host.middlewares_enabled {
-            match $host.flashloan_middleware.clone() {
-                Some(m) => {
-                    let mut middleware = m.deref().borrow_mut();
-                    middleware.$invoke($code, $addr, $host, $state);
-                }
-                _ => {}
-            }
-            if $host.setcode_data.len() > 0 {
-                $host.clear_codedata();
-            }
-            for middleware in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut() {
-                middleware
-                    .deref()
-                    .deref()
-                    .borrow_mut()
-                    .$invoke($code, $addr, $host, $state);
-            }
-
-            if $host.setcode_data.len() > 0 {
+            if !$host.setcode_data.is_empty() {
                 for (address, code) in &$host.setcode_data.clone() {
                     $host.set_code(address.clone(), code.clone(), $state);
                 }

@@ -523,10 +523,6 @@ where
         }
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
-
-    }
-
     fn get_type(&self) -> MiddlewareType {
         return MiddlewareType::Flashloan;
     }
