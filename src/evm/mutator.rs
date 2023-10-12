@@ -242,11 +242,11 @@ where
 
         // determine whether we should conduct havoc
         // (a sequence of mutations in batch vs single mutation)
-        let mut amount_of_args = input.get_data_abi().map(|abi| abi.b.get_size()).unwrap_or(0) / 32 + 1;
-        if amount_of_args > 6 {
-            amount_of_args = 6;
-        }
-        let should_havoc = state.rand_mut().below(100) < (amount_of_args * 10) as u64;
+        // let mut amount_of_args = input.get_data_abi().map(|abi| abi.b.get_size()).unwrap_or(0) / 32 + 1;
+        // if amount_of_args > 6 {
+        //     amount_of_args = 6;
+        // }
+        let should_havoc = state.rand_mut().below(100) < 60; // (amount_of_args * 10) as u64;
 
         // determine how many times we should mutate the input
         let havoc_times = if should_havoc {
