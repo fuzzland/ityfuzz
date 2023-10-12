@@ -412,12 +412,10 @@ where
 }
 
 pub fn is_reverted_or_control_leak(ret: &InstructionResult) -> bool {
-    match *ret {
-        InstructionResult::Return | InstructionResult::Stop | InstructionResult::SelfDestruct => {
-            false
-        }
-        _ => true,
-    }
+    !matches!(
+        *ret,
+        InstructionResult::Return | InstructionResult::Stop | InstructionResult::SelfDestruct
+    )
 }
 
 /// Execution result that may have control leaked
@@ -675,11 +673,32 @@ where
                 .clone()
         };
 
-        let mut r = None;
+        // check balance
+        #[cfg(feature = "real_balance")]
+        {
+            let tx_value = input.get_txn_value().unwrap_or_default();
+            if tx_value > EVMU256::ZERO {
+                let balance = *vm_state
+                    .get_balance(&input.get_caller())
+                    .unwrap_or(&EVMU256::ZERO);
+                if balance < tx_value {
+                    return ExecutionResult {
+                        output: vec![],
+                        reverted: true,
+                        new_state: StagedVMState::new_uninitialized(),
+                        additional_info: None,
+                    };
+                }
+                vm_state.set_balance(input.get_caller(), balance - tx_value);
+                vm_state.set_balance(input.get_contract(), balance + tx_value);
+            }
+        }
+
+        let r;
         let mut is_step = input.is_step();
         let mut data = Bytes::from(input.to_bytes());
         // use direct data (mostly used for debugging) if there is no data
-        if data.len() == 0 {
+        if data.is_empty() {
             data = Bytes::from(input.get_direct_data());
         }
 
@@ -691,11 +710,11 @@ where
             }
             // Execute the transaction
             let exec_res = if is_step {
-                let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
+                let post_exec = vm_state.post_execution.pop().unwrap().clone();
                 let mut local_res = None;
                 for mut pe in post_exec.pes {
                     // we need push the output of CALL instruction
-                    pe.stack.push(EVMU256::from(1));
+                    let _ = pe.stack.push(EVMU256::from(1));
                     let res = self.execute_from_pc(
                         &pe.get_call_ctx(),
                         &vm_state,
@@ -733,7 +752,7 @@ where
                     cleanup,
                 )
             };
-            let need_step = exec_res.new_state.post_execution.len() > 0
+            let need_step = !exec_res.new_state.post_execution.is_empty()
                 && exec_res.new_state.post_execution.last().unwrap().must_step;
             if (exec_res.ret == InstructionResult::Return
                 || exec_res.ret == InstructionResult::Stop)
@@ -787,7 +806,7 @@ where
                         _ => unreachable!(),
                     },
                 });
-            },
+            }
             _ => {}
         }
 
@@ -818,7 +837,8 @@ where
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),
-                reverted: match r.ret {
+                reverted: !matches!(
+                    r.ret,
                     InstructionResult::Return
                     | InstructionResult::Stop
                     | InstructionResult::ControlLeak
@@ -828,7 +848,7 @@ where
                     _ => true,
                 },
                 new_state: StagedVMState::new_with_state(
-                    VMStateT::as_any(&mut r.new_state)
+                    VMStateT::as_any(&r.new_state)
                         .downcast_ref_unchecked::<VS>()
                         .clone(),
                 ),
@@ -1033,7 +1053,7 @@ where
 
         let res = data
             .iter()
-            .map(|( address, by)| {
+            .map(|(address, by)| {
                 let ctx = CallContext {
                     address: *address,
                     caller: Default::default(),
@@ -1101,8 +1121,6 @@ where
                 } else {
                     interp.return_value().to_vec()
                 }
-
-                
             })
             .collect::<Vec<Vec<u8>>>();
 
@@ -1110,7 +1128,11 @@ where
             IS_FAST_CALL_STATIC = false;
         }
         (res, unsafe {
-            self.host.evmstate.as_any().downcast_ref_unchecked::<VS>().clone()
+            self.host
+                .evmstate
+                .as_any()
+                .downcast_ref_unchecked::<VS>()
+                .clone()
         })
     }
 

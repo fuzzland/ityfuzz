@@ -8,7 +8,13 @@ edition = "2021"
 criterion = "0.4.0"
 
 [features]
-default = ["cmp", "dataflow", "evm", "print_txn_corpus", "full_trace"]
+default = [
+    "cmp",
+    "dataflow",
+    "evm",
+    "print_txn_corpus",
+    "full_trace"
+]
 evm = []
 cmp = []
 dataflow = []
@@ -89,9 +95,13 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d
 heimdall = { git = "https://github.com/fuzzland/heimdall-rs", rev = "32363c9c59cf14c6839e48e5548cc862dfc54842" }
 
 move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-binary-format", optional = true }
-move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-core-types", features = ["address32"], optional = true }
+move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-core-types", features = [
+    "address32",
+], optional = true }
 move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-stdlib", optional = true }
-move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-runtime", features = ["lazy_natives"], optional = true }
+move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-runtime", features = [
+    "lazy_natives",
+], optional = true }
 move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-types", optional = true }
 sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-move-natives-latest", optional = true }
 sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-protocol-config", optional = true }
