@@ -117,7 +117,6 @@ impl ContractLoader {
     }
 
     pub fn parse_abi_str(data: &str) -> Vec<ABIConfig> {
-        println!("Parsing ABI: {}", data);
         let json: Vec<Value> = serde_json::from_str(data).expect("failed to parse abis file");
         json.iter()
             .flat_map(|abi| {
