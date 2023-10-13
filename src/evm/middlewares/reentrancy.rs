@@ -1,43 +1,26 @@
-use crate::evm::blaz::builder::ArtifactInfoMetadata;
-use crate::evm::bytecode_iterator::{all_bytecode, walk_bytecode};
 use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
+use crate::evm::input::{ConciseEVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::srcmap::parser::SourceMapAvailability::Available;
-use crate::evm::srcmap::parser::{
-    decode_instructions, pretty_print_source_map, pretty_print_source_map_single,
-    SourceMapAvailability, SourceMapLocation, SourceMapWithCode,
-};
-use crate::evm::types::{is_zero, EVMAddress, ProjectSourceMapTy, EVMU256};
-use crate::evm::vm::{EVMState, IN_DEPLOY};
+use crate::evm::types::{EVMAddress, EVMU256};
+use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use bytes::Bytes;
-use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
 use libafl::schedulers::Scheduler;
-use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::fs;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::ops::AddAssign;
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Default)]
 pub struct ReentrancyTracer;
 
 impl ReentrancyTracer {
     pub fn new() -> Self {
-        ReentrancyTracer {}
+        Self
     }
 }
 
@@ -113,7 +96,7 @@ where
         &mut self,
         interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
+        _state: &mut S,
     ) {
         match *interp.instruction_pointer {
             0x54 => {
@@ -189,6 +172,7 @@ where
         MiddlewareType::Reentrancy
     }
 
+    #[allow(unused_variables)]
     unsafe fn before_execute(
         &mut self,
         interp: Option<&mut Interpreter>,
@@ -213,6 +197,7 @@ where
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
     #[test]
