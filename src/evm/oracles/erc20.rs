@@ -160,7 +160,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
         if exec_res.new_state.state.flashloan_data.earned
             > exec_res.new_state.state.flashloan_data.owed
-            && exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed > EVMU512::from(50_000_000_000_000_000_000_000_0u128) // > 0.5ETH
+            && exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed > EVMU512::from(10_000_000_000_000_000_000_000_0u128) // > 0.1ETH
         {
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;

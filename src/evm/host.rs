@@ -247,8 +247,8 @@ pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
 
-// if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
-const CONTROL_LEAK_THRESHOLD: usize = 2;
+// if a PC transfers control to >10 addresses, we consider call at this PC to be unbounded
+const CONTROL_LEAK_THRESHOLD: usize = 10;
 
 impl<VS, I, S, SC> FuzzHost<VS, I, S, SC>
 where

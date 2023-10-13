@@ -844,9 +844,8 @@ where
                     | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
                     | InstructionResult::AddressUnboundedStaticCall
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => false,
-                    _ => true,
-                },
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+                ),
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&r.new_state)
                         .downcast_ref_unchecked::<VS>()
