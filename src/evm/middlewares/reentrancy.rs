@@ -64,19 +64,19 @@ fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &Vec<u32>) {
     while next_from_dst.is_some() || next_from_another.is_some() {
         // Determine the next value to push to the merged vector based on the current items from the iterators.
         match (next_from_dst, next_from_another) {
-            (Some(&val_dst), Some(&val_another)) => {
-                if val_dst < val_another {
-                    merged.push(val_dst);
-                    next_from_dst = dst_iter.next();
-                } else if val_dst > val_another {
-                    merged.push(val_another);
-                    next_from_another = another_iter.next();
-                } else {
-                    // If equal, push one value and advance both iterators to avoid duplicates.
-                    merged.push(val_dst);
-                    next_from_dst = dst_iter.next();
-                    next_from_another = another_iter.next();
-                }
+            (Some(&val_dst), Some(&val_another)) if val_dst < val_another => {
+                merged.push(val_dst);
+                next_from_dst = dst_iter.next();
+            }
+            (Some(&val_dst), Some(&val_another)) if val_dst > val_another => {
+                merged.push(val_another);
+                next_from_another = another_iter.next();
+            }
+            (Some(&val_dst), Some(_val_another)) => {
+                // If equal, push one value and advance both iterators to avoid duplicates.
+                merged.push(val_dst);
+                next_from_dst = dst_iter.next();
+                next_from_another = another_iter.next();
             }
             (Some(&val_dst), None) => {
                 merged.push(val_dst);
@@ -127,34 +127,29 @@ where
                     .reads
                     .entry((interp.contract.address, slot_idx))
                     .or_default();
-                let total_size = entry.len();
-                if total_size == 0 {
-                    entry.push(depth);
-                }
-                let mut nth = 0;
-                let mut should_insert = true;
-                let mut found_smaller = Vec::new();
 
+                let mut found_smaller = Vec::new();
                 // entry is sorted ascendingly
-                for i in entry.iter() {
-                    if *i == depth {
-                        should_insert = false;
-                        break;
+                for (idx, element) in entry.iter().enumerate() {
+                    match element.cmp(&depth) {
+                        std::cmp::Ordering::Less => {
+                            found_smaller.push(*element);
+                        }
+                        std::cmp::Ordering::Equal => {
+                            break;
+                        }
+                        std::cmp::Ordering::Greater => {
+                            entry.insert(idx, depth);
+                            break;
+                        }
                     }
-                    if *i > depth {
-                        break;
-                    }
-                    if *i < depth {
-                        found_smaller.push(*i);
-                    }
-                    nth += 1;
                 }
-                if should_insert {
-                    entry.insert(nth, depth);
+                if entry.is_empty() || *entry.last().unwrap() < depth {
+                    entry.push(depth);
                 }
 
                 // set up need writes
-                if found_smaller.len() == 0 {
+                if found_smaller.is_empty() {
                     return;
                 }
                 let write_entry = host
@@ -208,9 +203,13 @@ where
         }
         // otherwise, we clean up the writes and reads with depth larger than current depth
         let depth = evm_state.post_execution.len() as u32 - 1;
-        for (_, depths) in &mut evm_state.reentrancy_metadata.need_writes {
-            depths.retain(|&x| x <= depth);
-        }
+        evm_state
+            .reentrancy_metadata
+            .need_writes
+            .iter_mut()
+            .for_each(|(_, depths)| {
+                depths.retain(|&x| x <= depth);
+            });
     }
 }
 
