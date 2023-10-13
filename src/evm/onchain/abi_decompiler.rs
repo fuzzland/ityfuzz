@@ -1,12 +1,9 @@
 use crate::cache::{Cache, FileSystemCache};
 use crate::evm::contract_utils::ABIConfig;
-use heimdall::decompile::decompile_with_bytecode;
-use heimdall::decompile::out::solidity::ABIStructure;
+use heimdall_core::decompile::{decompile, DecompilerArgsBuilder, out::abi::ABIStructure};
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
-use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::Path;
 
 pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
     let mut hasher = DefaultHasher::new();
@@ -21,7 +18,7 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
         }
         Err(_) => {}
     }
-    let heimdall_result = decompile_with_bytecode(bytecode, "".to_string());
+    let heimdall_result = decompile_with_bytecode(bytecode).expect("unable to decompile contract");
     let mut result = vec![];
     for heimdall_abi in heimdall_result {
         match heimdall_abi {
@@ -62,6 +59,19 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
         )
         .expect("unable to save cache");
     result
+}
+
+fn decompile_with_bytecode(contract_bytecode: String) -> Result<Vec<ABIStructure>, Box<dyn Error>>{
+    let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
+    let args = DecompilerArgsBuilder::new()
+        .target(contract_bytecode)
+        .build()?;
+
+    let res = rt.block_on(decompile(args))?;
+    res.abi.ok_or("unable to decompile contract".into())
 }
 
 mod tests {
