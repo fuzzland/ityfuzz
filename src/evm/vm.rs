@@ -61,6 +61,8 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use super::middlewares::reentrancy::ReentrancyData;
+
 pub const MEM_LIMIT: u64 = 10 * 1024;
 const MAX_POST_EXECUTION: usize = 10;
 
@@ -97,6 +99,7 @@ pub enum Constraint {
     Contract(EVMAddress),
     Value(EVMU256),
     NoLiquidation,
+    MustStepNow,
 }
 
 /// A post execution context
@@ -259,6 +262,9 @@ pub struct EVMState {
     pub typed_bug: HashSet<(String, (EVMAddress, usize))>,
     #[serde(skip)]
     pub arbitrary_calls: HashSet<(EVMAddress, EVMAddress, usize)>,
+
+    #[serde(skip)]
+    pub reentrancy_metadata: ReentrancyData,
 }
 
 pub trait EVMStateT {
@@ -699,6 +705,9 @@ where
         let mut cleanup = true;
 
         loop {
+            unsafe {
+                invoke_middlewares!(&mut self.host, None, state, before_execute, is_step, &mut data, &mut vm_state);
+            }
             // Execute the transaction
             let exec_res = if is_step {
                 let post_exec = vm_state.post_execution.pop().unwrap().clone();
@@ -760,7 +769,7 @@ where
         }
         let mut r = r.unwrap();
         match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => {
+            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => unsafe {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -775,11 +784,13 @@ where
                     must_step: match r.ret {
                         ControlLeak => false,
                         InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => true,
+                        InstructionResult::AddressUnboundedStaticCall => false,
                         _ => unreachable!(),
                     },
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
+                        InstructionResult::AddressUnboundedStaticCall => vec![Constraint::MustStepNow],
                         InstructionResult::ArbitraryExternalCallAddressBounded(
                             caller,
                             target,
@@ -829,10 +840,11 @@ where
                 reverted: !matches!(
                     r.ret,
                     InstructionResult::Return
-                        | InstructionResult::Stop
-                        | InstructionResult::ControlLeak
-                        | InstructionResult::SelfDestruct
-                        | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+                    | InstructionResult::Stop
+                    | InstructionResult::ControlLeak
+                    | InstructionResult::SelfDestruct
+                    | InstructionResult::AddressUnboundedStaticCall
+                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
                 ),
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&r.new_state)
@@ -923,13 +935,7 @@ where
         let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
         unsafe {
-            invoke_middlewares!(
-                &mut contract_code,
-                deployed_address,
-                &mut self.host,
-                state,
-                on_insert
-            );
+            invoke_middlewares!(&mut self.host, Some(&mut interp), state, on_insert, &mut contract_code, deployed_address);
         }
         self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)

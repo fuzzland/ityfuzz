@@ -394,15 +394,6 @@ where
         self.pop_ctx();
     }
 
-    unsafe fn on_insert(
-        &mut self,
-        bytecode: &mut Bytecode,
-        address: EVMAddress,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
-    }
-
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3TaintAnalysis
     }
@@ -452,15 +443,6 @@ where
                     EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
-    }
-
-    unsafe fn on_insert(
-        &mut self,
-        bytecode: &mut Bytecode,
-        address: EVMAddress,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
     }
 
     fn get_type(&self) -> MiddlewareType {

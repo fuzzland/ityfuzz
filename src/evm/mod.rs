@@ -191,11 +191,17 @@ pub struct EvmArgs {
     #[arg(short, long, default_value = "false")]
     pair_oracle: bool,
 
+    /// Panic when a typed_bug() is called (Default: false)
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
+    /// Detect selfdestruct (Default: true)
     #[arg(long, default_value = "true")]
     selfdestruct_oracle: bool,
+
+    /// Detect pontential reentrancy vulnerability (Default: falss)
+    #[arg(long, default_value = "false")]
+    reentrancy_oracle: bool,
 
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
@@ -575,6 +581,7 @@ pub fn evm_main(args: EvmArgs) {
         replay_file: args.replay_file,
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
+        reentrancy_oracle: args.reentrancy_oracle,
         state_comp_matching: if args.state_comp_oracle.len() > 0 {
             Some(args.state_comp_matching)
         } else {

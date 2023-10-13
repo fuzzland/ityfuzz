@@ -115,7 +115,12 @@ where
         }
     }
 
-    fn ensures_constraint<I, S>(input: &mut I, state: &mut S, constraints: Vec<Constraint>)
+    fn ensures_constraint<I, S>(
+        input: &mut I, 
+        state: &mut S, 
+        new_vm_state: &VS,
+        constraints: Vec<Constraint>
+    ) -> bool
     where
         I: VMInputT<VS, Loc, Addr, CI> + Input + EVMInputT,
         S: State
@@ -125,6 +130,29 @@ where
             + HasCaller<Addr>
             + HasMetadata,
     {
+        // precheck
+        for constraint in &constraints {
+            match constraint {
+                Constraint::MustStepNow => {
+                    #[cfg(feature = "flashloan_v2")]
+                    {
+                        if input.get_input_type() == Borrow {
+                            return false;
+                        }
+                    }
+                }
+                Constraint::Contract(_) => {
+                    #[cfg(feature = "flashloan_v2")]
+                    {
+                        if input.get_input_type() == Borrow {
+                            return false;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         for constraint in constraints {
             match constraint {
                 Constraint::Caller(caller) => {
@@ -158,8 +186,16 @@ where
                         input.set_liquidation_percent(0);
                     }
                 }
+                Constraint::MustStepNow => {
+                    input.set_step(true);
+                    // todo(@shou): move args into
+                    // println!("vm state: {:?}", input.get_state());
+                    input.set_as_post_exec(new_vm_state.get_post_execution_needed_len());
+                    input.mutate(state);
+                }
             }
         }
+        return true;
     }
 }
 
@@ -206,7 +242,11 @@ where
 
         // determine whether we should conduct havoc
         // (a sequence of mutations in batch vs single mutation)
-        let should_havoc = state.rand_mut().below(100) < 60;
+        // let mut amount_of_args = input.get_data_abi().map(|abi| abi.b.get_size()).unwrap_or(0) / 32 + 1;
+        // if amount_of_args > 6 {
+        //     amount_of_args = 6;
+        // }
+        let should_havoc = state.rand_mut().below(100) < 60; // (amount_of_args * 10) as u64;
 
         // determine how many times we should mutate the input
         let havoc_times = if should_havoc {
@@ -215,7 +255,59 @@ where
             1
         };
 
-        let mut already_crossed = false;
+        let mut mutated = false;
+
+        {
+            if !input.is_step() && state.rand_mut().below(100) < 20_u64 {
+                let old_idx = input.get_state_idx();
+                let (idx, new_state) =
+                    state.get_infant_state(&mut self.infant_scheduler).unwrap();
+                if idx != old_idx {
+                    if !state.has_caller(&input.get_caller()) {
+                        input.set_caller(state.get_rand_caller());
+                    }
+    
+                    if Self::ensures_constraint(input, state, &new_state.state, new_state.state.get_constraints()) {
+                        mutated = true;
+                        input.set_staged_state(new_state, idx);
+                    }
+                }
+            }
+    
+            if input.get_staged_state().state.has_post_execution()
+                    && !input.is_step()
+                    && state.rand_mut().below(100) < 60_u64
+            {
+
+
+                macro_rules! turn_to_step {
+                    () => {
+                        input.set_step(true);
+                        // todo(@shou): move args into
+                        input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
+                        for _ in 0..havoc_times - 1 {
+                            input.mutate(state);
+                        }
+                        mutated = true;
+                    };
+                }
+                #[cfg(feature = "flashloan_v2")]
+                {
+                    if input.get_input_type() != Borrow {
+                        turn_to_step!();
+                    }
+                }
+
+                #[cfg(not(feature = "flashloan_v2"))]
+                {
+                    turn_to_step!();
+                }
+
+                return Ok(MutationResult::Mutated);
+            }
+        }
+
+        
 
         // mutate the input once
         let mut mutator = || -> MutationResult {
@@ -239,7 +331,6 @@ where
                     }
                     _ => input.mutate(state),
                 };
-
                 input.set_txn_value(EVMU256::ZERO);
                 return res;
             }
@@ -255,59 +346,14 @@ where
                         input.set_randomness(vec![rand_u8; 1]);
                         MutationResult::Mutated
                     }
-                    1 => {
-                        // mutate the VM state
-                        let old_idx = input.get_state_idx();
-                        let (idx, new_state) =
-                            state.get_infant_state(&mut self.infant_scheduler).unwrap();
-                        if idx == old_idx {
-                            return MutationResult::Skipped;
-                        }
-                        input.set_staged_state(new_state, idx);
-                        MutationResult::Mutated
-                    }
                     // mutate the bytes
                     _ => input.mutate(state),
                 };
-            }
-
-            // potentially set the input to be a step input  (resume execution from a control leak)
-            if input.get_staged_state().state.has_post_execution()
-                && !input.is_step()
-                && state.rand_mut().below(100) < 60_u64
-            {
-                input.set_step(true);
-                // todo(@shou): move args into
-                input.set_as_post_exec(input.get_state().get_post_execution_needed_len());
-                for _ in 0..havoc_times - 1 {
-                    input.mutate(state);
-                }
-                return MutationResult::Mutated;
-            }
+            }            
 
             // mutate the bytes or VM state or liquidation percent (percentage of token to liquidate)
             // by default
             match state.rand_mut().below(100) {
-                0..=5 => {
-                    if already_crossed {
-                        return MutationResult::Skipped;
-                    }
-                    already_crossed = true;
-                    // cross over infant state
-                    let old_idx = input.get_state_idx();
-                    let (idx, new_state) =
-                        state.get_infant_state(&mut self.infant_scheduler).unwrap();
-                    if idx == old_idx {
-                        return MutationResult::Skipped;
-                    }
-                    if !state.has_caller(&input.get_caller()) {
-                        input.set_caller(state.get_rand_caller());
-                    }
-
-                    Self::ensures_constraint(input, state, new_state.state.get_constraints());
-                    input.set_staged_state(new_state, idx);
-                    MutationResult::Mutated
-                }
                 #[cfg(feature = "flashloan_v2")]
                 6..=10 => {
                     let prev_percent = input.get_liquidation_percent();
@@ -331,7 +377,11 @@ where
             }
         };
 
-        let mut res = MutationResult::Skipped;
+        let mut res = if mutated {
+            MutationResult::Mutated
+        } else {
+            MutationResult::Skipped
+        };
         let mut tries = 0;
 
         // try to mutate the input for [`havoc_times`] times with 20 retries if

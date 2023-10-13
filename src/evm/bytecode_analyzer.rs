@@ -27,16 +27,14 @@ pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
             if next_op == JUMPI {
                 continue;
             }
-            if op as usize - 0x60 + 1 >= 5 {
-                let mut data = vec![0u8; op as usize - 0x60 + 1];
-                let mut i = 0;
-                while i < op - 0x60 + 1 {
-                    let offset = i as usize;
-                    data[offset] = bytes[pc + offset + 1];
-                    i += 1;
-                }
-                constants.insert(data);
+            let mut data = vec![0u8; op as usize - 0x60 + 1];
+            let mut i = 0;
+            while i < op - 0x60 + 1 {
+                let offset = i as usize;
+                data[offset] = bytes[pc + offset + 1];
+                i += 1;
             }
+            constants.insert(data);
         }
     }
     constants

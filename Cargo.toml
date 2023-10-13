@@ -76,17 +76,17 @@ regex = "1"
 typetag = "0.2.13"
 lazy_static = "1.4.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "f9fdf3e66f03ab864c8224c1720c7550f8488d28", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "f9fdf3e66f03ab864c8224c1720c7550f8488d28", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "f9fdf3e66f03ab864c8224c1720c7550f8488d28", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",

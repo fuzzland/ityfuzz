@@ -1,5 +1,6 @@
 use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
+use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
@@ -32,6 +33,7 @@ pub enum MiddlewareType {
     Sha3Bypass,
     Sha3TaintAnalysis,
     CallPrinter,
+    Reentrancy
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -104,14 +106,24 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
         ret: &Bytes,
-    ) {
-    }
+    ) { }
 
+    unsafe fn before_execute(
+        &mut self,
+        interp: Option<&mut Interpreter>,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+        is_step: bool,
+        data: &mut Bytes,
+        evm_state: &mut EVMState,
+    ) { }
 
     unsafe fn on_insert(&mut self,
+                        interp: Option<&mut Interpreter>,
+                        host: &mut FuzzHost<VS, I, S, SC>,
+                        state: &mut S,
                         bytecode: &mut Bytecode,
                         address: EVMAddress,
-                        host: &mut FuzzHost<VS, I, S, SC>,
-                        state: &mut S);
+                    ) {}
     fn get_type(&self) -> MiddlewareType;
 }

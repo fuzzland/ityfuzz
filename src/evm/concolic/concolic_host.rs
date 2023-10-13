@@ -1410,10 +1410,6 @@ where
         self.pop_ctx();
     }
 
-    unsafe fn on_insert(&mut self, bytecode: &mut Bytecode, address: EVMAddress, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
-
-    }
-
     fn get_type(&self) -> MiddlewareType {
         Concolic
     }

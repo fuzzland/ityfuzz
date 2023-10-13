@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy},
+    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle},
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use itertools::Itertools;
@@ -207,6 +207,10 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
+    if config.reentrancy_oracle {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
+    }
+
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
 
     if config.replay_file.is_some() {
@@ -267,10 +271,11 @@ pub fn evm_fuzzer(
     for (addr, bytecode) in &mut artifacts.address_to_bytecode {
         unsafe {
             cov_middleware.deref().borrow_mut().on_insert(
-                bytecode,
-                *addr,
+                None,
                 &mut evm_executor_ref.deref().borrow_mut().host,
                 state,
+                bytecode,
+                *addr,
             );
         }
     }
@@ -412,6 +417,13 @@ pub fn evm_fuzzer(
         ))));
     }
 
+    if config.reentrancy_oracle {
+        oracles.push(Rc::new(RefCell::new(ReentrancyOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
@@ -507,6 +519,15 @@ pub fn evm_fuzzer(
 
             // dump coverage:
             cov_middleware.borrow_mut().record_instruction_coverage();
+            // unsafe {
+            //     EVAL_COVERAGE = false;
+            //     CALL_UNTIL = u32::MAX;
+            // }
+
+
+            // fuzzer
+            //     .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
+            //     .expect("Fuzzing failed");
         }
     }
 }
