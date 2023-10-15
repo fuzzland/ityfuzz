@@ -179,7 +179,7 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     selfdestruct_oracle: bool,
 
-    /// Detect pontential reentrancy vulnerability (Default: falss)
+    /// Detect pontential reentrancy vulnerability (Default: false)
     #[arg(long, default_value = "false")]
     reentrancy_oracle: bool,
 
