@@ -30,14 +30,11 @@ use blaz::offchain_artifacts::OffChainArtifact;
 use blaz::offchain_config::OffchainConfig;
 use clap::Parser;
 use config::{Config, FuzzerTypes, StorageFetchingMode};
-use contract_utils::{set_hash, ContractLoader};
+use contract_utils::ContractLoader;
 use ethers::types::Transaction;
-use hex::{decode, encode};
-use host::PANIC_ON_BUG;
 use input::{ConciseEVMInput, EVMInput};
-use middlewares::middleware::Middleware;
 use onchain::endpoints::{Chain, OnChainConfig};
-use onchain::flashloan::{DummyPriceOracle, Flashloan};
+use onchain::flashloan::DummyPriceOracle;
 use oracles::erc20::IERC20OracleFlashloan;
 use oracles::v2_pair::PairBalanceOracle;
 use producers::erc20::ERC20Producer;
@@ -54,7 +51,7 @@ use vm::EVMState;
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
 
-    if input.len() == 0 {
+    if input.is_empty() {
         return map;
     }
 
@@ -73,29 +70,12 @@ pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<Strin
 #[derive(Deserialize)]
 struct Data {
     body: RPCCall,
-    response: serde_json::Value,
 }
 
 #[derive(Deserialize)]
 struct RPCCall {
     method: String,
     params: Option<serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-struct Response {
-    data: ResponseData,
-}
-
-#[derive(Deserialize)]
-struct ResponseData {
-    id: u16,
-    result: TXResult,
-}
-
-#[derive(Deserialize)]
-struct TXResult {
-    input: String,
 }
 
 /// CLI for ItyFuzz for EVM smart contracts
@@ -336,17 +316,22 @@ pub fn evm_main(args: EvmArgs) {
 
     let onchain_clone = onchain.clone();
 
-    if onchain.is_some() && args.onchain_etherscan_api_key.is_some() {
+    let etherscan_api_key = match args.onchain_etherscan_api_key {
+        Some(v) => v,
+        None => std::env::var("ETHERSCAN_API_KEY").unwrap_or_default(),
+    };
+
+    if onchain.is_some() && !etherscan_api_key.is_empty() {
         onchain
             .as_mut()
             .unwrap()
             .etherscan_api_key
-            .push(args.onchain_etherscan_api_key.unwrap());
+            .push(etherscan_api_key);
     }
     let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let mut flashloan_oracle = Rc::new(RefCell::new({
+    let flashloan_oracle = Rc::new(RefCell::new({
         IERC20OracleFlashloan::new(pair_producer.clone(), erc20_producer.clone())
     }));
 
@@ -361,14 +346,21 @@ pub fn evm_main(args: EvmArgs) {
             RefCell<
                 dyn Oracle<
                     EVMState,
-                    EVMAddress,
-                    _,
-                    _,
-                    EVMAddress,
-                    EVMU256,
+                    revm_primitives::B160,
+                    revm_primitives::Bytecode,
+                    bytes::Bytes,
+                    revm_primitives::B160,
+                    revm_primitives::ruint::Uint<256, 4>,
                     Vec<u8>,
                     EVMInput,
-                    EVMFuzzState,
+                    FuzzState<
+                        EVMInput,
+                        EVMState,
+                        revm_primitives::B160,
+                        revm_primitives::B160,
+                        Vec<u8>,
+                        ConciseEVMInput,
+                    >,
                     ConciseEVMInput,
                 >,
             >,
