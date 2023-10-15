@@ -322,11 +322,10 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     if onchain.is_some() && !etherscan_api_key.is_empty() {
-        onchain
-            .as_mut()
-            .unwrap()
-            .etherscan_api_key
-            .push(etherscan_api_key);
+        onchain.as_mut().unwrap().etherscan_api_key = etherscan_api_key
+            .split(',')
+            .map(|s| s.to_string())
+            .collect();
     }
     let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
