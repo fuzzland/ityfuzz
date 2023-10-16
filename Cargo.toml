@@ -76,23 +76,24 @@ regex = "1"
 typetag = "0.2.13"
 lazy_static = "1.4.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202", package = "revm", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202", package = "revm-primitives", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202", package = "revm-interpreter", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
+
 # external fuzzing-based abi decompiler
-heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", package = "heimdall-core"}
+heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", rev = "3d95f04146bbef2e0e88e6949a06519c938b47d7", package = "heimdall-core"}
 # heimdall_core relies on an async runtime
 tokio = {version = "1.0", features = ["full"]}
 

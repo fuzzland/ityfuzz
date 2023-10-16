@@ -11,7 +11,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput};
 use libafl::state::State;
-use revm_interpreter::InstructionResult::{Continue, ControlLeak, Revert};
+use revm_interpreter::InstructionResult::{Continue, Revert};
 
 use crate::evm::types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256};
 use revm::precompile::{Precompile, Precompiles};
@@ -20,7 +20,7 @@ use revm_interpreter::{
     BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host,
     InstructionResult, Interpreter, SelfDestructResult,
 };
-use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
+use revm_primitives::{Bytecode, Env, LatestSpec, B256, Address, U256};
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -98,6 +98,28 @@ pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
     num.wrapping_sub(1) < num_of_precompiles as u16
 }
 
+/// Custom instruction result
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FuzzInstructionRes {
+    //success codes
+    Continue = 0x00,
+    ControlLeak,
+    ArbitraryExternalCallAddressBounded(Address, Address, U256),
+    AddressUnboundedStaticCall,
+}
+
+/// Additional args for implementing Host trait
+#[derive(Debug)]
+pub struct AdditionalArgs<S>
+where
+    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
+{
+    pub interp: Interpreter,
+    pub state: &'static mut S
+}
+
 pub struct FuzzHost<VS, I, S, SC>
 where
     S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
@@ -164,6 +186,11 @@ where
     pub leak_ctx: Vec<SinglePostExecution>,
 
     pub jumpi_trace: usize,
+
+    /// Custom instruction result
+    pub instruction_res: FuzzInstructionRes,
+    /// Additional args for implementing Host trait
+    pub additional_args: Option<AdditionalArgs<S>>,
 }
 
 impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
@@ -237,6 +264,8 @@ where
             mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
             jumpi_trace: self.jumpi_trace,
+            instruction_res: self.instruction_res,
+            additional_args: None,
         }
     }
 }
@@ -303,7 +332,22 @@ where
             mapping_sstore_pcs: Default::default(),
             mapping_sstore_pcs_to_slot: Default::default(),
             jumpi_trace: 37,
+            instruction_res: FuzzInstructionRes::Continue,
+            additional_args: None,
         }
+    }
+
+    pub fn set_additional_args(&mut self, state: &mut S, interp: Interpreter) {
+        let args = AdditionalArgs {
+            interp,
+            state,
+        };
+        self.additional_args = Some(args);
+    }
+
+    pub fn take_additional_args(&mut self) -> (&mut S, Interpreter) {
+        let args = self.additional_args.take().unwrap();
+        (args.state, args.interp)
     }
 
     pub fn set_spec_id(&mut self, spec_id: String) {
@@ -531,7 +575,8 @@ where
         self.call_count += 1;
         if self.call_count >= unsafe { CALL_UNTIL } {
             push_interp!();
-            return (ControlLeak, Gas::new(0), Bytes::new());
+            self.instruction_res = FuzzInstructionRes::ControlLeak;
+            return (InstructionResult::FatalExternalError, Gas::new(0), Bytes::new());
         }
 
         if unsafe { WRITE_RELATIONSHIPS } {
@@ -594,7 +639,8 @@ where
                 record_func_hash!();
                 push_interp!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
+                self.instruction_res = FuzzInstructionRes::AddressUnboundedStaticCall;
+                return (InstructionResult::FatalExternalError, Gas::new(0), Bytes::new());
             }
         }
 
@@ -604,7 +650,8 @@ where
                 record_func_hash!();
                 push_interp!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (ControlLeak, Gas::new(0), Bytes::new());
+                self.instruction_res = FuzzInstructionRes::ControlLeak;
+                return (InstructionResult::FatalExternalError, Gas::new(0), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
             self.pc_to_call_hash
@@ -629,16 +676,14 @@ where
                 ));
                 // println!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
                 push_interp!();
-                return (
-                    InstructionResult::ArbitraryExternalCallAddressBounded(
-                        input.context.caller,
-                        input.context.address,
-                        input.transfer.value,
-                    ),
-                    Gas::new(0),
-                    Bytes::new(),
+                self.instruction_res = FuzzInstructionRes::ArbitraryExternalCallAddressBounded(
+                    input.context.caller,
+                    input.context.address,
+                    input.transfer.value,
                 );
-            }            
+
+                return (InstructionResult::FatalExternalError, Gas::new(0), Bytes::new());
+            }
         }
 
         let input_bytes = Bytes::from(input_seq);
@@ -672,15 +717,13 @@ where
 
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
-        match res.0 {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => {
-                self.leak_ctx.push(SinglePostExecution::from_interp(
-                    interp,
-                    (out_offset, out_len),
-                ));
-            }
-            _ => {}
+        if res.0 == InstructionResult::FatalExternalError && self.instruction_res != FuzzInstructionRes::Continue {
+            self.leak_ctx.push(SinglePostExecution::from_interp(
+                interp,
+                (out_offset, out_len),
+            ));
         }
+
         res
     }
 
@@ -1042,7 +1085,7 @@ where
             account.insert(index, self.next_slot);
             self.evmstate.insert(address, account);
         }
-            
+
         Some((self.next_slot, true))
     }
 

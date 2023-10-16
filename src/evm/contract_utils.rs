@@ -4,7 +4,6 @@ use crate::evm::types::{
 use core::panic;
 /// Load contract from file system or remote
 use glob::glob;
-use revm::precompile::B160;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -36,7 +35,7 @@ use hex::encode;
 use regex::Regex;
 use revm_interpreter::analysis::to_analysed;
 use revm_interpreter::opcode::PUSH4;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Address};
 use serde::{Deserialize, Serialize};
 
 use super::types::ProjectSourceMapTy;

@@ -345,18 +345,18 @@ pub fn evm_main(args: EvmArgs) {
             RefCell<
                 dyn Oracle<
                     EVMState,
-                    revm_primitives::B160,
+                    revm_primitives::Address,
                     revm_primitives::Bytecode,
                     bytes::Bytes,
-                    revm_primitives::B160,
+                    revm_primitives::Address,
                     revm_primitives::ruint::Uint<256, 4>,
                     Vec<u8>,
                     EVMInput,
                     FuzzState<
                         EVMInput,
                         EVMState,
-                        revm_primitives::B160,
-                        revm_primitives::B160,
+                        revm_primitives::Address,
+                        revm_primitives::Address,
                         Vec<u8>,
                         ConciseEVMInput,
                     >,

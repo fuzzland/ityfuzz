@@ -31,8 +31,8 @@ use libafl::state::{HasCorpus, State};
 use primitive_types::{H256, U512};
 use rand::random;
 
-use revm::db::BenchmarkDB;
-use revm_interpreter::InstructionResult::{ArbitraryExternalCallAddressBounded, ControlLeak};
+use super::host::FuzzInstructionRes;
+use super::host::FuzzInstructionRes::{ArbitraryExternalCallAddressBounded, ControlLeak, AddressUnboundedStaticCall};
 use revm_interpreter::{
     BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory,
     Stack,
@@ -84,11 +84,11 @@ macro_rules! get_token_ctx {
 /// Determine whether a call is successful
 #[macro_export]
 macro_rules! is_call_success {
-    ($ret: expr) => {
+    ($ret: expr, $fuzz_ret: expr) => {
         $ret == InstructionResult::Return
             || $ret == InstructionResult::Stop
-            || $ret == ControlLeak
             || $ret == InstructionResult::SelfDestruct
+            || ($ret == InstructionResult::FatalExternalError && $fuzz_ret == ControlLeak)
     };
 }
 
@@ -561,12 +561,12 @@ where
             interp.stack.data.clear();
             interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
-            if !is_call_success!(r) {
+            if !is_call_success!(r, self.host.instruction_res) {
                 interp.return_range = 0..0;
                 break;
             }
         }
-        if is_call_success!(r) {
+        if is_call_success!(r, self.host.instruction_res) {
             r = self.host.run_inspect(&mut interp, state);
         }
 
@@ -768,46 +768,43 @@ where
             }
         }
         let mut r = r.unwrap();
-        match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => unsafe {
-                if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
-                    return ExecutionResult {
-                        output: r.output.to_vec(),
-                        reverted: true,
-                        new_state: StagedVMState::new_uninitialized(),
-                        additional_info: None,
-                    };
-                }
-                let leak_ctx = self.host.leak_ctx.clone();
-                r.new_state.post_execution.push(PostExecutionCtx {
-                    pes: leak_ctx,
-                    must_step: match r.ret {
-                        ControlLeak => false,
-                        InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) => true,
-                        InstructionResult::AddressUnboundedStaticCall => false,
-                        _ => unreachable!(),
-                    },
-
-                    constraints: match r.ret {
-                        ControlLeak => vec![],
-                        InstructionResult::AddressUnboundedStaticCall => vec![Constraint::MustStepNow],
-                        InstructionResult::ArbitraryExternalCallAddressBounded(
-                            caller,
-                            target,
-                            value,
-                        ) => {
-                            vec![
-                                Constraint::Caller(caller),
-                                Constraint::Contract(target),
-                                Value(value),
-                                NoLiquidation,
-                            ]
-                        }
-                        _ => unreachable!(),
-                    },
-                });
+        if r.ret == InstructionResult::FatalExternalError && self.host.instruction_res != FuzzInstructionRes::Continue {
+            if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
+                return ExecutionResult {
+                    output: r.output.to_vec(),
+                    reverted: true,
+                    new_state: StagedVMState::new_uninitialized(),
+                    additional_info: None,
+                };
             }
-            _ => {}
+            let leak_ctx = self.host.leak_ctx.clone();
+            r.new_state.post_execution.push(PostExecutionCtx {
+                pes: leak_ctx,
+                must_step: match self.host.instruction_res {
+                    ControlLeak => false,
+                    ArbitraryExternalCallAddressBounded(_, _, _) => true,
+                    AddressUnboundedStaticCall => false,
+                    _ => unreachable!(),
+                },
+
+                constraints: match self.host.instruction_res {
+                    ControlLeak => vec![],
+                    AddressUnboundedStaticCall => vec![Constraint::MustStepNow],
+                    ArbitraryExternalCallAddressBounded(
+                        caller,
+                        target,
+                        value,
+                    ) => {
+                        vec![
+                            Constraint::Caller(caller),
+                            Constraint::Contract(target),
+                            Value(value),
+                            NoLiquidation,
+                        ]
+                    }
+                    _ => unreachable!(),
+                },
+            });
         }
 
         r.new_state.typed_bug = HashSet::from_iter(
@@ -841,17 +838,15 @@ where
                     r.ret,
                     InstructionResult::Return
                     | InstructionResult::Stop
-                    | InstructionResult::ControlLeak
                     | InstructionResult::SelfDestruct
-                    | InstructionResult::AddressUnboundedStaticCall
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+                    | InstructionResult::FatalExternalError
                 ),
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&r.new_state)
                         .downcast_ref_unchecked::<VS>()
                         .clone(),
                 ),
-                additional_info: if r.ret == ControlLeak {
+                additional_info: if r.ret == InstructionResult::FatalExternalError && self.host.instruction_res == ControlLeak {
                     Some(vec![self.host.call_count as u8])
                 } else {
                     None
@@ -1002,7 +997,7 @@ where
                         unsafe {
                             ExecutionResult {
                                 output: res.output.to_vec(),
-                                reverted: !is_call_success!(res.ret),
+                                reverted: !is_call_success!(res.ret, self.host.instruction_res),
                                 new_state: StagedVMState::new_with_state(
                                     VMStateT::as_any(&mut res.new_state)
                                         .downcast_ref_unchecked::<VS>()
@@ -1065,7 +1060,7 @@ where
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
+                if !is_call_success!(ret, self.host.instruction_res) {
                     vec![]
                 } else {
                     interp.return_value().to_vec()
@@ -1115,7 +1110,7 @@ where
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
+                if !is_call_success!(ret, self.host.instruction_res) {
                     vec![]
                 } else {
                     interp.return_value().to_vec()

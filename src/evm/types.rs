@@ -17,9 +17,9 @@ use libafl::schedulers::QueueScheduler;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
 use primitive_types::{H160, H256};
 use revm_primitives::ruint::aliases::U512;
-use revm_primitives::{Bytecode, B160, U256};
+use revm_primitives::{Bytecode, Address, U256};
 
-pub type EVMAddress = B160;
+pub type EVMAddress = Address;
 pub type EVMU256 = U256;
 pub type EVMU512 = U512;
 pub type EVMFuzzState =
