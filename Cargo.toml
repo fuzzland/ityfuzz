@@ -13,7 +13,8 @@ default = [
     "dataflow",
     "evm",
     "print_txn_corpus",
-    "full_trace"
+    "full_trace",
+    "flashloan_v2",
 ]
 evm = []
 cmp = []
@@ -92,9 +93,9 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d
     "memory_limit",
 ] }
 # external fuzzing-based abi decompiler
-heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", package = "heimdall-core"}
+heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", package = "heimdall-core" }
 # heimdall_core relies on an async runtime
-tokio = {version = "1.0", features = ["full"]}
+tokio = { version = "1.0", features = ["full"] }
 
 
 move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-binary-format", optional = true }

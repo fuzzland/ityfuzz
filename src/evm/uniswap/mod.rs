@@ -1,22 +1,16 @@
+use super::vm::EVMState;
 use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256};
-
 use crate::evm::onchain::endpoints::Chain;
-
+use crate::evm::types::{EVMAddress, EVMU256};
 use crypto::digest::Digest;
 use crypto::sha3::Sha3;
-
 use permutator::CartesianProductIterator;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-
-use crate::evm::types::{EVMAddress, EVMU256};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-
-use super::vm::EVMState;
 
 pub enum UniswapVer {
     V1,
@@ -76,54 +70,6 @@ pub struct PairContext {
 }
 
 impl PairContext {
-    // pub fn update_reserve_pre<I, S>(
-    //     &mut self,
-    //     ctx: &mut EVMOracleCtx,
-    // ) {
-    //     let mut abi = BoxedABI::new(Box::new(AEmpty {}));
-    //     abi.function = [0x09, 0x02, 0xf1, 0xac];
-    //     let res = ctx.call_pre(&mut EVMInput {
-    //         caller: Default::default(),
-    //         contract: self.pair_address,
-    //         data: Some(abi),
-    //         sstate: StagedVMState::new_uninitialized(),
-    //         sstate_idx: 0,
-    //         txn_value: None,
-    //         step: false,
-    //         env: Default::default(),
-    //         access_pattern: ctx.input.get_access_pattern().clone(),
-    //         #[cfg(any(test, feature = "debug"))]
-    //         direct_data: Default::default()
-    //     });
-    //
-    //     self.reserve0 = EVMU256::from_big_endian(&res.output[0..32]);
-    //     self.reserve1 = EVMU256::from_big_endian(&res.output[32..64]);
-    // }
-    //
-    // pub fn update_reserve_post<I, S>(
-    //     &mut self,
-    //     ctx: &mut EVMOracleCtx,
-    // ) {
-    //     let mut abi = BoxedABI::new(Box::new(AEmpty {}));
-    //     abi.function = [0x09, 0x02, 0xf1, 0xac];
-    //     let res = ctx.call_pre(&mut EVMInput {
-    //         caller: Default::default(),
-    //         contract: self.pair_address,
-    //         data: Some(abi),
-    //         sstate: StagedVMState::new_uninitialized(),
-    //         sstate_idx: 0,
-    //         txn_value: None,
-    //         step: false,
-    //         env: Default::default(),
-    //         access_pattern: ctx.input.get_access_pattern().clone(),
-    //         #[cfg(any(test, feature = "debug"))]
-    //         direct_data: Default::default()
-    //     });
-    //
-    //     self.reserve0 = EVMU256::from_big_endian(&res.output[0..32]);
-    //     self.reserve1 = EVMU256::from_big_endian(&res.output[32..64]);
-    // }
-
     pub fn get_amount_out(
         &self,
         amount_in: EVMU256,
@@ -187,7 +133,7 @@ impl PathContext {
             let p = pair.deref().borrow();
             let reserves = match reserve_data.get(&p.pair_address) {
                 None => p.initial_reserves,
-                Some(reserves) => reserves.clone(),
+                Some(reserves) => *reserves,
             };
             let swap_result = p.get_amount_out(amount_in, reserves.0, reserves.1);
             reserve_data.insert(
@@ -218,7 +164,7 @@ impl PathContext {
         let initial_pair = self.route.first().unwrap().deref().borrow();
         let initial_reserve = match reserve_data.get(&initial_pair.pair_address) {
             None => initial_pair.initial_reserves,
-            Some(reserves) => reserves.clone(),
+            Some(reserves) => *reserves,
         };
 
         let mut amount_out = {
@@ -280,7 +226,7 @@ pub fn generate_uniswap_router_call(
                                                  // EVMU256::from(perct) * unsafe {WETH_MAX}
         Some((abi, amount_in, token.weth_address))
     } else {
-        if token.swaps.len() == 0 {
+        if token.swaps.is_empty() {
             return None;
         }
         let path_ctx = &token.swaps[path_idx % token.swaps.len()];
@@ -292,7 +238,7 @@ pub fn generate_uniswap_router_call(
             .map(|pair| pair.deref().borrow().next_hop)
             .collect();
         // when it is pegged token or weth
-        if path.len() == 0 || path[0] != token.weth_address {
+        if path.is_empty() || path[0] != token.weth_address {
             path.insert(0, token.weth_address);
         }
         path.insert(path.len(), token.address);
@@ -349,7 +295,6 @@ pub fn generate_uniswap_router_call(
     }
 }
 
-
 pub fn generate_uniswap_router_sell(
     token: &TokenContext,
     path_idx: usize,
@@ -377,7 +322,7 @@ pub fn generate_uniswap_router_sell(
         abi_amount.function = [0x2e, 0x1a, 0x7d, 0x4d]; // withdraw
         Some(vec![(abi_amount, EVMU256::ZERO, token.weth_address)])
     } else {
-        if token.swaps.len() == 0 {
+        if token.swaps.is_empty() {
             return None;
         }
         let path_ctx = &token.swaps[path_idx % token.swaps.len()];
@@ -388,7 +333,7 @@ pub fn generate_uniswap_router_sell(
             .map(|pair| pair.deref().borrow().next_hop)
             .collect();
         // when it is pegged token or weth
-        if path.len() == 0 || *path.last().unwrap() != token.weth_address {
+        if path.is_empty() || *path.last().unwrap() != token.weth_address {
             path.push(token.weth_address);
         }
         path.insert(0, token.address);
@@ -428,8 +373,6 @@ pub fn generate_uniswap_router_sell(
         }));
         sell_abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
 
-        
-
         let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
             None => {
                 path_ctx
@@ -441,7 +384,7 @@ pub fn generate_uniswap_router_sell(
                     .uniswap_info
                     .router
             }
-            Some(info) =>info.uniswap_info.router,
+            Some(info) => info.uniswap_info.router,
         };
 
         let mut approve_abi = BoxedABI::new(Box::new(AArray {
@@ -469,7 +412,6 @@ pub fn generate_uniswap_router_sell(
     }
 }
 
-
 pub fn liquidate_all_token(
     tokens: Vec<(&TokenContext, EVMU256)>,
     initial_reserve_data: HashMap<EVMAddress, (EVMU256, EVMU256)>,
@@ -478,12 +420,12 @@ pub fn liquidate_all_token(
     for (token, amt) in tokens {
         let swaps: Vec<(PathContext, EVMU256)> =
             token.swaps.iter().map(|swap| (swap.clone(), amt)).collect();
-        if swaps.len() > 0 {
+        if !swaps.is_empty() {
             swap_combos.push(swaps);
         }
     }
 
-    if swap_combos.len() == 0 {
+    if swap_combos.is_empty() {
         return (EVMU256::ZERO, initial_reserve_data);
     }
 
@@ -501,7 +443,7 @@ pub fn liquidate_all_token(
         let mut reserve_data = initial_reserve_data.clone();
         let mut total_amount_out = EVMU256::ZERO;
         for (path, amt) in &swaps {
-            total_amount_out += path.get_amount_out(amt.clone(), &mut reserve_data);
+            total_amount_out += path.get_amount_out(*amt, &mut reserve_data);
         }
         possible_amount_out.push((total_amount_out, reserve_data));
     });
@@ -531,21 +473,21 @@ fn reserve_encoder(reserves: &(EVMU256, EVMU256), original: &EVMU256) -> EVMU256
 }
 
 pub fn update_reserve_on_state(
-    state: &mut EVMState, 
-    reserves: &HashMap<EVMAddress, (EVMU256, EVMU256)>
+    state: &mut EVMState,
+    reserves: &HashMap<EVMAddress, (EVMU256, EVMU256)>,
 ) {
     for (addr, reserves) in reserves {
         state
             .state
-            .entry(*addr).or_insert(HashMap::new())
-            .entry(EVMU256::from(8)).and_modify(|f| {
+            .entry(*addr)
+            .or_default()
+            .entry(EVMU256::from(8))
+            .and_modify(|f| {
                 *f = reserve_encoder(reserves, f);
-            }).or_insert(
-                reserve_encoder(reserves, &EVMU256::ZERO)
-            );
+            })
+            .or_insert(reserve_encoder(reserves, &EVMU256::ZERO));
     }
 }
-
 
 pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
     match (provider, chain) {
@@ -654,7 +596,7 @@ impl UniswapInfo {
 
     // calculate CREATE2 address for a pair without making any external calls
     pub fn get_pair_address(&self, token_a: EVMAddress, token_b: EVMAddress) -> EVMAddress {
-        let mut tokens = vec![token_a, token_b];
+        let mut tokens = [token_a, token_b];
         tokens.sort();
         let mut data = [0u8; 40];
         data[0..20].copy_from_slice(&tokens[0].0);
@@ -666,12 +608,12 @@ impl UniswapInfo {
         data[21..53].copy_from_slice(&keccak_token);
         data[53..85].copy_from_slice(&self.init_code_hash);
         let keccak = Self::keccak(data.to_vec());
-        return EVMAddress::from_slice(&keccak[12..]);
+        EVMAddress::from_slice(&keccak[12..])
     }
 }
 
 pub fn reserve_parser(reserve_slot: &EVMU256) -> (EVMU256, EVMU256) {
-    let mut reserve_bytes: [u8; 32] = reserve_slot.to_be_bytes();
+    let reserve_bytes: [u8; 32] = reserve_slot.to_be_bytes();
     let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
     let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
     (reserve_0, reserve_1)
@@ -1084,46 +1026,62 @@ mod tests {
             .unwrap(),
         );
 
-        let res = reserve_encoder(&(r0, r1), &EVMU256::from_str_radix(
-            "63cebab4000000004b702d24750df9f77b8500000016e7f19fdf1ede2902b6af",
-            16,
-        ).unwrap());
-        assert!(res == EVMU256::from_str_radix("63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae", 16).unwrap());
+        let res = reserve_encoder(
+            &(r0, r1),
+            &EVMU256::from_str_radix(
+                "63cebab4000000004b702d24750df9f77b8500000016e7f19fdf1ede2902b6af",
+                16,
+            )
+            .unwrap(),
+        );
+        assert!(
+            res == EVMU256::from_str_radix(
+                "63cebab4000000004b702d24750df9f77b8400000016e7f19fdf1ede2902b6ae",
+                16
+            )
+            .unwrap()
+        );
     }
 
     #[test]
     fn test_uniswap_sell() {
         let t1 = TokenContext {
-            swaps: vec![
-                PathContext {
-                    route: vec![wrap!(PairContext {
-                        pair_address: EVMAddress::from_str(
-                            "0x0000000000000000000000000000000000000000"
-                        )
+            swaps: vec![PathContext {
+                route: vec![wrap!(PairContext {
+                    pair_address: EVMAddress::from_str(
+                        "0x0000000000000000000000000000000000000000"
+                    )
+                    .unwrap(),
+                    side: 0,
+                    uniswap_info: Arc::new(get_uniswap_info(
+                        &UniswapProvider::PancakeSwap,
+                        &Chain::BSC
+                    )),
+                    initial_reserves: (Default::default(), Default::default()),
+                    next_hop: EVMAddress::from_str("0x1100000000000000000000000000000000000000")
                         .unwrap(),
-                        side: 0,
-                        uniswap_info: Arc::new(get_uniswap_info(
-                            &UniswapProvider::PancakeSwap,
-                            &Chain::BSC
-                        )),
-                        initial_reserves: (Default::default(), Default::default()),
-                        next_hop: EVMAddress::from_str("0x1100000000000000000000000000000000000000").unwrap(),
-                    })],
-                    final_pegged_ratio: EVMU256::from(1),
-                    final_pegged_pair: Rc::new(RefCell::new(None)),
-                },
-            ],
+                })],
+                final_pegged_ratio: EVMU256::from(1),
+                final_pegged_pair: Rc::new(RefCell::new(None)),
+            }],
             is_weth: false,
-            weth_address: EVMAddress::from_str("0xee00000000000000000000000000000000000000").unwrap(),
+            weth_address: EVMAddress::from_str("0xee00000000000000000000000000000000000000")
+                .unwrap(),
             address: EVMAddress::from_str("0xff00000000000000000000000000000000000000").unwrap(),
         };
 
-        let plan = generate_uniswap_router_sell(&t1, 0, EVMU256::from(10000), EVMAddress::from_str(
-            "0x2300000000000000000000000000000000000000"
-        ).unwrap());
+        let plan = generate_uniswap_router_sell(
+            &t1,
+            0,
+            EVMU256::from(10000),
+            EVMAddress::from_str("0x2300000000000000000000000000000000000000").unwrap(),
+        );
         println!(
             "plan: {:?}",
-            plan.unwrap().iter().map(|x| hex::encode(x.0.get_bytes())).collect::<Vec<_>>()
+            plan.unwrap()
+                .iter()
+                .map(|x| hex::encode(x.0.get_bytes()))
+                .collect::<Vec<_>>()
         );
     }
 }
