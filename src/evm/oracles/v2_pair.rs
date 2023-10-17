@@ -6,9 +6,8 @@ use crate::evm::uniswap::reserve_parser;
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx, Producer};
 use crate::state::HasExecutionResult;
-use bytes::Bytes;
 use revm::EVM;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
@@ -106,7 +105,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
                     violations.push(bug_idx);
                 }
-                
+
             }
 
             // for (addr, (r0, r1)) in &self.pair_producer.deref().borrow().reserves {

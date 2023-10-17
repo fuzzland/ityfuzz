@@ -91,6 +91,8 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "23cbac479f
     "serde",
     "memory_limit",
 ] }
+# Primitive types shared by revm and foundry
+alloy-primitives = { version = "0.4", features = ["default", "rand"] }
 
 # external fuzzing-based abi decompiler
 heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", rev = "3d95f04146bbef2e0e88e6949a06519c938b47d7", package = "heimdall-core"}

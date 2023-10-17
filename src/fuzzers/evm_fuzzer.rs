@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
@@ -70,7 +69,7 @@ use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
 use primitive_types::{H160, U256};
 use revm_primitives::bitvec::view::BitViewSized;
-use revm_primitives::{BlockEnv, Bytecode, Env};
+use revm_primitives::{BlockEnv, Bytecode, Env, Bytes};
 
 struct ABIConfig {
     abi: String,

@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use libafl::schedulers::Scheduler;
 
 use crate::evm::abi::BoxedABI;
@@ -18,7 +17,7 @@ use libafl::prelude::{Corpus, HasMetadata, Input};
 use libafl::state::{HasCorpus, State};
 
 use revm_interpreter::{Interpreter, Host};
-use revm_primitives::{Bytecode};
+use revm_primitives::{Bytecode, Bytes};
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -823,7 +822,7 @@ where
             println!("[concolic] stack: {:?}", interp.stack);
             println!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
             for idx in 0..interp.stack.len() {
-                let real = interp.stack.data[idx].clone();
+                let real = interp.stack.data()[idx].clone();
                 let sym = self.symbolic_stack[idx].clone();
                 if sym.is_some() {
                     match sym.unwrap().op {

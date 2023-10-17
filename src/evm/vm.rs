@@ -22,7 +22,6 @@ use std::sync::Arc;
 use crate::evm::types::{float_scale_to_u512, EVMU512};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::state_input::StagedVMState;
-use bytes::Bytes;
 
 use libafl::prelude::{HasMetadata, HasRand, UsesInput};
 use libafl::schedulers::Scheduler;
@@ -34,17 +33,17 @@ use rand::random;
 use super::host::FuzzInstructionRes;
 use super::host::FuzzInstructionRes::{ArbitraryExternalCallAddressBounded, ControlLeak, AddressUnboundedStaticCall};
 use revm_interpreter::{
-    BytecodeLocked, CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory,
+    CallContext, CallScheme, Contract, Gas, InstructionResult, Interpreter, Memory,
     Stack,
 };
-use revm_primitives::{Bytecode, LatestSpec};
+use revm_primitives::{Bytecode, LatestSpec, B256, Bytes};
 
 use core::ops::Range;
 use std::any::Any;
 
 use crate::evm::bytecode_analyzer;
 use crate::evm::host::{
-    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP, RET_OFFSET, RET_SIZE, STATE_CHANGE,
+    FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP, RET_SIZE, STATE_CHANGE,
     WRITE_MAP,
 };
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
@@ -122,8 +121,10 @@ pub struct SinglePostExecution {
     pub memory: Memory,
     /// Stack.
     pub stack: Stack,
-    /// Return value.
-    pub return_range: Range<usize>,
+    /// The offset into `self.memory` of the return data.
+    pub return_offset: usize,
+    /// The length of the return data.
+    pub return_len: usize,
     /// Is interpreter call static.
     pub is_static: bool,
     /// Contract information and invoking data
@@ -148,9 +149,10 @@ pub struct SinglePostExecution {
 impl SinglePostExecution {
     pub fn hash(&self, hasher: &mut impl Hasher) {
         self.program_counter.hash(hasher);
-        self.memory.data.hash(hasher);
-        self.stack.data.hash(hasher);
-        self.return_range.hash(hasher);
+        self.memory.data().hash(hasher);
+        self.stack.data().hash(hasher);
+        self.return_offset.hash(hasher);
+        self.return_len.hash(hasher);
         self.is_static.hash(hasher);
         self.input.hash(hasher);
         self.code_address.hash(hasher);
@@ -172,25 +174,27 @@ impl SinglePostExecution {
         }
     }
 
-    fn get_interpreter(&self, bytecode: Arc<BytecodeLocked>) -> Interpreter {
+    fn get_interpreter(&self, bytecode: Bytecode, code_hash: B256) -> Interpreter {
         let contract =
-            Contract::new_with_context_analyzed(self.input.clone(), bytecode, &self.get_call_ctx());
+            Contract::new_with_context(self.input.clone(), bytecode, code_hash, &self.get_call_ctx());
+        let instruction_pointer = unsafe { contract.bytecode.as_ptr().add(self.program_counter) };
 
         let mut stack = Stack::new();
-        for v in &self.stack.data {
+        for v in self.stack.data() {
             stack.push(v.clone());
         }
 
         Interpreter {
-            instruction_pointer: unsafe { contract.bytecode.as_ptr().add(self.program_counter) },
+            contract: Box::new(contract),
+            instruction_pointer,
             instruction_result: self.instruction_result,
             gas: Gas::new(0),
             memory: self.memory.clone(),
             stack,
             return_data_buffer: Bytes::new(),
-            return_range: self.return_range.clone(),
+            return_offset: self.return_offset,
+            return_len: self.return_len,
             is_static: self.is_static,
-            contract,
             memory_limit: MEM_LIMIT,
         }
     }
@@ -201,10 +205,11 @@ impl SinglePostExecution {
             instruction_result: interp.instruction_result,
             memory: interp.memory.clone(),
             stack: interp.stack.clone(),
-            return_range: interp.return_range.clone(),
+            return_offset: interp.return_offset,
+            return_len: interp.return_len,
             is_static: interp.is_static,
             input: interp.contract.input.clone(),
-            code_address: interp.contract.code_address,
+            code_address: interp.contract.address,
             address: interp.contract.address,
             caller: interp.contract.caller,
             value: interp.contract.value,
@@ -510,7 +515,7 @@ where
         let mut repeats = input.get_repeat();
 
         // Get the bytecode
-        let mut bytecode = match self.host.code.get(&call_ctx.code_address) {
+        let (bytecode, code_hash) = match self.host.code.get(&call_ctx.code_address) {
             Some(i) => i.clone(),
             None => {
                 println!(
@@ -533,24 +538,22 @@ where
             // If there is a post execution context, then we need to create the interpreter from
             // the post execution context
             repeats = 1;
-            unsafe {
-                // setup the pc, memory, and stack as the post execution context
-                let mut interp = post_exec_ctx.get_interpreter(bytecode);
-                // set return buffer as the input
-                // we remove the first 4 bytes because the first 4 bytes is the function hash (00000000 here)
-                interp.return_data_buffer = data.slice(4..);
-                let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
-                interp.memory.set(
-                    post_exec_ctx.output_offset,
-                    &interp.return_data_buffer[..target_len],
-                );
-                interp
-            }
+            // setup the pc, memory, and stack as the post execution context
+            let mut interp = post_exec_ctx.get_interpreter(bytecode, code_hash);
+            // set return buffer as the input
+            // we remove the first 4 bytes because the first 4 bytes is the function hash (00000000 here)
+            interp.return_data_buffer = data.slice(4..);
+            let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
+            interp.memory.set(
+                post_exec_ctx.output_offset,
+                &interp.return_data_buffer[..target_len],
+            );
+            interp
         } else {
             // if there is no post execution context, then we create the interpreter from the
             // beginning
-            let call = Contract::new_with_context_analyzed(data, bytecode, call_ctx);
-            Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT)
+            let call = Contract::new_with_context(data, bytecode, code_hash, call_ctx);
+            Interpreter::new_with_memory_limit(Box::new(call), 1e10 as u64, false, MEM_LIMIT)
         };
 
         // Execute the contract for `repeats` times or until revert
@@ -558,11 +561,12 @@ where
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
             r = self.host.run_inspect(&mut interp, state);
-            interp.stack.data.clear();
-            interp.memory.data.clear();
+            interp.stack = Stack::new();
+            interp.memory = Memory::new();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
             if !is_call_success!(r, self.host.instruction_res) {
-                interp.return_range = 0..0;
+                interp.return_offset = 0;
+                interp.return_len = 0;
                 break;
             }
         }
@@ -622,13 +626,11 @@ where
             IS_FAST_CALL = true;
         }
         // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
-        let call = Contract::new_with_context_analyzed(
+        let (bytecode, code_hash) = self.host.code.get(&address).unwrap().clone();
+        let call = Contract::new_with_context(
             data,
-            self.host
-                .code
-                .get(&address)
-                .expect(&*format!("no code {:?}", address))
-                .clone(),
+            bytecode,
+            code_hash,
             &CallContext {
                 address,
                 caller: from,
@@ -643,7 +645,7 @@ where
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
         }
-        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+        let mut interp = Interpreter::new_with_memory_limit(Box::new(call), 1e10 as u64, false, MEM_LIMIT);
         let ret = self.host.run_inspect(&mut interp, state);
         unsafe {
             IS_FAST_CALL = false;
@@ -899,10 +901,11 @@ where
         state: &mut S,
     ) -> Option<EVMAddress> {
         println!("deployer = 0x{} ", hex::encode(self.deployer));
+        let code_hash = code.hash_slow();
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
-            deployed_address,
+            code_hash,
             deployed_address,
             self.deployer,
             EVMU256::from(0),
@@ -912,7 +915,7 @@ where
             IN_DEPLOY = true;
         }
         let mut interp =
-            Interpreter::new_with_memory_limit(deployer, 1e10 as u64, false, MEM_LIMIT);
+            Interpreter::new_with_memory_limit(Box::new(deployer), 1e10 as u64, false, MEM_LIMIT);
         let mut dummy_state = S::default();
         let r = self.host.run_inspect(&mut interp, &mut dummy_state);
         unsafe {
@@ -1055,10 +1058,10 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::StaticCall,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
-                let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
+                let (code, code_hash) = self.host.code.get(address).expect("no code").clone();
+                let call = Contract::new_with_context(by.clone(), code, code_hash, &ctx);
                 let mut interp =
-                    Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                    Interpreter::new_with_memory_limit(Box::new(call), 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
                 if !is_call_success!(ret, self.host.instruction_res) {
                     vec![]
@@ -1105,10 +1108,10 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::Call,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
-                let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
+                let (code, code_hash) = self.host.code.get(address).expect("no code").clone();
+                let call = Contract::new_with_context(by.clone(), code, code_hash, &ctx);
                 let mut interp =
-                    Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                    Interpreter::new_with_memory_limit(Box::new(call), 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
                 if !is_call_success!(ret, self.host.instruction_res) {
                     vec![]
@@ -1164,10 +1167,9 @@ mod tests {
     use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
-    use bytes::Bytes;
     use libafl::prelude::StdScheduler;
     use libafl_bolts::tuples::tuple_list;
-    use revm_primitives::Bytecode;
+    use revm_primitives::{Bytecode, Bytes};
     use std::cell::RefCell;
     use std::path::Path;
     use std::rc::Rc;

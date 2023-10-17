@@ -288,7 +288,7 @@ where
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
-        let address = interp.contract.code_address;
+        let address = interp.contract.address;
         let pc = interp.program_counter();
         self.pc_coverage.entry(address).or_default().insert(pc);
 
@@ -314,7 +314,7 @@ where
 
             let sourcemap = build_artifact.get_sourcemap(
                 if (host.code.contains_key(&address)) {
-                    Vec::from(host.code.get(&address).unwrap().clone().bytecode())
+                    Vec::from(host.code.get(&address).unwrap().clone().0.bytecode)
                 } else {
                     host.setcode_data.get(&address).unwrap().clone().bytecode.to_vec()
                 }
@@ -358,7 +358,7 @@ where
 
 
 mod tests {
-    use bytes::Bytes;
+    use revm_primitives::Bytes;
     use super::*;
 
     #[test]

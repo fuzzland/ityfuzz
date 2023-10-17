@@ -5,8 +5,7 @@ use crate::evm::uniswap::{liquidate_all_token, TokenContext};
 use crate::evm::vm::EVMState;
 use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
-use bytes::Bytes;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -102,10 +101,10 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
 
             for ((caller, token), (prev_balance, new_balance)) in self.erc20_producer.deref().borrow().balances.iter() {
                 let token_info = self.known_tokens.get(token).expect("Token not found");
-                
+
                 #[cfg(feature = "flashloan_debug")]
                 println!("Balance: {} -> {} for {:?} @ {:?}", prev_balance, new_balance, caller, token);
-                
+
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
@@ -116,7 +115,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             let path_idx = ctx.input.get_randomness()[0] as usize;
 
             let mut liquidation_txs = vec![];
-    
+
             // println!("Liquidations earned: {:?}", liquidations_earned);
             for (caller, token_info, amount) in liquidations_earned {
                 let txs = generate_uniswap_router_sell(
@@ -124,7 +123,7 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
                 if txs.is_none() {
                     continue;
                 }
-    
+
                 liquidation_txs.extend(txs.unwrap().iter().map(
                     |(abi, _, addr)| {
                         (caller, *addr, Bytes::from(abi.get_bytes()))
@@ -135,8 +134,8 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             //     "Liquidation txs: {:?}",
             //     liquidation_txs
             // );
-    
-    
+
+
             // println!("Earned before liquidation: {:?}", ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
             let (out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
             // println!("results: {:?}", out);

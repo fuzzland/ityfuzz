@@ -3,13 +3,12 @@ use crate::evm::types::{EVMAddress, EVMU256};
 use crate::evm::uniswap::{
     get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
 };
-use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::OperationResult;
 use retry::{delay::Fixed, retry_with_index};
 use revm_interpreter::analysis::to_analysed;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;

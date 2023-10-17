@@ -308,7 +308,7 @@ pub fn generate_uniswap_router_call(
                         .iter()
                         .map(|addr| {
                             BoxedABI::new(Box::new(A256 {
-                                data: addr.as_bytes().to_vec(),
+                                data: addr.to_vec(),
                                 is_address: true,
                                 dont_mutate: false,
                             }))
@@ -405,7 +405,7 @@ pub fn generate_uniswap_router_sell(
                         .iter()
                         .map(|addr| {
                             BoxedABI::new(Box::new(A256 {
-                                data: addr.as_bytes().to_vec(),
+                                data: addr.to_vec(),
                                 is_address: true,
                                 dont_mutate: false,
                             }))
@@ -428,7 +428,7 @@ pub fn generate_uniswap_router_sell(
         }));
         sell_abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
 
-        
+
 
         let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
             None => {
@@ -531,7 +531,7 @@ fn reserve_encoder(reserves: &(EVMU256, EVMU256), original: &EVMU256) -> EVMU256
 }
 
 pub fn update_reserve_on_state(
-    state: &mut EVMState, 
+    state: &mut EVMState,
     reserves: &HashMap<EVMAddress, (EVMU256, EVMU256)>
 ) {
     for (addr, reserves) in reserves {
@@ -657,12 +657,12 @@ impl UniswapInfo {
         let mut tokens = vec![token_a, token_b];
         tokens.sort();
         let mut data = [0u8; 40];
-        data[0..20].copy_from_slice(&tokens[0].0);
-        data[20..].copy_from_slice(&tokens[1].0);
+        data[0..20].copy_from_slice(&tokens[0].as_slice());
+        data[20..].copy_from_slice(&tokens[1].as_slice());
         let keccak_token = Self::keccak(data.to_vec());
         let mut data = [0u8; 85];
         data[0] = 0xff;
-        data[1..21].copy_from_slice(&self.factory.0);
+        data[1..21].copy_from_slice(&self.factory.as_slice());
         data[21..53].copy_from_slice(&keccak_token);
         data[53..85].copy_from_slice(&self.init_code_hash);
         let keccak = Self::keccak(data.to_vec());

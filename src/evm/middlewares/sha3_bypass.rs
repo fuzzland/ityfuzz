@@ -5,14 +5,13 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256};
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
 use libafl::schedulers::Scheduler;
 use revm_interpreter::opcode::JUMPI;
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -439,8 +438,9 @@ where
                 .contains(&(interp.contract.address, jumpi))
             {
                 let stack_len = interp.stack.len();
-                interp.stack.data[stack_len - 2] =
-                    EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                let (top, second) = interp.stack.pop_top_unsafe();
+                *second = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                let _ = interp.stack.push(top);
             }
         }
     }
@@ -460,11 +460,10 @@ mod tests {
     use crate::generic_vm::vm_executor::GenericVM;
     use crate::state::FuzzState;
     use crate::state_input::StagedVMState;
-    use bytes::Bytes;
+    use revm_primitives::Bytes;
     use libafl::schedulers::StdScheduler;
     use revm_interpreter::analysis::to_analysed;
-    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP};
-    use revm_interpreter::BytecodeLocked;
+    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, KECCAK256, STOP};
     use std::cell::RefCell;
     use std::path::Path;
     use std::rc::Rc;
@@ -483,10 +482,9 @@ mod tests {
             );
 
         let target_addr = generate_random_address(&mut state);
-        evm_executor.host.code.insert(
-            target_addr.clone(),
-            Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
-        );
+        let bytecode = to_analysed(Bytecode::new_raw(code));
+        let code_hash = bytecode.hash_slow();
+        evm_executor.host.code.insert(target_addr.clone(), (bytecode, code_hash));
 
         let sha3 = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
         evm_executor.host.add_middlewares(sha3.clone());
@@ -535,7 +533,7 @@ mod tests {
     #[test]
     fn test_hash_simple() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, KECCAK256, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI,
             JUMPDEST, STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));
@@ -546,7 +544,7 @@ mod tests {
     #[test]
     fn test_hash_simple_none() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, KECCAK256, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf,
             JUMPI, JUMPDEST, STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));

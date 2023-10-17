@@ -16,7 +16,6 @@ use crate::generic_vm::vm_executor::GenericVM;
 
 use crate::state::HasCaller;
 use crate::state_input::StagedVMState;
-use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 
 use crate::dump_txn;
@@ -37,7 +36,7 @@ use libafl::prelude::HasMetadata;
 use libafl::schedulers::Scheduler;
 use libafl::state::HasCorpus;
 use libafl_bolts::impl_serdeany;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -280,14 +279,14 @@ where
                 .address_to_abi
                 .insert(contract.deployed_address, contract.abi.clone());
             let mut code = vec![];
-            if let Some(c) = self
+            if let Some((c, _)) = self
                 .executor
                 .host
                 .code
-                .clone()
                 .get(&contract.deployed_address)
+                .clone()
             {
-                code.extend_from_slice(c.bytecode());
+                code.extend_from_slice(&c.bytes());
             }
             artifacts.address_to_bytecode.insert(
                 contract.deployed_address,

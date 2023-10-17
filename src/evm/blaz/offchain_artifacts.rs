@@ -1,7 +1,6 @@
 use std::error::Error;
-use bytes::Bytes;
 use itertools::Itertools;
-use revm_primitives::HashMap;
+use revm_primitives::{HashMap, Bytes};
 use serde_json::Value;
 use crate::evm::blaz::{get_client, is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
 use crate::evm::blaz::builder::BuildJobResult;

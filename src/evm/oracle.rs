@@ -9,11 +9,10 @@ use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::HasExecutionResult;
 
-use bytes::Bytes;
 use libafl_bolts::impl_serdeany;
 
 use crate::evm::uniswap::{liquidate_all_token, TokenContext};
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use serde::{Deserialize, Serialize};
 use crate::evm::middlewares::call_printer::CallPrinterResult;
 use crate::evm::srcmap::parser::SourceMapLocation;

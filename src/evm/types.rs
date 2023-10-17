@@ -11,13 +11,13 @@ use crate::oracle::OracleCtx;
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
-use bytes::Bytes;
 use libafl::prelude::HasRand;
 use libafl::schedulers::QueueScheduler;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
 use primitive_types::{H160, H256};
 use revm_primitives::ruint::aliases::U512;
-use revm_primitives::{Bytecode, Address, U256};
+use revm_primitives::{Bytecode, U256, Bytes};
+use alloy_primitives::Address;
 
 pub type EVMAddress = Address;
 pub type EVMU256 = U256;
@@ -98,12 +98,12 @@ where
     S: HasRand,
 {
     let mut rand_seed: RomuDuoJrRand = RomuDuoJrRand::with_seed(s.rand_mut().next());
-    EVMAddress::random_using(&mut rand_seed)
+    EVMAddress::random_with(&mut rand_seed)
 }
 
 /// Generate a fixed H160 address from a hex string.
 pub fn fixed_address(s: &str) -> EVMAddress {
-    let mut address = EVMAddress::zero();
+    let mut address = EVMAddress::ZERO;
     address.0.copy_from_slice(&hex::decode(s).unwrap());
     address
 }

@@ -5,9 +5,8 @@ use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMStagedVMState
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::oracle::{BugMetadata, Oracle, OracleCtx, Producer};
 use crate::state::HasExecutionResult;
-use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;

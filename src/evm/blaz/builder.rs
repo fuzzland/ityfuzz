@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::collections::hash_map::DefaultHasher;
-use bytes::Bytes;
+use revm_primitives::Bytes;
 use itertools::Itertools;
 use libafl_bolts::impl_serdeany;
 use serde::{Deserialize, Serialize};
@@ -272,8 +272,9 @@ impl BuildJobResult {
                 .code
                 .get(addr)
                 .unwrap()
-                .clone()
-                .bytecode());
+                .0
+                .bytes()
+                .as_ref());
             return _self.get_sourcemap(bytecode).get(&pc).cloned();
         }
 

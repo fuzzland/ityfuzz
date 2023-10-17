@@ -14,14 +14,13 @@ use crate::evm::vm::IN_DEPLOY;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use bytes::Bytes;
 use itertools::Itertools;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
 use libafl::schedulers::Scheduler;
 use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::{HashMap, HashSet};
@@ -173,8 +172,8 @@ where
             let code_address = interp.contract.address;
             let caller_code = host
                 .code
-                .get(&interp.contract.code_address)
-                .map(|code| Vec::from(code.bytecode()))
+                .get(&interp.contract.address)
+                .map(|(code, _)| Vec::from(code.bytes().as_ref()))
                 .unwrap_or(vec![]);
             self.results.data.push((self.current_layer, SingleCall {
                 call_type: CallType::FirstLevelCall,
@@ -206,7 +205,7 @@ where
                 println!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
                 "unknown".to_string()
             } else if interp.memory.len() < offset + len {
-                hex::encode(interp.memory.data[offset..].to_vec())
+                hex::encode(interp.memory.data()[offset..].to_vec())
             } else {
                 hex::encode(interp.memory.get_slice(offset, len))
             };
@@ -240,7 +239,7 @@ where
                     return;
                 }
             };
-    
+
             let call_type = match unsafe { *interp.instruction_pointer } {
                 0xf1 => CallType::Call,
                 0xf2 => CallType::CallCode,
@@ -250,18 +249,18 @@ where
                     return;
                 }
             };
-    
+
             self.current_layer += 1;
-    
+
             let arg_offset = as_u64(arg_offset) as usize;
             let arg_len = as_u64(arg_len) as usize;
-    
+
             let arg = if interp.memory.len() < arg_offset + arg_len {
-                hex::encode(interp.memory.data[arg_len..].to_vec())
+                hex::encode(interp.memory.data()[arg_len..].to_vec())
             } else {
-                hex::encode(interp.memory.get_slice(arg_offset, arg_len))
+                hex::encode(interp.memory.slice(arg_offset, arg_len))
             };
-    
+
             let caller = interp.contract.address;
             let address = match *interp.instruction_pointer {
                 0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
@@ -270,21 +269,21 @@ where
                     unreachable!()
                 }
             };
-    
+
             let value = match *interp.instruction_pointer {
                 0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
                 _ => EVMU256::ZERO,
             };
-    
+
             let target = convert_u256_to_h160(address);
-    
-            let caller_code_address = interp.contract.code_address;
+
+            let caller_code_address = interp.contract.address;
             let caller_code = host
                 .code
-                .get(&interp.contract.code_address)
-                .map(|code| Vec::from(code.bytecode()))
+                .get(&interp.contract.address)
+                .map(|(code, _)| Vec::from(code.bytes().as_ref()))
                 .unwrap_or(vec![]);
-    
+
             self.offsets = 0;
             self.results.data.push((self.current_layer, SingleCall {
                 call_type,
@@ -307,7 +306,7 @@ where
                 results: "".to_string(),
             }));
         }
-        
+
     }
 
     unsafe fn on_return(

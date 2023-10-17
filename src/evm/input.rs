@@ -12,12 +12,11 @@ use libafl::mutators::MutationResult;
 use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, State};
 use libafl_bolts::{prelude::Rand, HasLen};
 use primitive_types::U512;
-use revm_primitives::Env;
+use revm_primitives::{Env, Bytes};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
-use bytes::Bytes;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -501,7 +500,6 @@ impl EVMInput {
     impl_env_mutator_h160!(coinbase, block);
     impl_env_mutator_u256!(gas_limit, block);
     impl_env_mutator_u256!(number, block);
-    impl_env_mutator_u256!(chain_id, cfg);
 
     pub fn prevrandao<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
@@ -597,7 +595,6 @@ impl EVMInput {
         add_mutator!(coinbase);
         add_mutator!(gas_limit);
         add_mutator!(number);
-        add_mutator!(chain_id);
         add_mutator!(prevrandao);
 
         if mutators.is_empty() {

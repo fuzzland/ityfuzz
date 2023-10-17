@@ -1,6 +1,5 @@
 use crate::oracle::{Oracle, OracleCtx, Producer};
 use crate::state::HasExecutionResult;
-use bytes::Bytes;
 use primitive_types::{H160, H256, U256};
 use serde_json::json;
 use std::borrow::Borrow;

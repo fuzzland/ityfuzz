@@ -3,8 +3,7 @@ use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{OracleCtx, Producer};
 use crate::state::HasExecutionResult;
-use bytes::Bytes;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::collections::HashMap;
 
 pub struct PairProducer {

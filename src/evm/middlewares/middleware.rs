@@ -5,7 +5,6 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasItyState};
 
-use bytes::Bytes;
 use libafl::corpus::{Corpus, Testcase};
 use libafl::inputs::Input;
 use libafl::prelude::UsesInput;
@@ -19,7 +18,7 @@ use std::fmt::Debug;
 
 use crate::evm::types::{EVMAddress, EVMU256};
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Bytes};
 use std::time::Duration;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

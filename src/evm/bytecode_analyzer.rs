@@ -66,8 +66,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::Bytes;
-    use revm_primitives::Bytecode;
+    use revm_primitives::{Bytecode, Bytes};
 
     #[test]
     fn test_find_constants() {

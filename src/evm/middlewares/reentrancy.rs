@@ -6,7 +6,7 @@ use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::VMInputT;
 use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use bytes::Bytes;
+use revm_primitives::Bytes;
 use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, HasMetadata, State};
 use libafl::schedulers::Scheduler;

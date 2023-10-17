@@ -1,8 +1,7 @@
 use std::time::Duration;
-use bytes::Bytes;
 use itertools::Itertools;
 use revm_interpreter::opcode::{EQ, PUSH4};
-use revm_primitives::{Bytecode, HashSet};
+use revm_primitives::{Bytecode, HashSet, Bytes};
 use crate::evm::bytecode_analyzer::find_constants;
 use crate::evm::bytecode_iterator::all_bytecode;
 use crate::evm::contract_utils::extract_sig_from_contract;
