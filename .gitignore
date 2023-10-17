@@ -19,3 +19,4 @@ work_dir
 combined.json
 /**/build/
 Move.lock
+/w_**/

@@ -81,6 +81,9 @@ pub static mut CALL_UNTIL: u32 = u32::MAX;
 /// Shall we dump the contract calls
 pub static mut WRITE_RELATIONSHIPS: bool = false;
 
+/// State is a generic type, so we use a `usize` pointer to store it
+pub static mut STATE_PTR: usize = 0;
+
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [
     0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c,
     0x1b, 0x48, 0x26, 0x46, 0x5e, 0x8b, 0xc5, 0x04, 0xb3, 0xeb, 0x3e, 0x88, 0xb3, 0xe6, 0xa4, 0xa0,
@@ -111,26 +114,16 @@ pub enum FuzzInstructionRes {
 
 /// Additional data for implementing Host trait
 #[derive(Debug)]
-pub struct AdditionalData<S>
-where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone,
-{
-    // for implementing `step`, `create`, `call`
-    pub state: Option<*mut S>,
-
+pub struct AdditionalData {
     // for implementing `call`
     pub out_offset: usize,
     pub out_len: usize,
     pub ret_buffer: Option<Bytes>,
 }
 
-impl<S> Default for AdditionalData<S>
-where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone,
-{
+impl Default for AdditionalData {
     fn default() -> Self {
         Self {
-            state: None,
             out_offset: 0,
             out_len: 0,
             ret_buffer: None,
@@ -211,7 +204,7 @@ where
     /// Custom instruction result
     pub instruction_res: FuzzInstructionRes,
     /// Additional args for implementing Host trait
-    pub additional_data: AdditionalData<S>,
+    pub additional_data: AdditionalData,
 }
 
 impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
@@ -358,27 +351,6 @@ where
         }
     }
 
-    pub fn set_state(&mut self, state: *mut S) {
-        self.additional_data.state = Some(state);
-    }
-
-    pub fn get_state(&self) -> &S {
-        let s = self.additional_data.state.expect("set_state first");
-        println!("get_state: {:p}", s);
-        unsafe { &*s }
-    }
-
-    // Take the ownership of `state` in order to avoid double mutable borrow.
-    pub fn take_state(&mut self) -> Box<S> {
-        let s = self.additional_data.state.take().expect("set_state first");
-        println!("take_state: {:p}", s);
-        unsafe { Box::from_raw(s) }
-    }
-
-    pub fn clear_state(&mut self) {
-        self.additional_data.state = None;
-    }
-
     pub fn set_out_info(&mut self, out_offset: usize, out_len: usize) {
         self.additional_data.out_offset = out_offset;
         self.additional_data.out_len = out_len;
@@ -392,11 +364,8 @@ where
         self.additional_data.ret_buffer = Some(ret_buffer);
     }
 
-    pub fn get_ret_buffer(&mut self) -> &Bytes {
-        self.additional_data
-            .ret_buffer
-            .as_ref()
-            .expect("set_ret_buffer first")
+    pub fn take_ret_buffer(&mut self) -> Option<Bytes> {
+        self.additional_data.ret_buffer.take()
     }
 
     pub fn set_spec_id(&mut self, spec_id: String) {
@@ -405,10 +374,9 @@ where
 
     /// custom spec id run_inspect
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
-        self.set_state(state as *mut S);
-        let res = self.run_inspect_inner(interp);
-        self.clear_state();
+        unsafe { STATE_PTR = state as *mut S as usize; }
 
+        let res = self.run_inspect_inner(interp);
         res
     }
 
@@ -615,6 +583,8 @@ where
     }
 
     fn call_allow_control_leak(&mut self, input: &mut CallInputs) -> (InstructionResult, Gas, Bytes) {
+        let state = unsafe { & *(STATE_PTR as *const S) };
+
         self.call_count += 1;
         if self.call_count >= unsafe { CALL_UNTIL } {
             self.instruction_res = FuzzInstructionRes::ControlLeak;
@@ -677,7 +647,7 @@ where
         };
 
         if input.context.scheme == CallScheme::StaticCall {
-            if self.get_state().has_caller(&input.contract) || is_target_address_unbounded {
+            if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 self.instruction_res = FuzzInstructionRes::AddressUnboundedStaticCall;
@@ -687,7 +657,7 @@ where
 
         if input.context.scheme == CallScheme::Call {
             // if calling sender, then definitely control leak
-            if self.get_state().has_caller(&input.contract) || is_target_address_unbounded {
+            if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 self.instruction_res = FuzzInstructionRes::ControlLeak;
@@ -866,10 +836,10 @@ where
         unsafe {
             // println!("pc: {}", interp.program_counter());
             // println!("{:?}", *interp.instruction_pointer);
-            let mut state = self.take_state();
-            invoke_middlewares!(self, interp, &mut *state, on_step);
+            let state = &mut *(STATE_PTR as *mut S);
+
+            invoke_middlewares!(self, interp, state, on_step);
             if IS_FAST_CALL_STATIC {
-                self.set_state(Box::into_raw(state));
                 return Continue;
             }
 
@@ -1036,8 +1006,6 @@ where
                 .deref()
                 .borrow_mut()
                 .decode_instruction(interp);
-
-            self.set_state(Box::into_raw(state));
         }
 
         Continue
@@ -1053,20 +1021,21 @@ where
             }
         }
 
-        if self.is_call(interp.current_opcode()) && self.middlewares_enabled {
-            let mut state = self.take_state();
-            let ret_buffer = self.get_ret_buffer().clone();
+        let ret_buffer = self.take_ret_buffer();
+        if self.is_call(interp.current_opcode()) && ret_buffer.is_some() && self.middlewares_enabled {
+            let state = unsafe { &mut *(STATE_PTR as *mut S) };
+            let ret_buffer = ret_buffer.unwrap();
+
             unsafe {
                 for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut() {
                     middleware.deref().deref().borrow_mut().on_return(
                         interp,
                         self,
-                        &mut *state,
+                        state,
                         &ret_buffer
                     );
                 }
             }
-            self.set_state(Box::into_raw(state));
         }
 
         ret
@@ -1218,10 +1187,10 @@ where
 
     fn create(&mut self, inputs: &mut CreateInputs) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
         if unsafe { IN_DEPLOY } {
-            let mut state = self.take_state();
+            let state = unsafe { &mut *(STATE_PTR as *mut S) };
 
             // todo: use nonce + hash instead
-            let r_addr = generate_random_address(&mut *state);
+            let r_addr = generate_random_address(state);
             let (code_hash, _) = self.code_hash(r_addr).unwrap_or_default();
             let mut interp = Interpreter::new_with_memory_limit(
                 Box::new(Contract::new_with_context(
@@ -1241,10 +1210,10 @@ where
                 MEM_LIMIT,
             );
 
-            let ret = self.run_inspect(&mut interp, &mut *state);
+            let ret = self.run_inspect_inner(&mut interp);
             if ret == InstructionResult::Continue {
                 let runtime_code = interp.return_value();
-                self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), &mut *state);
+                self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), state);
                 {
                     // now we build & insert abi
                     let contract_code_str = hex::encode(runtime_code.clone());
@@ -1282,7 +1251,7 @@ where
                     // notify flashloan and blacklisting flashloan addresses
                     #[cfg(feature = "flashloan_v2")]
                     {
-                        handle_contract_insertion!(&mut *state, self, r_addr, parsed_abi);
+                        handle_contract_insertion!(state, self, r_addr, parsed_abi);
                     }
 
                     parsed_abi
@@ -1297,7 +1266,7 @@ where
                             let mut abi_instance = get_abi_type_boxed(&abi.abi);
                             abi_instance
                                 .set_func_with_name(abi.function, abi.function_name.clone());
-                            register_abi_instance(r_addr, abi_instance.clone(), &mut *state);
+                            register_abi_instance(r_addr, abi_instance.clone(), state);
 
                             let input = EVMInput {
                                 caller: state.get_rand_caller(),
@@ -1322,14 +1291,12 @@ where
                                 randomness: vec![0],
                                 repeat: 1,
                             };
-                            add_corpus(self, &mut *state, &input);
+                            add_corpus(self, state, &input);
                         });
                 }
 
-                self.set_state(Box::into_raw(state));
                 (Continue, Some(r_addr), Gas::new(0), runtime_code)
             } else {
-                self.set_state(Box::into_raw(state));
                 (ret, Some(r_addr), Gas::new(0), Bytes::new())
             }
         } else {

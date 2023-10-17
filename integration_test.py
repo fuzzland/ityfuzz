@@ -14,7 +14,7 @@ def read_onchain_tests():
     with open("onchain_tests.txt", "r") as file:
         tests = file.read()
 
-    tests = tests.split("\n")
+    tests = tests.strip().split("\n")
     tests = [test.split("\t") for test in tests]
     return tests
 
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
         tests = read_onchain_tests()
-        with multiprocessing.Pool(10) as p:
+        with multiprocessing.Pool(1) as p:
             p.map(test_onchain, tests)
 
     if crashed_any:
