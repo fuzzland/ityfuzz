@@ -33,7 +33,7 @@ pub struct BuildJob {
 }
 
 pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
-const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources";
+const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources,ast";
 
 impl BuildJob {
     pub fn new(
@@ -153,6 +153,8 @@ pub struct BuildJobResult {
     pub bytecodes: Bytes,
     pub abi: String,
     pub source_maps_replacements: Vec<(String, String)>,
+    /// (file name, AST object)
+    pub asts: Vec<(String, Value)>,
 
     _cache_src_map: HashMap<usize, SourceMapLocation>,
     _cached: bool,
@@ -165,6 +167,7 @@ impl BuildJobResult {
         bytecodes: Bytes,
         abi: String,
         replacements: Vec<(String, String)>,
+        asts: Vec<(String, Value)>
     ) -> Self {
         Self {
             sources,
@@ -172,6 +175,7 @@ impl BuildJobResult {
             bytecodes,
             abi,
             source_maps_replacements: replacements,
+            asts,
             _cache_src_map: Default::default(),
             _cached: false,
         }
@@ -226,6 +230,8 @@ impl BuildJobResult {
         }
 
         let abi = serde_json::to_string(&json["abi"]).expect("get abi failed");
+        let ast_objs = json["ast"].as_object().expect("get ast failed");
+        let asts: Vec<(String, Value)> = ast_objs.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
         Some(Self {
             sources,
@@ -233,6 +239,7 @@ impl BuildJobResult {
             bytecodes: Bytes::from(hex::decode(bytecode).unwrap_or_default()),
             abi: abi.to_string(),
             source_maps_replacements: sourcemap_replacements,
+            asts,
             _cache_src_map: Default::default(),
             _cached: false,
         })

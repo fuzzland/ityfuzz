@@ -27,13 +27,13 @@ use crate::{
         vm::EVMExecutor,
     },
     executor::FuzzExecutor,
-    fuzzer::ItyFuzzer,
+    fuzzer::ItyFuzzer, scheduler::{PowerABIMutationalStage, PowerABIScheduler},
 };
 use itertools::Itertools;
 use libafl::feedbacks::Feedback;
 use libafl::prelude::HasMetadata;
 use libafl::prelude::{QueueScheduler, SimpleEventManager};
-use libafl::stages::{CalibrationStage, StdMutationalStage};
+use libafl::stages::{CalibrationStage, StdPowerMutationalStage};
 use libafl::{
     prelude::{MaxMapFeedback, SimpleMonitor, StdMapObserver},
     Evaluator, Fuzzer,
@@ -114,7 +114,7 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
-    let scheduler = QueueScheduler::new();
+    let scheduler = PowerABIScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
@@ -234,6 +234,10 @@ pub fn evm_fuzzer(
         }
     }
 
+    // moved here to ensure state has ArtifactInfoMetadata during corpus initialization
+    if !state.has_metadata::<ArtifactInfoMetadata>() {
+        state.add_metadata(ArtifactInfoMetadata::new());
+    }
     let mut corpus_initializer = EVMCorpusInitializer::new(
         &mut evm_executor,
         scheduler.clone(),
@@ -320,9 +324,6 @@ pub fn evm_fuzzer(
     // now evm executor is ready, we can clone it
 
     let evm_executor_ref = Rc::new(RefCell::new(evm_executor));
-    if !state.metadata_map().contains::<ArtifactInfoMetadata>() {
-        state.metadata_map_mut().insert(ArtifactInfoMetadata::new());
-    }
 
     let meta = state
         .metadata_map_mut()
@@ -389,7 +390,7 @@ pub fn evm_fuzzer(
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
-    let std_stage = StdMutationalStage::new(mutator);
+    let std_stage = PowerABIMutationalStage::new(mutator);
 
     let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(
         artifacts.address_to_name.clone(),

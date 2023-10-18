@@ -14,6 +14,7 @@ use crate::evm::types::{
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::generic_vm::vm_executor::GenericVM;
 
+use crate::scheduler::ABIScheduler;
 use crate::state::HasCaller;
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -52,7 +53,7 @@ pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
 pub struct EVMCorpusInitializer<'a, SC, ISC>
 where
-    SC: Scheduler<State = EVMFuzzState> + Clone,
+    SC: ABIScheduler<State = EVMFuzzState> + Clone,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
     executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
@@ -140,11 +141,19 @@ macro_rules! add_input_to_corpus {
             .on_add($state, idx)
             .expect("failed to call scheduler on_add");
     };
+    ($state:expr, $scheduler:expr, $input:expr, $artifacts:expr) => {
+        let idx = $state
+            .add_tx_to_corpus(wrap_input!($input))
+            .expect("failed to add");
+        $scheduler
+            .on_add_artifacts($state, idx, $artifacts)
+            .expect("failed to call scheduler on_add_artifact");
+    };
 }
 
 impl<'a, SC, ISC> EVMCorpusInitializer<'a, SC, ISC>
 where
-    SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    SC: ABIScheduler<State = EVMFuzzState> + Clone + 'static,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
     pub fn new(
@@ -459,7 +468,7 @@ where
             randomness: vec![0],
             repeat: 1,
         };
-        add_input_to_corpus!(self.state, &mut self.scheduler, input.clone());
+        add_input_to_corpus!(self.state, &mut self.scheduler, input.clone(), artifacts);
         #[cfg(feature = "print_txn_corpus")]
         {
             let corpus_dir = format!("{}/corpus", self.work_dir.as_str());
