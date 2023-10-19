@@ -5,14 +5,12 @@ use crate::evm::producers::erc20::ERC20Producer;
 use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
 #[cfg(feature = "flashloan_v2")]
-use crate::evm::uniswap::{liquidate_all_token, TokenContext};
+use crate::evm::uniswap::TokenContext;
 use crate::evm::vm::EVMState;
 use crate::oracle::Oracle;
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-#[cfg(feature = "flashloan_v2")]
-use std::borrow::Borrow;
 use std::cell::RefCell;
 #[cfg(feature = "flashloan_v2")]
 use std::collections::HashMap;
@@ -112,16 +110,14 @@ impl
 
     #[cfg(feature = "flashloan_v2")]
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
-        use crate::evm::{
-            input::EVMInputT, types::EVMFuzzExecutor, uniswap::generate_uniswap_router_sell,
-        };
+        use crate::evm::{input::EVMInputT, uniswap::generate_uniswap_router_sell};
 
         let liquidation_percent = ctx.input.get_liquidation_percent();
         if liquidation_percent > 0 {
             let liquidation_percent = EVMU256::from(liquidation_percent);
             let mut liquidations_earned = Vec::new();
 
-            for ((caller, token), (prev_balance, new_balance)) in
+            for ((caller, token), (_prev_balance, new_balance)) in
                 self.erc20_producer.deref().borrow().balances.iter()
             {
                 let token_info = self.known_tokens.get(token).expect("Token not found");
@@ -145,7 +141,7 @@ impl
             // println!("Liquidations earned: {:?}", liquidations_earned);
             for (caller, token_info, amount) in liquidations_earned {
                 let txs = generate_uniswap_router_sell(
-                    &token_info,
+                    token_info,
                     path_idx,
                     amount,
                     ctx.fuzz_state.callers_pool[0],
@@ -166,7 +162,7 @@ impl
             // );
 
             // println!("Earned before liquidation: {:?}", ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
-            let (out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
+            let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
             // println!("results: {:?}", out);
             // println!("result state: {:?}", state.flashloan_data);
             ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
@@ -190,28 +186,26 @@ impl
             > exec_res.new_state.state.flashloan_data.owed
             && exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed
-                > EVMU512::from(10_000_000_000_000_000_000_000_0u128)
+                > EVMU512::from(100_000_000_000_000_000_000_000_u128)
         // > 0.1ETH
         {
             let net = exec_res.new_state.state.flashloan_data.earned
                 - exec_res.new_state.state.flashloan_data.owed;
             // we scaled by 1e24, so divide by 1e24 to get ETH
-            let net_eth = net / EVMU512::from(10_000_000_000_000_000_000_000_00u128);
-            unsafe {
-                EVMBugResult::new_simple(
-                    "erc20".to_string(),
-                    ERC20_BUG_IDX,
-                    format!(
-                        "Earned {} more than owed {}, net earned = {}wei ({}ETH)\n",
-                        exec_res.new_state.state.flashloan_data.earned,
-                        exec_res.new_state.state.flashloan_data.owed,
-                        net,
-                        net_eth,
-                    ),
-                    ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-                )
-                .push_to_output();
-            }
+            let net_eth = net / EVMU512::from(1_000_000_000_000_000_000_000_000_u128);
+            EVMBugResult::new_simple(
+                "erc20".to_string(),
+                ERC20_BUG_IDX,
+                format!(
+                    "Earned {} more than owed {}, net earned = {}wei ({}ETH)\n",
+                    exec_res.new_state.state.flashloan_data.earned,
+                    exec_res.new_state.state.flashloan_data.owed,
+                    net,
+                    net_eth,
+                ),
+                ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
+            )
+            .push_to_output();
             vec![ERC20_BUG_IDX]
         } else {
             vec![]
