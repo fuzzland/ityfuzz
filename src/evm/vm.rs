@@ -561,8 +561,8 @@ where
         for v in 0..repeats - 1 {
             // println!("repeat: {:?}", v);
             r = self.host.run_inspect(&mut interp, state);
-            interp.stack = Stack::new();
-            interp.memory = Memory::new();
+            interp.stack.data.clear();
+            interp.memory.data.clear();
             interp.instruction_pointer = interp.contract.bytecode.as_ptr();
             if !is_call_success!(r, self.host.instruction_res) {
                 interp.return_offset = 0;

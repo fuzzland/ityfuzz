@@ -438,9 +438,8 @@ where
                 .contains(&(interp.contract.address, jumpi))
             {
                 let stack_len = interp.stack.len();
-                let (top, second) = interp.stack.pop_top_unsafe();
-                *second = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
-                let _ = interp.stack.push(top);
+                interp.stack.data[stack_len - 2] =
+                    EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
     }
