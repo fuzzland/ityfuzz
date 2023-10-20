@@ -96,7 +96,7 @@ pub fn evm_fuzzer(
         ConciseEVMInput,
     >,
     state: &mut EVMFuzzState,
-    test_generator: FoundryTestGenerator,
+    test_generator: Option<FoundryTestGenerator>,
 ) {
     println!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
@@ -443,7 +443,7 @@ pub fn evm_fuzzer(
         infant_result_feedback,
         objective,
         config.work_dir,
-        Some(test_generator),
+        test_generator,
     );
     match config.replay_file {
         None => {

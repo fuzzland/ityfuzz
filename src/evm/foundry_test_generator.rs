@@ -49,7 +49,7 @@ pub struct FoundryTestGenerator {
 }
 
 impl FoundryTestGenerator {
-    pub fn new(args: &EvmArgs) -> Self {
+    pub fn new(args: &EvmArgs) -> Option<Self> {
         let chain = args.chain_type.clone().unwrap_or_default();
         let filename = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -57,11 +57,11 @@ impl FoundryTestGenerator {
             .as_secs();
 
         let mut handlebars = Handlebars::new();
-        handlebars
-            .register_template_file("foundry_test", TEMPLATE_PATH)
-            .expect("Failed to register foundry template");
+        if handlebars.register_template_file("foundry_test", TEMPLATE_PATH).is_err() {
+            return None;
+        }
 
-        Self {
+        Some(Self {
             target: args.target.clone(),
             chain: chain.clone(),
             block_number: args.onchain_block_number.unwrap_or_default(),
@@ -69,7 +69,7 @@ impl FoundryTestGenerator {
             output_dir: format!("{}/vulnerabilities/{}.t.sol", args.work_dir, filename),
             engine: handlebars,
             ..Default::default()
-        }
+        })
     }
 }
 
@@ -89,8 +89,7 @@ impl TestGenerator for FoundryTestGenerator {
         }
 
         let mut output = File::create(&self.output_dir).unwrap();
-        self.engine
-            .render_to_write("foundry_test", &self, &mut output)
-            .expect("Failed to render foundry test file");
+        // ignore errors
+        let _ = self.engine.render_to_write("foundry_test", &self, &mut output);
     }
 }
