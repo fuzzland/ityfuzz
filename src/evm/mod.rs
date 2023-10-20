@@ -21,7 +21,7 @@ pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod foundry_test_generator;
+pub mod solution;
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
@@ -48,8 +48,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
-
-use self::foundry_test_generator::FoundryTestGenerator;
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -277,7 +275,7 @@ enum EVMTargetType {
 }
 
 pub fn evm_main(args: EvmArgs) {
-    let test_generator = FoundryTestGenerator::new(&args);
+    solution::init_cli_args(&args);
 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
@@ -607,7 +605,7 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config, &mut state, test_generator),
+        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
         // FuzzerTypes::BASIC => basic_fuzzer(config)
         _ => {}
     }

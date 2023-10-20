@@ -2,7 +2,7 @@ use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutator::AccessPattern;
 use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
 use crate::evm::vm::EVMState;
-use crate::input::{ConciseSerde, VMInputT};
+use crate::input::{ConciseSerde, VMInputT, SolutionTx};
 use crate::mutation_utils::byte_mutator;
 use crate::state::{HasCaller, HasItyState};
 use crate::state_input::StagedVMState;
@@ -17,12 +17,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
-use crate::test_generator::TestTx;
 use bytes::Bytes;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
+
 
 /// EVM Input Types
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -311,15 +311,10 @@ impl ConciseEVMInput {
     }
 }
 
-impl TestTx for ConciseEVMInput {
+impl SolutionTx for ConciseEVMInput {
     #[cfg(feature = "flashloan_v2")]
     fn is_borrow(&self) -> bool {
         self.input_type == EVMInputTy::Borrow
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn is_borrow(&self) -> bool {
-        false
     }
 
     fn caller(&self) -> String {
@@ -367,11 +362,6 @@ impl TestTx for ConciseEVMInput {
     #[cfg(feature = "flashloan_v2")]
     fn liq_percent(&self) -> u8 {
         self.liquidation_percent
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn liq_percent(&self) -> u8 {
-        0
     }
 }
 

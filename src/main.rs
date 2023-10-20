@@ -21,7 +21,6 @@ pub mod scheduler;
 pub mod state;
 pub mod state_input;
 pub mod tracer;
-pub mod test_generator;
 
 #[cfg(feature = "sui_support")]
 pub mod r#move;

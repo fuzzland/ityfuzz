@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle, foundry_test_generator::FoundryTestGenerator},
+    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle},
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use itertools::Itertools;
@@ -96,7 +96,6 @@ pub fn evm_fuzzer(
         ConciseEVMInput,
     >,
     state: &mut EVMFuzzState,
-    test_generator: Option<FoundryTestGenerator>,
 ) {
     println!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
@@ -443,7 +442,6 @@ pub fn evm_fuzzer(
         infant_result_feedback,
         objective,
         config.work_dir,
-        test_generator,
     );
     match config.replay_file {
         None => {
