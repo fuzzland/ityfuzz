@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+import "forge-std/Test.sol";
+
+// ityfuzz evm -o -t {{target}} -c {{chain}} --onchain-block-number {{block_number}} -f -i -p --onchain-etherscan-api-key ${{etherscan_keyname}}
+/*
+
+😊😊 Found violations!
+
+
+{{{solution}}}
+ */
+
+contract EGD is Test {
+    function setUp() public {
+        vm.createSelectFork("{{chain}}", {{block_number}});
+    }
+
+    function test() public {
+        vm.prank(address(this), address(this));
+{{#each trace}}
+
+    {{#with this}}
+        {{#if is_borrow}}
+        // borrow token {{contract}} with {{value}} ETH, liq percent: {{liq_percent}}
+        {{/if}}
+        {{#unless is_borrow}}
+        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
+            {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
+        ));
+        {{#if liq_percent}}
+        // swap todo: liq_percent: {{liq_percent}}
+        {{/if}}
+        {{/unless}}
+    {{/with}}
+{{/each}}
+    }
+
+{{#if stepping_with_return}}
+    // Stepping with return
+    receive() external payable {}
+{{/if}}
+}

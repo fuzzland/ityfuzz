@@ -9,6 +9,7 @@ pub mod oracles;
 pub mod scheduler;
 pub mod types;
 pub mod vm_state;
+pub mod move_test_generator;
 
 use clap::Parser;
 use hex::{decode, encode};

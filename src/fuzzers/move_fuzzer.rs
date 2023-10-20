@@ -43,6 +43,8 @@ use crate::r#move::scheduler::{MoveTestcaseScheduler, MoveVMStateScheduler};
 #[cfg(feature = "sui_support")]
 use crate::r#move::types::MoveFuzzState;
 #[cfg(feature = "sui_support")]
+use crate::r#move::move_test_generator::MoveTestGenerator;
+#[cfg(feature = "sui_support")]
 use crate::scheduler::SortedDroppingScheduler;
 use crate::state::FuzzState;
 
@@ -104,7 +106,6 @@ pub fn move_fuzzer(
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, vm_ref.clone());
 
-
     //
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
@@ -114,6 +115,7 @@ pub fn move_fuzzer(
         infant_result_feedback,
         objective,
         config.work_dir.clone(),
+        Some(MoveTestGenerator),
     );
     fuzzer
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)

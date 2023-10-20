@@ -41,6 +41,7 @@ use crate::evm::vm::EVMState;
 use crate::input::ConciseSerde;
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
+use crate::test_generator::{TestGenerator, TestTx};
 use itertools::Itertools;
 use libafl::prelude::HasRand;
 use primitive_types::H256;
@@ -65,7 +66,7 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 /// Addr: The address type (e.g., H160)
 /// Loc: The call target location type (e.g., H160)
 #[derive(Debug)]
-pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
@@ -79,7 +80,8 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + TestTx,
+    TG: TestGenerator<Tx = CI>,
 {
     /// The scheduler for the input corpus
     scheduler: CS,
@@ -99,10 +101,13 @@ where
     phantom: PhantomData<(I, S, OT, VS, Loc, Addr, Out, CI)>,
     /// work dir path
     work_dir: String,
+
+    /// test generator
+    test_generator: Option<TG>,
 }
 
-impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
-    ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
+    ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
@@ -116,7 +121,8 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + TestTx,
+    TG: TestGenerator<Tx = CI>,
 {
     /// Creates a new ItyFuzzer
     pub fn new(
@@ -127,6 +133,7 @@ where
         infant_result_feedback: IFR,
         objective: OF,
         work_dir: String,
+        test_generator: Option<TG>,
     ) -> Self {
         Self {
             scheduler,
@@ -136,6 +143,7 @@ where
             infant_scheduler,
             objective,
             work_dir,
+            test_generator,
             minimizer_map: Default::default(),
             phantom: PhantomData,
         }
@@ -192,8 +200,8 @@ where
     }
 }
 
-impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI> UsesState
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG> UsesState
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
@@ -207,14 +215,15 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + TestTx,
+    TG: TestGenerator<Tx = CI>,
 {
     type State = S;
 }
 
 /// Implement fuzzer trait for ItyFuzzer
-impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI> Fuzzer<E, EM, ST>
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, CS, IS, E, EM, F, IF, IFR, I, OF, S, ST, OT, CI, TG> Fuzzer<E, EM, ST>
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
@@ -238,7 +247,8 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + TestTx,
+    TG: TestGenerator<Tx = CI>,
 {
     /// Fuzz one input
     fn fuzz_one(
@@ -370,8 +380,8 @@ macro_rules! dump_txn {
 }
 
 // implement evaluator trait for ItyFuzzer
-impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI> Evaluator<E, EM>
-    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI>
+impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI, TG> Evaluator<E, EM>
+    for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, TG>
 where
     CS: Scheduler<State = S>,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
@@ -399,7 +409,8 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + TestTx,
+    TG: TestGenerator<Tx = CI>,
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -562,17 +573,18 @@ where
             // find the solution
             ExecuteInputResult::Solution => {
                 println!("\n\n\n😊😊 Found violations! \n\n");
+                let trace = state.get_execution_result().new_state.trace.clone();
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
-                    state
-                        .get_execution_result()
-                        .new_state
-                        .trace
-                        .clone()
-                        .to_string(state)
+                    trace.clone().to_string(state)
                 );
                 println!("{}", cur_report);
+
+                if let Some(test_generator) = self.test_generator.as_mut() {
+                    let concise_inputs = trace.get_concise_inputs(state);
+                    test_generator.generate_test(cur_report.clone(), concise_inputs);
+                }
 
                 let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
                 let mut f = OpenOptions::new()

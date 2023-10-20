@@ -17,6 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::generic_vm::vm_state::VMStateT;
+use crate::test_generator::TestTx;
 use bytes::Bytes;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -307,6 +308,58 @@ impl ConciseEVMInput {
                 self.txn_value.unwrap_or(EVMU256::ZERO),
             )),
         }
+    }
+}
+
+impl TestTx for ConciseEVMInput {
+    fn is_borrow(&self) -> bool {
+        self.input_type == EVMInputTy::Borrow
+    }
+
+    fn caller(&self) -> String {
+        format!("0x{}", hex::encode(self.caller))
+    }
+
+    fn contract(&self) -> String {
+        format!("0x{}", hex::encode(self.contract))
+    }
+
+    fn value(&self) -> String {
+        self.txn_value
+            .map(|v| format!("0x{}", hex::encode(v.to_be_bytes_vec())))
+            .unwrap_or(String::new())
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn fn_selector(&self) -> String {
+        match self.data {
+            Some(ref d) => format!("0x{}", hex::encode(d.function)),
+            None => "TODO".to_string(),
+        }
+    }
+
+    #[cfg(feature = "debug")]
+    fn fn_selector(&self) -> String {
+        "".to_string()
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn fn_args(&self) -> String {
+        match self.data {
+            Some(ref d) => {
+                d.get().to_string().trim_matches(|c| c == '(' || c == ')').to_string()
+            },
+            None => "TODO".to_string(),
+        }
+    }
+
+    #[cfg(feature = "debug")]
+    fn fn_args(&self) -> String {
+        "".to_string()
+    }
+
+    fn liq_percent(&self) -> u8 {
+        self.liquidation_percent
     }
 }
 

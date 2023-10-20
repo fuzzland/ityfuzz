@@ -109,3 +109,6 @@ move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", pack
 sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-move-natives-latest", optional = true }
 sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-protocol-config", optional = true }
 sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-types", optional = true }
+
+# template engine
+handlebars = "4.4"
