@@ -117,7 +117,7 @@ impl
             let liquidation_percent = EVMU256::from(liquidation_percent);
             let mut liquidations_earned = Vec::new();
 
-            for ((caller, token), (_prev_balance, new_balance)) in
+            for ((caller, token), (prev_balance, new_balance)) in
                 self.erc20_producer.deref().borrow().balances.iter()
             {
                 let token_info = self.known_tokens.get(token).expect("Token not found");

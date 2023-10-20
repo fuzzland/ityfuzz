@@ -12,9 +12,34 @@ import "forge-std/Test.sol";
 {{{solution}}}
  */
 
+{{#if is_borrow}}
+interface IUniswapV2Router {
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
+{{/if}}
+
 contract EGD is Test {
     function setUp() public {
-        vm.createSelectFork("{{chain}}", {{block_number}});
+        vm.createSelectFork("{{chain}}"{{#if block_number}}, {{block_number}}{{/if}});
     }
 
     function test() public {
