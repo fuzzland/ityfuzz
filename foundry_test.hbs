@@ -3,7 +3,12 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 
+{{#if is_onchain}}
 // ityfuzz evm -o -t {{target}} -c {{chain}} --onchain-block-number {{block_number}} -f -i -p --onchain-etherscan-api-key ${{etherscan_keyname}}
+{{/if}}
+{{#unless is_onchain}}
+// ityfuzz evm -t '{{target}}' -f --panic-on-bug
+{{/unless}}
 /*
 
 😊😊 Found violations!
@@ -39,7 +44,9 @@ interface IUniswapV2Router {
 
 contract EGD is Test {
     function setUp() public {
-        vm.createSelectFork("{{chain}}"{{#if block_number}}, {{block_number}}{{/if}});
+        {{#if is_onchain}}
+        vm.createSelectFork("{{chain}}", {{block_number}});
+        {{/if}}
     }
 
     function test() public {
@@ -48,10 +55,18 @@ contract EGD is Test {
 
     {{#with this}}
         {{#if is_borrow}}
-        // borrow token {{contract}} with {{value}} ETH, liq percent: {{liq_percent}}
+        address[] memory path{{borrow_idx}} = new address[](2);
+        path{{borrow_idx}}[0] = address({{weth}});
+        path{{borrow_idx}}[1] = address({{contract}});
+        IUniswapV2Router(address({{router}})).swapExactETHForTokensSupportingFeeOnTransferTokens{
+            value: {{value}}
+        }(0, path{{borrow_idx}}, address(this), block.timestamp);
+        {{#if liq_percent}}
+        // swap todo: liq_percent: {{liq_percent}}
+        {{/if}}
         {{/if}}
         {{#unless is_borrow}}
-        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
+        address({{contract}}).call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
         ));
         {{#if liq_percent}}

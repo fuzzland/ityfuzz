@@ -1,16 +1,13 @@
-use once_cell::sync::Lazy;
-
 use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::types::{EVMAddress, EVMU256};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug)]
 pub enum UniswapProvider {
     PancakeSwap,
     SushiSwap,
@@ -41,42 +38,6 @@ pub struct UniswapInfo {
     pub factory: EVMAddress,
     pub init_code_hash: Vec<u8>,
 }
-
-pub static UNISWAP_INFO: Lazy<HashMap<(&UniswapProvider, &Chain), UniswapInfo>> = Lazy::new(|| {
-    let univ2_bsc = UniswapInfo {
-        pool_fee: 25,
-        router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-        factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-        init_code_hash: hex::decode(
-            "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
-        )
-        .unwrap(),
-    };
-    let pancake_bsc = UniswapInfo {
-        pool_fee: 25,
-        router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-        factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-        init_code_hash: hex::decode(
-            "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
-        )
-        .unwrap(),
-    };
-    let univ2_eth = UniswapInfo {
-        pool_fee: 3,
-        router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
-        factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
-        init_code_hash: hex::decode(
-            "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
-        )
-        .unwrap(),
-    };
-
-    [
-        ((&UniswapProvider::UniswapV2, &Chain::BSC), univ2_bsc),
-        ((&UniswapProvider::PancakeSwap, &Chain::BSC), pancake_bsc),
-        ((&UniswapProvider::UniswapV2, &Chain::ETH), univ2_eth),
-    ].iter().cloned().collect()
-});
 
 #[derive(Clone, Debug, Default)]
 pub struct PairContext {
@@ -314,9 +275,35 @@ pub fn generate_uniswap_router_sell(
 }
 
 pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
-    match UNISWAP_INFO.get(&(provider, chain)) {
-        Some(info) => info.clone(),
-        None => panic!(
+    match (provider, chain) {
+        (&UniswapProvider::UniswapV2, &Chain::BSC) => UniswapInfo {
+            pool_fee: 25,
+            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+            init_code_hash: hex::decode(
+                "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
+            )
+            .unwrap(),
+        },
+        (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
+            pool_fee: 25,
+            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
+            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
+            init_code_hash: hex::decode(
+                "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
+            )
+            .unwrap(),
+        },
+        (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
+            pool_fee: 3,
+            router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
+            factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
+            init_code_hash: hex::decode(
+                "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
+            )
+            .unwrap(),
+        },
+        _ => panic!(
             "Uniswap provider {:?} @ chain {:?} not supported",
             provider, chain
         ),
