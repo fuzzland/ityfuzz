@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+import "forge-std/Test.sol";
+
+{{#if is_onchain}}
+// ityfuzz evm -o -t {{target}} -c {{chain}} --onchain-block-number {{block_number}} -f -i -p --onchain-etherscan-api-key ${{etherscan_keyname}}
+{{/if}}
+{{#unless is_onchain}}
+// ityfuzz evm -t '{{target}}' -f --panic-on-bug
+{{/unless}}
+/*
+
+😊😊 Found violations!
+
+
+{{{solution}}}
+ */
+
+{{#if is_borrow}}
+interface IUniswapV2Router {
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
+{{/if}}
+
+contract EGD is Test {
+    function setUp() public {
+        {{#if is_onchain}}
+        vm.createSelectFork("{{chain}}", {{block_number}});
+        {{/if}}
+    }
+
+    function test() public {
+        vm.prank(address(this), address(this));
+{{#each trace}}
+
+    {{#with this}}
+        {{#if is_borrow}}
+        address[] memory path{{borrow_idx}} = new address[](2);
+        path{{borrow_idx}}[0] = address({{weth}});
+        path{{borrow_idx}}[1] = address({{contract}});
+        IUniswapV2Router(address({{router}})).swapExactETHForTokensSupportingFeeOnTransferTokens{
+            value: {{value}}
+        }(0, path{{borrow_idx}}, address(this), block.timestamp);
+        {{#if liq_percent}}
+        // swap todo: liq_percent: {{liq_percent}}
+        {{/if}}
+        {{/if}}
+        {{#unless is_borrow}}
+        address({{contract}}).call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
+            {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
+        ));
+        {{#if liq_percent}}
+        // swap todo: liq_percent: {{liq_percent}}
+        {{/if}}
+        {{/unless}}
+    {{/with}}
+{{/each}}
+    }
+
+{{#if stepping_with_return}}
+    // Stepping with return
+    receive() external payable {}
+{{/if}}
+}

@@ -117,6 +117,37 @@ where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {
         }
         s
     }
+
+    pub fn get_concise_inputs<VS, S>(&self, state: &mut S) -> Vec<CI>
+    where
+        S: HasInfantStateState<Loc, Addr, VS, CI>,
+        VS: VMStateT,
+        Addr: Debug + Serialize + DeserializeOwned + Clone,
+        Loc: Debug + Serialize + DeserializeOwned + Clone,
+    {
+        // If from_idx is None, it means that the trace is from the initial state
+        if self.from_idx.is_none() {
+            return self.transactions.clone();
+        }
+
+        let current_idx = self.from_idx.unwrap();
+        let corpus_item = state.get_infant_state_state().corpus().get(current_idx.into());
+        // This happens when full_trace feature is not enabled, the corpus item may be discarded
+        if corpus_item.is_err() {
+            return Vec::new();
+        }
+        let testcase = corpus_item.unwrap().clone().into_inner();
+        let testcase_input = testcase.input();
+        if testcase_input.is_none() {
+            return Vec::new();
+        }
+
+        // Try to reconstruct transactions leading to the current VMState recursively
+        let mut res = Self::get_concise_inputs(&testcase_input.as_ref().unwrap().trace.clone(), state);
+
+        res.append(&mut self.transactions.clone());
+        res
+    }
 }
 impl<Loc, Addr, CI> Default for TxnTrace<Loc, Addr, CI>
     where CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde {

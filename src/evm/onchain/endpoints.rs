@@ -917,7 +917,7 @@ impl OnChainConfig {
         pairs
     }
 
-    fn get_weth(&self, network: &str) -> String {
+    pub fn get_weth(&self, network: &str) -> String {
         let pegged_token = self.get_pegged_token(network);
 
         match network {

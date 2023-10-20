@@ -21,6 +21,7 @@ pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
+pub mod solution;
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
@@ -274,6 +275,9 @@ enum EVMTargetType {
 }
 
 pub fn evm_main(args: EvmArgs) {
+    let target = args.target.clone();
+    let work_dir = args.work_dir.clone();
+
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
             "glob" => EVMTargetType::Glob,
@@ -314,6 +318,7 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
+    solution::init_cli_args(target, work_dir, &onchain);
     let onchain_clone = onchain.clone();
 
     let etherscan_api_key = match args.onchain_etherscan_api_key {

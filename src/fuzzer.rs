@@ -2,7 +2,7 @@
 use crate::{
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
-    state_input::StagedVMState,
+    state_input::StagedVMState, evm::solution,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -38,7 +38,7 @@ use libafl_bolts::current_time;
 use crate::evm::host::JMP_MAP;
 use crate::evm::input::ConciseEVMInput;
 use crate::evm::vm::EVMState;
-use crate::input::ConciseSerde;
+use crate::input::{ConciseSerde, SolutionTx};
 use crate::oracle::BugMetadata;
 use crate::scheduler::{HasReportCorpus, HasVote};
 use itertools::Itertools;
@@ -399,7 +399,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + SolutionTx,
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -562,17 +562,16 @@ where
             // find the solution
             ExecuteInputResult::Solution => {
                 println!("\n\n\n😊😊 Found violations! \n\n");
+                let trace = state.get_execution_result().new_state.trace.clone();
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
-                    state
-                        .get_execution_result()
-                        .new_state
-                        .trace
-                        .clone()
-                        .to_string(state)
+                    trace.clone().to_string(state)
                 );
                 println!("{}", cur_report);
+
+                let concise_inputs = trace.get_concise_inputs(state);
+                solution::generate_test(cur_report.clone(), concise_inputs);
 
                 let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
                 let mut f = OpenOptions::new()

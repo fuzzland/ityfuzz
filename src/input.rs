@@ -103,3 +103,28 @@ pub trait ConciseSerde {
     fn deserialize_concise(data: &[u8]) -> Self;
     fn serialize_string(&self) -> String;
 }
+
+/// SolutionTx for generating a test file.
+pub trait SolutionTx {
+    fn caller(&self) -> String {
+        String::from("")
+    }
+    fn contract(&self) -> String {
+        String::from("")
+    }
+    fn fn_selector(&self) -> String {
+        String::from("")
+    }
+    fn fn_args(&self) -> String {
+        String::from("")
+    }
+    fn value(&self) -> String {
+        String::from("")
+    }
+    fn is_borrow(&self) -> bool {
+        false
+    }
+    fn liq_percent(&self) -> u8 {
+        0
+    }
+}

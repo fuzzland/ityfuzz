@@ -1,5 +1,5 @@
 use crate::evm::abi::BoxedABI;
-use crate::input::{ConciseSerde, VMInputT};
+use crate::input::{ConciseSerde, VMInputT, SolutionTx};
 use crate::r#move::types::MoveStagedVMState;
 use crate::r#move::vm_state::{Gate, MoveVMState, MoveVMStateT};
 use crate::state::{HasCaller, HasItyState};
@@ -160,6 +160,8 @@ impl ConciseSerde for ConciseMoveInput {
         )
     }
 }
+
+impl SolutionTx for ConciseMoveInput {}
 
 impl Debug for MoveFunctionInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
