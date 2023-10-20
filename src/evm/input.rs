@@ -312,8 +312,14 @@ impl ConciseEVMInput {
 }
 
 impl TestTx for ConciseEVMInput {
+    #[cfg(feature = "flashloan_v2")]
     fn is_borrow(&self) -> bool {
         self.input_type == EVMInputTy::Borrow
+    }
+
+    #[cfg(not(feature = "flashloan_v2"))]
+    fn is_borrow(&self) -> bool {
+        false
     }
 
     fn caller(&self) -> String {
@@ -358,8 +364,14 @@ impl TestTx for ConciseEVMInput {
         "".to_string()
     }
 
+    #[cfg(feature = "flashloan_v2")]
     fn liq_percent(&self) -> u8 {
         self.liquidation_percent
+    }
+
+    #[cfg(not(feature = "flashloan_v2"))]
+    fn liq_percent(&self) -> u8 {
+        0
     }
 }
 
