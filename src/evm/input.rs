@@ -335,7 +335,7 @@ impl SolutionTx for ConciseEVMInput {
     fn fn_selector(&self) -> String {
         match self.data {
             Some(ref d) => format!("0x{}", hex::encode(d.function)),
-            None => "TODO".to_string(),
+            None => "".to_string(),
         }
     }
 
@@ -348,9 +348,11 @@ impl SolutionTx for ConciseEVMInput {
     fn fn_args(&self) -> String {
         match self.data {
             Some(ref d) => {
-                d.get().to_string().trim_matches(|c| c == '(' || c == ')').to_string()
+                let mut args_str = d.get().to_string();
+                let len = args_str.len();
+                args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
             },
-            None => "TODO".to_string(),
+            None => "".to_string(),
         }
     }
 
