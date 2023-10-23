@@ -184,29 +184,26 @@ def test_onchain(test):
 
 def build_fuzzer():
     # build fuzzer
-    subprocess.run(["cargo", "build", "--release"])
-
-
-def update_cargo_toml():
-    with open("Cargo.toml", "r") as file:
-        content = file.read()
-
-    if '"flashloan_v2"' in content:
-        return
-
-    if '"cmp"' in content:
-        content = content.replace('"cmp"', '"cmp","flashloan_v2","force_cache"')
-
-    with open("Cargo.toml", "w") as file:
-        file.write(content)
-
-    print("Cargo.toml has been updated!")
+    subprocess.run([
+        "cargo",
+        "build",
+        "--release",
+        "--features",
+        "cmp dataflow evm print_txn_corpus full_trace",
+        "--no-default-features"
+    ])
 
 
 def build_flash_loan_v2_fuzzer():
-    update_cargo_toml()
     # build fuzzer
-    subprocess.run(["cargo", "build", "--release"])
+    subprocess.run([
+        "cargo",
+        "build",
+        "--release",
+        "--features",
+        "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache",
+        "--no-default-features"
+    ])
 
 
 import multiprocessing
