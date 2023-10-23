@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::evm::types::EVMU256;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ConcolicOp {
@@ -39,9 +39,8 @@ pub enum ConcolicOp {
 
     // high / low
     SELECT(u32, u32),
-    CONCAT
+    CONCAT,
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Expr {
@@ -60,15 +59,23 @@ impl Expr {
             s.push_str(format!("{:?}", self.op).as_str());
         } else {
             s.push_str(format!("{:?}(", self.op).as_str());
-            s.push_str(format!("{}", match self.lhs {
-                Some(ref lhs) => format!("{},", lhs.pretty_print_helper(paddings + 1)),
-                None => "".to_string(),
-            }).as_str());
-            s.push_str(format!("{}", match self.rhs {
-                Some(ref rhs) => rhs.pretty_print_helper(paddings + 1),
-                None => "".to_string(),
-            }).as_str());
-            s.push_str(format!(")").as_str());
+            s.push_str(
+                (match self.lhs {
+                    Some(ref lhs) => format!("{},", lhs.pretty_print_helper(paddings + 1)),
+                    None => "".to_string(),
+                })
+                .to_string()
+                .as_str(),
+            );
+            s.push_str(
+                (match self.rhs {
+                    Some(ref rhs) => rhs.pretty_print_helper(paddings + 1),
+                    None => "".to_string(),
+                })
+                .to_string()
+                .as_str(),
+            );
+            s.push_str(")".to_string().as_str());
         }
         s
     }
@@ -254,27 +261,22 @@ impl Expr {
 
     pub fn is_concrete(&self) -> bool {
         match (&self.lhs, &self.rhs) {
-            (Some(l), Some(r)) => {
-                l.is_concrete() && r.is_concrete()
+            (Some(l), Some(r)) => l.is_concrete() && r.is_concrete(),
+            (None, None) => match self.op {
+                ConcolicOp::EVMU256(_) => true,
+                ConcolicOp::SLICEDINPUT(_) => false,
+                ConcolicOp::BALANCE => false,
+                ConcolicOp::CALLVALUE => false,
+                ConcolicOp::SYMBYTE(_) => false,
+                ConcolicOp::CONSTBYTE(_) => true,
+                ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
+                ConcolicOp::CALLER => false,
+                _ => unreachable!(),
             },
-            (None, None) => {
-                match self.op {
-                    ConcolicOp::EVMU256(_) => true,
-                    ConcolicOp::SLICEDINPUT(_) => false,
-                    ConcolicOp::BALANCE => false,
-                    ConcolicOp::CALLVALUE => false,
-                    ConcolicOp::SYMBYTE(_) => false,
-                    ConcolicOp::CONSTBYTE(_) => true,
-                    ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
-                    ConcolicOp::CALLER => false,
-                    _ => unreachable!()
-                }
-            }
             (Some(l), None) => l.is_concrete(),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
-
 
     pub fn depth(&self) -> u32 {
         if self.lhs.is_none() && self.rhs.is_none() {
@@ -304,14 +306,6 @@ struct ConcatOptCtx {
 }
 
 impl ConcatOptCtx {
-    pub fn new_none() -> ConcatOptCtx {
-        ConcatOptCtx {
-            low: 0,
-            high: 0,
-            on_expr: None,
-        }
-    }
-
     pub fn merge(&mut self, other: ConcatOptCtx) -> bool {
         if other.on_expr != self.on_expr || other.on_expr.is_none() || self.on_expr.is_none() {
             return false;
@@ -332,13 +326,11 @@ fn simplify_concat_select_helper(expr: Box<Expr>) -> (ConcatOptCtx, Box<Expr>) {
     let mut lhs_info = expr.lhs.map(|e| simplify_concat_select_helper(e));
     let mut rhs_info = expr.rhs.map(|e| simplify_concat_select_helper(e));
     let mut op = expr.op;
-    let mut new_expr = Box::new(
-        Expr {
-            lhs: lhs_info.clone().map(|(ctx, e)| e),
-            rhs: rhs_info.clone().map(|(ctx, e)| e),
-            op: op.clone(),
-        }
-    );
+    let mut new_expr = Box::new(Expr {
+        lhs: lhs_info.clone().map(|(ctx, e)| e),
+        rhs: rhs_info.clone().map(|(ctx, e)| e),
+        op: op.clone(),
+    });
 
     let mut ctx = ConcatOptCtx {
         low: 0,
@@ -376,39 +368,34 @@ pub fn simplify_concat_select(expr: Box<Expr>) -> Box<Expr> {
 }
 
 pub fn simplify(expr: Box<Expr>) -> Box<Expr> {
-    let expr = simplify_concat_select(expr);
-    expr
+    simplify_concat_select(expr)
 }
-
 
 #[cfg(test)]
 mod test {
-    use crate::evm::concolic::expr::{ConcolicOp, Expr, simplify, simplify_concat_select};
-    use crate::evm::concolic::expr::ConcolicOp::{AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT};
+    use crate::evm::concolic::expr::ConcolicOp::{
+        AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT,
+    };
+    use crate::evm::concolic::expr::{simplify, simplify_concat_select, ConcolicOp, Expr};
 
     #[test]
     fn test_simplify_concat_select_single() {
         let left_expr = Expr {
-            lhs: Some(
-                Box::new(Expr {
-                    lhs:None,
-                    rhs: None,
-                    op: CONSTBYTE(0x12)
-                })
-            ),
+            lhs: Some(Box::new(Expr {
+                lhs: None,
+                rhs: None,
+                op: CONSTBYTE(0x12),
+            })),
             rhs: None,
             op: ConcolicOp::SELECT(7, 0),
         };
 
-
         let right_expr = Expr {
-            lhs: Some(
-                Box::new(Expr {
-                    lhs:None,
-                    rhs: None,
-                    op: CONSTBYTE(0x12)
-                })
-            ),
+            lhs: Some(Box::new(Expr {
+                lhs: None,
+                rhs: None,
+                op: CONSTBYTE(0x12),
+            })),
             rhs: None,
             op: ConcolicOp::SELECT(15, 8),
         };
@@ -431,19 +418,15 @@ mod test {
         });
 
         for i in 1..32 {
-            current_expr = Box::new(
-                Expr {
-                    lhs: Some(current_expr),
-                    rhs: Some(Box::new(
-                        Expr {
-                            lhs: Some(Box::new(starting_expr.clone())),
-                            rhs: None,
-                            op: ConcolicOp::SELECT(256 - i*8 - 1, 256 - i*8 - 7 - 1)
-                        }
-                    )),
-                    op: ConcolicOp::CONCAT,
-                }
-            );
+            current_expr = Box::new(Expr {
+                lhs: Some(current_expr),
+                rhs: Some(Box::new(Expr {
+                    lhs: Some(Box::new(starting_expr.clone())),
+                    rhs: None,
+                    op: ConcolicOp::SELECT(256 - i * 8 - 1, 256 - i * 8 - 7 - 1),
+                })),
+                op: ConcolicOp::CONCAT,
+            });
         }
         current_expr
     }
@@ -451,9 +434,9 @@ mod test {
     #[test]
     fn test_simplify_concat_select_multi() {
         let mut starting_expr = Expr {
-            lhs:None,
+            lhs: None,
             rhs: None,
-            op: CONSTBYTE(0x12)
+            op: CONSTBYTE(0x12),
         };
         let new_expr = super::simplify_concat_select(expression_builder(starting_expr));
         assert_eq!(new_expr.op, ConcolicOp::SELECT(255, 0));
@@ -462,9 +445,9 @@ mod test {
     #[test]
     fn test_simplify_concat_select_internal() {
         let mut starting_expr1 = Expr {
-            lhs:None,
+            lhs: None,
             rhs: None,
-            op: CONSTBYTE(0x12)
+            op: CONSTBYTE(0x12),
         };
 
         let intermediate = Expr {
@@ -476,16 +459,14 @@ mod test {
         let mut starting_expr2 = Expr {
             lhs: Some(Box::new(intermediate.clone())),
             rhs: Some(expression_builder(intermediate)),
-            op: ConcolicOp::DIV
+            op: ConcolicOp::DIV,
         };
 
-        let new_expr = super::simplify_concat_select(
-            Box::new(Expr {
-                lhs: Some(Box::new(starting_expr2)),
-                rhs: None,
-                op: ConcolicOp::ADD,
-            })
-        );
+        let new_expr = super::simplify_concat_select(Box::new(Expr {
+            lhs: Some(Box::new(starting_expr2)),
+            rhs: None,
+            op: ConcolicOp::ADD,
+        }));
 
         new_expr.pretty_print();
     }
@@ -495,34 +476,28 @@ mod test {
         let mut starting_expr1 = Expr {
             lhs: None,
             rhs: None,
-            op: CONSTBYTE(0x12)
+            op: CONSTBYTE(0x12),
         };
 
         let mut starting_expr2 = Expr {
             lhs: Some(Box::new(starting_expr1.clone())),
             rhs: None,
-            op: SELECT(88, 88)
+            op: SELECT(88, 88),
         };
 
         let mut current_expr = Box::new(starting_expr2);
 
         for i in 1..3 {
-            current_expr = Box::new(
-                Expr {
-                    lhs: Some(current_expr),
-                    rhs: Some(Box::new(
-                        Expr {
-                            lhs: Some(Box::new(starting_expr1.clone())),
-                            rhs: None,
-                            op: ConcolicOp::SELECT(256 - i*8 - 1, 256 - i*8 - 7 - 1)
-                        }
-                    )),
-                    op: ConcolicOp::CONCAT,
-                }
-            );
+            current_expr = Box::new(Expr {
+                lhs: Some(current_expr),
+                rhs: Some(Box::new(Expr {
+                    lhs: Some(Box::new(starting_expr1.clone())),
+                    rhs: None,
+                    op: ConcolicOp::SELECT(256 - i * 8 - 1, 256 - i * 8 - 7 - 1),
+                })),
+                op: ConcolicOp::CONCAT,
+            });
         }
-
-
 
         current_expr.pretty_print();
 

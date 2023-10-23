@@ -7,12 +7,12 @@ use crate::input::ConciseSerde;
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::{HasCaller, HasItyState};
 use itertools::Itertools;
-use libafl_bolts::impl_serdeany;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
 use libafl::prelude::HasMetadata;
-use libafl_bolts::bolts_prelude::Rand;
 use libafl::state::{HasMaxSize, HasRand, State};
+use libafl_bolts::bolts_prelude::Rand;
+use libafl_bolts::impl_serdeany;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ impl ABIAddressToInstanceMap {
 
     /// Add an ABI instance to the map
     pub fn add(&mut self, address: EVMAddress, abi: BoxedABI) {
-        self.map.entry(address).or_insert_with(Vec::new);
+        self.map.entry(address).or_default();
         self.map.get_mut(&address).unwrap().push(abi);
     }
 }
@@ -119,7 +119,7 @@ pub trait ABI: CloneABI {
     /// Get the ABI type of args
     fn get_type(&self) -> ABILossyType;
     /// Set the bytes to args, used for decoding
-    fn set_bytes(&mut self, bytes: Vec<u8>);
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool;
     /// Convert args to string (for debugging)
     fn to_string(&self) -> String;
     fn as_any(&mut self) -> &mut dyn Any;
@@ -266,21 +266,6 @@ impl BoxedABI {
             .to_string()
     }
 
-    /// Convert function hash and args to string (for debugging)
-    // pub fn to_string(&self) -> String {
-    //     if self.function == [0; 4] {
-    //         format!("Stepping with return: {}", hex::encode(self.b.to_string()))
-    //     } else {
-    //         let function_name = unsafe {
-    //             FUNCTION_SIG
-    //                 .get(&self.function)
-    //                 .unwrap_or(&hex::encode(self.function))
-    //                 .clone()
-    //         };
-    //         format!("{}{}", function_name, self.b.to_string())
-    //     }
-    // }
-
     /// todo: remove this
     pub fn get_concolic(self) -> Vec<Box<Expr>> {
         [
@@ -294,8 +279,8 @@ impl BoxedABI {
     }
 
     /// Set the bytes to args, used for decoding
-    pub fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.b.set_bytes(bytes[4..].to_vec());
+    pub fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
+        self.b.set_bytes(bytes[4..].to_vec())
     }
 }
 
@@ -531,8 +516,9 @@ impl ABI for AEmpty {
         TEmpty
     }
 
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         assert!(bytes.is_empty());
+        true
     }
 
     fn to_string(&self) -> String {
@@ -612,8 +598,12 @@ impl ABI for A256 {
         T256
     }
 
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
+        if bytes.len() < 32 {
+            return false;
+        }
         self.data = bytes[..32].to_vec();
+        true
     }
 
     fn to_string(&self) -> String {
@@ -700,12 +690,13 @@ impl ABI for ADynamic {
         self
     }
 
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         if bytes.is_empty() {
             self.data = Vec::new();
-            return;
+            return true;
         }
         self.data = bytes[32..32 + get_size(&bytes)].to_vec();
+        true
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -848,7 +839,7 @@ impl ABI for AArray {
 
     // Input: packed concrete bytes produced by get_concolic
     // Set the bytes in self.data accordingly
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         let base_offset = if self.dynamic_size {
             let array_size = get_size(&bytes);
             while self.data.len() < array_size {
@@ -876,10 +867,15 @@ impl ABI for AArray {
                     unreachable!()
                 }
             };
-            item.b
-                .set_bytes(bytes[item_offset + base_offset..].to_vec());
+
+            let start = item_offset + base_offset;
+            if start + size >= bytes.len() {
+                return false;
+            }
+            item.b.set_bytes(bytes[start..].to_vec());
             offset += size;
         }
+        true
     }
 
     fn get_concolic(&self) -> Vec<Box<Expr>> {
@@ -1020,8 +1016,9 @@ impl ABI for AUnknown {
         TUnknown
     }
 
-    fn set_bytes(&mut self, bytes: Vec<u8>) {
+    fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         self.concrete.b.set_bytes(bytes);
+        true
     }
 
     fn to_string(&self) -> String {
@@ -1043,19 +1040,19 @@ impl ABI for AUnknown {
 
 /// Create a [`BoxedABI`] with default arg given the ABI type in string
 pub fn get_abi_type_boxed(abi_name: &str) -> BoxedABI {
-    return BoxedABI {
+    BoxedABI {
         b: get_abi_type(abi_name, &None),
         function: [0; 4],
-    };
+    }
 }
 
 /// Create a [`BoxedABI`] with default arg given the ABI type in string and address
 /// todo: remove this function
 pub fn get_abi_type_boxed_with_address(abi_name: &str, address: Vec<u8>) -> BoxedABI {
-    return BoxedABI {
+    BoxedABI {
         b: get_abi_type(abi_name, &Some(address)),
         function: [0; 4],
-    };
+    }
 }
 
 /// Split a string with parenthesis
@@ -1184,7 +1181,7 @@ fn get_abi_type_basic(
             if let Some(stripped) = abi_name.strip_prefix("uint") {
                 let len = stripped.parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
-                return get_abi_type_basic("uint", len / 8, with_address);
+                get_abi_type_basic("uint", len / 8, with_address)
             } else if let Some(stripped) = abi_name.strip_prefix("int") {
                 let len = stripped.parse::<usize>().unwrap();
                 assert!(len % 8 == 0 && len >= 8);
