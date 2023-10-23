@@ -27,12 +27,12 @@ where
     ) -> Vec<EVMInput>;
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize)]
 pub struct FunctionSig {
     pub value: [u8; 4],
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct ExploitTemplate {
     pub exploit_name: String,
     pub function_sigs: Vec<FunctionSig>,
@@ -42,10 +42,7 @@ pub struct ExploitTemplate {
 impl ExploitTemplate {
     pub fn from_filename(filename: String) -> Vec<Self> {
         let file = File::open(filename).unwrap();
-
-        // each line is a json
         let exploit_templates: Vec<Self> = serde_json::from_reader(file).unwrap();
-
         exploit_templates
     }
 }

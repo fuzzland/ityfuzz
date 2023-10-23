@@ -62,6 +62,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use super::middlewares::reentrancy::ReentrancyData;
+use super::presets::presets::ExploitTemplate;
 
 pub const MEM_LIMIT: u64 = 10 * 1024;
 const MAX_POST_EXECUTION: usize = 10;

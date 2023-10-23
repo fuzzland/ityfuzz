@@ -28,6 +28,7 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
 use crate::evm::types::EVMAddress;
+use crate::evm::presets::presets::ExploitTemplate;
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -120,6 +121,10 @@ where
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out, CI>);
 }
 
+pub trait HasPresets {
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>);
+}
+
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
 /// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference
 ///
@@ -185,6 +190,12 @@ where
     /// The last time we reported progress (if available/used).
     /// This information is used by fuzzer `maybe_report_progress` and updated by event_manager.
     last_report_time: Option<Duration>,
+
+    pub has_matched_preset: bool,
+
+    pub immutable_matched_templates: Vec<ExploitTemplate>,
+
+    pub matched_templates: Vec<ExploitTemplate>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -258,6 +269,9 @@ where
             hash_to_address: Default::default(),
             last_report_time: None,
             phantom: Default::default(),
+            has_matched_preset: false,
+            immutable_matched_templates: vec![],
+            matched_templates: vec![],
         }
     }
 
@@ -800,5 +814,21 @@ where
     /// This information is used by fuzzer `maybe_report_progress`.
     fn last_report_time_mut(&mut self) -> &mut Option<Duration> {
         &mut self.last_report_time
+    }
+}
+
+impl<VI, VS, Loc, Addr, Out, CI> HasPresets for FuzzState<VI, VS, Loc, Addr, Out, CI>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr, CI> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>) {
+        self.has_matched_preset = has_matched;
+        self.immutable_matched_templates = templates.clone();
+        self.matched_templates = templates;
     }
 }

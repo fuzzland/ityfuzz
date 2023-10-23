@@ -35,7 +35,7 @@ use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasCaller, HasExecutionResult};
+use crate::state::{FuzzState, HasCaller, HasExecutionResult, HasPresets};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
@@ -271,6 +271,8 @@ pub fn evm_fuzzer(
     } else {
         (false, vec![])
     };
+
+    state.init_presets(has_preset_match, matched_templates.clone());
 
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
