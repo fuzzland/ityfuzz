@@ -146,7 +146,8 @@ where
                     solution.to_string()
                 );
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
-                if !data_abi.set_bytes(solution.input) {
+                // if cannot set_bytes AND no fields to modify, skip
+                if !data_abi.set_bytes(solution.input) && solution.fields.len() == 0{
                     continue;
                 }
                 let mut new_testcase = (*orig_testcase).clone();
