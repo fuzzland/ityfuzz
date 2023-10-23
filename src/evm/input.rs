@@ -327,7 +327,13 @@ impl SolutionTx for ConciseEVMInput {
 
     fn value(&self) -> String {
         self.txn_value
-            .map(|v| format!("0x{}", hex::encode(v.to_be_bytes_vec())))
+            .map(|v| {
+                if v == EVMU256::ZERO {
+                    "".to_string()
+                } else {
+                    format!("0x{}", hex::encode(v.to_be_bytes_vec()))
+                }
+            })
             .unwrap_or(String::new())
     }
 
