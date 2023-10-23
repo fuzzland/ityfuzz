@@ -464,7 +464,6 @@ pub fn evm_fuzzer(
         evm_executor_ref.clone(),
         config.sha3_bypass,
     ));
-    let objective_ref = Rc::new(RefCell::new(objective.clone()));
 
     let mut fuzzer: ItyFuzzer<_, _, _, _, _, _, _, _, _, _, _, _, _, _, EVMMinimizer> =
         ItyFuzzer::new(
@@ -474,7 +473,7 @@ pub fn evm_fuzzer(
             infant_feedback,
             infant_result_feedback,
             objective,
-            EVMMinimizer::new(evm_executor_ref.clone(), objective_ref.clone()),
+            EVMMinimizer::new(evm_executor_ref.clone()),
             config.work_dir,
         );
     match config.replay_file {

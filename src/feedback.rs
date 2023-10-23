@@ -50,30 +50,6 @@ where
     phantom: PhantomData<Out>,
 }
 
-// impl Clone for OracleFeedback
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Clone
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
-where
-    I: VMInputT<VS, Loc, Addr, CI>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
-{
-    fn clone(&self) -> Self {
-        Self {
-            producers: self.producers,
-            oracle: self.oracle,
-            executor: self.executor.clone(),
-            phantom: Default::default(),
-        }
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        *self = source.clone()
-    }
-}
-
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where

@@ -404,7 +404,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + SolutionTx,
-    SM: SequentialMinimizer<S, E, Loc, Addr, CI>,
+    SM: SequentialMinimizer<S, E, Loc, Addr, CI, OF>,
 {
     /// Evaluate input (execution + feedback + objectives)
     fn evaluate_input_events(
@@ -570,6 +570,7 @@ where
                     state,
                     executor,
                     &state.get_execution_result().new_state.trace.clone(),
+                    &mut self.objective,
                 );
                 let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
                 let txn_json = minimized

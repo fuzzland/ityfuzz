@@ -12,7 +12,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::events::EventManager;
 use libafl::observers;
-use libafl::prelude::{Corpus, Executor, Feedback, ObserversTuple, StdScheduler};
+use libafl::prelude::{Corpus, Executor, Feedback, ObserversTuple, StdScheduler, ExitKind, SimpleEventManager, SimpleMonitor};
 use libafl::state::HasCorpus;
 use revm_primitives::Bytecode;
 use serde::de::DeserializeOwned;
@@ -24,65 +24,16 @@ use std::rc::Rc;
 
 use super::types::EVMStagedVMState;
 
-pub struct EVMMinimizer<'a> {
+pub struct EVMMinimizer {
     evm_executor_ref: Rc<RefCell<EVMQueueExecutor>>,
-    objective_ref: Rc<
-        RefCell<
-            OracleFeedback<
-                'a,
-                EVMState,
-                revm_primitives::B160,
-                Bytecode,
-                Bytes,
-                revm_primitives::B160,
-                revm_primitives::ruint::Uint<256, 4>,
-                Vec<u8>,
-                EVMInput,
-                FuzzState<
-                    EVMInput,
-                    EVMState,
-                    revm_primitives::B160,
-                    revm_primitives::B160,
-                    Vec<u8>,
-                    ConciseEVMInput,
-                >,
-                ConciseEVMInput,
-            >,
-        >,
-    >,
 }
 
-impl<'a> EVMMinimizer<'a> {
+impl EVMMinimizer {
     pub fn new(
         evm_executor_ref: Rc<RefCell<EVMQueueExecutor>>,
-        objective_ref: Rc<
-            RefCell<
-                OracleFeedback<
-                    'a,
-                    EVMState,
-                    revm_primitives::B160,
-                    Bytecode,
-                    Bytes,
-                    revm_primitives::B160,
-                    revm_primitives::ruint::Uint<256, 4>,
-                    Vec<u8>,
-                    EVMInput,
-                    FuzzState<
-                        EVMInput,
-                        EVMState,
-                        revm_primitives::B160,
-                        revm_primitives::B160,
-                        Vec<u8>,
-                        ConciseEVMInput,
-                    >,
-                    ConciseEVMInput,
-                >,
-            >,
-        >,
     ) -> Self {
         Self {
             evm_executor_ref,
-            objective_ref,
         }
     }
 
@@ -123,15 +74,38 @@ impl<'a> EVMMinimizer<'a> {
     }
 }
 
+
+type EVMOracleFeedback<'a> = OracleFeedback<
+    'a,
+    EVMState,
+    revm_primitives::B160,
+    Bytecode,
+    Bytes,
+    revm_primitives::B160,
+    revm_primitives::ruint::Uint<256, 4>,
+    Vec<u8>,
+    EVMInput,
+    FuzzState<
+        EVMInput,
+        EVMState,
+        revm_primitives::B160,
+        revm_primitives::B160,
+        Vec<u8>,
+        ConciseEVMInput,
+    >,
+    ConciseEVMInput,
+>;
+
 impl<E: libafl::executors::HasObservers>
-    SequentialMinimizer<EVMFuzzState, E, EVMAddress, EVMAddress, ConciseEVMInput>
-    for EVMMinimizer<'_>
+    SequentialMinimizer<EVMFuzzState, E, EVMAddress, EVMAddress, ConciseEVMInput, EVMOracleFeedback<'_>>
+    for EVMMinimizer
 {
     fn minimize(
         &mut self,
         state: &mut EVMFuzzState,
-        _: &mut E,
+        exec: &mut E,
         input: &TxnTrace<EVMAddress, EVMAddress, ConciseEVMInput>,
+        objective: &mut EVMOracleFeedback<'_>,
     ) -> Vec<ConciseEVMInput> {
         let mut executor = self.evm_executor_ref.deref().borrow_mut();
 
@@ -165,15 +139,15 @@ impl<E: libafl::executors::HasObservers>
                         break;
                     }
                 }
-
-                // let is_solution = self.objective_ref.borrow_mut().is_interesting(
-                //     state,
-                //     manager,
-                //     &txs[txs.len() - 1].0,
-                //     observers,
-                //     &exitkind,
-                // )?;
-                let is_solution = false;
+                let monitor = SimpleMonitor::new(|s| println!("{}", s));
+                let mut mgr = SimpleEventManager::new(monitor);
+                let is_solution = objective.is_interesting(
+                    state,
+                    &mut mgr,
+                    &txs[txs.len() - 1].0,
+                    &(),
+                    &ExitKind::Ok,
+                ).expect("Oracle feedback should not fail");
 
                 if is_solution {
                     txs = txs
