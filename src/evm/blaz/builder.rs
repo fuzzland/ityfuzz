@@ -1,4 +1,21 @@
+use crate::cache::{Cache, FileSystemCache};
+use crate::evm::blaz::get_client;
+use crate::evm::host::FuzzHost;
+use crate::evm::input::{ConciseEVMInput, EVMInput};
+use crate::evm::onchain::endpoints::Chain;
+use crate::evm::srcmap::parser::{
+    decode_instructions, decode_instructions_with_replacement, SourceMapLocation,
+};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy};
+use crate::evm::vm::{EVMExecutor, EVMState};
+use crate::generic_vm::vm_executor::GenericVM;
+use bytes::Bytes;
+use itertools::Itertools;
+use libafl_bolts::impl_serdeany;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -7,21 +24,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
-use std::collections::hash_map::DefaultHasher;
-use bytes::Bytes;
-use itertools::Itertools;
-use libafl_bolts::impl_serdeany;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use crate::cache::{Cache, FileSystemCache};
-use crate::evm::blaz::get_client;
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::onchain::endpoints::Chain;
-use crate::evm::srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation};
-use crate::evm::types::{EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMQueueExecutor};
-use crate::evm::vm::{EVMExecutor, EVMState};
-use crate::generic_vm::vm_executor::GenericVM;
 
 #[derive(Clone)]
 pub struct BuildJob {
@@ -34,29 +36,39 @@ pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
 const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources";
 
 impl BuildJob {
-    pub fn new(build_server: String, replacements: HashMap<EVMAddress, Option<BuildJobResult>>) -> Self {
+    pub fn new(
+        build_server: String,
+        replacements: HashMap<EVMAddress, Option<BuildJobResult>>,
+    ) -> Self {
         let cache = FileSystemCache::new("./cache");
         Self {
             build_server,
             replacements,
-            cache
+            cache,
         }
     }
 
     pub fn async_submit_onchain_job(&self, chain: String, addr: EVMAddress) -> Option<JobContext> {
         let client = get_client();
-        let url = format!("{}onchain/{}/{:?}?needs={}", self.build_server, chain, addr, NEEDS);
+        let url = format!(
+            "{}onchain/{}/{:?}?needs={}",
+            self.build_server, chain, addr, NEEDS
+        );
         println!("Submitting artifact build job to {}", url);
-        let resp = client.get(&url)
-            .send()
-            .expect("submit onchain job failed");
+        let resp = client.get(&url).send().expect("submit onchain job failed");
 
-        let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed")).expect("parse json failed");
+        let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
+            .expect("parse json failed");
         if json["code"].as_u64().expect("get status failed") != 200 {
             println!("submit onchain job failed for {:?}", addr);
             return None;
         }
-        Some(JobContext::new(json["task_id"].as_str().expect("get job id failed").to_string()))
+        Some(JobContext::new(
+            json["task_id"]
+                .as_str()
+                .expect("get job id failed")
+                .to_string(),
+        ))
     }
 
     pub fn onchain_job(&self, chain: String, addr: EVMAddress) -> Option<BuildJobResult> {
@@ -84,12 +96,13 @@ impl BuildJob {
             return None;
         }
         if let Some(res) = &result {
-        self.cache.save(hash.as_str(), &serde_json::to_string(res).unwrap()).unwrap();
-    }
+            self.cache
+                .save(hash.as_str(), &serde_json::to_string(res).unwrap())
+                .unwrap();
+        }
         return result;
     }
 }
-
 
 pub struct JobContext {
     id: String,
@@ -105,10 +118,12 @@ impl JobContext {
         let url = format!("{}task/{}/", unsafe { BUILD_SERVER }, self.id);
         loop {
             println!("Retrieving artifact build job from {}", url);
-            let resp = client.get(&url)
+            let resp = client
+                .get(&url)
                 .send()
                 .expect("retrieve onchain job failed");
-            let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed")).expect("parse json failed");
+            let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
+                .expect("parse json failed");
             if json["code"].as_u64().expect("get status failed") != 200 {
                 println!("retrieve onchain job failed for {:?}", self.id);
                 return None;
@@ -130,7 +145,6 @@ impl JobContext {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildJobResult {
     /// (file name, source code)
@@ -141,7 +155,7 @@ pub struct BuildJobResult {
     pub source_maps_replacements: Vec<(String, String)>,
 
     _cache_src_map: HashMap<usize, SourceMapLocation>,
-    _cached: bool
+    _cached: bool,
 }
 
 impl BuildJobResult {
@@ -150,7 +164,7 @@ impl BuildJobResult {
         source_maps: String,
         bytecodes: Bytes,
         abi: String,
-        replacements: Vec<(String, String)>
+        replacements: Vec<(String, String)>,
     ) -> Self {
         Self {
             sources,
@@ -165,11 +179,13 @@ impl BuildJobResult {
 
     pub fn from_json_url(url: String) -> Option<Self> {
         let client = get_client();
-        let resp = client.get(&url)
+        let resp = client
+            .get(&url)
             .send()
             .expect("retrieve onchain job failed");
 
-        let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed")).expect("parse json failed");
+        let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
+            .expect("parse json failed");
         if json["success"].as_bool().expect("get status failed") != true {
             println!("retrieve onchain job failed for {:?}", url);
             return None;
@@ -181,24 +197,25 @@ impl BuildJobResult {
         let sourcemap = json["sourcemap"].as_str().expect("get sourcemap failed");
         let mut sourcemap_replacements = vec![];
         if let Some(_replaces) = json["replaces"].as_array() {
-            sourcemap_replacements = _replaces.iter().map(
-                |v| {
+            sourcemap_replacements = _replaces
+                .iter()
+                .map(|v| {
                     let v = v.as_array().expect("get replace failed");
                     let source = v[0].as_str().expect("get source failed");
                     let target = v[1].as_str().expect("get target failed");
                     (source.to_string(), target.to_string())
-                }
-            ).collect_vec();
+                })
+                .collect_vec();
         }
-        let bytecode = json["runtime_bytecode"].as_str().expect("get bytecode failed");
+        let bytecode = json["runtime_bytecode"]
+            .as_str()
+            .expect("get bytecode failed");
         let source_objs = json["sources"].as_object().expect("get sources failed");
         let mut sources = vec![(String::new(), String::new()); source_objs.len()];
         for (k, v) in source_objs {
-
-
             let idx = match &v["id"] {
-                Value::Number(v) => { v.as_u64().unwrap() as usize }
-                Value::String(v) => { v.parse::<usize>().unwrap() }
+                Value::Number(v) => v.as_u64().unwrap() as usize,
+                Value::String(v) => v.parse::<usize>().unwrap(),
                 _ => {
                     println!("{:?} is not a valid source id", v["id"]);
                     return None;
@@ -213,7 +230,7 @@ impl BuildJobResult {
         Some(Self {
             sources,
             source_maps: sourcemap.to_string(),
-            bytecodes: Bytes::from(hex::decode(bytecode).expect("decode bytecode failed")),
+            bytecodes: Bytes::from(hex::decode(bytecode).unwrap_or_default()),
             abi: abi.to_string(),
             source_maps_replacements: sourcemap_replacements,
             _cache_src_map: Default::default(),
@@ -234,7 +251,6 @@ impl BuildJobResult {
         results
     }
 
-
     pub fn get_sourcemap(&mut self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
         if self._cached {
             return self._cache_src_map.clone();
@@ -243,7 +259,12 @@ impl BuildJobResult {
                 bytecode,
                 &self.source_maps_replacements,
                 self.source_maps.clone(),
-                &self.sources.iter().map(|(name, _)| (name)).cloned().collect()
+                &self
+                    .sources
+                    .iter()
+                    .map(|(name, _)| (name))
+                    .cloned()
+                    .collect(),
             );
             self._cache_src_map = result.clone();
             self._cached = true;
@@ -253,7 +274,7 @@ impl BuildJobResult {
 
     pub fn get_sourcemap_executor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>(
         _self: Option<&mut Self>,
-        executor: &mut  Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+        executor: &mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
         addr: &EVMAddress,
         additional_sourcemap: &ProjectSourceMapTy,
         pc: usize,
@@ -263,17 +284,19 @@ impl BuildJobResult {
                 return _self._cache_src_map.get(&pc).cloned();
             }
 
-            let bytecode = Vec::from((**executor)
-                .borrow_mut()
-                .as_any()
-                .downcast_ref::<EVMQueueExecutor>()
-                .unwrap()
-                .host
-                .code
-                .get(addr)
-                .unwrap()
-                .clone()
-                .bytecode());
+            let bytecode = Vec::from(
+                (**executor)
+                    .borrow_mut()
+                    .as_any()
+                    .downcast_ref::<EVMQueueExecutor>()
+                    .unwrap()
+                    .host
+                    .code
+                    .get(addr)
+                    .unwrap()
+                    .clone()
+                    .bytecode(),
+            );
             return _self.get_sourcemap(bytecode).get(&pc).cloned();
         }
 
@@ -286,7 +309,7 @@ impl BuildJobResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactInfoMetadata {
-    pub info: HashMap<EVMAddress, BuildJobResult>
+    pub info: HashMap<EVMAddress, BuildJobResult>,
 }
 
 impl ArtifactInfoMetadata {
@@ -311,11 +334,10 @@ impl ArtifactInfoMetadata {
 
 impl_serdeany!(ArtifactInfoMetadata);
 
-
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use super::*;
+    use std::str::FromStr;
 
     // #[test]
     // fn test_from_json_url() {
