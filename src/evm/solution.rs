@@ -52,14 +52,7 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         return;
     }
 
-    let filename = if args.is_onchain {
-        &args.target[2..6]
-    } else {
-        let path = Path::new(&args.target);
-        path.parent().unwrap().file_name().unwrap().to_str().unwrap()
-    };
-
-    let path = format!("{}/{}.t.sol", args.output_dir, filename);
+    let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
     let mut output = File::create(&path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
         println!("generate_test error: failed to render template: {:?}", e);
@@ -111,6 +104,7 @@ impl<T: SolutionTx> From<&T> for Tx {
 
 #[derive(Debug, Serialize, Default)]
 pub struct TemplateArgs {
+    contract_name: String,
     is_onchain: bool,
     need_swap: bool,
     router: String,
@@ -159,7 +153,18 @@ impl TemplateArgs {
             String::from("")
         };
 
+        // Contract name
+        let contract_name = if cli_args.is_onchain {
+            format!("C{}", &cli_args.target[2..6])
+        } else {
+            let path = Path::new(&cli_args.target);
+            let dirname = path.parent().unwrap().file_name().unwrap().to_str().unwrap();
+            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+            format!("{}{}", &name[..1].to_uppercase(), &name[1..])
+        };
+
         Ok(Self {
+            contract_name,
             is_onchain: cli_args.is_onchain,
             need_swap: trace.iter().any(|x| x.is_borrow || x.liq_percent > 0),
             router,

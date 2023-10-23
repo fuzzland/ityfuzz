@@ -16,7 +16,7 @@ import "forge-std/Test.sol";
 {{{solution}}}
  */
 
-contract EGD is Test {
+contract {{contract_name}} is Test {
     function setUp() public {
         {{#if is_onchain}}
         vm.createSelectFork("{{chain}}", {{block_number}});
