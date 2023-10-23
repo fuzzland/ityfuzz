@@ -17,31 +17,6 @@ import "forge-std/Test.sol";
 {{{solution}}}
  */
 
-{{#if is_borrow}}
-interface IUniswapV2Router {
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable;
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-}
-{{/if}}
-
 contract EGD is Test {
     function setUp() public {
         {{#if is_onchain}}
@@ -82,3 +57,34 @@ contract EGD is Test {
     receive() external payable {}
 {{/if}}
 }
+
+{{#if is_borrow}}
+interface IERC20 {
+    function balanceOf(address owner) external view returns (uint);
+    function approve(address spender, uint value) external returns (bool);
+    function transfer(address to, uint value) external returns (bool);
+}
+
+interface IUniswapV2Router {
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
+{{/if}}
