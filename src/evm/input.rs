@@ -1,6 +1,6 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
+use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512, checksum};
 use crate::evm::vm::EVMState;
 use crate::input::{ConciseSerde, VMInputT, SolutionTx};
 use crate::mutation_utils::byte_mutator;
@@ -318,11 +318,11 @@ impl SolutionTx for ConciseEVMInput {
     }
 
     fn caller(&self) -> String {
-        format!("0x{}", hex::encode(self.caller))
+        checksum(&self.caller)
     }
 
     fn contract(&self) -> String {
-        format!("0x{}", hex::encode(self.contract))
+        checksum(&self.contract)
     }
 
     fn value(&self) -> String {

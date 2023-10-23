@@ -3,7 +3,7 @@ use std::{fs::{File, self}, time::SystemTime, sync::OnceLock};
 use handlebars::Handlebars;
 use serde::Serialize;
 
-use crate::input::SolutionTx;
+use crate::{input::SolutionTx, evm::types::checksum};
 use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
@@ -154,7 +154,7 @@ impl TemplateArgs {
         // Router
         let router = if let Some(chain) = Chain::from_str(&cli_args.chain) {
             let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-            format!("0x{}", hex::encode(r))
+            checksum(&r)
         } else {
             String::from("")
         };
