@@ -10,8 +10,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle},
-    executor::FuzzExecutor, fuzzer::ItyFuzzer,
+    evm::contract_utils::{
+        parse_buildjob_result_sourcemap, save_builder_source_code, FIX_DEPLOYER,
+    },
+    evm::host::FuzzHost,
+    evm::{
+        contract_utils::{copy_local_source_code, modify_concolic_skip},
+        types::ProjectSourceMapTy,
+        vm::EVMExecutor, oracles::reentrancy::ReentrancyOracle, middlewares::reentrancy::ReentrancyTracer,
+    },
+    executor::FuzzExecutor,
+    fuzzer::ItyFuzzer,
 };
 use itertools::Itertools;
 use libafl::feedbacks::Feedback;
@@ -31,6 +40,7 @@ use crate::evm::host::CALL_UNTIL;
 use crate::evm::host::{
     ACTIVE_MATCH_EXT_CALL, CMP_MAP, JMP_MAP, PANIC_ON_BUG, READ_MAP, WRITE_MAP, WRITE_RELATIONSHIPS,
 };
+use crate::evm::minimizer::EVMMinimizer;
 use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
@@ -61,7 +71,7 @@ use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::presets::pair::PairPreset;
-use crate::evm::srcmap::parser::{BASE_PATH, SourceMapLocation};
+use crate::evm::srcmap::parser::{SourceMapLocation, BASE_PATH};
 use crate::evm::types::{
     fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
 };
@@ -297,17 +307,19 @@ pub fn evm_fuzzer(
 
     // check if we use the remote or local
     let mut srcmap = if remote_addr_sourcemaps.len() > 0 {
-        save_builder_source_code(
-            &artifacts.build_artifacts,
-            &config.work_dir,
-        );
+        save_builder_source_code(&artifacts.build_artifacts, &config.work_dir);
         remote_addr_sourcemaps
     } else {
         match config.local_files_basedir_pattern {
             Some(pattern) => {
                 // we copy the source files to the work dir
-                copy_local_source_code(&pattern, &config.work_dir, &artifacts.address_to_sourcemap, &config.base_path);
-            },
+                copy_local_source_code(
+                    &pattern,
+                    &config.work_dir,
+                    &artifacts.address_to_sourcemap,
+                    &config.base_path,
+                );
+            }
             None => {
                 // no local files, so we won't skip any concolic
             }
@@ -426,23 +438,45 @@ pub fn evm_fuzzer(
 
     let mut producers = config.producers;
 
-    let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
+    let objective: OracleFeedback<
+        '_,
+        EVMState,
+        revm_primitives::B160,
+        Bytecode,
+        Bytes,
+        revm_primitives::B160,
+        revm_primitives::ruint::Uint<256, 4>,
+        Vec<u8>,
+        EVMInput,
+        FuzzState<
+            EVMInput,
+            EVMState,
+            revm_primitives::B160,
+            revm_primitives::B160,
+            Vec<u8>,
+            ConciseEVMInput,
+        >,
+        ConciseEVMInput,
+    > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
     let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,
         sha3_taint,
         evm_executor_ref.clone(),
         config.sha3_bypass,
     ));
+    let objective_ref = Rc::new(RefCell::new(objective.clone()));
 
-    let mut fuzzer = ItyFuzzer::new(
-        scheduler,
-        infant_scheduler,
-        wrapped_feedback,
-        infant_feedback,
-        infant_result_feedback,
-        objective,
-        config.work_dir,
-    );
+    let mut fuzzer: ItyFuzzer<_, _, _, _, _, _, _, _, _, _, _, _, _, _, EVMMinimizer> =
+        ItyFuzzer::new(
+            scheduler,
+            infant_scheduler,
+            wrapped_feedback,
+            infant_feedback,
+            infant_result_feedback,
+            objective,
+            EVMMinimizer::new(evm_executor_ref.clone(), objective_ref.clone()),
+            config.work_dir,
+        );
     match config.replay_file {
         None => {
             fuzzer
