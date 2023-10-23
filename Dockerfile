@@ -28,14 +28,14 @@ RUN cargo build --release
 RUN cp target/release/ityfuzz /bins/cli_offchain
 
 # build onchain binary
-RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ./Cargo.toml
-RUN cargo build --release
+# RUN sed -i -e 's/"cmp"/"cmp","flashloan_v2"/g' ./Cargo.toml
+RUN cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace flashloan_v2" --no-default-features
 RUN cp target/release/ityfuzz /bins/cli_onchain
 
-RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ./Cargo.toml
-RUN sed -i -e 's/"print_txn_corpus",//g' ./Cargo.toml
-RUN sed -i -e 's/"full_trace",//g' ./Cargo.toml
-RUN cargo build --release
+# RUN sed -i -e 's/"deployer_is_attacker"/"print_logs"/g' ./Cargo.toml
+# RUN sed -i -e 's/"print_txn_corpus",//g' ./Cargo.toml
+# RUN sed -i -e 's/"full_trace",//g' ./Cargo.toml
+RUN cargo build --release --features "cmp dataflow evm flashloan_v2 print_logs" --no-default-features
 RUN cp target/release/ityfuzz /bins/cli_print_logs
 
 FROM run_environment
@@ -46,5 +46,3 @@ WORKDIR /bins
 COPY tests /bins/tests
 
 EXPOSE 8000
-
-

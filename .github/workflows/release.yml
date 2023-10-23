@@ -118,7 +118,7 @@ jobs:
           # git clone https://github.com/Z3Prover/z3
           # cd z3
           # python scripts/mk_make.py --prefix=/usr/local
-          # cd build 
+          # cd build
           # make -j64
           # sudo make install
 
@@ -158,7 +158,9 @@ jobs:
       - name: Build binaries with flashloan
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
-        run: cargo build --release --bins --target ${{ matrix.job.target }} --target-dir "target_f" --features "default flashloan_v2 force_cache"
+        run: |
+          cargo build --release --bins --target ${{ matrix.job.target }} --target-dir "target_f" \
+            --features "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache" --no-default-features
 
       - name: Archive binaries
         id: artifacts
