@@ -5,10 +5,9 @@ import "forge-std/Test.sol";
 
 {{#if is_onchain}}
 // ityfuzz evm -o -t {{target}} -c {{chain}} --onchain-block-number {{block_number}} -f -i -p --onchain-etherscan-api-key ${{etherscan_keyname}}
+{{else}}
+// ityfuzz evm -t '{{target}}' -f
 {{/if}}
-{{#unless is_onchain}}
-// ityfuzz evm -t '{{target}}' -f --panic-on-bug
-{{/unless}}
 /*
 
 😊😊 Found violations!
@@ -26,55 +25,47 @@ contract EGD is Test {
 
     function test() public {
     {{#if need_swap}}
-        address router = address({{router}});
-        address weth = address({{weth}});
-    {{/if}}
-
-{{#each trace}}
-    {{#with this}}
-        {{! Borrow }}
-        {{#if is_borrow}}
+        address router = {{router}};
+        address weth = {{weth}};
+    {{/if}} {{#each trace}} {{#with this}} {{#if is_borrow}}
         address[] memory path{{borrow_idx}} = new address[](2);
         path{{borrow_idx}}[0] = weth;
-        path{{borrow_idx}}[1] = address({{contract}});
+        path{{borrow_idx}}[1] = {{contract}};
         vm.prank(router);
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp);
-        {{! Liq pencent > 0 }}
-        {{#if liq_percent}}
-        vm.startPrank(address({{contract}}));
-        uint256 amount{{liq_idx}} = IERC20(address({{contract}})).balanceOf(address(this));
-        IERC20(address({{contract}})).approve(router, amount1);
+            {{#if liq_percent}}
+        vm.startPrank({{contract}});
+        uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
+        IERC20({{contract}}).approve(router, amount1);
         address[] memory liq_path{{liq_idx}} = new address[](2);
-        liq_path{{liq_idx}}[0] = address(address({{contract}}));
+        liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
         vm.stopPrank();
-        {{/if}} {{! Liq pencent end }}
-        {{/if}} {{! Borrow end }}
-        {{! ABI Call }}
-        {{#unless is_borrow}}
-        vm.prank(address({{contract}}));
-        address({{contract}}).call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
+            {{/if}} {{else}} {{! ABI Call }}
+        vm.prank({{contract}}); {{#if is_transfer}}
+        IERC20({{contract}}).transfer(address(this), {{value}}); {{else}} {{#if fn_signature}}
+        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
+            "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
+        )); {{else}}
+        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
         ));
-        {{! Liq pencent > 0 }}
-        {{#if liq_percent}}
-        vm.startPrank(address({{contract}}));
-        uint256 amount{{liq_idx}} = IERC20(address({{contract}})).balanceOf(address(this));
-        IERC20(address({{contract}})).approve(router, amount1);
+            {{/if}} {{/if}} {{#if liq_percent}}
+        vm.startPrank({{contract}});
+        uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
+        IERC20({{contract}}).approve(router, amount1);
         address[] memory liq_path{{liq_idx}} = new address[](2);
-        liq_path{{liq_idx}}[0] = address(address({{contract}}));
+        liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
-        vm.stopPrank();
-        {{/if}}     {{! Liq pencent end }}
-        {{/unless}} {{! ABI Call end }}
+        vm.stopPrank(); {{/if}} {{/if}}
     {{/with}}
 {{/each}}
     }

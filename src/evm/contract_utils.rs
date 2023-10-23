@@ -282,7 +282,7 @@ impl ContractLoader {
         if let Some(abi) = abi_result.abi.iter().find(|abi| abi.is_constructor) {
             let mut abi_instance =
                 get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
-            abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
+            abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
             if contract_result.constructor_args.is_empty() {
                 println!("No constructor args found, using default constructor args");
                 contract_result.constructor_args = abi_instance.get().get_bytes();

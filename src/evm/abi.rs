@@ -177,13 +177,7 @@ impl Display for BoxedABI {
                 hex::encode(self.b.to_string())
             )
         } else {
-            let function_name = unsafe {
-                FUNCTION_SIG
-                    .get(&self.function)
-                    .unwrap_or(&hex::encode(self.function))
-                    .clone()
-            };
-            write!(f, "{}{}", function_name, self.b.to_string())
+            write!(f, "{}{}", self.get_func_name(), self.b.to_string())
         }
     }
 }
@@ -244,12 +238,32 @@ impl BoxedABI {
         self.function = function;
     }
 
-    /// Set the function hash with function name, so that we can print the function name instead of hash
-    pub fn set_func_with_name(&mut self, function: [u8; 4], function_name: String) {
+    /// Set the function hash with function signature, so that we can print the function signature or name instead of hash
+    pub fn set_func_with_signature(&mut self, function: [u8; 4], fn_name: &str, fn_args: &str) {
+        println!("set_func_with_signature: {}{}", fn_name, fn_args);
         self.function = function;
         unsafe {
-            FUNCTION_SIG.insert(function, function_name);
+            FUNCTION_SIG.insert(function, format!("{}({})", fn_name, fn_args));
         }
+    }
+
+    /// Get function signature
+    pub fn get_func_signature(&self) -> Option<String> {
+        unsafe {
+            FUNCTION_SIG
+                .get(&self.function)
+                .cloned()
+        }
+    }
+
+    /// Get function name
+    pub fn get_func_name(&self) -> String {
+        self.get_func_signature()
+            .unwrap_or(hex::encode(self.function))
+            .split("(")
+            .next()
+            .unwrap()
+            .to_string()
     }
 
     /// Convert function hash and args to string (for debugging)

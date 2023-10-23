@@ -1,4 +1,4 @@
-use std::{fs::{File, self}, time::SystemTime, sync::OnceLock};
+use std::{fs::{File, self}, time::SystemTime, sync::OnceLock, path::Path};
 
 use handlebars::Handlebars;
 use serde::Serialize;
@@ -52,10 +52,13 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         return;
     }
 
-    let filename = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let filename = if args.is_onchain {
+        &args.target[2..6]
+    } else {
+        let path = Path::new(&args.target);
+        path.parent().unwrap().file_name().unwrap().to_str().unwrap()
+    };
+
     let path = format!("{}/{}.t.sol", args.output_dir, filename);
     let mut output = File::create(&path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
@@ -76,11 +79,13 @@ struct CliArgs {
 
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
+    is_transfer: bool,
     is_borrow: bool,
     borrow_idx: u32,
     caller: String,
     contract: String,
     value: String,
+    fn_signature: String,
     fn_selector: String,
     fn_args: String,
     liq_percent: u8,
@@ -91,9 +96,11 @@ impl<T: SolutionTx> From<&T> for Tx {
     fn from(input: &T) -> Self {
         Self {
             is_borrow: input.is_borrow(),
+            is_transfer: input.is_transfer(),
             caller: input.caller(),
             contract: input.contract(),
             value: input.value(),
+            fn_signature: input.fn_signature(),
             fn_selector: input.fn_selector(),
             fn_args: input.fn_args(),
             liq_percent: input.liq_percent(),
@@ -119,7 +126,7 @@ pub struct TemplateArgs {
 }
 
 impl TemplateArgs {
-    pub fn new(solution: String, mut trace: Vec<Tx>) -> Result<Self, String> {
+    pub fn new(solution: String, trace: Vec<Tx>) -> Result<Self, String> {
         let cli_args = CLI_ARGS.get();
         if cli_args.is_none() {
             return Err(String::from("CLI_ARGS is not initialized."));
@@ -127,24 +134,17 @@ impl TemplateArgs {
         let cli_args = cli_args.unwrap();
 
         // Stepping with return
-        let mut stepping_with_return = false;
-        if trace.last().unwrap().fn_selector == "0x00000000" {
-            trace.pop();
-            stepping_with_return = true;
-        }
+        let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
+        let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
-        // Borrow index
-        let mut borrow_idx = 0;
+        let (mut borrow_idx, mut liq_idx) = (0, 0);
         for tx in trace.iter_mut() {
+            // Borrow index
             if tx.is_borrow {
                 tx.borrow_idx = borrow_idx;
                 borrow_idx += 1;
             }
-        }
-
-        // Liq index
-        let mut liq_idx = 0;
-        for tx in trace.iter_mut() {
+            // Liq index
             if tx.liq_percent > 0 {
                 tx.liq_idx = liq_idx;
                 liq_idx += 1;
