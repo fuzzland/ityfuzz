@@ -78,14 +78,13 @@ struct CliArgs {
 pub struct Tx {
     is_borrow: bool,
     borrow_idx: u32,
-    router: String,
-    weth: String,
     caller: String,
     contract: String,
     value: String,
     fn_selector: String,
     fn_args: String,
     liq_percent: u8,
+    liq_idx: u32,
 }
 
 impl<T: SolutionTx> From<&T> for Tx {
@@ -106,6 +105,9 @@ impl<T: SolutionTx> From<&T> for Tx {
 #[derive(Debug, Serialize, Default)]
 pub struct TemplateArgs {
     is_onchain: bool,
+    need_swap: bool,
+    router: String,
+    weth: String,
     chain: String,
     target: String,
     block_number: String,
@@ -124,28 +126,44 @@ impl TemplateArgs {
         }
         let cli_args = cli_args.unwrap();
 
+        // Stepping with return
         let mut stepping_with_return = false;
         if trace.last().unwrap().fn_selector == "0x00000000" {
             trace.pop();
             stepping_with_return = true;
         }
 
-        if let Some(chain) = Chain::from_str(&cli_args.chain) {
-            let router = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-            let router = format!("0x{}", hex::encode(router));
-            let mut borrow_idx = 0;
-            for tx in trace.iter_mut() {
-                if tx.is_borrow {
-                    tx.router = router.clone();
-                    tx.weth = cli_args.weth.clone();
-                    tx.borrow_idx = borrow_idx;
-                    borrow_idx += 1;
-                }
+        // Borrow index
+        let mut borrow_idx = 0;
+        for tx in trace.iter_mut() {
+            if tx.is_borrow {
+                tx.borrow_idx = borrow_idx;
+                borrow_idx += 1;
             }
         }
 
+        // Liq index
+        let mut liq_idx = 0;
+        for tx in trace.iter_mut() {
+            if tx.liq_percent > 0 {
+                tx.liq_idx = liq_idx;
+                liq_idx += 1;
+            }
+        }
+
+        // Router
+        let router = if let Some(chain) = Chain::from_str(&cli_args.chain) {
+            let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
+            format!("0x{}", hex::encode(r))
+        } else {
+            String::from("")
+        };
+
         Ok(Self {
             is_onchain: cli_args.is_onchain,
+            need_swap: trace.iter().any(|x| x.is_borrow || x.liq_percent > 0),
+            router,
+            weth: cli_args.weth.clone(),
             chain: cli_args.chain.clone(),
             target: cli_args.target.clone(),
             block_number: cli_args.block_number.clone(),

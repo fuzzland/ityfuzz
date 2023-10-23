@@ -25,29 +25,58 @@ contract EGD is Test {
     }
 
     function test() public {
-        vm.prank(address(this), address(this));
-{{#each trace}}
+    {{#if need_swap}}
+        address router = address({{router}});
+        address weth = address({{weth}});
+    {{/if}}
 
+{{#each trace}}
     {{#with this}}
+        {{! Borrow }}
         {{#if is_borrow}}
         address[] memory path{{borrow_idx}} = new address[](2);
-        path{{borrow_idx}}[0] = address({{weth}});
+        path{{borrow_idx}}[0] = weth;
         path{{borrow_idx}}[1] = address({{contract}});
-        IUniswapV2Router(address({{router}})).swapExactETHForTokensSupportingFeeOnTransferTokens{
+        vm.prank(router)
+        IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp);
+
+        {{! Liq pencent > 0 }}
         {{#if liq_percent}}
-        // swap todo: liq_percent: {{liq_percent}}
-        {{/if}}
-        {{/if}}
+        vm.startPrank(address({{contract}}));
+        uint256 amount{{liq_idx}} = IERC20(address({{contract}})).balanceOf(address(this));
+        IERC20(address({{contract}})).approve(router, amount1);
+        address[] memory liq_path{{liq_idx}} = new address[](2);
+        liq_path{{liq_idx}}[0] = address(address({{contract}}));
+        liq_path{{liq_idx}}[1] = address(weth);
+        IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
+            amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+        );
+        vm.stopPrank();
+        {{/if}} {{! Liq pencent > 0 }}
+        {{/if}} {{! Borrow }}
+        {{! ABI Call }}
         {{#unless is_borrow}}
+        vm.prank(address({{contract}}))
         address({{contract}}).call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
         ));
+
+        {{! Liq pencent > 0 }}
         {{#if liq_percent}}
-        // swap todo: liq_percent: {{liq_percent}}
-        {{/if}}
-        {{/unless}}
+        vm.startPrank(address({{contract}}));
+        uint256 amount{{liq_idx}} = IERC20(address({{contract}})).balanceOf(address(this));
+        IERC20(address({{contract}})).approve(router, amount1);
+        address[] memory liq_path{{liq_idx}} = new address[](2);
+        liq_path{{liq_idx}}[0] = address(address({{contract}}));
+        liq_path{{liq_idx}}[1] = address(weth);
+        IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
+            amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+        );
+        vm.stopPrank();
+        {{/if}}     {{! Liq pencent > 0 }}
+        {{/unless}} {{! ABI Call }}
     {{/with}}
 {{/each}}
     }
