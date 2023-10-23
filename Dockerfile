@@ -24,7 +24,7 @@ COPY src ./src
 COPY benches ./benches
 
 # build offchain binary
-RUN cargo build --release
+RUN cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
 RUN cp target/release/ityfuzz /bins/cli_offchain
 
 # build onchain binary

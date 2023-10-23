@@ -56,7 +56,7 @@ main() {
     # Enter local repo and build
     say "installing from $ITYFUZZ_LOCAL_REPO"
     cd "$ITYFUZZ_LOCAL_REPO"
-    ensure cargo build --bins --release # need 4 speed
+    ensure cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features # need 4 speed
 
     for bin in "${BINS[@]}"; do
       # Remove prior installations if they exist
@@ -192,7 +192,7 @@ EOF
     fi
 
     # Build the repo and install the binaries locally to the .ityfuzz bin directory.
-    ensure cargo build --bins --release
+    ensure cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
     for bin in "${BINS[@]}"; do
       for try_path in target/release/$bin target/release/$bin.exe; do
         if [ -f "$try_path" ]; then
@@ -275,30 +275,30 @@ download() {
   fi
 }
 
-# Banner Function for ITYFUZZ 
+# Banner Function for ITYFUZZ
 banner() {
-  printf '                                                                                                                          
-IIIIIIIIII         tttt                                   FFFFFFFFFFFFFFFFFFFFFF                                                    
-I::::::::I      ttt:::t                                   F::::::::::::::::::::F                                                    
-I::::::::I      t:::::t                                   F::::::::::::::::::::F                                                    
-II::::::II      t:::::t                                   FF::::::FFFFFFFFF::::F                                                    
+  printf '
+IIIIIIIIII         tttt                                   FFFFFFFFFFFFFFFFFFFFFF
+I::::::::I      ttt:::t                                   F::::::::::::::::::::F
+I::::::::I      t:::::t                                   F::::::::::::::::::::F
+II::::::II      t:::::t                                   FF::::::FFFFFFFFF::::F
   I::::I  ttttttt:::::ttttttt    yyyyyyy           yyyyyyy  F:::::F       FFFFFFuuuuuu    uuuuuu  zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
   I::::I  t:::::::::::::::::t     y:::::y         y:::::y   F:::::F             u::::u    u::::u  z:::::::::::::::zz:::::::::::::::z
-  I::::I  t:::::::::::::::::t      y:::::y       y:::::y    F::::::FFFFFFFFFF   u::::u    u::::u  z::::::::::::::z z::::::::::::::z 
-  I::::I  tttttt:::::::tttttt       y:::::y     y:::::y     F:::::::::::::::F   u::::u    u::::u  zzzzzzzz::::::z  zzzzzzzz::::::z  
-  I::::I        t:::::t              y:::::y   y:::::y      F:::::::::::::::F   u::::u    u::::u        z::::::z         z::::::z   
-  I::::I        t:::::t               y:::::y y:::::y       F::::::FFFFFFFFFF   u::::u    u::::u       z::::::z         z::::::z    
-  I::::I        t:::::t                y:::::y:::::y        F:::::F             u::::u    u::::u      z::::::z         z::::::z     
-  I::::I        t:::::t    tttttt       y:::::::::y         F:::::F             u:::::uuuu:::::u     z::::::z         z::::::z      
+  I::::I  t:::::::::::::::::t      y:::::y       y:::::y    F::::::FFFFFFFFFF   u::::u    u::::u  z::::::::::::::z z::::::::::::::z
+  I::::I  tttttt:::::::tttttt       y:::::y     y:::::y     F:::::::::::::::F   u::::u    u::::u  zzzzzzzz::::::z  zzzzzzzz::::::z
+  I::::I        t:::::t              y:::::y   y:::::y      F:::::::::::::::F   u::::u    u::::u        z::::::z         z::::::z
+  I::::I        t:::::t               y:::::y y:::::y       F::::::FFFFFFFFFF   u::::u    u::::u       z::::::z         z::::::z
+  I::::I        t:::::t                y:::::y:::::y        F:::::F             u::::u    u::::u      z::::::z         z::::::z
+  I::::I        t:::::t    tttttt       y:::::::::y         F:::::F             u:::::uuuu:::::u     z::::::z         z::::::z
 II::::::II      t::::::tttt:::::t        y:::::::y        FF:::::::FF           u:::::::::::::::uu  z::::::zzzzzzzz  z::::::zzzzzzzz
 I::::::::I      tt::::::::::::::t         y:::::y         F::::::::FF            u:::::::::::::::u z::::::::::::::z z::::::::::::::z
 I::::::::I        tt:::::::::::tt        y:::::y          F::::::::FF             uu::::::::uu:::uz:::::::::::::::zz:::::::::::::::z
 IIIIIIIIII          ttttttttttt         y:::::y           FFFFFFFFFFF               uuuuuuuu  uuuuzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-                                       y:::::y                                                                                      
-                                      y:::::y                                                                                       
-                                     y:::::y                                                                                        
-                                    y:::::y                                                                                         
-                                   yyyyyyy                                                                                                                                                                                                  
+                                       y:::::y
+                                      y:::::y
+                                     y:::::y
+                                    y:::::y
+                                   yyyyyyy
 '
 }
 

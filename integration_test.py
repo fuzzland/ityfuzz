@@ -184,7 +184,14 @@ def test_onchain(test):
 
 def build_fuzzer():
     # build fuzzer
-    subprocess.run(["cargo", "build", "--release"])
+    subprocess.run([
+        "cargo",
+        "build",
+        "--release",
+        "--features",
+        "cmp dataflow evm print_txn_corpus full_trace",
+        "--no-default-features"
+    ])
 
 
 def build_flash_loan_v2_fuzzer():

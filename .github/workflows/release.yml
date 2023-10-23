@@ -153,7 +153,9 @@ jobs:
       - name: Build binaries
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
-        run: cargo build --release --bins --target ${{ matrix.job.target }}
+        run: |
+          cargo build --release --bins --target ${{ matrix.job.target }} \
+            --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
 
       - name: Build binaries with flashloan
         env:
