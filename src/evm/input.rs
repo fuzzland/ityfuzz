@@ -352,14 +352,16 @@ impl SolutionTx for ConciseEVMInput {
 
     #[cfg(not(feature = "debug"))]
     fn fn_args(&self) -> String {
-        match self.data {
-            Some(ref d) => {
-                let mut args_str = d.get().to_string();
-                let len = args_str.len();
-                args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
-            },
-            None => "".to_string(),
+        if self.data.is_none() {
+            return "".to_string();
         }
+
+        let mut args_str = self.data.as_ref().unwrap().get().to_string();
+        let len = args_str.len();
+        if len < 2 {
+            return "".to_string();
+        }
+        args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
     }
 
     #[cfg(feature = "debug")]
