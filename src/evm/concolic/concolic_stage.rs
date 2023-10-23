@@ -146,12 +146,15 @@ where
                     solution.to_string()
                 );
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
+                let mut new_testcase = (*orig_testcase).clone();
+
                 // if cannot set_bytes AND no fields to modify, skip
-                if !data_abi.set_bytes(solution.input) && solution.fields.len() == 0{
+                if data_abi.set_bytes(solution.input) { // This can fail if e.g. solving for an array
+                    new_testcase.data = Some(data_abi);
+                }
+                else if solution.fields.len() == 0 {
                     continue;
                 }
-                let mut new_testcase = (*orig_testcase).clone();
-                new_testcase.data = Some(data_abi);
 
                 for mod_fields in solution.fields {
                     match mod_fields {
