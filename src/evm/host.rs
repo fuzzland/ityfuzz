@@ -766,12 +766,12 @@ macro_rules! invoke_middlewares {
                 middleware.$invoke($interp, $host, $state $(, $arg)*);
             }
 
-            if !$host.setcode_data.is_empty() {
-                $host.clear_codedata();
-            }
-
             for middleware in &mut $host.middlewares.clone().deref().borrow_mut().iter_mut() {
                 middleware.deref().deref().borrow_mut().$invoke($interp, $host, $state $(, $arg)*);
+            }
+
+            if !$host.setcode_data.is_empty() {
+                $host.clear_codedata();
             }
 
             if !$host.setcode_data.is_empty() {
