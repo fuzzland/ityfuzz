@@ -273,7 +273,7 @@ pub fn evm_fuzzer(
         } else {
             (false, vec![])
         };
-        println!("has_preset_match: {}", has_preset_match);
+        println!("has_preset_match: {} {}", has_preset_match, matched_templates.len());
 
         state.init_presets(has_preset_match, matched_templates.clone());
     }

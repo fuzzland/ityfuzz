@@ -268,8 +268,19 @@ where
                                         Some(abis) => {
                                             if !abis.is_empty() {
                                                 // find the abi with the function
-                                                let new_abi = abis.iter().find(|abi| abi.function == func_sig).unwrap();
-                                                input.set_contract_and_abi(address, Some(new_abi.clone()));
+                                                match abis.iter().find(|abi| abi.function == func_sig) {
+                                                    Some(new_abi) => {
+                                                        input.set_contract_and_abi(address, Some(new_abi.clone()));
+                                                        input.mutate(state);
+                                                        return Ok(MutationResult::Mutated);
+                                                    }
+                                                    None => {
+                                                        // BUG? e.g. 0xad0da05b9c20fa541012ee2e89ac99a864cc68bb is uniswapv2pair
+                                                        //           matched: "getReserves()" @ 0xad0da05b9c20fa541012ee2e89ac99a864cc68bb
+                                                        //           but cannot be found
+                                                        // println!("cannot find abi with function");
+                                                    }
+                                                }
                                             }
                                         }
                                         None => {
