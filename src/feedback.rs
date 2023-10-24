@@ -83,11 +83,19 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
     OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
-    I: VMInputT<VS, Loc, Addr, CI>,
-    VS: Default + VMStateT,
-    Addr: Serialize + DeserializeOwned + Debug + Clone,
-    Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    S: State
+        + HasClientPerfMonitor
+        + HasExecutionResult<Loc, Addr, VS, Out, CI>
+        + HasCorpus
+        + HasMetadata
+        + UsesInput<Input = I>
+        + 'static,
+        I: VMInputT<VS, Loc, Addr, CI> + 'static,
+        VS: Default + VMStateT,
+        Addr: Serialize + DeserializeOwned + Debug + Clone,
+        Loc: Serialize + DeserializeOwned + Debug + Clone,
+        Out: Default,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`OracleFeedback`]
     pub fn new(
@@ -106,6 +114,70 @@ where
             phantom: Default::default(),
         }
     }
+
+    /// Determines whether the current execution reproduces the bug 
+    /// specified in the bug_idx.
+    pub fn reproduces(
+        &mut self,
+        state: &mut S,
+        input: &S::Input,
+        bug_idx: &Vec<u64>,
+    ) -> bool {
+        if state.get_execution_result().reverted {
+            return false;
+        }
+        // set up oracle context
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> =
+            OracleCtx::new(state, input.get_state(), &mut self.executor, input);
+
+        // cleanup producers by calling `notify_end` hooks
+        macro_rules! before_exit {
+            () => {
+                self.producers.iter().for_each(|producer| {
+                    producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
+                });
+            };
+        }
+
+        // execute producers
+        self.producers.iter().for_each(|producer| {
+            producer.deref().borrow_mut().produce(&mut oracle_ctx);
+        });
+
+        let mut bug_to_hit = bug_idx.clone();
+        let has_post_exec = oracle_ctx
+            .fuzz_state
+            .get_execution_result()
+            .new_state
+            .state
+            .has_post_execution();
+
+        // execute oracles and update stages if needed
+        for idx in 0..self.oracle.len() {
+            let original_stage = if idx >= input.get_staged_state().stage.len() {
+                0
+            } else {
+                input.get_staged_state().stage[idx]
+            };
+
+            for bug_idx in self.oracle[idx]
+                .deref()
+                .borrow()
+                .oracle(&mut oracle_ctx, original_stage)
+            {
+                bug_to_hit.retain(|x| *x != bug_idx);
+            }
+        }
+
+        // ensure the execution is finished
+        if has_post_exec {
+            before_exit!();
+            return false;
+        }
+
+        before_exit!();
+        bug_to_hit.is_empty()
+    } 
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<S>

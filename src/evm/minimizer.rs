@@ -4,21 +4,16 @@ use crate::evm::types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMQueueExecu
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::feedback::OracleFeedback;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
-use crate::input::ConciseSerde;
 use crate::minimizer::SequentialMinimizer;
+use crate::oracle::BugMetadata;
 use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
 use crate::tracer::TxnTrace;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::events::EventManager;
-use libafl::observers;
 use libafl::prelude::{Corpus, Executor, Feedback, ObserversTuple, StdScheduler, ExitKind, SimpleEventManager, SimpleMonitor};
-use libafl::state::HasCorpus;
+use libafl::state::{HasCorpus, HasMetadata};
 use revm_primitives::Bytecode;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::cell::RefCell;
-use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -106,48 +101,59 @@ impl<E: libafl::executors::HasObservers>
         exec: &mut E,
         input: &TxnTrace<EVMAddress, EVMAddress, ConciseEVMInput>,
         objective: &mut EVMOracleFeedback<'_>,
+        corpus_id: usize,
     ) -> Vec<ConciseEVMInput> {
-        let mut executor = self.evm_executor_ref.deref().borrow_mut();
+
+        let bug_meta = state.metadata::<BugMetadata>().unwrap();
+        let bug_idx_needed = bug_meta.corpus_idx_to_bug.get(&corpus_id).expect("Bug idx needed").clone();
 
         let current_idx = input.from_idx.unwrap();
-        let testcase = state
+        let testcase = state.infant_states_state
             .corpus()
             .get(current_idx.into())
             .unwrap()
             .borrow()
             .clone();
-        let last_input = testcase.input().as_ref().expect("Input should be present");
-        let mut txs = Self::get_call_seq(&last_input.sstate, state);
-        let mut results = vec![];
+        let last_sstate = testcase.input().as_ref().expect("Input should be present");
+        let mut txs = Self::get_call_seq(&last_sstate, state);
+        txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
+        assert!(txs.len() >= 1);
         let mut minimized = false;
         while !minimized {
             minimized = true;
-            for try_skip in 0..(txs.len() - 1) {
-                results = vec![];
+            for try_skip in 0..(txs.len()) {
+                let mut current_state = txs[0].0.sstate.clone();
+                let mut is_solution = false;
+
                 for (i, item) in txs.iter().enumerate() {
                     if i == try_skip {
                         continue;
                     }
-                    let (tx, call_leak) = item;
+                    let (mut tx, call_leak) = item.clone();
                     unsafe {
-                        CALL_UNTIL = *call_leak;
+                        CALL_UNTIL = call_leak;
                     }
-                    let res = executor.execute(tx, state);
-                    results.push(res);
+                    tx.sstate = current_state.clone();
+                    let res = {
+                        let mut executor = self.evm_executor_ref.deref().borrow_mut();
+                        executor.execute(&tx, state)
+                    };
+
+                    println!("trial {} result: {:?}", i, res);
+
+                    state.set_execution_result(res.clone());
+                    let trial_is_solution = objective.reproduces(
+                        state,
+                        &tx,
+                        &bug_idx_needed
+                    );
+                    is_solution |= trial_is_solution;
+                    current_state = state.get_execution_result().new_state.clone();
                     let reverted = state.get_execution_result().reverted;
                     if reverted {
                         break;
                     }
                 }
-                let monitor = SimpleMonitor::new(|s| println!("{}", s));
-                let mut mgr = SimpleEventManager::new(monitor);
-                let is_solution = objective.is_interesting(
-                    state,
-                    &mut mgr,
-                    &txs[txs.len() - 1].0,
-                    &(),
-                    &ExitKind::Ok,
-                ).expect("Oracle feedback should not fail");
 
                 if is_solution {
                     txs = txs
@@ -158,18 +164,13 @@ impl<E: libafl::executors::HasObservers>
                         .collect();
                     minimized = false;
                     break;
-                }
+                } 
             }
         }
 
-        if results.is_empty() {
-            assert!(txs.len() == 1);
-            let res = executor.execute(&txs[0].0, state);
-            results = vec![res];
-        }
+
         txs.into_iter()
-            .zip(results)
-            .map(|(tx, res)| ConciseEVMInput::from_input(&tx.0, &res))
+            .map(|(tx, call_leak)| ConciseEVMInput::from_input_with_call_leak(&tx, call_leak))
             .collect_vec()
     }
 }

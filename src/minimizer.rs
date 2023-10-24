@@ -12,6 +12,7 @@ pub trait SequentialMinimizer<S, E, Loc, Addr, CI, OF> where
         state: &mut S,
         executor: &mut E, 
         input: &TxnTrace<Loc, Addr, CI>,
-        objective: &mut OF
+        objective: &mut OF,
+        corpus_id: usize,
     ) -> Vec<CI>;
 }

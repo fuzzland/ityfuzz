@@ -566,11 +566,18 @@ where
             }
             // find the solution
             ExecuteInputResult::Solution => {
+                state
+                    .metadata_map_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap()
+                    .register_corpus_idx(corpus_idx.into());
+
                 let minimized = self.sequential_minimizer.minimize(
                     state,
                     executor,
                     &state.get_execution_result().new_state.trace.clone(),
                     &mut self.objective,
+                    corpus_idx.into()
                 );
                 let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
                 let txn_json = minimized
@@ -605,12 +612,6 @@ where
                 })
                 .expect("Unable to write data");
                 f.write_all(b"\n").expect("Unable to write data");
-
-                state
-                    .metadata_map_mut()
-                    .get_mut::<BugMetadata>()
-                    .unwrap()
-                    .register_corpus_idx(corpus_idx.into());
 
                 #[cfg(feature = "print_txn_corpus")]
                 {
