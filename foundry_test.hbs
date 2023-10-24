@@ -28,7 +28,7 @@ contract {{contract_name}} is Test {
         address router = {{router}};
         address weth = {{weth}};
     {{/if}} {{#each trace}} {{#with this}} {{#if is_borrow}} {{#if is_deposit}}
-        weth.call{value: {{value}}}(abi.encodeWithSignature("deposit()", {{value}}))
+        weth.call{value: {{value}}}(abi.encodeWithSignature("deposit()", {{value}})) {{else}}
         address[] memory path{{borrow_idx}} = new address[](2);
         path{{borrow_idx}}[0] = weth;
         path{{borrow_idx}}[1] = {{contract}};
@@ -36,7 +36,7 @@ contract {{contract_name}} is Test {
         vm.deal(router, {{value}});
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
-        }(0, path{{borrow_idx}}, address(this), block.timestamp);
+        }(0, path{{borrow_idx}}, address(this), block.timestamp); {{/if}}
             {{#if liq_percent}}
         vm.startPrank({{caller}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
