@@ -246,18 +246,18 @@ pub fn evm_fuzzer(
             // must exists in all abi.function
             let mut function_sigs = template.function_sigs.clone();
             for (_addr, abis) in &artifacts.address_to_abi {
-                if function_sigs.len() == 0 {
-                    matched_templates.push(template);
-                    break;
-                }
-
                 for abi in abis {
                     for (idx, function_sig) in function_sigs.iter().enumerate() {
                         if abi.function == function_sig.value {
+                            println!("matched: {:?}", function_sig);
                             function_sigs.remove(idx);
                             break;
                         }
                     }
+                }
+                if function_sigs.len() == 0 {
+                    matched_templates.push(template);
+                    break;
                 }
             }
         }
