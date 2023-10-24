@@ -33,7 +33,7 @@ contract {{contract_name}} is Test {
         path{{borrow_idx}}[0] = weth;
         path{{borrow_idx}}[1] = {{contract}};
         vm.prank({{caller}});
-        vm.deal(router, {{value}});
+        vm.deal({{caller}}, {{value}});
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp); {{/if}}
@@ -44,7 +44,7 @@ contract {{contract_name}} is Test {
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
-        vm.deal(router, amount{{liq_idx}});
+        vm.deal({{caller}}, amount{{liq_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
@@ -65,7 +65,7 @@ contract {{contract_name}} is Test {
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
-        vm.deal(router, amount{{liq_idx}});
+        vm.deal({{caller}}, amount{{liq_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
@@ -85,6 +85,12 @@ interface IERC20 {
     function balanceOf(address owner) external view returns (uint);
     function approve(address spender, uint value) external returns (bool);
     function transfer(address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+    function mint(address to) external returns (uint liquidity);
+    function burn(address to) external returns (uint amount0, uint amount1);
+    function skim(address to) external;
+    function sync() external;
 }
 
 interface IUniswapV2Router {

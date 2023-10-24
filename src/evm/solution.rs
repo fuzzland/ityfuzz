@@ -4,7 +4,7 @@ use handlebars::Handlebars;
 use serde::Serialize;
 
 use crate::{input::SolutionTx, evm::types::checksum};
-use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}, types::EVMAddress};
+use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}, types::{EVMAddress, EVMU256}};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
 /// Cli args for generating a test command.
@@ -16,7 +16,9 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
         Some(oc) => {
             let weth_str = oc.get_weth(&oc.chain_name);
             let weth = checksum(&EVMAddress::from_str(&weth_str).unwrap());
-            (oc.chain_name.clone(), weth, oc.block_number.clone())
+            let block_number = oc.block_number.clone();
+            let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap().to_string();
+            (oc.chain_name.clone(), weth, number)
         },
         None => (String::from(""), String::from(""), String::from("")),
     };
