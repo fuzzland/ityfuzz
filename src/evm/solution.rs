@@ -78,7 +78,7 @@ struct CliArgs {
 
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
-    is_transfer: bool,
+    raw_code: String,
     is_deposit: bool,
     is_borrow: bool,
     borrow_idx: u32,
@@ -96,7 +96,6 @@ impl<T: SolutionTx> From<&T> for Tx {
     fn from(input: &T) -> Self {
         Self {
             is_borrow: input.is_borrow(),
-            is_transfer: input.is_transfer(),
             caller: input.caller(),
             contract: input.contract(),
             value: input.value(),
@@ -113,7 +112,7 @@ impl<T: SolutionTx> From<&T> for Tx {
 pub struct TemplateArgs {
     contract_name: String,
     is_onchain: bool,
-    need_swap: bool,
+    include_interface: bool,
     router: String,
     weth: String,
     chain: String,
@@ -138,46 +137,15 @@ impl TemplateArgs {
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
         let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
-        let (mut borrow_idx, mut liq_idx) = (0, 0);
-        for tx in trace.iter_mut() {
-            // Borrow index
-            if tx.is_borrow {
-                tx.borrow_idx = borrow_idx;
-                borrow_idx += 1;
-                // deposit weth
-                if tx.contract == cli_args.weth {
-                    tx.is_deposit = true;
-                }
-            }
-            // Liq index
-            if tx.liq_percent > 0 {
-                tx.liq_idx = liq_idx;
-                liq_idx += 1;
-            }
-        }
-
-        // Router
-        let router = if let Some(chain) = Chain::from_str(&cli_args.chain) {
-            let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-            checksum(&r)
-        } else {
-            String::from("")
-        };
-
-        // Contract name
-        let contract_name = if cli_args.is_onchain {
-            format!("C{}", &cli_args.target[2..6])
-        } else {
-            let path = Path::new(&cli_args.target);
-            let dirname = path.parent().unwrap().file_name().unwrap().to_str().unwrap();
-            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
-            format!("{}{}", &name[..1].to_uppercase(), &name[1..])
-        };
+        setup_trace(&mut trace, &cli_args);
+        let router = get_router(&cli_args.chain);
+        let contract_name = make_contract_name(&cli_args);
+        let include_interface = trace.iter().any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
 
         Ok(Self {
             contract_name,
             is_onchain: cli_args.is_onchain,
-            need_swap: trace.iter().any(|x| x.is_borrow || x.liq_percent > 0),
+            include_interface,
             router,
             weth: cli_args.weth.clone(),
             chain: cli_args.chain.clone(),
@@ -190,4 +158,81 @@ impl TemplateArgs {
             output_dir: cli_args.output_dir.clone(),
         })
     }
+}
+
+fn setup_trace(trace: &mut Vec<Tx>, cli_args: &CliArgs) {
+    let (mut borrow_idx, mut liq_idx) = (0, 0);
+    for tx in trace.iter_mut() {
+        // Liquidation
+        if tx.liq_percent > 0 {
+            tx.liq_idx = liq_idx;
+            liq_idx += 1;
+        }
+
+        // Raw code
+        if let Some(code) = make_raw_code(tx) {
+            tx.raw_code = code;
+            continue;
+        }
+
+        // Borrow
+        if tx.is_borrow {
+            tx.borrow_idx = borrow_idx;
+            borrow_idx += 1;
+            // deposit weth
+            if tx.contract == cli_args.weth {
+                tx.is_deposit = true;
+            }
+        }
+
+        // ABI Call
+        if tx.value == "0" {
+            tx.value = "".to_string();
+        }
+    }
+}
+
+fn make_raw_code(tx: &Tx) -> Option<String> {
+    if tx.is_borrow || tx.is_deposit {
+        return None;
+    }
+
+    let code = match tx.fn_signature.as_str() {
+        "" => format!("IERC20({}).transfer({}, {});", tx.caller, tx.contract, tx.value),
+        "balanceOf(address)" => format!("IERC20({}).balanceOf({});", tx.contract, tx.fn_args),
+        "approve(address,uint256)" => format!("IERC20({}).approve({});", tx.contract, tx.fn_args),
+        "transfer(address,uint256)" => format!("IERC20({}).transfer({});", tx.contract, tx.fn_args),
+        "transferFrom(address,address,uint256)" => format!("IERC20({}).transferFrom({});", tx.contract, tx.fn_args),
+        "mint(address)" => format!("IERC20({}).mint({});", tx.contract, tx.fn_args),
+        "burn(address)" => format!("IERC20({}).burn({});", tx.contract, tx.fn_args),
+        "skim(address)" => format!("IERC20({}).skim({});", tx.contract, tx.fn_args),
+        "sync()" => format!("IERC20({}).sync();", tx.contract),
+        _ => "".to_string(),
+    };
+
+    if code.is_empty() {
+        None
+    } else {
+        Some(code)
+    }
+}
+
+fn get_router(chain: &String) -> String {
+    if let Some(chain) = Chain::from_str(chain) {
+        let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
+        checksum(&r)
+    } else {
+        String::from("")
+    }
+}
+
+fn make_contract_name(cli_args: &CliArgs) -> String {
+    if cli_args.is_onchain {
+        return format!("C{}", &cli_args.target[2..6])
+    }
+
+    let path = Path::new(&cli_args.target);
+    let dirname = path.parent().unwrap().file_name().unwrap().to_str().unwrap();
+    let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+    format!("{}{}", &name[..1].to_uppercase(), &name[1..])
 }

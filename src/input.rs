@@ -124,9 +124,6 @@ pub trait SolutionTx {
     fn value(&self) -> String {
         String::from("")
     }
-    fn is_transfer(&self) -> bool {
-        false
-    }
     fn is_borrow(&self) -> bool {
         false
     }

@@ -312,36 +312,12 @@ impl ConciseEVMInput {
 }
 
 impl SolutionTx for ConciseEVMInput {
-    #[cfg(not(feature = "debug"))]
-    fn is_transfer(&self) -> bool {
-        match self.data {
-            Some(ref d) => d.get_func_name() == "transfer",
-            #[cfg(feature = "flashloan_v2")]
-            None => !self.is_borrow(),
-            #[cfg(not(feature = "flashloan_v2"))]
-            None => true,
-        }
-    }
-
-    #[cfg(feature = "flashloan_v2")]
-    fn is_borrow(&self) -> bool {
-        self.input_type == EVMInputTy::Borrow
-    }
-
     fn caller(&self) -> String {
         checksum(&self.caller)
     }
 
     fn contract(&self) -> String {
         checksum(&self.contract)
-    }
-
-    fn value(&self) -> String {
-        let val = self.txn_value.unwrap_or(EVMU256::ZERO);
-        if !self.is_transfer() && val == EVMU256::ZERO {
-            return "".to_string();
-        }
-        val.to_string()
     }
 
     #[cfg(not(feature = "debug"))]
@@ -372,6 +348,15 @@ impl SolutionTx for ConciseEVMInput {
             return "".to_string();
         }
         args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
+    }
+
+    fn value(&self) -> String {
+        self.txn_value.unwrap_or(EVMU256::ZERO).to_string()
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn is_borrow(&self) -> bool {
+        self.input_type == EVMInputTy::Borrow
     }
 
     #[cfg(feature = "flashloan_v2")]
