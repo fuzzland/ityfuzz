@@ -238,42 +238,45 @@ pub fn evm_fuzzer(
             instance_map.map.insert(addr.clone(), abi.clone());
         });
 
-    let (has_preset_match, matched_templates): (bool, Vec<ExploitTemplate>) = if config.preset_file_path.len() > 0 {
-        let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
-        let mut matched_templates = vec![];
-        for template in exploit_templates {
-            // to match, all function_sigs in the template
-            // must exists in all abi.function
-            let mut function_sigs = template.function_sigs.clone();
-            for (_addr, abis) in &artifacts.address_to_abi {
-                for abi in abis {
-                    for (idx, function_sig) in function_sigs.iter().enumerate() {
-                        if abi.function == function_sig.value {
-                            println!("matched: {:?}", function_sig);
-                            function_sigs.remove(idx);
-                            break;
+    #[cfg(feature = "use_presets")]
+    {
+        let (has_preset_match, matched_templates): (bool, Vec<ExploitTemplate>) = if config.preset_file_path.len() > 0 {
+            let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
+            let mut matched_templates = vec![];
+            for template in exploit_templates {
+                // to match, all function_sigs in the template
+                // must exists in all abi.function
+                let mut function_sigs = template.function_sigs.clone();
+                for (addr, abis) in &artifacts.address_to_abi {
+                    for abi in abis {
+                        for (idx, function_sig) in function_sigs.iter().enumerate() {
+                            if abi.function == function_sig.value {
+                                println!("matched: {:?}{:?} @ {:?}", abi.function_name, abi.abi, addr );
+                                function_sigs.remove(idx);
+                                break;
+                            }
                         }
                     }
-                }
-                if function_sigs.len() == 0 {
-                    matched_templates.push(template);
-                    break;
+                    if function_sigs.len() == 0 {
+                        matched_templates.push(template);
+                        break;
+                    }
                 }
             }
-        }
 
-        if matched_templates.len() > 0 {
-            (true, matched_templates)
-        }
-        else {
+            if matched_templates.len() > 0 {
+                (true, matched_templates)
+            }
+            else {
+                (false, vec![])
+            }
+        } else {
             (false, vec![])
-        }
-    } else {
-        (false, vec![])
-    };
+        };
+        println!("has_preset_match: {}", has_preset_match);
 
-    state.init_presets(has_preset_match, matched_templates.clone());
-
+        state.init_presets(has_preset_match, matched_templates.clone());
+    }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
         artifacts.address_to_name.clone(),
