@@ -245,7 +245,7 @@ impl BoxedABI {
         println!("set_func_with_signature: {}{}", fn_name, fn_args);
         self.function = function;
         unsafe {
-            FUNCTION_SIG.insert(function, format!("{}({})", fn_name, fn_args));
+            FUNCTION_SIG.insert(function, format!("{}{}", fn_name, fn_args));
         }
     }
 
