@@ -27,17 +27,18 @@ contract {{contract_name}} is Test {
     {{#if need_swap}}
         address router = {{router}};
         address weth = {{weth}};
-    {{/if}} {{#each trace}} {{#with this}} {{#if is_borrow}}
+    {{/if}} {{#each trace}} {{#with this}} {{#if is_borrow}} {{#if is_deposit}}
+        weth.call{value: {{value}}}(abi.encodeWithSignature("deposit()", {{value}}))
         address[] memory path{{borrow_idx}} = new address[](2);
         path{{borrow_idx}}[0] = weth;
         path{{borrow_idx}}[1] = {{contract}};
-        vm.prank(router);
+        vm.prank({{caller}});
         vm.deal(router, {{value}});
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp);
             {{#if liq_percent}}
-        vm.startPrank({{contract}});
+        vm.startPrank({{caller}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
         IERC20({{contract}}).approve(router, amount{{liq_idx}});
         address[] memory liq_path{{liq_idx}} = new address[](2);
@@ -49,7 +50,7 @@ contract {{contract_name}} is Test {
         );
         vm.stopPrank();
             {{/if}} {{else}} {{! ABI Call }}
-        vm.prank({{contract}}); {{#if is_transfer}}
+        vm.prank({{caller}}); {{#if is_transfer}}
         IERC20({{contract}}).transfer(address(this), {{value}}); {{else}} {{#if fn_signature}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
             "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
@@ -58,7 +59,7 @@ contract {{contract_name}} is Test {
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
         ));
             {{/if}} {{/if}} {{#if liq_percent}}
-        vm.startPrank({{contract}});
+        vm.startPrank({{caller}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
         IERC20({{contract}}).approve(router, amount{{liq_idx}});
         address[] memory liq_path{{liq_idx}} = new address[](2);

@@ -77,6 +77,7 @@ struct CliArgs {
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
     is_transfer: bool,
+    is_deposit: bool,
     is_borrow: bool,
     borrow_idx: u32,
     caller: String,
@@ -141,6 +142,10 @@ impl TemplateArgs {
             if tx.is_borrow {
                 tx.borrow_idx = borrow_idx;
                 borrow_idx += 1;
+                // deposit weth
+                if tx.contract == cli_args.weth {
+                    tx.is_deposit = true;
+                }
             }
             // Liq index
             if tx.liq_percent > 0 {
