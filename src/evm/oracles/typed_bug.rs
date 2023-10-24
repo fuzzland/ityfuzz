@@ -1,6 +1,5 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::{dummy_precondition, EVMBugResult};
-use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMStagedVMState, EVMU256, ProjectSourceMapTy};
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::oracle::{BugMetadata, Oracle, OracleCtx, Producer};
