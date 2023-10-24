@@ -71,6 +71,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub sha3_bypass: bool,
     pub base_path: String,
     pub echidna_oracle: bool,
+    pub invariant_oracle: bool,
     pub panic_on_bug: bool,
     pub spec_id: String,
     pub only_fuzz: HashSet<EVMAddress>,

@@ -1,19 +1,30 @@
-use std::{fs::{File, self}, time::SystemTime, sync::OnceLock};
+use std::{
+    fs::{self, File},
+    sync::OnceLock,
+    time::SystemTime,
+};
 
 use handlebars::Handlebars;
 use serde::Serialize;
 
+use super::{
+    uniswap::{self, UniswapProvider},
+    Chain, OnChainConfig,
+};
 use crate::input::SolutionTx;
-use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
-/// Cli args for generating a test command.
+/// Cli args.
 static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 
 /// Initialize CLI_ARGS.
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
-        Some(oc) => (oc.chain_name.clone(), oc.get_weth(&oc.chain_name), oc.block_number.clone()),
+        Some(oc) => (
+            oc.chain_name.clone(),
+            oc.get_weth(&oc.chain_name),
+            oc.block_number.clone(),
+        ),
         None => (String::from(""), String::from(""), String::from("")),
     };
 
@@ -31,7 +42,7 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
 
 /// Generate a foundry test file.
 pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
-    let trace: Vec<Tx> = inputs.iter().map(|x| Tx::from(x)).collect();
+    let trace: Vec<Tx> = inputs.iter().map(Tx::from).collect();
     if trace.is_empty() {
         println!("generate_test error: no trace found.");
         return;
@@ -43,11 +54,17 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     }
     let args = args.unwrap();
     if fs::create_dir_all(&args.output_dir).is_err() {
-        println!("generate_test error: failed to create output dir {:?}.", args.output_dir);
+        println!(
+            "generate_test error: failed to create output dir {:?}.",
+            args.output_dir
+        );
         return;
     }
     let mut handlebars = Handlebars::new();
-    if handlebars.register_template_file("foundry_test", TEMPLATE_PATH).is_err() {
+    if handlebars
+        .register_template_file("foundry_test", TEMPLATE_PATH)
+        .is_err()
+    {
         println!("generate_test error: failed to register template file.");
         return;
     }
@@ -57,12 +74,11 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         .unwrap()
         .as_secs();
     let path = format!("{}/{}.t.sol", args.output_dir, filename);
-    let mut output = File::create(&path).unwrap();
+    let mut output = File::create(path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
         println!("generate_test error: failed to render template: {:?}", e);
     }
 }
-
 
 #[derive(Debug, Clone)]
 struct CliArgs {

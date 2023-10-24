@@ -1054,7 +1054,7 @@ where
         data: &Vec<(EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> (Vec<Vec<u8>>) {
+    ) -> Vec<Vec<u8>> {
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state
@@ -1079,15 +1079,15 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::StaticCall,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
+                let code = self.host.code.get(address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
-                    vec![]
-                } else {
+                if is_call_success!(ret) {
                     interp.return_value().to_vec()
+                } else {
+                    vec![]
                 }
             })
             .collect::<Vec<Vec<u8>>>();
@@ -1129,7 +1129,7 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::Call,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
+                let code = self.host.code.get(address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
@@ -1179,6 +1179,7 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::evm::host::{FuzzHost, JMP_MAP};
     use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
