@@ -123,6 +123,8 @@ where
 
 pub trait HasPresets {
     fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>);
+    fn has_preset(&self) -> bool;
+    fn get_next_call(&mut self) -> Option<[u8; 4]>;
 }
 
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
@@ -830,5 +832,13 @@ where
         self.has_matched_preset = has_matched;
         self.immutable_matched_templates = templates.clone();
         self.matched_templates = templates;
+    }
+
+    fn has_preset(&self) -> bool {
+        self.has_matched_preset
+    }
+
+    fn get_next_call(&mut self) -> Option<[u8; 4]> {
+        todo!("")
     }
 }

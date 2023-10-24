@@ -15,7 +15,7 @@ use libafl_bolts::Named;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::evm::abi::ABIAddressToInstanceMap;
+use crate::evm::abi::{ABIAddressToInstanceMap, BoxedABI};
 #[cfg(feature = "flashloan_v2")]
 use crate::evm::input::EVMInputTy::Borrow;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
@@ -23,7 +23,7 @@ use crate::evm::vm::{Constraint, EVMStateT};
 use revm_interpreter::Interpreter;
 use std::fmt::Debug;
 
-use crate::state::HasItyState;
+use crate::state::{HasItyState, HasPresets, HasHashToAddress};
 
 /// [`AccessPattern`] records the access pattern of the input during execution. This helps
 /// to determine what is needed to be fuzzed. For instance, we don't need to mutate caller
@@ -220,7 +220,9 @@ where
         + HasMaxSize
         + HasItyState<Loc, Addr, VS, CI>
         + HasCaller<Addr>
-        + HasMetadata,
+        + HasMetadata
+        + HasPresets
+        + HasHashToAddress,
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + EVMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
@@ -240,6 +242,51 @@ where
             input.set_staged_state(concrete.1, concrete.0);
         }
 
+        // use exploit template
+        if state.has_preset() && state.rand_mut().below(100) < 50 {
+
+            // if flashloan_v2, we don't mutate if it's a borrow
+            #[cfg(feature = "flashloan_v2")]
+            {
+                if input.get_input_type() != Borrow {
+                    match state.get_next_call() {
+                        Some(func_sig) => {
+                            // find an address that has the function
+                            match state.get_hash_to_address().get(&func_sig) {
+                                Some(addresses) => {
+                                    // randomly select an address from a hashset
+                                    // TODO: review this. does hashset.iter() gives random?
+                                    let address = addresses.iter().next().unwrap().clone();
+
+                                    let address_to_abis_map = state
+                                        .metadata_map()
+                                        .get::<ABIAddressToInstanceMap>()
+                                        .expect("ABIAddressToInstanceMap not found");
+
+                                    match address_to_abis_map.map.get(&address) {
+                                        Some(abis) => {
+                                            if !abis.is_empty() {
+                                                // find the abi with the function
+                                                let new_abi = abis.iter().find(|abi| abi.function == func_sig).unwrap();
+                                                input.set_contract_and_abi(address, Some(new_abi.clone()));
+                                            }
+                                        }
+                                        None => {}
+                                    }
+                                }
+                                None => {}
+                            }
+                        },
+                        None => {}
+                    }
+                }
+            }
+
+            #[cfg(not(feature = "flashloan_v2"))]
+            {
+                todo!("set function")
+            }
+        }
         // determine whether we should conduct havoc
         // (a sequence of mutations in batch vs single mutation)
         // let mut amount_of_args = input.get_data_abi().map(|abi| abi.b.get_size()).unwrap_or(0) / 32 + 1;
