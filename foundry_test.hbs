@@ -38,12 +38,12 @@ contract {{contract_name}} is Test {
             {{#if liq_percent}}
         vm.startPrank({{contract}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
-        IERC20({{contract}}).approve(router, amount1);
+        IERC20({{contract}}).approve(router, amount{{liq_idx}});
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+            amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
         vm.stopPrank();
             {{/if}} {{else}} {{! ABI Call }}
@@ -58,12 +58,12 @@ contract {{contract_name}} is Test {
             {{/if}} {{/if}} {{#if liq_percent}}
         vm.startPrank({{contract}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
-        IERC20({{contract}}).approve(router, amount1);
+        IERC20({{contract}}).approve(router, amount{{liq_idx}});
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount1, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+            amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
         vm.stopPrank(); {{/if}} {{/if}}
     {{/with}}
