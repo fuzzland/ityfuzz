@@ -839,6 +839,29 @@ where
     }
 
     fn get_next_call(&mut self) -> Option<[u8; 4]> {
-        todo!("")
+        // we have n templates, each template has m calls
+        // we want to pop the first call from a random template
+        // we first pick a random template in case we have multiple templates matched
+
+        if self.matched_templates.len() == 0 {
+            self.matched_templates = self.immutable_matched_templates.clone();
+        }
+
+        // Will this happen?
+        if self.matched_templates.len() == 0 {
+            return None;
+        }
+
+        let template_idx = self.rand_generator.below(self.matched_templates.len() as u64);
+        let template = self.matched_templates.get_mut(template_idx as usize).unwrap();
+        let call = template.calls.pop();
+        if template.calls.len() == 0 {
+            self.matched_templates.remove(template_idx as usize);
+        }
+
+        match call {
+            Some(call) => Some(call.value),
+            None => None,
+        }
     }
 }

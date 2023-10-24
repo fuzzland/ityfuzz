@@ -251,6 +251,7 @@ where
                 if input.get_input_type() != Borrow {
                     match state.get_next_call() {
                         Some(func_sig) => {
+                            // println!("func_sig: {:?}", func_sig);
                             // find an address that has the function
                             match state.get_hash_to_address().get(&func_sig) {
                                 Some(addresses) => {
@@ -271,13 +272,19 @@ where
                                                 input.set_contract_and_abi(address, Some(new_abi.clone()));
                                             }
                                         }
-                                        None => {}
+                                        None => {
+                                            println!("cannot find address in ABIAddressToInstanceMap");
+                                        }
                                     }
                                 }
-                                None => {}
+                                None => {
+                                    println!("cannot find function in hash_to_address");
+                                }
                             }
                         },
-                        None => {}
+                        None => {
+                            println!("cannot find next call");
+                        }
                     }
                 }
             }

@@ -36,7 +36,7 @@ pub struct FunctionSig {
 pub struct ExploitTemplate {
     pub exploit_name: String,
     pub function_sigs: Vec<FunctionSig>,
-    // TODO: add transactions
+    pub calls: Vec<FunctionSig>,
 }
 
 impl ExploitTemplate {
