@@ -4,6 +4,8 @@ use crate::evm::types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMQueueExecu
 use crate::evm::vm::{EVMExecutor, EVMState};
 use crate::feedback::OracleFeedback;
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
+use crate::generic_vm::vm_state::VMStateT;
+use crate::input::VMInputT;
 use crate::minimizer::SequentialMinimizer;
 use crate::oracle::BugMetadata;
 use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
@@ -129,6 +131,12 @@ impl<E: libafl::executors::HasObservers>
                     if i == try_skip {
                         continue;
                     }
+
+                    // skip when there is no post execution but the tx is step
+                    if item.0.is_step() && !current_state.state.has_post_execution() {
+                        continue;
+                    }
+
                     let (mut tx, call_leak) = item.clone();
                     unsafe {
                         CALL_UNTIL = call_leak;
