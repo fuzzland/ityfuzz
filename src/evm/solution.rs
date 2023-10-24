@@ -1,10 +1,10 @@
-use std::{fs::{File, self}, time::SystemTime, sync::OnceLock, path::Path};
+use std::{fs::{File, self}, sync::OnceLock, path::Path, str::FromStr};
 
 use handlebars::Handlebars;
 use serde::Serialize;
 
 use crate::{input::SolutionTx, evm::types::checksum};
-use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}};
+use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}, types::EVMAddress};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
 /// Cli args for generating a test command.
@@ -13,7 +13,11 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 /// Initialize CLI_ARGS.
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
-        Some(oc) => (oc.chain_name.clone(), oc.get_weth(&oc.chain_name), oc.block_number.clone()),
+        Some(oc) => {
+            let weth_str = oc.get_weth(&oc.chain_name);
+            let weth = checksum(&EVMAddress::from_str(&weth_str).unwrap());
+            (oc.chain_name.clone(), weth, oc.block_number.clone())
+        },
         None => (String::from(""), String::from(""), String::from("")),
     };
 

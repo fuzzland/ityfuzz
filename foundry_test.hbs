@@ -32,6 +32,7 @@ contract {{contract_name}} is Test {
         path{{borrow_idx}}[0] = weth;
         path{{borrow_idx}}[1] = {{contract}};
         vm.prank(router);
+        vm.deal(router, {{value}});
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp);
@@ -42,6 +43,7 @@ contract {{contract_name}} is Test {
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
+        vm.deal(router, amount{{liq_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
@@ -62,6 +64,7 @@ contract {{contract_name}} is Test {
         address[] memory liq_path{{liq_idx}} = new address[](2);
         liq_path{{liq_idx}}[0] = {{contract}};
         liq_path{{liq_idx}}[1] = address(weth);
+        vm.deal(router, amount{{liq_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
