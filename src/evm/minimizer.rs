@@ -147,8 +147,6 @@ impl<E: libafl::executors::HasObservers>
                         executor.execute(&tx, state)
                     };
 
-                    println!("trial {} result: {:?}", i, res);
-
                     state.set_execution_result(res.clone());
                     let trial_is_solution = objective.reproduces(
                         state,

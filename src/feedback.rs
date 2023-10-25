@@ -1,3 +1,4 @@
+use crate::fuzzer::ORACLE_OUTPUT;
 /// Implements the feedback mechanism needed by ItyFuzz.
 /// Implements Oracle, Comparison, Dataflow feedbacks.
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
@@ -123,6 +124,8 @@ where
         input: &S::Input,
         bug_idx: &Vec<u64>,
     ) -> bool {
+
+        let initial_oracle_output = unsafe { ORACLE_OUTPUT.clone() };
         if state.get_execution_result().reverted {
             return false;
         }
@@ -133,6 +136,7 @@ where
         // cleanup producers by calling `notify_end` hooks
         macro_rules! before_exit {
             () => {
+                unsafe { ORACLE_OUTPUT = initial_oracle_output; }
                 self.producers.iter().for_each(|producer| {
                     producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
                 });
