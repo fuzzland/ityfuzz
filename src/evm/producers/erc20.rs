@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 pub struct ERC20Producer {
     // (caller, token) -> (pre_balance, post_balance)
-    pub balances: HashMap<(EVMAddress, EVMAddress), (EVMU256, EVMU256)>,
+    pub balances: HashMap<(EVMAddress, EVMAddress), EVMU256>,
     pub balance_of: Vec<u8>,
 }
 
@@ -65,19 +65,15 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
                 }
             ).flatten().collect::<Vec<(EVMAddress, Bytes)>>();
             let post_balance_res = ctx.call_post_batch(&query_balance_batch);
-            let pre_balance_res = ctx.call_pre_batch(&query_balance_batch);
 
             let mut idx = 0;
 
             for caller in &callers {
                 for token in &tokens {
                     let token = *token;
-                    let pre_balance = &pre_balance_res[idx];
                     let post_balance = &post_balance_res[idx];
-                    let prev_balance = EVMU256::try_from_be_slice(pre_balance.as_slice()).unwrap_or(EVMU256::ZERO);
                     let new_balance = EVMU256::try_from_be_slice(post_balance.as_slice()).unwrap_or(EVMU256::ZERO);
-
-                    self.balances.insert((*caller, token), (prev_balance, new_balance));
+                    self.balances.insert((*caller, token), new_balance);
                     idx += 1;
                 }
             }

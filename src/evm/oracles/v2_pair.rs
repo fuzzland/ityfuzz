@@ -1,7 +1,6 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::EVMBugResult;
 use crate::evm::oracles::V2_PAIR_BUG_IDX;
-use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
@@ -14,12 +13,11 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 pub struct PairBalanceOracle {
-    pub pair_producer: Rc<RefCell<PairProducer>>,
 }
 
 impl PairBalanceOracle {
-    pub fn new(pair_producer: Rc<RefCell<PairProducer>>) -> Self {
-        Self { pair_producer }
+    pub fn new() -> Self {
+        Self {  }
     }
 }
 
