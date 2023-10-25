@@ -39,7 +39,6 @@ use onchain::flashloan::DummyPriceOracle;
 use oracles::erc20::IERC20OracleFlashloan;
 use oracles::v2_pair::PairBalanceOracle;
 use producers::erc20::ERC20Producer;
-use producers::pair::PairProducer;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -332,11 +331,10 @@ pub fn evm_main(args: EvmArgs) {
             .map(|s| s.to_string())
             .collect();
     }
-    let pair_producer = Rc::new(RefCell::new(PairProducer::new()));
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
     let flashloan_oracle = Rc::new(RefCell::new({
-        IERC20OracleFlashloan::new(pair_producer.clone(), erc20_producer.clone())
+        IERC20OracleFlashloan::new(erc20_producer.clone())
     }));
 
     // let harness_code = "oracle_harness()";
@@ -391,17 +389,11 @@ pub fn evm_main(args: EvmArgs) {
     > = vec![];
 
     if args.pair_oracle {
-        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new(
-            pair_producer.clone(),
-        ))));
+        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));
     }
 
     if args.ierc20_oracle {
         oracles.push(flashloan_oracle.clone());
-    }
-
-    if args.ierc20_oracle || args.pair_oracle {
-        producers.push(pair_producer);
     }
 
     if args.ierc20_oracle {
