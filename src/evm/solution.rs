@@ -218,12 +218,17 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
 }
 
 fn get_router(chain: &String) -> String {
-    if let Some(chain) = Chain::from_str(chain) {
-        let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-        checksum(&r)
-    } else {
-        String::from("")
+    let chain = Chain::from_str(chain);
+    if chain.is_none() {
+        return EVMAddress::zero().to_string();
     }
+    let chain = chain.unwrap();
+    if chain != Chain::ETH && chain != Chain::BSC {
+        return EVMAddress::zero().to_string();
+    }
+
+    let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
+    checksum(&r)
 }
 
 fn make_contract_name(cli_args: &CliArgs) -> String {
