@@ -1107,7 +1107,7 @@ where
         state: &mut S,
     ) -> (Vec<(Vec<u8>, bool)>, VS) {
         unsafe {
-            IS_FAST_CALL = true;
+            // IS_FAST_CALL = true;
             self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
@@ -1136,10 +1136,8 @@ where
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
-                println!("{:?}", ctx);
-                println!("{}", hex::encode(by.clone()));
                 let ret = self.host.run_inspect(&mut interp, state);
-                println!("ret: {:?}", ret);
+                println!("ret: {:?} {} {}", ret,hex::encode(by.clone()), hex::encode(interp.return_data_buffer.clone()));
                 if is_call_success!(ret) {
                     (interp.return_value().to_vec(), true)
                 } else {
@@ -1149,7 +1147,7 @@ where
             .collect::<Vec<(Vec<u8>, bool)>>();
 
         unsafe {
-            IS_FAST_CALL = false;
+            // IS_FAST_CALL = false;
         }
         (res, unsafe {
             self.host
