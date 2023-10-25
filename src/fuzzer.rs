@@ -9,6 +9,7 @@ use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::{collections::hash_map::DefaultHasher, env};
+use tracing::info;
 
 use std::path::Path;
 use std::process::exit;
@@ -310,9 +311,9 @@ macro_rules! dump_file {
                 txn_text
             );
             if $print {
-                println!("============= New Corpus Item =============");
-                println!("{}", data);
-                println!("==========================================");
+                info!("============= New Corpus Item =============");
+                info!("{}", data);
+                info!("==========================================");
             }
 
             // write to file
@@ -585,14 +586,14 @@ where
                     .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
                     .join("\n");
 
-                println!("\n\n\n😊😊 Found violations! \n\n");
+                info!("\n\n\n😊😊 Found violations! \n\n");
                 let trace = state.get_execution_result().new_state.trace.clone();
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     txn_text
                 );
-                println!("{}", cur_report);
+                info!("{}", cur_report);
 
                 let concise_inputs = trace.get_concise_inputs(state);
                 solution::generate_test(cur_report.clone(), concise_inputs);

@@ -8,6 +8,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use tracing::info;
 
 use crate::{
     evm::contract_utils::{
@@ -107,7 +108,7 @@ pub fn evm_fuzzer(
     >,
     state: &mut EVMFuzzState,
 ) {
-    println!("\n\n ================ EVM Fuzzer Start ===================\n\n");
+    info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -115,7 +116,7 @@ pub fn evm_fuzzer(
         std::fs::create_dir(path).unwrap();
     }
 
-    let monitor = SimpleMonitor::new(|s| println!("{}", s));
+    let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let mut infant_scheduler = SortedDroppingScheduler::new();
     let mut scheduler = QueueScheduler::new();
@@ -513,7 +514,7 @@ pub fn evm_fuzzer(
                     if txn.len() < 4 {
                         continue;
                     }
-                    println!("============ Execution {} ===============", idx);
+                    info!("============ Execution {} ===============", idx);
 
                     // [is_step] [caller] [target] [input] [value]
                     let temp = txn.as_bytes();
@@ -529,24 +530,24 @@ pub fn evm_fuzzer(
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                         .unwrap();
 
-                    println!("============ Execution result {} =============", idx);
-                    println!(
+                    info!("============ Execution result {} =============", idx);
+                    info!(
                         "reverted: {:?}",
                         state.get_execution_result().clone().reverted
                     );
-                    println!("call trace:\n{}", printer.deref().borrow().get_trace());
-                    println!(
+                    info!("call trace:\n{}", printer.deref().borrow().get_trace());
+                    info!(
                         "output: {:?}",
                         hex::encode(state.get_execution_result().clone().output)
                     );
 
-                    // println!(
+                    // debug!(
                     //     "new_state: {:?}",
                     //     state.get_execution_result().clone().new_state.state
                     // );
 
                     vm_state = state.get_execution_result().new_state.clone();
-                    println!("================================================");
+                    info!("================================================");
                 }
             }
 

@@ -315,6 +315,7 @@ mod tests {
     use super::*;
     use crate::evm::onchain::endpoints::Chain;
     use std::str::FromStr;
+    use tracing::debug;
 
     macro_rules! wrap {
         ($x: expr) => {
@@ -355,7 +356,7 @@ mod tests {
             EVMU256::from(10000),
             EVMAddress::from_str("0x2300000000000000000000000000000000000000").unwrap(),
         );
-        println!(
+        debug!(
             "plan: {:?}",
             plan.unwrap()
                 .iter()

@@ -30,6 +30,8 @@ pub mod r#move;
 use crate::r#move::{move_main, MoveArgs};
 use clap::Parser;
 use clap::Subcommand;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 use evm::{evm_main, EvmArgs};
 
@@ -56,6 +58,17 @@ enum Commands {
 
 fn main() {
     init_sentry();
+
+    // initialize logger
+    let subscriber = FmtSubscriber::builder()
+        .compact()
+        .with_target(false)
+        .without_time()
+        .with_max_level(Level::TRACE)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("failed to initialize logger");
+
     let args = Cli::parse();
     match args.command {
         Commands::EVM(args) => {

@@ -30,6 +30,7 @@ use std::marker::PhantomData;
 use std::ops::{Add, Mul, Not, Sub};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
+use tracing::{debug, error};
 
 use crate::bv_from_u256;
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
@@ -162,7 +163,7 @@ impl<'a> Solving<'a> {
                 }
             }};
         }
-        // println!("generate_z3_bv: {:?}", bv);
+        // debug!("generate_z3_bv: {:?}", bv);
 
         macro_rules! comparisons2 {
             ($lhs:expr, $rhs:expr, $op:ident) => {{
@@ -220,7 +221,7 @@ impl<'a> Solving<'a> {
             ConcolicOp::SLICEDINPUT(idx) => {
                 let idx = idx.as_limbs()[0] as u32;
                 let skv = self.slice_input(idx, idx + 32);
-                // println!("[concolic] SLICEDINPUT: {} {:?}", idx, skv);
+                // debug!("[concolic] SLICEDINPUT: {} {:?}", idx, skv);
                 Some(SymbolicTy::BV(skv))
             }
             ConcolicOp::BALANCE => Some(SymbolicTy::BV(self.balance.clone())),
@@ -274,7 +275,7 @@ impl<'a> Solving<'a> {
     pub fn solve(&mut self, optimistic: bool) -> Vec<Solution> {
         let context = self.context;
         let solver = Solver::new(context);
-        // println!("Constraints: {:?}", self.constraints);
+        // debug!("Constraints: {:?}", self.constraints);
         for (nth, cons) in self.constraints.iter().enumerate() {
             // only solve the last constraint
             if optimistic && nth != self.constraints.len() - 1 {
@@ -289,7 +290,7 @@ impl<'a> Solving<'a> {
                         bv
                     } else {
                         #[cfg(feature = "z3_debug")]
-                        println!("Failed to generate Z3 BV for {:?}", $e);
+                        error!("Failed to generate Z3 BV for {:?}", $e);
                         continue;
                     }
                 };
@@ -316,19 +317,19 @@ impl<'a> Solving<'a> {
                     Some(SymbolicTy::Bool(bv)) => bv.not(),
                     _ => {
                         #[cfg(feature = "z3_debug")]
-                        println!("Failed to generate Z3 BV for {:?}", bv);
+                        error!("Failed to generate Z3 BV for {:?}", bv);
                         continue;
                     }
                 },
                 _ => {
                     #[cfg(feature = "z3_debug")]
-                    println!("Unsupported constraint: {:?}", cons);
+                    error!("Unsupported constraint: {:?}", cons);
                     continue;
                 }
             });
         }
 
-        // println!("Solver: {:?}", solver);
+        // debug!("Solver: {:?}", solver);
         let mut p = Params::new(context);
 
         if unsafe { CONCOLIC_TIMEOUT > 0 } {
@@ -341,7 +342,7 @@ impl<'a> Solving<'a> {
             z3::SatResult::Sat => {
                 let model = solver.get_model().unwrap();
                 #[cfg(feature = "z3_debug")]
-                println!("Model: {:?}", model);
+                debug!("Model: {:?}", model);
                 let input = self
                     .input
                     .iter()
@@ -475,7 +476,7 @@ impl SymbolicMemory {
             self.memory.resize(idx + 1, None);
         }
 
-        println!("insert_8: idx: {}, val: {:?}", idx, val);
+        debug!("insert_8: idx: {}, val: {:?}", idx, val);
         todo!("insert_8");
         // self.memory[idx] = Some(Box::new(Expr {
         //     lhs: Some(val.clone()),
@@ -629,7 +630,7 @@ impl<I, VS> ConcolicHost<I, VS> {
                 let by = self.symbolic_memory.get_slice(arg_offset, arg_len);
                 #[cfg(feature = "z3_debug")]
                 {
-                    println!("input_bytes = {} {}", arg_offset, arg_len);
+                    debug!("input_bytes = {} {}", arg_offset, arg_len);
                     by.iter().for_each(|b| {
                         b.pretty_print();
                     });
@@ -646,7 +647,7 @@ impl<I, VS> ConcolicHost<I, VS> {
 
     fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
         let res = vm_input.get_concolic();
-        // println!("[concolic] construct_input_from_abi: {:?}", res);
+        // debug!("[concolic] construct_input_from_abi: {:?}", res);
         res
     }
 
@@ -751,7 +752,7 @@ where
 
         macro_rules! concrete_eval {
             ($in_cnt: expr, $out_cnt: expr) => {{
-                // println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
+                // debug!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
                 for _ in 0..$in_cnt {
                     self.symbolic_stack.pop();
                 }
@@ -761,7 +762,7 @@ where
 
         macro_rules! concrete_eval_with_action {
             ($in_cnt: expr, $out_cnt: expr, $pp: ident) => {{
-                // println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
+                // debug!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
                 for _ in 0..$in_cnt {
                     self.symbolic_stack.pop();
                 }
@@ -782,9 +783,9 @@ where
         // TODO: Figure out the corresponding MiddlewareOp to add
         // We may need coverage map here to decide whether to add a new input to the
         // corpus or not.
-        // println!("[concolic] on_step @ {:x}: {:x}", interp.program_counter(), *interp.instruction_pointer);
-        // println!("[concolic] stack: {:?}", interp.stack.len());
-        // println!("[concolic] symbolic_stack: {:?}", self.symbolic_stack.len());
+        // debug!("[concolic] on_step @ {:x}: {:x}", interp.program_counter(), *interp.instruction_pointer);
+        // debug!("[concolic] stack: {:?}", interp.stack.len());
+        // debug!("[concolic] symbolic_stack: {:?}", self.symbolic_stack.len());
 
         // let mut max_depth = 0;
         // let mut max_ref = None;
@@ -798,17 +799,17 @@ where
         //     }
         // }
         //
-        // println!("max_depth: {} for {:?}", max_depth, max_ref.map(|x| x.pretty_print_str()));
-        // println!("max_depth simpl: {:?} for {:?}", max_ref.map(|x| simplify(x.clone()).depth()), max_ref.map(|x| simplify(x.clone()).pretty_print_str()));
+        // debug!("max_depth: {} for {:?}", max_depth, max_ref.map(|x| x.pretty_print_str()));
+        // debug!("max_depth simpl: {:?} for {:?}", max_ref.map(|x| simplify(x.clone()).depth()), max_ref.map(|x| simplify(x.clone()).pretty_print_str()));
         #[cfg(feature = "z3_debug")]
         {
-            println!(
+            debug!(
                 "[concolic] on_step @ {:x}: {:x}",
                 interp.program_counter(),
                 *interp.instruction_pointer
             );
-            println!("[concolic] stack: {:?}", interp.stack);
-            println!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
+            debug!("[concolic] stack: {:?}", interp.stack);
+            debug!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
             for idx in 0..interp.stack.len() {
                 let real = interp.stack.data[idx].clone();
                 let sym = self.symbolic_stack[idx].clone();
@@ -1015,7 +1016,7 @@ where
             }
             // CALLER
             0x33 => {
-                // println!("CALLER @ pc : {:x}", interp.program_counter());
+                // debug!("CALLER @ pc : {:x}", interp.program_counter());
                 if !self.ctxs.is_empty() {
                     // use concrete caller when inside a call
                     vec![None]
@@ -1040,7 +1041,7 @@ where
                     let offset_usize = as_u64(offset) as usize;
                     #[cfg(feature = "z3_debug")]
                     {
-                        println!(
+                        debug!(
                             "CALLDATALOAD: {:?}",
                             self.get_input_slice_from_ctx(offset_usize, 32)
                         );
@@ -1135,7 +1136,7 @@ where
             }
             // MLOAD
             0x51 => {
-                // println!("[concolic] MLOAD: {:?}", self.symbolic_stack);
+                // debug!("[concolic] MLOAD: {:?}", self.symbolic_stack);
                 let offset = fast_peek!(0);
                 self.symbolic_stack.pop();
                 vec![self.symbolic_memory.get_256(offset)]
@@ -1182,8 +1183,8 @@ where
             }
             // JUMPI
             0x57 => {
-                // println!("{:?}", interp.stack);
-                // println!("{:?}", self.symbolic_stack);
+                // debug!("{:?}", interp.stack);
+                // debug!("{:?}", self.symbolic_stack);
                 // jump dest in concolic solving mode is the opposite of the concrete
                 let br = is_zero(fast_peek!(1));
 
@@ -1197,10 +1198,10 @@ where
                 let mut need_solve = true;
                 let pc = interp.program_counter();
                 let address = interp.contract.address;
-                // println!("[concolic] address: {:?} pc: {:x}", address, pc);
-                // println!("input: {:?}", self.input_bytes);
+                // debug!("[concolic] address: {:?} pc: {:x}", address, pc);
+                // debug!("input: {:?}", self.input_bytes);
                 if let Some(Some(srcmap)) = self.source_map.get(&address) {
-                    // println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                    // debug!("source line: {:?}", srcmap.get(&pc).unwrap());
                     let source_map_loc = if srcmap.get(&pc).is_some() {
                         srcmap.get(&pc).unwrap()
                     } else {
@@ -1218,7 +1219,7 @@ where
                         }
                     } else {
                         // FIXME: This might not hold true for all cases
-                        println!("[concolic] skip solve for None file");
+                        debug!("[concolic] skip solve for None file");
                         need_solve = false;
                     }
                 } else {
@@ -1235,7 +1236,7 @@ where
                 };
 
                 if need_solve {
-                    // println!("[concolic] still need to solve");
+                    // debug!("[concolic] still need to solve");
                     if !real_path_constraint.is_concrete() {
                         let intended_path_constraint = real_path_constraint.clone().lnot();
                         let constraint_hash = intended_path_constraint.pretty_print_str();
@@ -1246,7 +1247,7 @@ where
                             .contains(&constraint_hash)
                         {
                             #[cfg(feature = "z3_debug")]
-                            println!(
+                            debug!(
                                 "[concolic] to solve {:?}",
                                 intended_path_constraint.pretty_print_str()
                             );
@@ -1254,7 +1255,7 @@ where
 
                             solutions.extend(self.solve());
                             #[cfg(feature = "z3_debug")]
-                            println!("[concolic] Solutions: {:?}", solutions);
+                            debug!("[concolic] Solutions: {:?}", solutions);
                             self.constraints.pop();
 
                             ALREADY_SOLVED
@@ -1366,7 +1367,7 @@ where
                 vec![]
             }
         };
-        // println!("[concolic] adding bv to stack {:?}", bv);
+        // debug!("[concolic] adding bv to stack {:?}", bv);
         for v in bv {
             if v.is_some() && v.as_ref().unwrap().is_concrete() {
                 self.symbolic_stack.push(None);

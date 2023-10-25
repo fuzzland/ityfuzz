@@ -24,6 +24,7 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
+use tracing::{debug, info};
 
 pub struct ConcolicStage<OT> {
     pub enabled: bool,
@@ -101,7 +102,7 @@ where
             .clone();
 
         for idx in &meta.interesting_idx {
-            println!("Running concolic execution on testcase #{}", idx);
+            debug!("Running concolic execution on testcase #{}", idx);
 
             let testcase = state
                 .corpus()
@@ -141,7 +142,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                println!(
+                info!(
                     "We have a solution from concolic execution: {}",
                     solution.to_string()
                 );
@@ -168,7 +169,7 @@ where
                         }
                     }
                 }
-                // println!("new testcase: {:?}", new_testcase);
+                // debug!("new testcase: {:?}", new_testcase);
                 testcases.push(new_testcase);
             }
 

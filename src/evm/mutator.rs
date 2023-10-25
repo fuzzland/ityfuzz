@@ -116,8 +116,8 @@ where
     }
 
     fn ensures_constraint<I, S>(
-        input: &mut I, 
-        state: &mut S, 
+        input: &mut I,
+        state: &mut S,
         new_vm_state: &VS,
         constraints: Vec<Constraint>
     ) -> bool
@@ -189,7 +189,7 @@ where
                 Constraint::MustStepNow => {
                     input.set_step(true);
                     // todo(@shou): move args into
-                    // println!("vm state: {:?}", input.get_state());
+                    // debug!("vm state: {:?}", input.get_state());
                     input.set_as_post_exec(new_vm_state.get_post_execution_needed_len());
                     input.mutate(state);
                 }
@@ -266,14 +266,14 @@ where
                     if !state.has_caller(&input.get_caller()) {
                         input.set_caller(state.get_rand_caller());
                     }
-    
+
                     if Self::ensures_constraint(input, state, &new_state.state, new_state.state.get_constraints()) {
                         mutated = true;
                         input.set_staged_state(new_state, idx);
                     }
                 }
             }
-    
+
             if input.get_staged_state().state.has_post_execution()
                     && !input.is_step()
                     && state.rand_mut().below(100) < 60_u64
@@ -307,7 +307,7 @@ where
             }
         }
 
-        
+
 
         // mutate the input once
         let mut mutator = || -> MutationResult {
@@ -349,7 +349,7 @@ where
                     // mutate the bytes
                     _ => input.mutate(state),
                 };
-            }            
+            }
 
             // mutate the bytes or VM state or liquidation percent (percentage of token to liquidate)
             // by default

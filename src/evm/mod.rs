@@ -614,7 +614,7 @@ pub fn evm_main(args: EvmArgs) {
     //                 df_fuzzer(&String::from(args.target), args.target_contract);
     //             }
     //             _ => {
-    //                 println!("Fuzzer type not supported");
+    //                 info!("Fuzzer type not supported");
     //             }
     //         }
     //     },
