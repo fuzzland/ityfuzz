@@ -1,17 +1,19 @@
 use std::{
     fs::{self, File},
+    path::Path,
+    str::FromStr,
     sync::OnceLock,
-    time::SystemTime,
 };
 
 use handlebars::Handlebars;
 use serde::Serialize;
 
 use super::{
+    types::{EVMAddress, EVMU256},
     uniswap::{self, UniswapProvider},
     Chain, OnChainConfig,
 };
-use crate::input::SolutionTx;
+use crate::{evm::types::checksum, input::SolutionTx};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
 /// Cli args.
@@ -20,11 +22,15 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 /// Initialize CLI_ARGS.
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
-        Some(oc) => (
-            oc.chain_name.clone(),
-            oc.get_weth(&oc.chain_name),
-            oc.block_number.clone(),
-        ),
+        Some(oc) => {
+            let weth_str = oc.get_weth(&oc.chain_name);
+            let weth = checksum(&EVMAddress::from_str(&weth_str).unwrap());
+            let block_number = oc.block_number.clone();
+            let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
+                .unwrap()
+                .to_string();
+            (oc.chain_name.clone(), weth, number)
+        }
         None => (String::from(""), String::from(""), String::from("")),
     };
 
@@ -69,12 +75,8 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         return;
     }
 
-    let filename = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let path = format!("{}/{}.t.sol", args.output_dir, filename);
-    let mut output = File::create(path).unwrap();
+    let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
+    let mut output = File::create(&path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
         println!("generate_test error: failed to render template: {:?}", e);
     }
@@ -92,16 +94,18 @@ struct CliArgs {
 
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
+    raw_code: String,
+    is_deposit: bool,
     is_borrow: bool,
     borrow_idx: u32,
-    router: String,
-    weth: String,
     caller: String,
     contract: String,
     value: String,
+    fn_signature: String,
     fn_selector: String,
     fn_args: String,
     liq_percent: u8,
+    liq_idx: u32,
 }
 
 impl<T: SolutionTx> From<&T> for Tx {
@@ -111,6 +115,7 @@ impl<T: SolutionTx> From<&T> for Tx {
             caller: input.caller(),
             contract: input.contract(),
             value: input.value(),
+            fn_signature: input.fn_signature(),
             fn_selector: input.fn_selector(),
             fn_args: input.fn_args(),
             liq_percent: input.liq_percent(),
@@ -121,7 +126,11 @@ impl<T: SolutionTx> From<&T> for Tx {
 
 #[derive(Debug, Serialize, Default)]
 pub struct TemplateArgs {
+    contract_name: String,
     is_onchain: bool,
+    include_interface: bool,
+    router: String,
+    weth: String,
     chain: String,
     target: String,
     block_number: String,
@@ -133,35 +142,33 @@ pub struct TemplateArgs {
 }
 
 impl TemplateArgs {
-    pub fn new(solution: String, mut trace: Vec<Tx>) -> Result<Self, String> {
+    pub fn new(solution: String, trace: Vec<Tx>) -> Result<Self, String> {
         let cli_args = CLI_ARGS.get();
         if cli_args.is_none() {
             return Err(String::from("CLI_ARGS is not initialized."));
         }
         let cli_args = cli_args.unwrap();
 
-        let mut stepping_with_return = false;
-        if trace.last().unwrap().fn_selector == "0x00000000" {
-            trace.pop();
-            stepping_with_return = true;
-        }
+        // Stepping with return
+        let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
+        let mut trace: Vec<Tx> = trace
+            .into_iter()
+            .filter(|tx| tx.fn_selector != "0x00000000")
+            .collect();
 
-        if let Some(chain) = Chain::from_str(&cli_args.chain) {
-            let router = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-            let router = format!("0x{}", hex::encode(router));
-            let mut borrow_idx = 0;
-            for tx in trace.iter_mut() {
-                if tx.is_borrow {
-                    tx.router = router.clone();
-                    tx.weth = cli_args.weth.clone();
-                    tx.borrow_idx = borrow_idx;
-                    borrow_idx += 1;
-                }
-            }
-        }
+        setup_trace(&mut trace, &cli_args);
+        let router = get_router(&cli_args.chain);
+        let contract_name = make_contract_name(&cli_args);
+        let include_interface = trace
+            .iter()
+            .any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
 
         Ok(Self {
+            contract_name,
             is_onchain: cli_args.is_onchain,
+            include_interface,
+            router,
+            weth: cli_args.weth.clone(),
             chain: cli_args.chain.clone(),
             target: cli_args.target.clone(),
             block_number: cli_args.block_number.clone(),
@@ -172,4 +179,95 @@ impl TemplateArgs {
             output_dir: cli_args.output_dir.clone(),
         })
     }
+}
+
+fn setup_trace(trace: &mut Vec<Tx>, cli_args: &CliArgs) {
+    let (mut borrow_idx, mut liq_idx) = (0, 0);
+    for tx in trace.iter_mut() {
+        // Liquidation
+        if tx.liq_percent > 0 {
+            tx.liq_idx = liq_idx;
+            liq_idx += 1;
+        }
+
+        // Raw code
+        if let Some(code) = make_raw_code(tx) {
+            tx.raw_code = code;
+            continue;
+        }
+
+        // Borrow
+        if tx.is_borrow {
+            tx.borrow_idx = borrow_idx;
+            borrow_idx += 1;
+            // deposit weth
+            if tx.contract == cli_args.weth {
+                tx.is_deposit = true;
+            }
+        }
+
+        // ABI Call
+        if tx.value == "0" {
+            tx.value = "".to_string();
+        }
+    }
+}
+
+fn make_raw_code(tx: &Tx) -> Option<String> {
+    if tx.is_borrow || tx.is_deposit {
+        return None;
+    }
+
+    let code = match tx.fn_signature.as_str() {
+        "" => format!(
+            "IERC20({}).transfer({}, {});",
+            tx.caller, tx.contract, tx.value
+        ),
+        "balanceOf(address)" => format!("IERC20({}).balanceOf({});", tx.contract, tx.fn_args),
+        "approve(address,uint256)" => format!("IERC20({}).approve({});", tx.contract, tx.fn_args),
+        "transfer(address,uint256)" => format!("IERC20({}).transfer({});", tx.contract, tx.fn_args),
+        "transferFrom(address,address,uint256)" => {
+            format!("IERC20({}).transferFrom({});", tx.contract, tx.fn_args)
+        }
+        "mint(address)" => format!("IERC20({}).mint({});", tx.contract, tx.fn_args),
+        "burn(address)" => format!("IERC20({}).burn({});", tx.contract, tx.fn_args),
+        "skim(address)" => format!("IERC20({}).skim({});", tx.contract, tx.fn_args),
+        "sync()" => format!("IERC20({}).sync();", tx.contract),
+        _ => "".to_string(),
+    };
+
+    if code.is_empty() {
+        None
+    } else {
+        Some(code)
+    }
+}
+
+fn get_router(chain: &String) -> String {
+    if let Some(chain) = Chain::from_str(chain) {
+        let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
+        checksum(&r)
+    } else {
+        String::from("")
+    }
+}
+
+fn make_contract_name(cli_args: &CliArgs) -> String {
+    if cli_args.is_onchain {
+        return format!("C{}", &cli_args.target[2..6]);
+    }
+
+    let path = Path::new(&cli_args.target);
+    let dirname = path
+        .parent()
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let name: String = dirname
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    format!("{}{}", &name[..1].to_uppercase(), &name[1..])
 }

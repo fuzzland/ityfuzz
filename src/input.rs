@@ -112,6 +112,9 @@ pub trait SolutionTx {
     fn contract(&self) -> String {
         String::from("")
     }
+    fn fn_signature(&self) -> String {
+        String::from("")
+    }
     fn fn_selector(&self) -> String {
         String::from("")
     }

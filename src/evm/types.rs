@@ -12,6 +12,7 @@ use crate::scheduler::SortedDroppingScheduler;
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
+use crypto::{sha3::Sha3, digest::Digest};
 use libafl::prelude::HasRand;
 use libafl::schedulers::QueueScheduler;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
@@ -123,6 +124,34 @@ pub fn bytes_to_u64(v: &[u8]) -> u64 {
     let mut data: [u8; 8] = [0; 8];
     data.copy_from_slice(v);
     u64::from_be_bytes(data)
+}
+
+/// EVMAddress to checksum address
+pub fn checksum(address: &EVMAddress) -> String {
+    let address = hex::encode(address);
+
+    let address_hash = {
+        let mut hasher = Sha3::keccak256();
+        hasher.input(address.as_bytes());
+        hasher.result_str()
+    };
+
+    address
+        .char_indices()
+        .fold(String::from("0x"), |mut acc, (index, address_char)| {
+            // this cannot fail since it's Keccak256 hashed
+            let n = u16::from_str_radix(&address_hash[index..index + 1], 16).unwrap();
+
+            if n > 7 {
+                // make char uppercase if ith character is 9..f
+                acc.push_str(&address_char.to_uppercase().to_string())
+            } else {
+                // already lowercased
+                acc.push(address_char)
+            }
+
+            acc
+        })
 }
 
 #[cfg(test)]
