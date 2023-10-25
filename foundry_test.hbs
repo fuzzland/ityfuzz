@@ -44,7 +44,7 @@ contract {{contract_name}} is Test {
             "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
         )); {{else}}{{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector({{! Call with selector }}
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
-        ));{{/if}}{{/if}}{{/if}}{{#if liq_percent}}{{! Liquidation }}
+        ));{{/if}}{{/if}}{{/if}}{{/if}}{{#if liq_percent}}{{! Liquidation }}
         vm.startPrank({{caller}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
         IERC20({{contract}}).approve(router, amount{{liq_idx}});
@@ -55,7 +55,7 @@ contract {{contract_name}} is Test {
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
-        vm.stopPrank();{{/if}}{{/if}}{{/with}}{{/each}}
+        vm.stopPrank();{{/if}}{{/with}}{{/each}}
     }
 
 {{#if stepping_with_return}}
