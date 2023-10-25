@@ -240,8 +240,8 @@ pub fn evm_fuzzer(
 
     #[cfg(feature = "use_presets")]
     {
-        let (has_preset_match, matched_templates, hash_to_addr_abi_map): (bool, Vec<ExploitTemplate>, HashMap<[u8; 4], (EVMAddress, BoxedABI)>) = if config.preset_file_path.len() > 0 {
-            let mut hash_to_addr_abi_map = HashMap::new();
+        let (has_preset_match, matched_templates, sig_to_addr_abi_map): (bool, Vec<ExploitTemplate>, HashMap<[u8; 4], (EVMAddress, BoxedABI)>) = if config.preset_file_path.len() > 0 {
+            let mut sig_to_addr_abi_map = HashMap::new();
             let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
             let mut matched_templates = vec![];
             for template in exploit_templates {
@@ -253,7 +253,7 @@ pub fn evm_fuzzer(
                         for (idx, function_sig) in function_sigs.iter().enumerate() {
                             if abi.function == function_sig.value {
                                 println!("matched: {:?} @ {:?}", abi.function, addr);
-                                hash_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
+                                sig_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
                                 function_sigs.remove(idx);
                                 break;
                             }
@@ -267,7 +267,7 @@ pub fn evm_fuzzer(
             }
 
             if matched_templates.len() > 0 {
-                (true, matched_templates, hash_to_addr_abi_map)
+                (true, matched_templates, sig_to_addr_abi_map)
             }
             else {
                 (false, vec![], HashMap::new())
@@ -277,7 +277,7 @@ pub fn evm_fuzzer(
         };
         println!("has_preset_match: {} {}", has_preset_match, matched_templates.len());
 
-        state.init_presets(has_preset_match, matched_templates.clone());
+        state.init_presets(has_preset_match, matched_templates.clone(), sig_to_addr_abi_map);
     }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),

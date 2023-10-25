@@ -11,7 +11,7 @@ use libafl::prelude::{HasMetadata, Scheduler, UsesInput, HasTestcase, CorpusId};
 use libafl_bolts::{current_nanos, bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand}};
 use std::borrow::BorrowMut;
 use std::cell::{Ref, RefMut};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -123,7 +123,7 @@ where
 }
 
 pub trait HasPresets {
-    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>);
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>);
     fn has_preset(&self) -> bool;
     fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)>;
 }
@@ -196,7 +196,7 @@ where
 
     pub interesting_signatures: Vec<[u8; 4]>,
 
-    pub hash_to_addr_abi_map: std::collections::HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
+    pub sig_to_addr_abi_map: std::collections::HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -271,7 +271,7 @@ where
             last_report_time: None,
             phantom: Default::default(),
             interesting_signatures: Vec::new(),
-            hash_to_addr_abi_map: Default::default(),
+            sig_to_addr_abi_map: Default::default(),
         }
     }
 
@@ -826,12 +826,13 @@ where
     Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>) {
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>) {
         for template in templates {
             for sig in template.calls {
                 self.interesting_signatures.push(sig.value);
             }
         }
+        self.sig_to_addr_abi_map = sig_to_addr_abi_map;
     }
 
     fn has_preset(&self) -> bool {
@@ -846,8 +847,14 @@ where
         let sig = self.interesting_signatures[self.rand_generator.below(self.interesting_signatures.len() as u64) as usize];
 
         // find the abi
-        let (addr, abi) = self.hash_to_addr_abi_map.get(&sig).unwrap();
-
-        Some((addr.clone(), abi.clone()))
+        match self.sig_to_addr_abi_map.get(&sig) {
+            Some((addr, abi)) => {
+                return Some((addr.clone(), abi.clone()))
+            },
+            None => {
+                println!("No abi found for sig: {:?}", sig);
+                return None;
+            }
+        };
     }
 }
