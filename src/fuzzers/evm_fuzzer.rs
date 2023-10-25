@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::{
-    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle},
+    evm::contract_utils::{FIX_DEPLOYER, parse_buildjob_result_sourcemap, save_builder_source_code}, evm::host::FuzzHost, evm::{vm::EVMExecutor, contract_utils::{modify_concolic_skip, copy_local_source_code}, types::ProjectSourceMapTy, middlewares::reentrancy::ReentrancyTracer, oracle, oracles::reentrancy::ReentrancyOracle, abi::BoxedABI},
     executor::FuzzExecutor, fuzzer::ItyFuzzer,
 };
 use itertools::Itertools;
@@ -240,18 +240,20 @@ pub fn evm_fuzzer(
 
     #[cfg(feature = "use_presets")]
     {
-        let (has_preset_match, matched_templates): (bool, Vec<ExploitTemplate>) = if config.preset_file_path.len() > 0 {
+        let (has_preset_match, matched_templates, hash_to_addr_abi_map): (bool, Vec<ExploitTemplate>, HashMap<[u8; 4], (EVMAddress, BoxedABI)>) = if config.preset_file_path.len() > 0 {
+            let mut hash_to_addr_abi_map = HashMap::new();
             let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
             let mut matched_templates = vec![];
             for template in exploit_templates {
                 // to match, all function_sigs in the template
                 // must exists in all abi.function
                 let mut function_sigs = template.function_sigs.clone();
-                for (addr, abis) in &artifacts.address_to_abi {
+                for (addr, abis) in &artifacts.address_to_abi_object {
                     for abi in abis {
                         for (idx, function_sig) in function_sigs.iter().enumerate() {
                             if abi.function == function_sig.value {
-                                println!("matched: {:?}{:?} @ {:?}", abi.function_name, abi.abi, addr );
+                                println!("matched: {:?} @ {:?}", abi.function, addr);
+                                hash_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
                                 function_sigs.remove(idx);
                                 break;
                             }
@@ -265,13 +267,13 @@ pub fn evm_fuzzer(
             }
 
             if matched_templates.len() > 0 {
-                (true, matched_templates)
+                (true, matched_templates, hash_to_addr_abi_map)
             }
             else {
-                (false, vec![])
+                (false, vec![], HashMap::new())
             }
         } else {
-            (false, vec![])
+            (false, vec![], HashMap::new())
         };
         println!("has_preset_match: {} {}", has_preset_match, matched_templates.len());
 

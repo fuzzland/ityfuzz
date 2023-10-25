@@ -1,3 +1,4 @@
+use crate::evm::abi::BoxedABI;
 /// Implements LibAFL's State trait supporting our fuzzing logic.
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{ConciseSerde, VMInputT};
@@ -124,7 +125,7 @@ where
 pub trait HasPresets {
     fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>);
     fn has_preset(&self) -> bool;
-    fn get_next_call(&mut self) -> Option<[u8; 4]>;
+    fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)>;
 }
 
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
@@ -193,11 +194,9 @@ where
     /// This information is used by fuzzer `maybe_report_progress` and updated by event_manager.
     last_report_time: Option<Duration>,
 
-    pub has_matched_preset: bool,
+    pub interesting_signatures: Vec<[u8; 4]>,
 
-    pub immutable_matched_templates: Vec<ExploitTemplate>,
-
-    pub matched_templates: Vec<ExploitTemplate>,
+    pub hash_to_addr_abi_map: std::collections::HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -271,9 +270,8 @@ where
             hash_to_address: Default::default(),
             last_report_time: None,
             phantom: Default::default(),
-            has_matched_preset: false,
-            immutable_matched_templates: vec![],
-            matched_templates: vec![],
+            interesting_signatures: Vec::new(),
+            hash_to_addr_abi_map: Default::default(),
         }
     }
 
@@ -829,39 +827,27 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>) {
-        self.has_matched_preset = has_matched;
-        self.immutable_matched_templates = templates.clone();
-        self.matched_templates = templates;
+        for template in templates {
+            for sig in template.calls {
+                self.interesting_signatures.push(sig.value);
+            }
+        }
     }
 
     fn has_preset(&self) -> bool {
-        self.has_matched_preset
+        self.interesting_signatures.len() > 0
     }
 
-    fn get_next_call(&mut self) -> Option<[u8; 4]> {
-        // we have n templates, each template has m calls
-        // we want to pop the first call from a random template
-        // we first pick a random template in case we have multiple templates matched
-
-        if self.matched_templates.len() == 0 {
-            self.matched_templates = self.immutable_matched_templates.clone();
-        }
-
-        // Will this happen?
-        if self.matched_templates.len() == 0 {
+    fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)> {
+        if self.interesting_signatures.len() == 0 {
             return None;
         }
 
-        let template_idx = self.rand_generator.below(self.matched_templates.len() as u64);
-        let template = self.matched_templates.get_mut(template_idx as usize).unwrap();
-        let call = template.calls.pop();
-        if template.calls.len() == 0 {
-            self.matched_templates.remove(template_idx as usize);
-        }
+        let sig = self.interesting_signatures[self.rand_generator.below(self.interesting_signatures.len() as u64) as usize];
 
-        match call {
-            Some(call) => Some(call.value),
-            None => None,
-        }
+        // find the abi
+        let (addr, abi) = self.hash_to_addr_abi_map.get(&sig).unwrap();
+
+        Some((addr.clone(), abi.clone()))
     }
 }

@@ -250,48 +250,10 @@ where
             {
                 if input.get_input_type() != Borrow {
                     match state.get_next_call() {
-                        Some(func_sig) => {
-                            // println!("func_sig: {:?}", func_sig);
-                            // find an address that has the function
-                            match state.get_hash_to_address().get(&func_sig) {
-                                Some(addresses) => {
-                                    // randomly select an address from a hashset
-                                    // TODO: review this. does hashset.iter() gives random?
-                                    let address = addresses.iter().next().unwrap().clone();
-
-                                    let address_to_abis_map = state
-                                        .metadata_map()
-                                        .get::<ABIAddressToInstanceMap>()
-                                        .expect("ABIAddressToInstanceMap not found");
-
-                                    match address_to_abis_map.map.get(&address) {
-                                        Some(abis) => {
-                                            if !abis.is_empty() {
-                                                // find the abi with the function
-                                                match abis.iter().find(|abi| abi.function == func_sig) {
-                                                    Some(new_abi) => {
-                                                        input.set_contract_and_abi(address, Some(new_abi.clone()));
-                                                        input.mutate(state);
-                                                        return Ok(MutationResult::Mutated);
-                                                    }
-                                                    None => {
-                                                        // BUG? e.g. 0xad0da05b9c20fa541012ee2e89ac99a864cc68bb is uniswapv2pair
-                                                        //           matched: "getReserves()" @ 0xad0da05b9c20fa541012ee2e89ac99a864cc68bb
-                                                        //           but cannot be found
-                                                        // println!("cannot find abi with function");
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        None => {
-                                            // println!("cannot find address in ABIAddressToInstanceMap");
-                                        }
-                                    }
-                                }
-                                None => {
-                                    // println!("cannot find function in hash_to_address");
-                                }
-                            }
+                        Some((addr, abi)) => {
+                            input.set_contract_and_abi(addr, Some(abi));
+                            input.mutate(state);
+                            return Ok(MutationResult::Mutated);
                         },
                         None => {
                             // println!("cannot find next call");
