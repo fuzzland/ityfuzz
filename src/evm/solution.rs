@@ -14,8 +14,7 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
         Some(oc) => {
-            let weth_str = oc.get_weth(&oc.chain_name);
-            let weth = checksum(&EVMAddress::from_str(&weth_str).unwrap());
+            let weth = get_weth(&oc);
             let block_number = oc.block_number.clone();
             let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap().to_string();
             (oc.chain_name.clone(), weth, number)
@@ -252,4 +251,18 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
         },
         None => default_name,
     }
+}
+
+fn get_weth(oc: &OnChainConfig) -> String {
+    let chain = Chain::from_str(&oc.chain_name);
+    if chain.is_none() {
+        return EVMAddress::zero().to_string();
+    }
+    let chain = chain.unwrap();
+    if chain != Chain::ETH && chain != Chain::BSC {
+        return EVMAddress::zero().to_string();
+    }
+
+    let weth_str = oc.get_weth(&oc.chain_name);
+    checksum(&EVMAddress::from_str(&weth_str).unwrap())
 }
