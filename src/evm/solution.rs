@@ -1,4 +1,4 @@
-use std::{fs::{File, self}, sync::OnceLock, path::Path, str::FromStr};
+use std::{fs::{File, self}, sync::OnceLock, path::Path, str::FromStr, time::SystemTime};
 
 use handlebars::Handlebars;
 use serde::Serialize;
@@ -14,8 +14,7 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
         Some(oc) => {
-            let weth_str = oc.get_weth(&oc.chain_name);
-            let weth = checksum(&EVMAddress::from_str(&weth_str).unwrap());
+            let weth = get_weth(&oc);
             let block_number = oc.block_number.clone();
             let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap().to_string();
             (oc.chain_name.clone(), weth, number)
@@ -218,12 +217,17 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
 }
 
 fn get_router(chain: &String) -> String {
-    if let Some(chain) = Chain::from_str(chain) {
-        let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-        checksum(&r)
-    } else {
-        String::from("")
+    let chain = Chain::from_str(chain);
+    if chain.is_none() {
+        return EVMAddress::zero().to_string();
     }
+    let chain = chain.unwrap();
+    if chain != Chain::ETH && chain != Chain::BSC {
+        return EVMAddress::zero().to_string();
+    }
+
+    let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
+    checksum(&r)
 }
 
 fn make_contract_name(cli_args: &CliArgs) -> String {
@@ -231,8 +235,34 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
         return format!("C{}", &cli_args.target[2..6])
     }
 
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    let default_name = format!("C{}", now);
+
     let path = Path::new(&cli_args.target);
-    let dirname = path.parent().unwrap().file_name().unwrap().to_str().unwrap();
-    let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
-    format!("{}{}", &name[..1].to_uppercase(), &name[1..])
+    match path.parent() {
+        Some(parent) => {
+            let dirname = parent.file_name().unwrap().to_str().unwrap();
+            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+            if name.is_empty() {
+                default_name
+            } else {
+                format!("{}{}", &name[..1].to_uppercase(), &name[1..])
+            }
+        },
+        None => default_name,
+    }
+}
+
+fn get_weth(oc: &OnChainConfig) -> String {
+    let chain = Chain::from_str(&oc.chain_name);
+    if chain.is_none() {
+        return EVMAddress::zero().to_string();
+    }
+    let chain = chain.unwrap();
+    if chain != Chain::ETH && chain != Chain::BSC {
+        return EVMAddress::zero().to_string();
+    }
+
+    let weth_str = oc.get_weth(&oc.chain_name);
+    checksum(&EVMAddress::from_str(&weth_str).unwrap())
 }
