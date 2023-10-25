@@ -329,7 +329,20 @@ where
             }
 
             for abi in contract.abi.clone() {
-                self.add_abi(&abi, contract.deployed_address, &mut artifacts);
+                let name = abi.function_name;
+                if name.starts_with("echidna_") || name.starts_with("invariant_") {
+                    contract.should_add_corpus = false;
+                    println!("{} should not add corpus", contract.name);
+                    break;
+                }
+            }
+            for abi in contract.abi.clone() {
+                self.add_abi(
+                    &abi,
+                    contract.deployed_address,
+                    &mut artifacts,
+                    contract.should_add_corpus,
+                );
             }
         }
         artifacts.initial_state =
@@ -390,6 +403,7 @@ where
         abi: &ABIConfig,
         deployed_address: EVMAddress,
         artifacts: &mut EVMInitializationArtifacts,
+        should_add_to_corpus: bool,
     ) {
         if abi.is_constructor {
             return;
@@ -447,7 +461,9 @@ where
             randomness: vec![0],
             repeat: 1,
         };
-        add_input_to_corpus!(self.state, &mut self.scheduler, input.clone());
+        if should_add_to_corpus {
+            add_input_to_corpus!(self.state, &mut self.scheduler, input.clone());
+        }
         #[cfg(feature = "print_txn_corpus")]
         {
             let corpus_dir = format!("{}/corpus", self.work_dir.as_str());
@@ -459,7 +475,9 @@ where
             for p in presets {
                 let mut presets = p.presets(abi.function, &input, self.executor);
                 presets.iter().for_each(|preset| {
-                    add_input_to_corpus!(self.state, &mut self.scheduler, preset.clone());
+                    if should_add_to_corpus {
+                        add_input_to_corpus!(self.state, &mut self.scheduler, preset.clone());
+                    }
                 });
             }
         }

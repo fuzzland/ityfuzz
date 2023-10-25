@@ -62,6 +62,7 @@ pub struct ContractInfo {
     pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
     pub deployed_address: EVMAddress,
+    pub should_add_corpus: bool,
     pub source_map: Option<HashMap<usize, SourceMapLocation>>,
     pub build_artifact: Option<BuildJobResult>,
 }
@@ -233,6 +234,7 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
+            should_add_corpus: true,
             source_map: source_map_info.map(|info| {
                 info.get(contract_name.as_str())
                     .unwrap_or_else(|| {
@@ -467,6 +469,7 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
+                should_add_corpus: true,
                 source_map: None,
                 build_artifact,
             });
@@ -514,6 +517,7 @@ impl ContractLoader {
                 is_code_deployed: false,
                 constructor_args,
                 deployed_address: contract_info.address,
+                should_add_corpus: true,
                 source_map: None,
                 build_artifact: Some(BuildJobResult::new(
                     sources,

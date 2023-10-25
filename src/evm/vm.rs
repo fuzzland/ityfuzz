@@ -1104,7 +1104,7 @@ where
         data: &Vec<(EVMAddress, EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> (Vec<Vec<u8>>, VS) {
+    ) -> (Vec<(Vec<u8>, bool)>, VS) {
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state
@@ -1134,13 +1134,13 @@ where
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
-                    vec![]
+                if is_call_success!(ret) {
+                    (interp.return_value().to_vec(), true)
                 } else {
-                    interp.return_value().to_vec()
+                    (vec![], false)
                 }
             })
-            .collect::<Vec<Vec<u8>>>();
+            .collect::<Vec<(Vec<u8>, bool)>>();
 
         unsafe {
             IS_FAST_CALL_STATIC = false;

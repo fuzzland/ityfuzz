@@ -64,7 +64,7 @@ use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
-use crate::evm::mutator::{AccessPattern, FuzzMutator};
+use crate::evm::mutator::FuzzMutator;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
 use crate::evm::oracles::arb_call::ArbitraryCallOracle;
@@ -81,7 +81,7 @@ use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
 use primitive_types::{H160, U256};
-use revm_primitives::{BlockEnv, Bytecode, Env};
+use revm_primitives::Bytecode;
 
 pub fn evm_fuzzer(
     config: Config<
@@ -161,6 +161,33 @@ pub fn evm_fuzzer(
 
         #[cfg(feature = "flashloan_v2")]
         {
+            let onchain_middleware = match config.onchain.clone() {
+                Some(onchain) => {
+                    Some({
+                        let mid = Rc::new(RefCell::new(
+                            OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                                // scheduler can be cloned because it never uses &mut self
+                                onchain,
+                                config.onchain_storage_fetching.unwrap(),
+                            ),
+                        ));
+
+                        if let Some(builder) = config.builder.clone() {
+                            mid.borrow_mut().add_builder(builder);
+                        }
+
+                        fuzz_host.add_middlewares(mid.clone());
+                        mid
+                    })
+                }
+                None => {
+                    // enable active match for offchain fuzzing (todo: handle this more elegantly)
+                    unsafe {
+                        ACTIVE_MATCH_EXT_CALL = true;
+                    }
+                    None
+                }
+            };
             assert!(
                 onchain_middleware.is_some(),
                 "Flashloan v2 requires onchain env"

@@ -924,6 +924,7 @@ impl OnChainConfig {
             "eth" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             "mumbai" => panic!("Not supported"),
             _ => panic!("Unknown network"),
         }
@@ -966,6 +967,10 @@ impl OnChainConfig {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+            "local" => [("ZERO", "0x0000000000000000000000000000000000000000")]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
             _ => panic!("[Flashloan] Network is not supported"),
         }
     }
