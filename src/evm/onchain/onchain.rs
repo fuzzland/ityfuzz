@@ -234,6 +234,7 @@ where
                         force_cache!(self.locs, slot_idx),
                     ),
                 };
+                println!("next slot {:?}", host.next_slot);
             }
             #[cfg(feature = "real_balance")]
             // BALANCE
