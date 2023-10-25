@@ -204,6 +204,7 @@ where
             0x54 => {
                 let address = interp.contract.address;
                 let slot_idx = interp.stack.peek(0).unwrap();
+                println!("onchain sload for {:?} {:?}", address, slot_idx);
 
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
@@ -475,7 +476,11 @@ where
                         }
 
                         let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                        abi_instance.set_func_with_signature(
+                            abi.function,
+                            &abi.function_name,
+                            &abi.abi,
+                        );
                         register_abi_instance(target, abi_instance.clone(), state);
 
                         let input = EVMInput {

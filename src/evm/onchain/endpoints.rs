@@ -438,7 +438,7 @@ impl OnChainConfig {
         address: EVMAddress,
     ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         if let Some(storage) = self.storage_dump_cache.get(&address) {
-            return storage.clone();
+            storage.clone()
         } else {
             let storage = self.fetch_storage_dump_uncached(address);
             self.storage_dump_cache.insert(address, storage.clone());

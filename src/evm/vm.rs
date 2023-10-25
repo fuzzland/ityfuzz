@@ -61,6 +61,7 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use super::middlewares::middleware;
 use super::middlewares::reentrancy::ReentrancyData;
 
 pub const MEM_LIMIT: u64 = 10 * 1024;
@@ -1106,18 +1107,20 @@ where
         state: &mut S,
     ) -> (Vec<(Vec<u8>, bool)>, VS) {
         unsafe {
-            IS_FAST_CALL_STATIC = true;
+            IS_FAST_CALL = true;
             self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
-            self.host.current_self_destructs = vec![];
-            self.host.current_arbitrary_calls = vec![];
-            self.host.call_count = 0;
-            self.host.jumpi_trace = 37;
-            self.host.current_typed_bug = vec![];
-            self.host.randomness = vec![9];
         }
+        self.host.current_self_destructs = vec![];
+        self.host.current_arbitrary_calls = vec![];
+        self.host.call_count = 0;
+        self.host.jumpi_trace = 37;
+        self.host.current_typed_bug = vec![];
+        self.host.randomness = vec![9];
+
+        // self.host.add_middlewares(middleware.clone());
 
         let res = data
             .iter()
@@ -1133,7 +1136,10 @@ where
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                println!("{:?}", ctx);
+                println!("{}", hex::encode(by.clone()));
                 let ret = self.host.run_inspect(&mut interp, state);
+                println!("ret: {:?}", ret);
                 if is_call_success!(ret) {
                     (interp.return_value().to_vec(), true)
                 } else {
@@ -1143,7 +1149,7 @@ where
             .collect::<Vec<(Vec<u8>, bool)>>();
 
         unsafe {
-            IS_FAST_CALL_STATIC = false;
+            IS_FAST_CALL = false;
         }
         (res, unsafe {
             self.host

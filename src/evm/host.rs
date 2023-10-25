@@ -53,7 +53,7 @@ use revm_primitives::{
     PetersburgSpec, ShanghaiSpec, SpecId, SpuriousDragonSpec, TangerineSpec,
 };
 
-use super::vm::{MEM_LIMIT, IS_FAST_CALL};
+use super::vm::{IS_FAST_CALL, MEM_LIMIT};
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -594,7 +594,11 @@ where
                 record_func_hash!();
                 push_interp!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
+                return (
+                    InstructionResult::AddressUnboundedStaticCall,
+                    Gas::new(0),
+                    Bytes::new(),
+                );
             }
         }
 
@@ -673,7 +677,9 @@ where
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
         match res.0 {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => {
+            ControlLeak
+            | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+            | InstructionResult::AddressUnboundedStaticCall => {
                 self.leak_ctx.push(SinglePostExecution::from_interp(
                     interp,
                     (out_offset, out_len),
@@ -1031,6 +1037,7 @@ where
     }
 
     fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
+        println!("sload {address:?} {index:?} nextslot {}", self.next_slot);
         if let Some(account) = self.evmstate.get_mut(&address) {
             if let Some(slot) = account.get(&index) {
                 return Some((*slot, true));
@@ -1052,6 +1059,7 @@ where
         index: EVMU256,
         value: EVMU256,
     ) -> Option<(EVMU256, EVMU256, EVMU256, bool)> {
+        println!("sstore {address:?} {index:?} nextslot {}", self.next_slot);
         match self.evmstate.get_mut(&address) {
             Some(account) => {
                 account.insert(index, value);
@@ -1198,8 +1206,11 @@ where
                             }
 
                             let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                            abi_instance
-                                .set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                            abi_instance.set_func_with_signature(
+                                abi.function,
+                                &abi.function_name,
+                                &abi.abi,
+                            );
                             register_abi_instance(r_addr, abi_instance.clone(), state);
 
                             let input = EVMInput {

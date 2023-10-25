@@ -507,6 +507,7 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Config => ContractLoader::from_config(
                 &offchain_artifacts.expect("offchain artifacts is required for config target type"),
                 &offchain_config.expect("offchain config is required for config target type"),
+                onchain.as_mut().unwrap(),
             ),
 
             EVMTargetType::ArtifactAndProxy => {
@@ -610,27 +611,7 @@ pub fn evm_main(args: EvmArgs) {
         },
     };
 
-    match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
-        // FuzzerTypes::BASIC => basic_fuzzer(config)
-        _ => {}
+    if let FuzzerTypes::CMP = config.fuzzer_type {
+        evm_fuzzer(config, &mut state)
     }
-    //
-    //     Some(v) => {
-    //         match v.as_str() {
-    //             "cmp" => {
-    //                 cmp_fuzzer(&String::from(args.target), args.target_contract);
-    //             }
-    //             "df" => {
-    //                 df_fuzzer(&String::from(args.target), args.target_contract);
-    //             }
-    //             _ => {
-    //                 println!("Fuzzer type not supported");
-    //             }
-    //         }
-    //     },
-    //     _ => {
-    //         df_fuzzer(&String::from(args.target), args.target_contract);
-    //     }
-    // }
 }

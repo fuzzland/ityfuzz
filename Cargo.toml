@@ -14,7 +14,7 @@ default = [
     "evm",
     "print_txn_corpus",
     "full_trace",
-    "flashloan_v2",
+    # "flashloan_v2",
 ]
 evm = []
 cmp = []

@@ -121,6 +121,36 @@ pub fn evm_fuzzer(
     let mut fuzz_host = FuzzHost::new(scheduler.clone(), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
 
+    #[allow(unused_variables)]
+    let onchain_middleware = match config.onchain.clone() {
+        Some(onchain) => {
+            Some({
+                let mid = Rc::new(RefCell::new(
+                    OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                        // scheduler can be cloned because it never uses &mut self
+                        onchain,
+                        config.onchain_storage_fetching.unwrap(),
+                    ),
+                ));
+
+                if let Some(builder) = config.builder.clone() {
+                    mid.borrow_mut().add_builder(builder);
+                }
+
+                println!("onchain middleware enabled");
+                fuzz_host.add_middlewares(mid.clone());
+                mid
+            })
+        }
+        None => {
+            // enable active match for offchain fuzzing (todo: handle this more elegantly)
+            unsafe {
+                ACTIVE_MATCH_EXT_CALL = true;
+            }
+            None
+        }
+    };
+
     if config.write_relationship {
         unsafe {
             WRITE_RELATIONSHIPS = true;
@@ -161,33 +191,6 @@ pub fn evm_fuzzer(
 
         #[cfg(feature = "flashloan_v2")]
         {
-            let onchain_middleware = match config.onchain.clone() {
-                Some(onchain) => {
-                    Some({
-                        let mid = Rc::new(RefCell::new(
-                            OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
-                                // scheduler can be cloned because it never uses &mut self
-                                onchain,
-                                config.onchain_storage_fetching.unwrap(),
-                            ),
-                        ));
-
-                        if let Some(builder) = config.builder.clone() {
-                            mid.borrow_mut().add_builder(builder);
-                        }
-
-                        fuzz_host.add_middlewares(mid.clone());
-                        mid
-                    })
-                }
-                None => {
-                    // enable active match for offchain fuzzing (todo: handle this more elegantly)
-                    unsafe {
-                        ACTIVE_MATCH_EXT_CALL = true;
-                    }
-                    None
-                }
-            };
             assert!(
                 onchain_middleware.is_some(),
                 "Flashloan v2 requires onchain env"
@@ -204,10 +207,12 @@ pub fn evm_fuzzer(
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
 
     if config.sha3_bypass {
+        println!("sha3 bypass enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
     if config.reentrancy_oracle {
+        println!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
     }
 
