@@ -117,11 +117,12 @@ impl
             {
                 let token_info = self.known_tokens.get(token).expect("Token not found");
 
-                #[cfg(feature = "flashloan_debug")]
-                println!(
-                    "Balance: {} -> {} for {:?} @ {:?}",
-                    prev_balance, new_balance, caller, token
-                );
+                // prev_balance is nonexistent
+                // #[cfg(feature = "flashloan_debug")]
+                // println!(
+                //     "Balance: {} -> {} for {:?} @ {:?}",
+                //     prev_balance, new_balance, caller, token
+                // );
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
