@@ -106,7 +106,7 @@ impl ContractLoader {
     }
 
     pub fn parse_abi_str(data: &str) -> Vec<ABIConfig> {
-        let json: Vec<Value> = serde_json::from_str(data).expect("failed to parse abis file");
+        let json: Vec<Value> = serde_json::from_str(&Self::normalize_abi_str(data)).expect("failed to parse abis file");
         json.iter()
             .flat_map(|abi| {
                 if abi["type"] == "function" || abi["type"] == "constructor" {
@@ -166,6 +166,13 @@ impl ContractLoader {
                 }
             })
             .collect()
+    }
+
+    fn normalize_abi_str(data: &str) -> String {
+        data.to_string()
+            .replace("'", "\"")
+            .replace("False", "false")
+            .replace("True", "true")
     }
 
     fn parse_hex_file(path: &Path) -> Vec<u8> {
@@ -867,4 +874,15 @@ mod tests {
     //             .collect::<Vec<String>>()
     //     );
     // }
+
+    #[test]
+    fn test_parse_abi_not_in_json_format() {
+        let abi_str = "[{'anonymous': False, 'inputs': [{'internalType': 'contract IController', 'name': '_controller', 'type': 'address'}], 'stateMutability': 'nonpayable', 'type': 'constructor'}]";
+        let mut abi = ContractLoader::parse_abi_str(abi_str);
+        assert_eq!(abi.len(), 1);
+        let abi_cfg = abi.pop().unwrap();
+        assert!(abi_cfg.is_constructor);
+        assert_eq!(abi_cfg.function_name, "constructor");
+        assert_eq!(abi_cfg.abi, "(address)");
+    }
 }
