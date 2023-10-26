@@ -187,7 +187,7 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
 
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value = "false")]
     integer_overflow_oracle: bool,
 
     #[arg(long, default_value = "true")]
