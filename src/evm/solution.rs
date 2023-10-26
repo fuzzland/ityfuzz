@@ -3,6 +3,7 @@ use std::{
     path::Path,
     str::FromStr,
     sync::OnceLock,
+    time::SystemTime,
 };
 
 use handlebars::Handlebars;
@@ -261,20 +262,26 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
         return format!("C{}", &cli_args.target[2..6]);
     }
 
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let default_name = format!("C{}", now);
 
     let path = Path::new(&cli_args.target);
     match path.parent() {
         Some(parent) => {
             let dirname = parent.file_name().unwrap().to_str().unwrap();
-            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+            let name: String = dirname
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
             if name.is_empty() {
                 default_name
             } else {
                 format!("{}{}", &name[..1].to_uppercase(), &name[1..])
             }
-        },
+        }
         None => default_name,
     }
 }

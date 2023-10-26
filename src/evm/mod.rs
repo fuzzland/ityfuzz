@@ -11,6 +11,7 @@ pub mod feedbacks;
 pub mod host;
 pub mod input;
 pub mod middlewares;
+pub mod minimizer;
 pub mod mutator;
 pub mod onchain;
 pub mod oracle;
@@ -22,9 +23,6 @@ pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod solution;
-pub mod minimizer;
-
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
