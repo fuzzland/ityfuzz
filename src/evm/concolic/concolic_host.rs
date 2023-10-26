@@ -42,8 +42,10 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 
 lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-} // 1s
-pub static mut CONCOLIC_TIMEOUT: u32 = 1000;
+    static ref ALL_SOLUTIONS: Arc<Mutex<Vec<Solution>>> = Arc::new(Mutex::new(Vec::new()));
+}
+
+pub static mut CONCOLIC_TIMEOUT: u32 = 1000;  // 1s
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
@@ -272,6 +274,7 @@ impl<'a> Solving<'a> {
     }
 
     pub fn solve(&mut self, optimistic: bool) -> Vec<Solution> {
+        // println!("solving on tid {:?}", std::thread::current().id());
         let context = self.context;
         let solver = Solver::new(context);
         // println!("Constraints: {:?}", self.constraints);
@@ -675,6 +678,32 @@ impl<I, VS> ConcolicHost<I, VS> {
         solving.solve(false)
     }
 
+    pub fn threaded_solve(&self) {
+        let solutions_clone = ALL_SOLUTIONS.clone();
+        let input_bytes = self.input_bytes.clone();
+        let constraints = self.constraints.clone();
+
+        std::thread::spawn(move || {
+            let context = Context::new(&Config::default());
+            let callvalue = BV::new_const(&context, "callvalue", 256);
+            let caller = BV::new_const(&context, "caller", 256);
+            let balance = BV::new_const(&context, "balance", 256);
+
+            let mut solving = Solving::new(
+                &context,
+                &input_bytes,
+                &balance,
+                &callvalue,
+                &caller,
+                &constraints,
+            );
+
+            let solutions = solving.solve(false);
+            let mut solutions_clone = solutions_clone.lock().unwrap();
+            solutions_clone.extend(solutions);
+        });
+    }
+
     pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
         let data = self.ctxs.last().expect("no ctx").input_bytes.clone();
         let mut bytes = data[idx].clone();
@@ -772,8 +801,6 @@ where
                 vec![]
             }};
         }
-
-        let mut solutions = vec![];
 
         // if self.ctxs.len() > 0 {
         //     return;
@@ -1252,9 +1279,10 @@ where
                             );
                             self.constraints.push(intended_path_constraint);
 
-                            solutions.extend(self.solve());
-                            #[cfg(feature = "z3_debug")]
-                            println!("[concolic] Solutions: {:?}", solutions);
+                            self.threaded_solve();
+
+                            // #[cfg(feature = "z3_debug")]
+                            // println!("[concolic] Solutions: {:?}", solutions);
                             self.constraints.pop();
 
                             ALREADY_SOLVED
@@ -1384,14 +1412,16 @@ where
         //     .expect("Failed loading input")
         //     .clone();
 
+        let mut solutions = ALL_SOLUTIONS.lock().unwrap().clone();
         if solutions.len() > 0 {
             let meta = state
                 .metadata_map_mut()
                 .get_mut::<ConcolicPrioritizationMetadata>()
                 .expect("Failed to get metadata");
-            for solution in solutions {
+            for solution in solutions.clone() {
                 meta.solutions.push((solution, self.testcase_ref.clone()));
             }
+            solutions.clear();
         }
     }
 
