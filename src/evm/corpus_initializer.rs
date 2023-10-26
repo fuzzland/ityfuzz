@@ -332,7 +332,7 @@ where
             for abi in contract.abi.clone() {
                 let name = &abi.function_name;
 
-                if name.starts_with("invariant_") || name.starts_with("echidna_") || name == "setUp" {
+                if name.starts_with("invariant_") || name.starts_with("echidna_") || name == "setUp" || name == "failed" {
                     println!("Skipping function: {}", name);
                     continue;
                 }

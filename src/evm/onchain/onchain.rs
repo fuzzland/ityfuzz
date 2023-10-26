@@ -209,7 +209,6 @@ where
             0x54 => {
                 let address = interp.contract.address;
                 let slot_idx = interp.stack.peek(0).unwrap();
-                println!("onchain sload for {:?} {:?}", address, slot_idx);
 
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
@@ -239,7 +238,6 @@ where
                         force_cache!(self.locs, slot_idx),
                     ),
                 };
-                println!("next slot {:?}", host.next_slot);
             }
             #[cfg(feature = "real_balance")]
             // BALANCE

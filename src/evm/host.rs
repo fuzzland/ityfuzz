@@ -521,7 +521,6 @@ where
         (out_offset, out_len): (usize, usize),
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
-        println!("call_allow_control_leak");
         macro_rules! push_interp {
             () => {{
                 self.leak_ctx = vec![SinglePostExecution::from_interp(
@@ -697,13 +696,10 @@ where
         input: &mut CallInputs,
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
-        println!("call_forbid_control_leak");
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
-            println!("address: {:?}", input.context.code_address);
-            println!("call_forbid_control_leak: {:?} {:?}", hex::encode(input.input.clone()), hex::encode(code.clone().bytecode()));
             let mut interp = Interpreter::new_with_memory_limit(
                 Contract::new_with_context_analyzed(
                     Bytes::from(input.input.to_vec()),
@@ -716,7 +712,6 @@ where
             );
 
             let ret = self.run_inspect(&mut interp, state);
-            println!("call_forbid_control_leak ret: {:?}", hex::encode(interp.return_data_buffer.clone()));
             return (ret, Gas::new(0), interp.return_value());
         }
 
@@ -1065,7 +1060,6 @@ where
         index: EVMU256,
         value: EVMU256,
     ) -> Option<(EVMU256, EVMU256, EVMU256, bool)> {
-        println!("sstore {address:?} {index:?} nextslot {}", self.next_slot);
         match self.evmstate.get_mut(&address) {
             Some(account) => {
                 account.insert(index, value);
@@ -1261,8 +1255,6 @@ where
         output_info: (usize, usize),
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
-        println!("calling {:?} -> {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-
         let value = EVMU256::from(input.transfer.value);
         if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
             let sender = input.transfer.source;
@@ -1296,8 +1288,6 @@ where
         };
 
         let ret_buffer = res.2.clone();
-
-        println!("call result: {:?}, {}", res.0, hex::encode(ret_buffer.clone()));
 
         unsafe {
             if self.middlewares_enabled {

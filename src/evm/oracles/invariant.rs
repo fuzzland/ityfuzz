@@ -3,6 +3,7 @@ use crate::evm::oracle::EVMBugResult;
 use crate::evm::oracles::INVARIANT_BUG_IDX;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
+use crate::fuzzer::ORACLE_OUTPUT;
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
@@ -76,17 +77,15 @@ impl
             .0
             .iter()
             .enumerate()
-            .map(|(idx, (returns, succ))| {
+            .map(|(idx, (_, succ))| {
                 let name = self
                     .names
                     .get(&self.batch_call_txs[idx].2.to_vec())
                     .unwrap();
-                println!("{} {name}  {succ}", idx);
                 if *succ {
                     0
                 } else {
                     let bug_idx = (idx << 8) as u64 + INVARIANT_BUG_IDX;
-                    println!("{} violated {bug_idx}", name);
                     EVMBugResult::new(
                         "invariant".to_string(),
                         bug_idx,

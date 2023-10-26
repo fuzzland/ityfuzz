@@ -242,7 +242,6 @@ impl BoxedABI {
 
     /// Set the function hash with function signature, so that we can print the function signature or name instead of hash
     pub fn set_func_with_signature(&mut self, function: [u8; 4], fn_name: &str, fn_args: &str) {
-        println!("set_func_with_signature: {}{}", fn_name, fn_args);
         self.function = function;
         unsafe {
             FUNCTION_SIG.insert(function, format!("{}{}", fn_name, fn_args));
