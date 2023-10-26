@@ -638,7 +638,7 @@ where
                     Gas::new(0),
                     Bytes::new(),
                 );
-            }            
+            }
         }
 
         let input_bytes = Bytes::from(input_seq);
@@ -1042,7 +1042,7 @@ where
             account.insert(index, self.next_slot);
             self.evmstate.insert(address, account);
         }
-            
+
         Some((self.next_slot, true))
     }
 
@@ -1199,7 +1199,7 @@ where
 
                             let mut abi_instance = get_abi_type_boxed(&abi.abi);
                             abi_instance
-                                .set_func_with_name(abi.function, abi.function_name.clone());
+                                .set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
                             register_abi_instance(r_addr, abi_instance.clone(), state);
 
                             let input = EVMInput {

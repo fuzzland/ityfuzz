@@ -2,7 +2,6 @@ use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::EVMBugResult;
 use crate::evm::oracles::ERC20_BUG_IDX;
 use crate::evm::producers::erc20::ERC20Producer;
-use crate::evm::producers::pair::PairProducer;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
 #[cfg(feature = "flashloan_v2")]
 use crate::evm::uniswap::TokenContext;
@@ -31,14 +30,12 @@ pub struct IERC20OracleFlashloan {
     #[cfg(feature = "flashloan_v2")]
     pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
     #[cfg(feature = "flashloan_v2")]
-    pub pair_producer: Rc<RefCell<PairProducer>>,
-    #[cfg(feature = "flashloan_v2")]
     pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
 
 impl IERC20OracleFlashloan {
     #[cfg(not(feature = "flashloan_v2"))]
-    pub fn new(_: Rc<RefCell<PairProducer>>, _: Rc<RefCell<ERC20Producer>>) -> Self {
+    pub fn new(_: Rc<RefCell<ERC20Producer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
         }
@@ -46,14 +43,12 @@ impl IERC20OracleFlashloan {
 
     #[cfg(feature = "flashloan_v2")]
     pub fn new(
-        pair_producer: Rc<RefCell<PairProducer>>,
         erc20_producer: Rc<RefCell<ERC20Producer>>,
     ) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
             known_tokens: HashMap::new(),
             known_pair_reserve_slot: HashMap::new(),
-            pair_producer,
             erc20_producer,
         }
     }
@@ -117,16 +112,17 @@ impl
             let liquidation_percent = EVMU256::from(liquidation_percent);
             let mut liquidations_earned = Vec::new();
 
-            for ((caller, token), (prev_balance, new_balance)) in
+            for ((caller, token), new_balance) in
                 self.erc20_producer.deref().borrow().balances.iter()
             {
                 let token_info = self.known_tokens.get(token).expect("Token not found");
 
-                #[cfg(feature = "flashloan_debug")]
-                println!(
-                    "Balance: {} -> {} for {:?} @ {:?}",
-                    prev_balance, new_balance, caller, token
-                );
+                // prev_balance is nonexistent
+                // #[cfg(feature = "flashloan_debug")]
+                // println!(
+                //     "Balance: {} -> {} for {:?} @ {:?}",
+                //     prev_balance, new_balance, caller, token
+                // );
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);

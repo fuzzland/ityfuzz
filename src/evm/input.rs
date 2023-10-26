@@ -1,6 +1,6 @@
 use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
 use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512};
+use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512, checksum};
 use crate::evm::vm::EVMState;
 use crate::input::{ConciseSerde, VMInputT, SolutionTx};
 use crate::mutation_utils::byte_mutator;
@@ -222,6 +222,37 @@ impl ConciseEVMInput {
         }
     }
 
+    pub fn from_input_with_call_leak<I>(
+        input: &I,
+        call_leak: u32,
+    ) -> Self
+    where
+        I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
+    {
+        Self {
+            #[cfg(feature = "flashloan_v2")]
+            input_type: input.get_input_type(),
+            caller: input.get_caller(),
+            contract: input.get_contract(),
+            #[cfg(not(feature = "debug"))]
+            data: input.get_data_abi(),
+            #[cfg(feature = "debug")]
+            direct_data: match &input.get_data_abi() {
+                Some(v) => hex::encode(v.get_bytes()),
+                None => "".to_string(),
+            },
+            txn_value: input.get_txn_value(),
+            step: input.is_step(),
+            env: input.get_vm_env().clone(),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: input.get_liquidation_percent(),
+            randomness: input.get_randomness(),
+            repeat: input.get_repeat(),
+            layer: input.get_state().get_post_execution_len(),
+            call_leak
+        }
+    }
+
     pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
         (
             EVMInput {
@@ -312,51 +343,51 @@ impl ConciseEVMInput {
 }
 
 impl SolutionTx for ConciseEVMInput {
-    #[cfg(feature = "flashloan_v2")]
-    fn is_borrow(&self) -> bool {
-        self.input_type == EVMInputTy::Borrow
-    }
-
     fn caller(&self) -> String {
-        format!("0x{}", hex::encode(self.caller))
+        checksum(&self.caller)
     }
 
     fn contract(&self) -> String {
-        format!("0x{}", hex::encode(self.contract))
+        checksum(&self.contract)
     }
 
-    fn value(&self) -> String {
-        self.txn_value
-            .map(|v| format!("0x{}", hex::encode(v.to_be_bytes_vec())))
-            .unwrap_or(String::new())
+    #[cfg(not(feature = "debug"))]
+    fn fn_signature(&self) -> String {
+        match self.data {
+            Some(ref d) => d.get_func_signature().unwrap_or("".to_string()),
+            None => "".to_string(),
+        }
     }
 
     #[cfg(not(feature = "debug"))]
     fn fn_selector(&self) -> String {
         match self.data {
             Some(ref d) => format!("0x{}", hex::encode(d.function)),
-            None => "TODO".to_string(),
+            None => "".to_string(),
         }
-    }
-
-    #[cfg(feature = "debug")]
-    fn fn_selector(&self) -> String {
-        "".to_string()
     }
 
     #[cfg(not(feature = "debug"))]
     fn fn_args(&self) -> String {
-        match self.data {
-            Some(ref d) => {
-                d.get().to_string().trim_matches(|c| c == '(' || c == ')').to_string()
-            },
-            None => "TODO".to_string(),
+        if self.data.is_none() {
+            return "".to_string();
         }
+
+        let mut args_str = self.data.as_ref().unwrap().get().to_string();
+        let len = args_str.len();
+        if len < 2 {
+            return "".to_string();
+        }
+        args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
     }
 
-    #[cfg(feature = "debug")]
-    fn fn_args(&self) -> String {
-        "".to_string()
+    fn value(&self) -> String {
+        self.txn_value.unwrap_or(EVMU256::ZERO).to_string()
+    }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn is_borrow(&self) -> bool {
+        self.input_type == EVMInputTy::Borrow
     }
 
     #[cfg(feature = "flashloan_v2")]

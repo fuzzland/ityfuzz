@@ -5,10 +5,9 @@ import "forge-std/Test.sol";
 
 {{#if is_onchain}}
 // ityfuzz evm -o -t {{target}} -c {{chain}} --onchain-block-number {{block_number}} -f -i -p --onchain-etherscan-api-key ${{etherscan_keyname}}
+{{else}}
+// ityfuzz evm -t '{{target}}' -f
 {{/if}}
-{{#unless is_onchain}}
-// ityfuzz evm -t '{{target}}' -f --panic-on-bug
-{{/unless}}
 /*
 
 😊😊 Found violations!
@@ -17,7 +16,67 @@ import "forge-std/Test.sol";
 {{{solution}}}
  */
 
-{{#if is_borrow}}
+contract {{contract_name}} is Test {
+    function setUp() public {
+        {{#if is_onchain}}
+        vm.createSelectFork("{{chain}}", {{block_number}});
+        {{/if}}
+    }
+
+    function test() public {
+    {{#if include_interface}}
+        address router = {{router}};
+        address weth = {{weth}};
+        {{/if}}{{#each trace}}
+        vm.prank({{caller}});
+        {{#with this}}{{#if raw_code}}{{raw_code}}{{! Raw Code }}
+        {{else}}{{#if is_deposit}}vm.deal({{caller}}, {{value}});
+        weth.call{value: {{value}}}(abi.encodeWithSignature("deposit()", {{value}}));{{! Deposit weth }}
+        {{else}}{{#if is_borrow}}address[] memory path{{borrow_idx}} = new address[](2);{{! Borrow token }}
+        path{{borrow_idx}}[0] = weth;
+        path{{borrow_idx}}[1] = {{contract}};
+        vm.deal({{caller}}, {{value}});
+        IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
+            value: {{value}}
+        }(0, path{{borrow_idx}}, address(this), block.timestamp);
+        {{else}}{{#if value}}vm.deal({{caller}}, {{value}});{{/if}}
+        {{#if fn_signature}}{{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature({{! Call with signature }}
+            "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
+        )); {{else}}{{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector({{! Call with selector }}
+            {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
+        ));{{/if}}{{/if}}{{/if}}{{/if}}{{#if liq_percent}}{{! Liquidation }}
+        vm.startPrank({{caller}});
+        uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
+        IERC20({{contract}}).approve(router, amount{{liq_idx}});
+        address[] memory liq_path{{liq_idx}} = new address[](2);
+        liq_path{{liq_idx}}[0] = {{contract}};
+        liq_path{{liq_idx}}[1] = address(weth);
+        vm.deal({{caller}}, amount{{liq_idx}});
+        IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
+            amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+        );
+        vm.stopPrank();{{/if}}{{/with}}{{/each}}
+    }
+
+{{#if stepping_with_return}}
+    // Stepping with return
+    receive() external payable {}
+{{/if}}
+}
+
+{{#if include_interface}}
+interface IERC20 {
+    function balanceOf(address owner) external view returns (uint256);
+    function approve(address spender, uint256 value) external returns (bool);
+    function transfer(address to, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+
+    function mint(address to) external returns (uint liquidity);
+    function burn(address to) external returns (uint amount0, uint amount1);
+    function skim(address to) external;
+    function sync() external;
+}
+
 interface IUniswapV2Router {
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint256 amountIn,
@@ -41,44 +100,3 @@ interface IUniswapV2Router {
     ) external;
 }
 {{/if}}
-
-contract EGD is Test {
-    function setUp() public {
-        {{#if is_onchain}}
-        vm.createSelectFork("{{chain}}", {{block_number}});
-        {{/if}}
-    }
-
-    function test() public {
-        vm.prank(address(this), address(this));
-{{#each trace}}
-
-    {{#with this}}
-        {{#if is_borrow}}
-        address[] memory path{{borrow_idx}} = new address[](2);
-        path{{borrow_idx}}[0] = address({{weth}});
-        path{{borrow_idx}}[1] = address({{contract}});
-        IUniswapV2Router(address({{router}})).swapExactETHForTokensSupportingFeeOnTransferTokens{
-            value: {{value}}
-        }(0, path{{borrow_idx}}, address(this), block.timestamp);
-        {{#if liq_percent}}
-        // swap todo: liq_percent: {{liq_percent}}
-        {{/if}}
-        {{/if}}
-        {{#unless is_borrow}}
-        address({{contract}}).call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
-            {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
-        ));
-        {{#if liq_percent}}
-        // swap todo: liq_percent: {{liq_percent}}
-        {{/if}}
-        {{/unless}}
-    {{/with}}
-{{/each}}
-    }
-
-{{#if stepping_with_return}}
-    // Stepping with return
-    receive() external payable {}
-{{/if}}
-}

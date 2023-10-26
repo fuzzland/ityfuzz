@@ -1,16 +1,11 @@
-use crate::evm::types::{
-    fixed_address, generate_random_address, EVMAddress, EVMFuzzMutator, EVMFuzzState,
-};
+use crate::evm::types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState};
 use core::panic;
 /// Load contract from file system or remote
 use glob::glob;
-use revm::precompile::B160;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
-use crate::state::FuzzState;
-use bytes::Bytes;
 use itertools::Itertools;
 use std::io::Read;
 use std::path::Path;
@@ -29,14 +24,8 @@ use crate::evm::blaz::builder::{BuildJob, BuildJobResult};
 use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
 use crate::evm::blaz::offchain_config::OffchainConfig;
 use crate::evm::bytecode_iterator::all_bytecode;
-use crate::evm::host::FuzzHost;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
-use crate::evm::vm::EVMExecutor;
-use hex::encode;
 use regex::Regex;
-use revm_interpreter::analysis::to_analysed;
 use revm_interpreter::opcode::PUSH4;
-use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 
 use super::types::ProjectSourceMapTy;
@@ -117,7 +106,7 @@ impl ContractLoader {
     }
 
     pub fn parse_abi_str(data: &str) -> Vec<ABIConfig> {
-        let json: Vec<Value> = serde_json::from_str(data).expect("failed to parse abis file");
+        let json: Vec<Value> = serde_json::from_str(&Self::normalize_abi_str(data)).expect("failed to parse abis file");
         json.iter()
             .flat_map(|abi| {
                 if abi["type"] == "function" || abi["type"] == "constructor" {
@@ -179,19 +168,26 @@ impl ContractLoader {
             .collect()
     }
 
+    fn normalize_abi_str(data: &str) -> String {
+        data.to_string()
+            .replace("'", "\"")
+            .replace("False", "false")
+            .replace("True", "true")
+    }
+
     fn parse_hex_file(path: &Path) -> Vec<u8> {
         let mut file = File::open(path).unwrap();
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
-        hex::decode(data).expect("Failed to parse hex file")
+        hex::decode(data.trim()).expect("Failed to parse hex file")
     }
 
-    fn constructor_args_encode(constructor_args: &Vec<String>) -> Vec<u8> {
+    fn constructor_args_encode(constructor_args: &[String]) -> Vec<u8> {
         constructor_args
             .iter()
             .flat_map(|arg| {
-                let arg = if arg.starts_with("0x") {
-                    &arg[2..]
+                let arg = if let Some(stripped) = arg.strip_prefix("0x") {
+                    stripped
                 } else {
                     arg
                 };
@@ -218,7 +214,7 @@ impl ContractLoader {
         state: &mut EVMFuzzState,
         source_map_info: Option<ContractsSourceMapInfo>,
         proxy_deploy_codes: &Vec<String>,
-        constructor_args: &Vec<String>,
+        constructor_args: &[String],
     ) -> Self {
         let contract_name = prefix.split('/').last().unwrap().replace('*', "");
 
@@ -282,7 +278,7 @@ impl ContractLoader {
         if let Some(abi) = abi_result.abi.iter().find(|abi| abi.is_constructor) {
             let mut abi_instance =
                 get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
-            abi_instance.set_func_with_name(abi.function, abi.function_name.clone());
+            abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
             if contract_result.constructor_args.is_empty() {
                 println!("No constructor args found, using default constructor args");
                 contract_result.constructor_args = abi_instance.get().get_bytes();
@@ -527,57 +523,6 @@ impl ContractLoader {
 
         Self { contracts, abis }
     }
-
-    // pub fn from_artifacts_and_proxy(
-    //     offchain_artifacts: &Vec<OffChainArtifact>,
-    //     proxy_deploy_codes: &Vec<String>,
-    // ) {
-    //     for deployed_code in proxy_deploy_codes {
-    //         deployed_code_cleaned = deployed_code.replace("0x", "");
-    //         let mut deployed_code_bytes = hex::decode(deployed_code_cleaned).expect("Failed to decode hex");
-    //
-    //         EVMExecutor::new(
-    //             FuzzHost::new(
-    //
-    //             )
-    //         )
-    //
-    //         // let build_job = OffChainArtifact::locate(
-    //         //     offchain_artifacts,
-    //         //     deployed_code_bytes,
-    //         // );
-    //         //
-    //         // if build_job.is_none() {
-    //         //     println!("Failed to find build job for {}", deployed_code);
-    //         //     continue;
-    //         // }
-    //         //
-    //         // let build_job = build_job.unwrap();
-    //         //
-    //         // abis.push(ABIInfo {
-    //         //     source: format!("{}:{}", slug.0, slug.1),
-    //         //     abi: abi.clone(),
-    //         // });
-    //         //
-    //         // contracts.push(ContractInfo {
-    //         //     name: format!("{}:{}", slug.0, slug.1),
-    //         //     code: more_info.deploy_bytecode.to_vec(),
-    //         //     abi: abi,
-    //         //     is_code_deployed: false,
-    //         //     constructor_args: hex::decode(contract_info.constructor.clone()).expect("failed to decode hex"),
-    //         //     deployed_address: contract_info.address,
-    //         //     source_map: None,
-    //         //     build_artifact: Some(BuildJobResult {
-    //         //         sources,
-    //         //         source_maps: more_info.source_map,
-    //         //         bytecodes: more_info.deploy_bytecode,
-    //         //         abi: more_info.abi.clone(),
-    //         //     })
-    //         // })
-    //
-    //
-    //     }
-    // }
 }
 
 type ContractSourceMap = HashMap<usize, SourceMapLocation>;
@@ -704,10 +649,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
                     SourceMapLocation {
                         offset: loc.offset,
                         length: loc.length,
-                        file: match loc.file {
-                            Some(file) => Some(file),
-                            None => None,
-                        },
+                        file: loc.file,
                         file_idx: loc.file_idx,
                         skip_on_concolic: true,
                     },
@@ -727,7 +669,7 @@ pub fn save_builder_source_code(
             build_job_result,
             addr,
             work_dir,
-            &parse_buildjob_result_sourcemap(&build_job_result),
+            &parse_buildjob_result_sourcemap(build_job_result),
         );
     }
 }
@@ -747,47 +689,44 @@ pub fn save_builder_addr_source_code(
         std::fs::create_dir_all(path).unwrap();
     }
 
-    for (_pc, loc) in src_map {
-        match loc.file.clone() {
-            Some(file) => {
-                if !files_downloaded.contains(&file) {
-                    if file.contains("/") {
-                        // we make the parent directory
-                        let parent_dir = format!(
-                            "{}/{}",
-                            addr_dir,
-                            file.split("/")
-                                .take(file.split("/").count() - 1)
-                                .collect::<Vec<&str>>()
-                                .join("/")
-                        );
-                        let path = Path::new(parent_dir.as_str());
-                        // same as above, it's okay to skip
-                        if !path.exists() {
-                            std::fs::create_dir_all(path).unwrap();
-                        }
+    src_map.iter().for_each(|(_pc, loc)| {
+        if let Some(file) = loc.file.clone() {
+            if !files_downloaded.contains(&file) {
+                if file.contains('/') {
+                    // we make the parent directory
+                    let parent_dir = format!(
+                        "{}/{}",
+                        addr_dir,
+                        file.split('/')
+                            .take(file.split('/').count() - 1)
+                            .collect::<Vec<&str>>()
+                            .join("/")
+                    );
+                    let path = Path::new(parent_dir.as_str());
+                    // same as above, it's okay to skip
+                    if !path.exists() {
+                        std::fs::create_dir_all(path).unwrap();
                     }
-                    let file_path = format!("{}/{}", addr_dir, file);
-                    println!("Downloading {} to {}", &file, &file_path);
-                    // println!("{:?}", build_job_result.sources);
-                    let mut file_content = String::new();
-                    for (filename, content) in build_job_result.sources.clone().into_iter() {
-                        if filename == file {
-                            file_content = content;
-                            break;
-                        }
-                    }
-                    std::fs::write(file_path, file_content).unwrap();
-                    files_downloaded.insert(file);
                 }
+                let file_path = format!("{}/{}", addr_dir, file);
+                println!("Downloading {} to {}", &file, &file_path);
+                // println!("{:?}", build_job_result.sources);
+                let mut file_content = String::new();
+                for (filename, content) in build_job_result.sources.clone().into_iter() {
+                    if filename == file {
+                        file_content = content;
+                        break;
+                    }
+                }
+                std::fs::write(file_path, file_content).unwrap();
+                files_downloaded.insert(file);
             }
-            None => {}
         }
-    }
+    });
 }
 
 pub fn copy_local_source_code(
-    source_dir_pattern: &String,
+    source_dir_pattern: &str,
     work_dir: &String,
     addr_map: &ProjectSourceMapTy,
     base_path: &String,
@@ -807,62 +746,61 @@ pub fn copy_local_source_code(
         }
 
         for (_pc, loc) in src_map {
-            match loc.file {
-                Some(file) => {
-                    // copy file to work_dir/sources/addr/file
-                    if !files_copied.contains(&file) {
-                        let file_path = match Path::new(file.as_str()).exists() {
-                            true => file.to_string(),
-                            false => {
-                                if base_path.len() > 0 {
-                                    format!(
-                                        "{}{}/{}",
-                                        source_dir_pattern.replace("*", ""),
-                                        base_path,
-                                        file
-                                    )
-                                } else {
-                                    format!("{}/{}", source_dir_pattern.replace("*", ""), file)
-                                }
+            if let Some(file) = loc.file {
+                // copy file to work_dir/sources/addr/file
+                if !files_copied.contains(&file) {
+                    let file_path = match Path::new(file.as_str()).exists() {
+                        true => file.to_string(),
+                        false => {
+                            if !base_path.is_empty() {
+                                format!(
+                                    "{}{}/{}",
+                                    source_dir_pattern.replace('*', ""),
+                                    base_path,
+                                    file
+                                )
+                            } else {
+                                format!("{}/{}", source_dir_pattern.replace('*', ""), file)
                             }
-                        };
-
-                        if Path::new(&file_path).exists() {
-                            // NOTICE, HERE PATH TRAVERSAL IS POSSIBLE
-                            println!("Copying {} to {}", &file_path, &addr_dir);
-                            let path = Path::new(&addr_dir);
-                            if !path.exists() {
-                                std::fs::create_dir_all(path).unwrap();
-                            }
-                            if file.contains("/") {
-                                // we make the parent directory
-                                let parent_dir = format!(
-                                    "{}/{}",
-                                    addr_dir,
-                                    file.split("/")
-                                        .take(file.split("/").count() - 1)
-                                        .collect::<Vec<&str>>()
-                                        .join("/")
-                                );
-                                std::fs::create_dir_all(parent_dir).unwrap();
-                            }
-                            std::fs::copy(&file_path, format!("{}/{}", addr_dir, file)).unwrap();
-                            println!("Copied {} to {}", &file_path, &addr_dir);
-                            files_copied.insert(file);
-                        } else {
-                            println!("File {} not found", &file_path);
                         }
+                    };
+
+                    if Path::new(&file_path).exists() {
+                        // NOTICE, HERE PATH TRAVERSAL IS POSSIBLE
+                        println!("Copying {} to {}", &file_path, &addr_dir);
+                        let path = Path::new(&addr_dir);
+                        if !path.exists() {
+                            std::fs::create_dir_all(path).unwrap();
+                        }
+                        if file.contains('/') {
+                            // we make the parent directory
+                            let parent_dir = format!(
+                                "{}/{}",
+                                addr_dir,
+                                file.split('/')
+                                    .take(file.split('/').count() - 1)
+                                    .collect::<Vec<&str>>()
+                                    .join("/")
+                            );
+                            std::fs::create_dir_all(parent_dir).unwrap();
+                        }
+                        std::fs::copy(&file_path, format!("{}/{}", addr_dir, file)).unwrap();
+                        println!("Copied {} to {}", &file_path, &addr_dir);
+                        files_copied.insert(file);
+                    } else {
+                        println!("File {} not found", &file_path);
                     }
                 }
-                None => {}
             }
         }
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::skip_cbor;
+    use crate::state::FuzzState;
     use std::str::FromStr;
 
     #[test]
@@ -936,4 +874,15 @@ mod tests {
     //             .collect::<Vec<String>>()
     //     );
     // }
+
+    #[test]
+    fn test_parse_abi_not_in_json_format() {
+        let abi_str = "[{'anonymous': False, 'inputs': [{'internalType': 'contract IController', 'name': '_controller', 'type': 'address'}], 'stateMutability': 'nonpayable', 'type': 'constructor'}]";
+        let mut abi = ContractLoader::parse_abi_str(abi_str);
+        assert_eq!(abi.len(), 1);
+        let abi_cfg = abi.pop().unwrap();
+        assert!(abi_cfg.is_constructor);
+        assert_eq!(abi_cfg.function_name, "constructor");
+        assert_eq!(abi_cfg.abi, "(address)");
+    }
 }
