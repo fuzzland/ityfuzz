@@ -221,7 +221,7 @@ where
         + HasItyState<Loc, Addr, VS, CI>
         + HasCaller<Addr>
         + HasMetadata
-        + HasPresets
+        + HasPresets,
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + EVMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
