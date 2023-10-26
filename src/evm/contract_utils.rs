@@ -473,7 +473,7 @@ impl ContractLoader {
     pub fn from_config(
         offchain_artifacts: &Vec<OffChainArtifact>,
         offchain_config: &OffchainConfig,
-        onchain: &mut OnChainConfig,
+        onchain: &mut Option<OnChainConfig>,
     ) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
@@ -500,27 +500,46 @@ impl ContractLoader {
 
             let constructor_args =
                 hex::decode(contract_info.constructor.clone()).expect("failed to decode hex");
-            contracts.push(ContractInfo {
-                name: format!("{}:{}", slug.0, slug.1),
-                // code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
-                code: onchain
-                    .get_contract_code(contract_info.address, false)
-                    .bytes()
-                    .to_vec(),
-                abi,
-                is_code_deployed: true,
-                constructor_args,
-                deployed_address: contract_info.address,
-                should_add_corpus: true,
-                source_map: None,
-                build_artifact: Some(BuildJobResult::new(
-                    sources,
-                    more_info.source_map,
-                    more_info.deploy_bytecode,
-                    more_info.abi.clone(),
-                    more_info.source_map_replacements.clone(),
-                )),
-            })
+            if let Some(onchain) = onchain {
+                contracts.push(ContractInfo {
+                    name: format!("{}:{}", slug.0, slug.1),
+                    code: onchain
+                        .get_contract_code(contract_info.address, false)
+                        .bytes()
+                        .to_vec(),
+                    abi,
+                    is_code_deployed: true,
+                    constructor_args,
+                    deployed_address: contract_info.address,
+                    should_add_corpus: true,
+                    source_map: None,
+                    build_artifact: Some(BuildJobResult::new(
+                        sources,
+                        more_info.source_map,
+                        more_info.deploy_bytecode,
+                        more_info.abi.clone(),
+                        more_info.source_map_replacements.clone(),
+                    )),
+                })
+            } else {
+                contracts.push(ContractInfo {
+                    name: format!("{}:{}", slug.0, slug.1),
+                    code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
+                    abi,
+                    is_code_deployed: false,
+                    constructor_args,
+                    deployed_address: contract_info.address,
+                    should_add_corpus: true,
+                    source_map: None,
+                    build_artifact: Some(BuildJobResult::new(
+                        sources,
+                        more_info.source_map,
+                        more_info.deploy_bytecode,
+                        more_info.abi.clone(),
+                        more_info.source_map_replacements.clone(),
+                    )),
+                })
+            }
         }
 
         Self { contracts, abis }

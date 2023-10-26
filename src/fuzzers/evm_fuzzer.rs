@@ -457,6 +457,10 @@ pub fn evm_fuzzer(
         ))));
     }
 
+    if let Some(m) = onchain_middleware {
+        m.borrow_mut().add_abi(artifacts.address_to_abi.clone());
+    }
+
     let mut producers = config.producers;
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());

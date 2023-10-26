@@ -64,6 +64,7 @@ where
     work_dir: String,
 }
 
+#[derive(Default)]
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_bytecode: HashMap<EVMAddress, Bytecode>,

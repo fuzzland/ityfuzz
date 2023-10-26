@@ -29,7 +29,7 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
-use crate::evm::corpus_initializer::ABIMap;
+use crate::evm::corpus_initializer::{ABIMap, EVMInitializationArtifacts};
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use itertools::Itertools;
@@ -61,6 +61,7 @@ where
     pub storage_all: HashMap<EVMAddress, Arc<HashMap<String, EVMU256>>>,
     pub storage_dump: HashMap<EVMAddress, Arc<HashMap<EVMU256, EVMU256>>>,
     pub builder: Option<BuildJob>,
+    pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
     pub phantom: std::marker::PhantomData<(I, S, VS)>,
 }
 
@@ -125,12 +126,16 @@ where
             storage_dump: Default::default(),
             builder: None,
             phantom: Default::default(),
+            address_to_abi: Default::default(),
             storage_fetching,
         }
     }
 
     pub fn add_builder(&mut self, builder: BuildJob) {
         self.builder = Some(builder);
+    }
+    pub fn add_abi(&mut self, abi: HashMap<EVMAddress, Vec<ABIConfig>>) {
+        self.address_to_abi = abi;
     }
 
     pub fn add_blacklist(&mut self, address: EVMAddress) {
@@ -337,74 +342,77 @@ where
                 self.loaded_abi.insert(address_h160);
                 let is_proxy_call = matches!(*interp.instruction_pointer, 0xf2 | 0xf4);
 
-                let mut abi = None;
-                if let Some(builder) = &self.builder {
-                    println!("onchain job {:?}", address_h160);
-                    let build_job =
-                        builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
-
-                    if let Some(job) = build_job {
-                        abi = Some(job.abi.clone());
-                        // replace the code with the one from builder
-                        // println!("replace code for {:?} with builder's", address_h160);
-                        // host.set_codedata(address_h160, contract_code.clone());
-                        state
-                            .metadata_map_mut()
-                            .get_mut::<ArtifactInfoMetadata>()
-                            .expect("artifact info metadata")
-                            .add(address_h160, job);
-                    }
-                }
-
-                if abi.is_none() {
-                    println!("fetching abi {:?}", address_h160);
-                    abi = self.endpoint.fetch_abi(address_h160);
-                }
-
                 let mut parsed_abi = vec![];
-                match abi {
-                    Some(ref abi_ins) => parsed_abi = ContractLoader::parse_abi_str(abi_ins),
-                    None => {
-                        // 1. Extract abi from bytecode, and see do we have any function sig available in state
-                        // 2. Use Heimdall to extract abi
-                        // 3. Reconfirm on failures of heimdall
-                        println!("Contract {:?} has no abi", address_h160);
-                        let contract_code_str = hex::encode(contract_code.bytes());
-                        let sigs = extract_sig_from_contract(&contract_code_str);
-                        let mut unknown_sigs: usize = 0;
-                        for sig in &sigs {
-                            if let Some(abi) =
-                                state.metadata_map().get::<ABIMap>().unwrap().get(sig)
-                            {
-                                parsed_abi.push(abi.clone());
-                            } else {
-                                unknown_sigs += 1;
+                if let Some(abis) = self.address_to_abi.get(&address_h160) {
+                    parsed_abi = abis.clone();
+                } else {
+                    let mut abi = None;
+                    if let Some(builder) = &self.builder {
+                        println!("onchain job {:?}", address_h160);
+                        let build_job =
+                            builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
+
+                        if let Some(job) = build_job {
+                            abi = Some(job.abi.clone());
+                            // replace the code with the one from builder
+                            // println!("replace code for {:?} with builder's", address_h160);
+                            // host.set_codedata(address_h160, contract_code.clone());
+                            state
+                                .metadata_map_mut()
+                                .get_mut::<ArtifactInfoMetadata>()
+                                .expect("artifact info metadata")
+                                .add(address_h160, job);
+                        }
+                    }
+
+                    if abi.is_none() {
+                        println!("fetching abi {:?}", address_h160);
+                        abi = self.endpoint.fetch_abi(address_h160);
+                    }
+
+                    match abi {
+                        Some(ref abi_ins) => parsed_abi = ContractLoader::parse_abi_str(abi_ins),
+                        None => {
+                            // 1. Extract abi from bytecode, and see do we have any function sig available in state
+                            // 2. Use Heimdall to extract abi
+                            // 3. Reconfirm on failures of heimdall
+                            println!("Contract {:?} has no abi", address_h160);
+                            let contract_code_str = hex::encode(contract_code.bytes());
+                            let sigs = extract_sig_from_contract(&contract_code_str);
+                            let mut unknown_sigs: usize = 0;
+                            for sig in &sigs {
+                                if let Some(abi) =
+                                    state.metadata_map().get::<ABIMap>().unwrap().get(sig)
+                                {
+                                    parsed_abi.push(abi.clone());
+                                } else {
+                                    unknown_sigs += 1;
+                                }
+                            }
+
+                            if unknown_sigs >= sigs.len() / 30 {
+                                println!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
+                                let abis = fetch_abi_heimdall(contract_code_str)
+                                    .iter()
+                                    .map(|abi| {
+                                        if let Some(known_abi) = state
+                                            .metadata_map()
+                                            .get::<ABIMap>()
+                                            .unwrap()
+                                            .get(&abi.function)
+                                        {
+                                            known_abi
+                                        } else {
+                                            abi
+                                        }
+                                    })
+                                    .cloned()
+                                    .collect_vec();
+                                parsed_abi = abis;
                             }
                         }
-
-                        if unknown_sigs >= sigs.len() / 30 {
-                            println!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
-                            let abis = fetch_abi_heimdall(contract_code_str)
-                                .iter()
-                                .map(|abi| {
-                                    if let Some(known_abi) = state
-                                        .metadata_map()
-                                        .get::<ABIMap>()
-                                        .unwrap()
-                                        .get(&abi.function)
-                                    {
-                                        known_abi
-                                    } else {
-                                        abi
-                                    }
-                                })
-                                .cloned()
-                                .collect_vec();
-                            parsed_abi = abis;
-                        }
                     }
                 }
-
                 // set up host
                 let mut abi_hashes_to_add = HashSet::new();
                 if is_proxy_call {

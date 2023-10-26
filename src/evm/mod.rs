@@ -507,7 +507,7 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Config => ContractLoader::from_config(
                 &offchain_artifacts.expect("offchain artifacts is required for config target type"),
                 &offchain_config.expect("offchain config is required for config target type"),
-                onchain.as_mut().unwrap(),
+                &mut onchain,
             ),
 
             EVMTargetType::ArtifactAndProxy => {
