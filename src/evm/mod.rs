@@ -11,18 +11,18 @@ pub mod feedbacks;
 pub mod host;
 pub mod input;
 pub mod middlewares;
+pub mod minimizer;
 pub mod mutator;
 pub mod onchain;
 pub mod oracle;
 pub mod oracles;
 pub mod presets;
 pub mod producers;
+pub mod solution;
 pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod solution;
-pub mod minimizer;
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
@@ -186,6 +186,9 @@ pub struct EvmArgs {
 
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    integer_overflow_oracle: bool,
 
     #[arg(long, default_value = "true")]
     echidna_oracle: bool,
@@ -592,6 +595,7 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
         arbitrary_external_call: args.arbitrary_external_call_oracle,
+        integer_overflow_oracle: args.integer_overflow_oracle,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),

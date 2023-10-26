@@ -16,8 +16,10 @@ use crate::{
     evm::host::FuzzHost,
     evm::{
         contract_utils::{copy_local_source_code, modify_concolic_skip},
+        middlewares::{integer_overflow::IntegerOverflowMiddleware, reentrancy::ReentrancyTracer},
+        oracles::{integer_overflow::IntegerOverflowOracle, reentrancy::ReentrancyOracle},
         types::ProjectSourceMapTy,
-        vm::EVMExecutor, oracles::reentrancy::ReentrancyOracle, middlewares::reentrancy::ReentrancyTracer,
+        vm::EVMExecutor,
     },
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
@@ -219,6 +221,10 @@ pub fn evm_fuzzer(
 
     if config.reentrancy_oracle {
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
+    }
+
+    if config.integer_overflow_oracle {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new())));
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -436,6 +442,13 @@ pub fn evm_fuzzer(
         ))));
     }
 
+    if config.integer_overflow_oracle {
+        oracles.push(Rc::new(RefCell::new(IntegerOverflowOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
     let mut producers = config.producers;
 
     let objective: OracleFeedback<
@@ -556,7 +569,6 @@ pub fn evm_fuzzer(
             //     EVAL_COVERAGE = false;
             //     CALL_UNTIL = u32::MAX;
             // }
-
 
             // fuzzer
             //     .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
