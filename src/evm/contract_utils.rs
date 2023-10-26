@@ -222,7 +222,7 @@ impl ContractLoader {
         // get constructor args
         let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(constructor_args);
 
-        // create dummy contract debug
+        // create dummy contract info
         let mut contract_result = ContractInfo {
             name: prefix.to_string(),
             code: vec![],
@@ -230,8 +230,8 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
-            source_map: source_map_info.map(|debug| {
-                debug.get(contract_name.as_str())
+            source_map: source_map_info.map(|info| {
+                info.get(contract_name.as_str())
                     .unwrap_or_else(|| {
                         panic!(
                             "combined.json provided but contract ({:?}) not found",
@@ -492,7 +492,7 @@ impl ContractLoader {
                 }
             }
 
-            let more_info = more_info.expect("Failed to find contract debug");
+            let more_info = more_info.expect("Failed to find contract info");
             let sources = sources.expect("Failed to find sources");
             let abi = Self::parse_abi_str(&more_info.abi);
 
