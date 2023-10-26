@@ -25,11 +25,11 @@ impl InvariantOracle {
             batch_call_txs: invariant_funcs
                 .iter()
                 .map(|(address, invariant_func)| {
-                    let echidna_txn = Bytes::from(invariant_func.clone());
+                    let invariant_tx = Bytes::from(invariant_func.clone());
                     (
                         EVMAddress::from_str("0x0000000000000000000000000000000000007777").unwrap(),
                         *address,
-                        echidna_txn,
+                        invariant_tx,
                     )
                 })
                 .collect_vec(),

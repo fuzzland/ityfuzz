@@ -41,6 +41,7 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
                     is_static: func.state_mutability == "view",
                     is_payable: func.state_mutability == "payable",
                     is_constructor: false,
+                    should_add_corpus: true,
                 };
                 abi_config
                     .function

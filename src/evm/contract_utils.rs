@@ -28,6 +28,7 @@ use regex::Regex;
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
 
+use super::blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
 use super::types::ProjectSourceMapTy;
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
@@ -41,6 +42,7 @@ pub struct ABIConfig {
     pub is_static: bool,
     pub is_payable: bool,
     pub is_constructor: bool,
+    pub should_add_corpus: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +53,6 @@ pub struct ContractInfo {
     pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
     pub deployed_address: EVMAddress,
-    pub should_add_corpus: bool,
     pub source_map: Option<HashMap<usize, SourceMapLocation>>,
     pub build_artifact: Option<BuildJobResult>,
 }
@@ -134,15 +135,14 @@ impl ContractLoader {
                         is_static: abi["stateMutability"] == "view",
                         is_payable: abi["stateMutability"] == "payable",
                         is_constructor: abi["type"] == "constructor",
+                        should_add_corpus: true,  // delaying determination of this to later
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
                     // print name and abi_name
-                    println!("{}({})", name, abi_name.join(","));
 
                     set_hash(function_to_hash.as_str(), &mut abi_config.function);
                     Some(abi_config)
                 } else if abi["type"] == "receive" && abi["stateMutability"] == "payable" {
-                    println!("{} is payable", abi["type"]);
                     Some(ABIConfig {
                         abi: String::from("()"),
                         function: [0; 4],
@@ -150,9 +150,9 @@ impl ContractLoader {
                         is_static: false,
                         is_payable: true,
                         is_constructor: false,
+                        should_add_corpus: true,
                     })
                 } else if abi["type"] == "fallback" {
-                    println!("{} {}", abi["type"], abi["stateMutability"]);
                     Some(ABIConfig {
                         abi: String::from("(bytes)"),
                         function: [0; 4],
@@ -160,9 +160,9 @@ impl ContractLoader {
                         is_static: false,
                         is_payable: abi["stateMutability"] == "payable",
                         is_constructor: false,
+                        should_add_corpus: true,
                     })
                 } else {
-                    println!("{} abi type", abi["type"]);
                     None
                 }
             })
@@ -230,7 +230,6 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
-            should_add_corpus: true,
             source_map: source_map_info.map(|info| {
                 info.get(contract_name.as_str())
                     .unwrap_or_else(|| {
@@ -465,7 +464,6 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
-                should_add_corpus: true,
                 source_map: None,
                 build_artifact,
             });
@@ -480,7 +478,6 @@ impl ContractLoader {
     pub fn from_config(
         offchain_artifacts: &Vec<OffChainArtifact>,
         offchain_config: &OffchainConfig,
-        onchain: &mut Option<OnChainConfig>,
     ) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
@@ -507,50 +504,115 @@ impl ContractLoader {
 
             let constructor_args =
                 hex::decode(contract_info.constructor.clone()).expect("failed to decode hex");
-            if let Some(onchain) = onchain {
-                contracts.push(ContractInfo {
-                    name: format!("{}:{}", slug.0, slug.1),
-                    code: onchain
-                        .get_contract_code(contract_info.address, false)
-                        .bytes()
-                        .to_vec(),
-                    abi,
-                    is_code_deployed: true,
-                    constructor_args,
-                    deployed_address: contract_info.address,
-                    should_add_corpus: true,
-                    source_map: None,
-                    build_artifact: Some(BuildJobResult::new(
-                        sources,
-                        more_info.source_map,
-                        more_info.deploy_bytecode,
-                        more_info.abi.clone(),
-                        more_info.source_map_replacements.clone(),
-                    )),
-                })
-            } else {
-                contracts.push(ContractInfo {
-                    name: format!("{}:{}", slug.0, slug.1),
-                    code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
-                    abi,
-                    is_code_deployed: false,
-                    constructor_args,
-                    deployed_address: contract_info.address,
-                    should_add_corpus: true,
-                    source_map: None,
-                    build_artifact: Some(BuildJobResult::new(
-                        sources,
-                        more_info.source_map,
-                        more_info.deploy_bytecode,
-                        more_info.abi.clone(),
-                        more_info.source_map_replacements.clone(),
-                    )),
-                })
-            }
+            contracts.push(ContractInfo {
+                name: format!("{}:{}", slug.0, slug.1),
+                code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
+                abi,
+                is_code_deployed: false,
+                constructor_args,
+                deployed_address: contract_info.address,
+                source_map: None,
+                build_artifact: Some(BuildJobResult::new(
+                    sources,
+                    more_info.source_map,
+                    more_info.deploy_bytecode,
+                    more_info.abi.clone(),
+                    more_info.source_map_replacements.clone(),
+                )),
+            });
         }
 
         Self { contracts, abis }
     }
+
+    /// This function is used to find the contract artifact from offchain artifacts by comparing the bytecode
+    /// It will return the index of the artifact and the location of the contract
+    fn find_contract_artifact(to_find: Vec<u8>, offchain_artifacts: &Vec<OffChainArtifact>) -> (usize, (String, String)) {
+        let mut candidates = vec![];
+        let mut all_candidates = vec![];
+        for (idx, artifact) in offchain_artifacts.iter().enumerate() {
+            for (loc, contract) in &artifact.contracts {
+                if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) < 2 {
+                    candidates.push((idx, loc.clone()));
+                }
+                all_candidates.push((idx, loc.clone()));
+            }
+        }
+        if candidates.len() == 0 {
+            candidates = all_candidates;
+        }
+        
+        let diffs = candidates.iter().map(|(idx, loc)| {
+            let artifact = &offchain_artifacts[*idx].contracts[loc];
+            is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
+        }).collect::<Vec<_>>();
+        
+        let mut min_diff = usize::MAX;
+        let mut selected_idx = 0;
+        
+        for (idx, diff) in diffs.iter().enumerate() {
+            if *diff < min_diff {
+                min_diff = *diff;
+                selected_idx = idx;
+            }
+        }
+
+        let (idx, loc) = candidates[selected_idx].clone();
+        return (idx, loc);
+    }
+
+
+    pub fn from_fork(
+        offchain_artifacts: &Vec<OffChainArtifact>,
+        onchain: &mut OnChainConfig,
+        targets: HashSet<EVMAddress>,
+    ) -> Self {
+        let mut contracts: Vec<ContractInfo> = vec![];
+        let mut abis: Vec<ABIInfo> = vec![];
+
+        for artifact in offchain_artifacts {
+            for (slug, contract_artifact) in &artifact.contracts {
+                let abi = Self::parse_abi_str(&contract_artifact.abi);
+                abis.push(ABIInfo {
+                    source: format!("{}:{}", slug.0, slug.1),
+                    abi: abi.clone(),
+                });
+            }
+        }
+
+        for addr in targets {
+            let contract_code = onchain.get_contract_code(addr, false);
+            let (artifact_idx, slug) = Self::find_contract_artifact(contract_code.bytes().to_vec(), offchain_artifacts);
+
+            println!("Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub", addr, slug);
+
+            let artifact = &offchain_artifacts[artifact_idx];
+            let more_info = &artifact.contracts[&slug];
+
+            let abi: Vec<ABIConfig> = Self::parse_abi_str(&more_info.abi);
+
+
+            contracts.push(ContractInfo {
+                name: format!("{:?}", addr),
+                code: contract_code.bytes().to_vec(),
+                abi,
+                is_code_deployed: true,
+                constructor_args: vec![],
+                deployed_address: addr,
+                source_map: None,
+                build_artifact: Some(BuildJobResult::new(
+                    artifact.sources.clone(),
+                    more_info.source_map.clone(),
+                    more_info.deploy_bytecode.clone(),
+                    more_info.abi.clone(),
+                    more_info.source_map_replacements.clone(),
+                )),
+            });
+        }
+        Self { contracts, abis }
+    }
+
+
 }
 
 type ContractSourceMap = HashMap<usize, SourceMapLocation>;

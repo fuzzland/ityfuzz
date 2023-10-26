@@ -273,7 +273,7 @@ pub struct EvmArgs {
 enum EVMTargetType {
     Glob,
     Address,
-    ArtifactAndProxy,
+    AnvilFork,
     Config,
 }
 
@@ -458,13 +458,13 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     let offchain_artifacts = if args.builder_artifacts_url.len() > 0 {
-        target_type = EVMTargetType::ArtifactAndProxy;
+        target_type = EVMTargetType::AnvilFork;
         Some(
             OffChainArtifact::from_json_url(args.builder_artifacts_url)
                 .expect("failed to parse builder artifacts"),
         )
     } else if args.builder_artifacts_file.len() > 0 {
-        target_type = EVMTargetType::ArtifactAndProxy;
+        target_type = EVMTargetType::AnvilFork;
         Some(
             OffChainArtifact::from_file(args.builder_artifacts_file)
                 .expect("failed to parse builder artifacts"),
@@ -500,16 +500,18 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Config => ContractLoader::from_config(
                 &offchain_artifacts.expect("offchain artifacts is required for config target type"),
                 &offchain_config.expect("offchain config is required for config target type"),
-                &mut onchain,
             ),
-
-            EVMTargetType::ArtifactAndProxy => {
-                // ContractLoader::from_artifacts_and_proxy(
-                //     &offchain_artifacts.expect("offchain artifacts is required for artifact and proxy target type"),
-                //     &proxy_deploy_codes,
-                // )
-                todo!("Artifact and proxy is not supported yet")
-            }
+            EVMTargetType::AnvilFork => {
+                let addresses: Vec<EVMAddress> = args.target
+                    .split(',')
+                    .map(|s| EVMAddress::from_str(s).unwrap())
+                    .collect();
+                ContractLoader::from_fork(
+                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                    onchain.as_mut().expect("onchain is required to fork anvil"),
+                    HashSet::from_iter(addresses),
+                )
+            },
             EVMTargetType::Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");

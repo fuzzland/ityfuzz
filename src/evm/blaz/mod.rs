@@ -23,11 +23,11 @@ fn get_client() -> reqwest::blocking::Client {
 /// In this, we'll just check all push4
 /// Hay = longer contract, with constructor args
 /// Needle = shorter contract, without constructor args
-pub fn is_bytecode_similar_lax(hay: Vec<u8>, needle: Vec<u8>) -> bool {
+pub fn is_bytecode_similar_lax(hay: Vec<u8>, needle: Vec<u8>) -> usize {
     skip_cbor!({
         let push4_hay: HashSet<_> = extract_sig_from_contract(hex::encode(hay).as_str()).iter().cloned().collect();
         let push4_needle: HashSet<_> = extract_sig_from_contract(hex::encode(needle).as_str()).iter().cloned().collect();
-        push4_needle.difference(&push4_hay).count() == 0
+        push4_needle.difference(&push4_hay).count() + push4_hay.difference(&push4_needle).count()
     })
 }
 
@@ -36,7 +36,7 @@ pub fn is_bytecode_similar_strict_ranking(hay: Vec<u8>, needle: Vec<u8>) -> usiz
     skip_cbor!({
         let constants_hay = find_constants(&Bytecode::new_raw(Bytes::from(hay)));
         let constants_needle = find_constants(&Bytecode::new_raw(Bytes::from(needle)));
-        constants_needle.difference(&constants_hay).count()
+        constants_needle.difference(&constants_hay).count() + constants_hay.difference(&constants_needle).count()
     })
 }
 
