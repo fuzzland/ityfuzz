@@ -20,6 +20,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use tracing::{debug, info};
 
 use super::types::checksum;
 
@@ -242,7 +243,7 @@ impl BoxedABI {
 
     /// Set the function hash with function signature, so that we can print the function signature or name instead of hash
     pub fn set_func_with_signature(&mut self, function: [u8; 4], fn_name: &str, fn_args: &str) {
-        println!("set_func_with_signature: {}{}", fn_name, fn_args);
+        debug!("set_func_with_signature: {}{}", fn_name, fn_args);
         self.function = function;
         unsafe {
             FUNCTION_SIG.insert(function, format!("{}{}", fn_name, fn_args));
@@ -625,7 +626,7 @@ impl ABI for A256 {
             let mut ptr = bytes.as_mut_ptr();
             ptr = ptr.add(32 - data_len);
             for i in 0..data_len {
-                println!("[concolic] AAAAAAAA {}_A256_{}", counter, i);
+                debug!("[concolic] AAAAAAAA {}_A256_{}", counter, i);
                 *ptr.add(i) = Expr::sym_byte(format!("{}_A256_{}", counter, i));
             }
         }
@@ -1233,7 +1234,7 @@ mod tests {
             .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
                 &mut test_state,
             );
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abi.get_bytes())
@@ -1248,7 +1249,7 @@ mod tests {
             .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
                 &mut test_state,
             );
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abi.get_bytes())
@@ -1263,7 +1264,7 @@ mod tests {
             .mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(
                 &mut test_state,
             );
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abi.get_bytes())
@@ -1280,7 +1281,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1297,7 +1298,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1314,7 +1315,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1331,7 +1332,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1348,7 +1349,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1365,7 +1366,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1382,7 +1383,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1400,7 +1401,7 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
         abi.set_bytes(abibytes.clone());
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)
@@ -1418,17 +1419,17 @@ mod tests {
             );
         let abibytes = abi.get_bytes();
 
-        println!("abibytes: {:?}", hex::encode(abibytes.clone()));
+        debug!("abibytes: {:?}", hex::encode(abibytes.clone()));
 
         abi.set_bytes(abibytes.clone());
 
         let newbytes = abi.get_bytes();
         if newbytes != abibytes {
-            println!("oldbytes: {:?}", hex::encode(abibytes));
-            println!("newbytes: {:?}", hex::encode(newbytes));
+            debug!("oldbytes: {:?}", hex::encode(abibytes));
+            debug!("newbytes: {:?}", hex::encode(newbytes));
             panic!("bytes mismatch");
         }
-        println!(
+        debug!(
             "result: {:?} abi: {:?}",
             mutation_result,
             hex::encode(abibytes)

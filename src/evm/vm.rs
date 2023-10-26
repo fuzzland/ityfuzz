@@ -4,6 +4,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use tracing::{error, debug};
 
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
@@ -513,7 +514,7 @@ where
         let mut bytecode = match self.host.code.get(&call_ctx.code_address) {
             Some(i) => i.clone(),
             None => {
-                println!(
+                error!(
                     "no code @ {:?}, did you forget to deploy?",
                     call_ctx.code_address
                 );
@@ -556,7 +557,7 @@ where
         // Execute the contract for `repeats` times or until revert
         let mut r = InstructionResult::Stop;
         for v in 0..repeats - 1 {
-            // println!("repeat: {:?}", v);
+            // debug!("repeat: {:?}", v);
             r = self.host.run_inspect(&mut interp, state);
             interp.stack.data.clear();
             interp.memory.data.clear();
@@ -621,7 +622,7 @@ where
         unsafe {
             IS_FAST_CALL = true;
         }
-        // println!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
+        // debug!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()), value);
         let call = Contract::new_with_context_analyzed(
             data,
             self.host
@@ -844,7 +845,7 @@ where
                 .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
-        // println!("r.ret: {:?}", r.ret);
+        // debug!("r.ret: {:?}", r.ret);
 
         unsafe {
             ExecutionResult {
@@ -915,7 +916,7 @@ where
         deployed_address: EVMAddress,
         state: &mut S,
     ) -> Option<EVMAddress> {
-        println!("deployer = 0x{} ", hex::encode(self.deployer));
+        debug!("deployer = 0x{} ", hex::encode(self.deployer));
         let deployer = Contract::new(
             constructor_args.unwrap_or(Bytes::new()),
             code,
@@ -936,10 +937,10 @@ where
             IN_DEPLOY = false;
         }
         if r != InstructionResult::Return {
-            println!("deploy failed: {:?}", r);
+            error!("deploy failed: {:?}", r);
             return None;
         }
-        println!(
+        debug!(
             "deployer = 0x{} contract = {:?}",
             hex::encode(self.deployer),
             hex::encode(interp.return_value())
@@ -1196,6 +1197,7 @@ mod tests {
     use std::path::Path;
     use std::rc::Rc;
     use std::sync::Arc;
+    use tracing::debug;
 
     #[test]
     fn test_fuzz_executor() {
@@ -1235,7 +1237,7 @@ mod tests {
             )
             .unwrap();
 
-        println!("deployed to address: {:?}", deployment_loc);
+        debug!("deployed to address: {:?}", deployment_loc);
 
         let function_hash = hex::decode("90b6e333").unwrap();
 
@@ -1312,7 +1314,7 @@ mod tests {
         for i in 0..MAP_SIZE {
             let hit = unsafe { JMP_MAP[i] };
             if hit != know_map[i] && hit != 0 {
-                println!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
+                debug!("jmp_map[{}] = known: {}; new: {}", i, know_map[i], hit);
                 unsafe { JMP_MAP[i] = 0 };
                 cov_changed = true;
             }

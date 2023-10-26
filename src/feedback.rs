@@ -28,6 +28,7 @@ use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
+use tracing::debug;
 
 /// OracleFeedback is a wrapper around a set of oracles and producers.
 /// It executes the producers and then oracles after each successful execution. If any of the oracle
@@ -116,7 +117,7 @@ where
         }
     }
 
-    /// Determines whether the current execution reproduces the bug 
+    /// Determines whether the current execution reproduces the bug
     /// specified in the bug_idx.
     pub fn reproduces(
         &mut self,
@@ -181,7 +182,7 @@ where
 
         before_exit!();
         bug_to_hit.is_empty()
-    } 
+    }
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<S>
@@ -395,7 +396,7 @@ where
                 };
                 // update the global write map, if the current write map is not set, then it is interesting
                 if !self.global_write_map[i % MAP_SIZE][category] {
-                    // println!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
+                    // debug!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
                     interesting = true;
                     self.global_write_map[i % MAP_SIZE][category] = true;
                 }
@@ -542,16 +543,14 @@ where
 
         // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
-            #[cfg(feature = "debug")]
-            println!("Voted for {} because of CMP", input.get_state_idx());
+            debug!("Voted for {} because of CMP", input.get_state_idx());
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
         // if coverage has increased, vote for the state
         if cov_interesting {
-            #[cfg(feature = "debug")]
-            println!("Voted for {} because of COV", input.get_state_idx());
+            debug!("Voted for {} because of COV", input.get_state_idx());
 
             self.scheduler
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);

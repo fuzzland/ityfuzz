@@ -27,6 +27,7 @@ use crate::evm::vm::IN_DEPLOY;
 use serde_json;
 use crate::evm::blaz::builder::ArtifactInfoMetadata;
 use crate::evm::bytecode_iterator::{all_bytecode, walk_bytecode};
+use tracing::info;
 
 pub static mut EVAL_COVERAGE: bool = false;
 
@@ -170,9 +171,9 @@ impl CoverageReport {
     }
 
     pub fn summarize(&self) {
-        println!("============= Coverage Summary =============");
+        info!("============= Coverage Summary =============");
         for (addr, cov) in &self.coverage {
-            println!(
+            info!(
                 "{}: {:.2}% Instruction Covered, {:.2}% Branch Covered",
                 addr,
                 (cov.instruction_coverage * 100) as f64 / cov.total_instructions as f64,

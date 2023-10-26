@@ -11,6 +11,7 @@ use libafl::state::UsesState;
 use libafl_bolts::{impl_serdeany, prelude::Rand};
 
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info};
 
 use rand::random;
 use std::collections::HashMap;
@@ -279,7 +280,7 @@ where
             let data = state.metadata_map().get::<VoteData>().unwrap();
             use crate::r#const::DEBUG_PRINT_PERCENT;
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-                println!(
+                info!(
                     "======================= corpus size: {} =======================",
                     corpus_size
                 );
@@ -288,7 +289,7 @@ where
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
                     match inp.into_inner().input() {
                         Some(x) => {
-                            println!(
+                            info!(
                                 "idx: {}, votes: {}, visits: {}: {:?}",
                                 idx, votes, visits, x
                             );
@@ -296,7 +297,7 @@ where
                         _ => {}
                     }
                 }
-                println!("======================= corpus  =======================");
+                info!("======================= corpus  =======================");
             }
         }
 
@@ -367,10 +368,9 @@ where
             if v.is_some() {
                 let (votes, _visits) = v.expect("scheduler metadata malformed");
                 *votes += increment;
-                #[cfg(feature = "debug")]
-                println!("Voted for {}", idx);
+                debug!("Voted for {}", idx);
             } else {
-                println!("scheduler metadata malformed");
+                debug!("scheduler metadata malformed");
             }
         }
 

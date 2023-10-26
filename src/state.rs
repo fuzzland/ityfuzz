@@ -13,6 +13,7 @@ use std::cell::{Ref, RefMut};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::time::Duration;
+use tracing::debug;
 
 use libafl::state::{
     HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
@@ -238,7 +239,7 @@ where
         if lparam_seed == 0 {
             seed = current_nanos();
         }
-        println!("Seed: {}", seed);
+        debug!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
             #[cfg(not(feature = "evaluation"))]
