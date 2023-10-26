@@ -247,7 +247,6 @@ impl ContractLoader {
             abi: vec![],
         };
 
-        debug!("");
         debug!("Loading contract {}", prefix);
 
         // Load contract, ABI, and address from file

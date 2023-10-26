@@ -187,7 +187,6 @@ where
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
         for contract in &mut loader.contracts {
-            info!("");
             info!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(
