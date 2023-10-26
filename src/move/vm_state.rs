@@ -4,7 +4,6 @@ use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::effects::Op;
 use move_core_types::gas_algebra::NumBytes;
-use tracing::debug;
 
 use move_core_types::language_storage::ModuleId;
 
@@ -320,7 +319,7 @@ impl MoveVMState {
 
 
         if !ret_ty.is_ref() {
-            debug!("looking for struct abilities for {:?} {:?}", value, ty);
+            println!("looking for struct abilities for {:?} {:?}", value, ty);
             let struct_abilities = state
                 .metadata_map()
                 .get::<StructAbilities>()
