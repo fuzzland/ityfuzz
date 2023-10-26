@@ -23,7 +23,7 @@ use crate::evm::vm::{Constraint, EVMStateT};
 use revm_interpreter::Interpreter;
 use std::fmt::Debug;
 
-use crate::state::{HasItyState, HasPresets, HasHashToAddress};
+use crate::state::{HasItyState, HasPresets};
 
 /// [`AccessPattern`] records the access pattern of the input during execution. This helps
 /// to determine what is needed to be fuzzed. For instance, we don't need to mutate caller
@@ -222,7 +222,6 @@ where
         + HasCaller<Addr>
         + HasMetadata
         + HasPresets
-        + HasHashToAddress,
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + EVMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
@@ -243,7 +242,7 @@ where
         }
 
         // use exploit template
-        if state.has_preset() && state.rand_mut().below(100) < 50 {
+        if state.has_preset() && state.rand_mut().below(100) < 20 {
 
             // if flashloan_v2, we don't mutate if it's a borrow
             #[cfg(feature = "flashloan_v2")]
