@@ -1137,7 +1137,7 @@ where
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                println!("ret: {:?} {} {}", ret,hex::encode(by.clone()), hex::encode(interp.return_data_buffer.clone()));
+                // println!("ret: {:?} {} {}", ret,hex::encode(by.clone()), hex::encode(interp.return_data_buffer.clone()));
                 if is_call_success!(ret) {
                     (interp.return_value().to_vec(), true)
                 } else {
