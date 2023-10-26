@@ -51,7 +51,7 @@ use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
 use crate::evm::onchain::flashloan::FlashloanData;
 use crate::evm::types::{EVMAddress, EVMU256};
-use crate::evm::uniswap::generate_uniswap_router_call;
+use crate::evm::uniswap::generate_uniswap_router_buy;
 use crate::evm::vm::Constraint::{NoLiquidation, Value};
 use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
 use crate::generic_vm::vm_state::VMStateT;
@@ -707,7 +707,15 @@ where
 
         loop {
             unsafe {
-                invoke_middlewares!(&mut self.host, None, state, before_execute, is_step, &mut data, &mut vm_state);
+                invoke_middlewares!(
+                    &mut self.host,
+                    None,
+                    state,
+                    before_execute,
+                    is_step,
+                    &mut data,
+                    &mut vm_state
+                );
             }
             // Execute the transaction
             let exec_res = if is_step {
@@ -770,7 +778,9 @@ where
         }
         let mut r = r.unwrap();
         match r.ret {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => unsafe {
+            ControlLeak
+            | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+            | InstructionResult::AddressUnboundedStaticCall => unsafe {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -791,7 +801,9 @@ where
 
                     constraints: match r.ret {
                         ControlLeak => vec![],
-                        InstructionResult::AddressUnboundedStaticCall => vec![Constraint::MustStepNow],
+                        InstructionResult::AddressUnboundedStaticCall => {
+                            vec![Constraint::MustStepNow]
+                        }
                         InstructionResult::ArbitraryExternalCallAddressBounded(
                             caller,
                             target,
@@ -807,7 +819,7 @@ where
                         _ => unreachable!(),
                     },
                 });
-            }
+            },
             _ => {}
         }
 
@@ -841,11 +853,11 @@ where
                 reverted: !matches!(
                     r.ret,
                     InstructionResult::Return
-                    | InstructionResult::Stop
-                    | InstructionResult::ControlLeak
-                    | InstructionResult::SelfDestruct
-                    | InstructionResult::AddressUnboundedStaticCall
-                    | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+                        | InstructionResult::Stop
+                        | InstructionResult::ControlLeak
+                        | InstructionResult::SelfDestruct
+                        | InstructionResult::AddressUnboundedStaticCall
+                        | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
                 ),
                 new_state: StagedVMState::new_with_state(
                     VMStateT::as_any(&r.new_state)
@@ -936,7 +948,14 @@ where
         let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
         unsafe {
-            invoke_middlewares!(&mut self.host, Some(&mut interp), state, on_insert, &mut contract_code, deployed_address);
+            invoke_middlewares!(
+                &mut self.host,
+                Some(&mut interp),
+                state,
+                on_insert,
+                &mut contract_code,
+                deployed_address
+            );
         }
         self.host.set_code(deployed_address, contract_code, state);
         Some(deployed_address)
@@ -966,7 +985,7 @@ where
 
                 let path_idx = input.get_randomness()[0] as usize;
                 // generate the call to uniswap router for buying tokens using ETH
-                let call_info = generate_uniswap_router_call(
+                let call_info = generate_uniswap_router_buy(
                     get_token_ctx!(
                         self.host
                             .flashloan_middleware

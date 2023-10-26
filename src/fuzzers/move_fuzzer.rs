@@ -104,7 +104,6 @@ pub fn move_fuzzer(
 
     let objective = OracleFeedback::new(&mut oracles, &mut producers, vm_ref.clone());
 
-
     //
     let mut fuzzer = ItyFuzzer::new(
         scheduler,
