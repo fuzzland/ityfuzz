@@ -1,4 +1,4 @@
-use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution};
+use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution, ALL_WORKER_THREADS};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::MiddlewareType;
 use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy};
@@ -127,6 +127,12 @@ where
                         self.sourcemap.clone(),
                     ))));
                 vm.execute(&testcase_ref, state);
+                let mut worker_threads = ALL_WORKER_THREADS.lock().unwrap();
+                while worker_threads.len() > 0 {
+                    let curr_thread = worker_threads.remove(0);
+                    curr_thread.join().unwrap();
+                }
+
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);
             }
         }

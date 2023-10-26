@@ -43,6 +43,7 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
     static ref ALL_SOLUTIONS: Arc<Mutex<Vec<Solution>>> = Arc::new(Mutex::new(Vec::new()));
+    pub static ref ALL_WORKER_THREADS: Mutex<Vec::<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
 }
 
 pub static mut CONCOLIC_TIMEOUT: u32 = 1000;  // 1s
@@ -683,7 +684,7 @@ impl<I, VS> ConcolicHost<I, VS> {
         let input_bytes = self.input_bytes.clone();
         let constraints = self.constraints.clone();
 
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             let context = Context::new(&Config::default());
             let callvalue = BV::new_const(&context, "callvalue", 256);
             let caller = BV::new_const(&context, "caller", 256);
@@ -702,6 +703,8 @@ impl<I, VS> ConcolicHost<I, VS> {
             let mut solutions_clone = solutions_clone.lock().unwrap();
             solutions_clone.extend(solutions);
         });
+
+        ALL_WORKER_THREADS.lock().unwrap().push(handle);
     }
 
     pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
