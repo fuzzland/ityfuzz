@@ -9,7 +9,6 @@ use std::fs::File;
 use itertools::Itertools;
 use std::io::Read;
 use std::path::Path;
-use tracing::{error, debug};
 
 extern crate crypto;
 
@@ -137,12 +136,12 @@ impl ContractLoader {
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
                     // print name and abi_name
-                    debug!("{}({})", name, abi_name.join(","));
+                    println!("{}({})", name, abi_name.join(","));
 
                     set_hash(function_to_hash.as_str(), &mut abi_config.function);
                     Some(abi_config)
                 } else if abi["type"] == "receive" && abi["stateMutability"] == "payable" {
-                    debug!("{} is payable", abi["type"]);
+                    println!("{} is payable", abi["type"]);
                     Some(ABIConfig {
                         abi: String::from("()"),
                         function: [0; 4],
@@ -152,7 +151,7 @@ impl ContractLoader {
                         is_constructor: false,
                     })
                 } else if abi["type"] == "fallback" {
-                    debug!("{} {}", abi["type"], abi["stateMutability"]);
+                    println!("{} {}", abi["type"], abi["stateMutability"]);
                     Some(ABIConfig {
                         abi: String::from("(bytes)"),
                         function: [0; 4],
@@ -162,7 +161,7 @@ impl ContractLoader {
                         is_constructor: false,
                     })
                 } else {
-                    debug!("{} abi type", abi["type"]);
+                    println!("{} abi type", abi["type"]);
                     None
                 }
             })
@@ -247,7 +246,8 @@ impl ContractLoader {
             abi: vec![],
         };
 
-        debug!("Loading contract {}", prefix);
+        println!();
+        println!("Loading contract {}", prefix);
 
         // Load contract, ABI, and address from file
         for i in glob(prefix).expect("not such path for prefix") {
@@ -257,7 +257,7 @@ impl ContractLoader {
                         // this is an ABI file
                         abi_result.abi = Self::parse_abi(&path);
                         contract_result.abi = abi_result.abi.clone();
-                        // debug!("ABI: {:?}", result.abis);
+                        // println!("ABI: {:?}", result.abis);
                     } else if path.to_str().unwrap().ends_with(".bin") {
                         // this is an BIN file
                         contract_result.code = Self::parse_hex_file(&path);
@@ -268,10 +268,10 @@ impl ContractLoader {
                             .0
                             .clone_from_slice(Self::parse_hex_file(&path).as_slice());
                     } else {
-                        debug!("Found unknown file: {:?}", path.display())
+                        println!("Found unknown file: {:?}", path.display())
                     }
                 }
-                Err(e) => error!("{:?}", e),
+                Err(e) => println!("{:?}", e),
             }
         }
 
@@ -280,15 +280,15 @@ impl ContractLoader {
                 get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
             abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
             if contract_result.constructor_args.is_empty() {
-                debug!("No constructor args found, using default constructor args");
+                println!("No constructor args found, using default constructor args");
                 contract_result.constructor_args = abi_instance.get().get_bytes();
             }
-            // debug!("Constructor args: {:?}", result.constructor_args);
+            // println!("Constructor args: {:?}", result.constructor_args);
             contract_result
                 .code
                 .extend(contract_result.constructor_args.clone());
         } else {
-            debug!("No constructor in ABI found, skipping");
+            println!("No constructor in ABI found, skipping");
         }
 
         // now check if contract is deployed through proxy by checking function signatures
@@ -370,10 +370,10 @@ impl ContractLoader {
                     } else if path_str.ends_with("combined.json") {
                         contract_combined_json_info = Some(path_str.to_string());
                     } else {
-                        debug!("Found unknown file in folder: {:?}", path.display())
+                        println!("Found unknown file in folder: {:?}", path.display())
                     }
                 }
-                Err(e) => error!("{:?}", e),
+                Err(e) => println!("{:?}", e),
             }
         }
 
@@ -453,7 +453,7 @@ impl ContractLoader {
             let abi_parsed = if let Some(abi) = abi {
                 Self::parse_abi_str(&abi)
             } else {
-                debug!("ABI not found for {}, we'll decompile", addr);
+                println!("ABI not found for {}, we'll decompile", addr);
                 vec![]
             };
             contracts.push(ContractInfo {
@@ -614,13 +614,13 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
     let mut file_contents = HashMap::<String, String>::new();
     // panic!("{:?}", orginal);
     for (addr, source_map) in orginal {
-        // debug!("{:?}", addr);
+        // println!("{:?}", addr);
         if source_map.is_none() {
             continue;
         }
         let srcmap = source_map.clone().unwrap();
         for (pc, loc) in srcmap {
-            // debug!("\t{:?}", loc);
+            // println!("\t{:?}", loc);
             if loc.file.is_none() {
                 continue;
             }
@@ -637,11 +637,11 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
                 buf
             });
 
-            // debug!("file_content: {}", file_content);
+            // println!("file_content: {}", file_content);
             let mapped_source = file_content[loc.offset..loc.offset + loc.length].to_string();
             // if starts with "library, contract, function" and ends with "}" then skip
             let re = Regex::new(r"^(library|contract|function)(.|\n)*\}$").unwrap();
-            // debug!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
+            // println!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
             if re.is_match(&mapped_source) {
                 // update loc's skip_on_concolic to true
                 source_map.as_mut().unwrap().insert(
@@ -654,7 +654,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
                         skip_on_concolic: true,
                     },
                 );
-                // debug!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
+                // println!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
             }
         }
     }
@@ -709,8 +709,8 @@ pub fn save_builder_addr_source_code(
                     }
                 }
                 let file_path = format!("{}/{}", addr_dir, file);
-                debug!("Downloading {} to {}", &file, &file_path);
-                // debug!("{:?}", build_job_result.sources);
+                println!("Downloading {} to {}", &file, &file_path);
+                // println!("{:?}", build_job_result.sources);
                 let mut file_content = String::new();
                 for (filename, content) in build_job_result.sources.clone().into_iter() {
                     if filename == file {
@@ -767,7 +767,7 @@ pub fn copy_local_source_code(
 
                     if Path::new(&file_path).exists() {
                         // NOTICE, HERE PATH TRAVERSAL IS POSSIBLE
-                        debug!("Copying {} to {}", &file_path, &addr_dir);
+                        println!("Copying {} to {}", &file_path, &addr_dir);
                         let path = Path::new(&addr_dir);
                         if !path.exists() {
                             std::fs::create_dir_all(path).unwrap();
@@ -785,10 +785,10 @@ pub fn copy_local_source_code(
                             std::fs::create_dir_all(parent_dir).unwrap();
                         }
                         std::fs::copy(&file_path, format!("{}/{}", addr_dir, file)).unwrap();
-                        debug!("Copied {} to {}", &file_path, &addr_dir);
+                        println!("Copied {} to {}", &file_path, &addr_dir);
                         files_copied.insert(file);
                     } else {
-                        debug!("File {} not found", &file_path);
+                        println!("File {} not found", &file_path);
                     }
                 }
             }
@@ -802,14 +802,13 @@ mod tests {
     use crate::skip_cbor;
     use crate::state::FuzzState;
     use std::str::FromStr;
-    use tracing::debug;
 
     #[test]
     fn test_load() {
         let codes: Vec<String> = vec![];
         let args: HashMap<String, Vec<String>> = HashMap::new();
         let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0), &codes, &args);
-        debug!(
+        println!(
             "{:?}",
             loader
                 .contracts
@@ -825,7 +824,7 @@ mod tests {
         let result = parse_combined_json(combined_json_file.to_string());
 
         assert!(result.contains_key("main"));
-        debug!("result: {:?}", result);
+        println!("result: {:?}", result);
     }
 
     #[test]
@@ -839,7 +838,7 @@ mod tests {
                 .map(|x| hex::encode(x))
                 .collect_vec()
         });
-        debug!("{}: {:?}", sigs.len(), sigs);
+        println!("{}: {:?}", sigs.len(), sigs);
 
         // counted from etherscan lol
         assert_eq!(sigs.len(), 24);
@@ -853,7 +852,7 @@ mod tests {
             .iter()
             .map(|x| hex::encode(x))
             .collect_vec();
-        debug!("{}: {:?}", sigs.len(), sigs);
+        println!("{}: {:?}", sigs.len(), sigs);
         // counted from etherscan lol
         assert_eq!(sigs.len(), 56);
     }
@@ -866,7 +865,7 @@ mod tests {
     //         &onchain,
     //         vec![EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
     //     );
-    //     debug!(
+    //     println!(
     //         "{:?}",
     //         loader
     //             .contracts

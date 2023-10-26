@@ -38,7 +38,6 @@ use revm_primitives::{Bytecode, U256};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use tracing::debug;
 
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
 pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
@@ -239,7 +238,7 @@ where
             // BALANCE
             0x31 => {
                 let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
-                debug!("onchain balance for {:?}", address);
+                println!("onchain balance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
@@ -247,7 +246,7 @@ where
             // 	SELFBALANCE
             0x47 => {
                 let address = interp.contract.address;
-                debug!("onchain selfbalance for {:?}", address);
+                println!("onchain selfbalance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
@@ -319,7 +318,7 @@ where
                 {
                     bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
                     host.set_codedata(address_h160, contract_code.clone());
-                    debug!(
+                    println!(
                         "fetching code from {:?} due to call by {:?}",
                         address_h160, caller
                     );
@@ -338,14 +337,14 @@ where
 
                 let mut abi = None;
                 if let Some(builder) = &self.builder {
-                    debug!("onchain job {:?}", address_h160);
+                    println!("onchain job {:?}", address_h160);
                     let build_job =
                         builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
 
                     if let Some(job) = build_job {
                         abi = Some(job.abi.clone());
                         // replace the code with the one from builder
-                        // debug!("replace code for {:?} with builder's", address_h160);
+                        // println!("replace code for {:?} with builder's", address_h160);
                         // host.set_codedata(address_h160, contract_code.clone());
                         state
                             .metadata_map_mut()
@@ -356,7 +355,7 @@ where
                 }
 
                 if abi.is_none() {
-                    debug!("fetching abi {:?}", address_h160);
+                    println!("fetching abi {:?}", address_h160);
                     abi = self.endpoint.fetch_abi(address_h160);
                 }
 
@@ -367,7 +366,7 @@ where
                         // 1. Extract abi from bytecode, and see do we have any function sig available in state
                         // 2. Use Heimdall to extract abi
                         // 3. Reconfirm on failures of heimdall
-                        debug!("Contract {:?} has no abi", address_h160);
+                        println!("Contract {:?} has no abi", address_h160);
                         let contract_code_str = hex::encode(contract_code.bytes());
                         let sigs = extract_sig_from_contract(&contract_code_str);
                         let mut unknown_sigs: usize = 0;
@@ -382,7 +381,7 @@ where
                         }
 
                         if unknown_sigs >= sigs.len() / 30 {
-                            debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
+                            println!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
                             let abis = fetch_abi_heimdall(contract_code_str)
                                 .iter()
                                 .map(|abi| {
@@ -423,7 +422,7 @@ where
                             host.add_one_hashes(caller, hash);
                         }
                     }
-                    debug!(
+                    println!(
                         "Propagating hashes {:?} for proxy {:?}",
                         abi_hashes_to_add
                             .iter()

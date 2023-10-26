@@ -43,7 +43,6 @@ use crate::evm::types::{as_u64, EVMAddress, EVMU256, EVMU512};
 use crate::evm::types::convert_u256_to_h160;
 use crate::evm::types::float_scale_to_u512;
 use crate::evm::vm::IS_FAST_CALL_STATIC;
-use tracing::debug;
 
 macro_rules! scale {
     () => {
@@ -254,14 +253,14 @@ where
                     is_erc20 = true;
                 }
             } else {
-                debug!("Ignoring token {:?}", addr);
+                println!("Ignoring token {:?}", addr);
             }
         }
 
         // if the contract is pair
         if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
             self.pair_address.insert(addr.clone());
-            debug!("pair detected @ address {:?}", addr);
+            println!("pair detected @ address {:?}", addr);
             is_pair = true;
         }
 
@@ -280,7 +279,7 @@ where
         );
         if slots.len() == 3 {
             let slot = slots[0];
-            // debug!("pairslots: {:?} {:?}", pair, slot);
+            // println!("pairslots: {:?} {:?}", pair, slot);
             self.flashloan_oracle
                 .deref()
                 .borrow_mut()
@@ -378,7 +377,7 @@ where
             return;
         }
         let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-        // debug!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
+        // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
         macro_rules! make_transfer_call_success {
             () => {
@@ -426,7 +425,7 @@ where
             [0xa9, 0x05, 0x9c, 0xbb] => {
                 let dst = EVMAddress::from_slice(&data[16..36]);
                 let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
-                // debug!(
+                // println!(
                 //     "transfer from {:?} to {:?} amount {:?}",
                 //     interp.contract.address, dst, amount
                 // );

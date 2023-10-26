@@ -23,7 +23,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{error, debug, info};
 
 const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
@@ -311,20 +310,20 @@ impl OnChainConfig {
                     match text {
                         Ok(t) => {
                             if t.contains("Max rate limit reached") {
-                                debug!("Etherscan max rate limit reached, retrying...");
+                                println!("Etherscan max rate limit reached, retrying...");
                                 OperationResult::Retry("Rate limit reached".to_string())
                             } else {
                                 OperationResult::Ok(t)
                             }
                         }
                         Err(e) => {
-                            error!("{:?}", e);
+                            println!("{:?}", e);
                             OperationResult::Retry("failed to parse response".to_string())
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Error: {}", e);
+                    println!("Error: {}", e);
                     OperationResult::Retry("failed to send request".to_string())
                 }
             }
@@ -337,7 +336,7 @@ impl OnChainConfig {
                 Some(t)
             }
             Err(e) => {
-                error!("Error: {}", e);
+                println!("Error: {}", e);
                 None
             }
         }
@@ -368,13 +367,13 @@ impl OnChainConfig {
                     match text {
                         Ok(t) => OperationResult::Ok(t),
                         Err(e) => {
-                            error!("{:?}", e);
+                            println!("{:?}", e);
                             OperationResult::Retry("failed to parse response".to_string())
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Error: {}", e);
+                    println!("Error: {}", e);
                     OperationResult::Retry("failed to send request".to_string())
                 }
             }
@@ -386,7 +385,7 @@ impl OnChainConfig {
                 Some(t)
             }
             Err(e) => {
-                error!("Error: {}", e);
+                println!("Error: {}", e);
                 None
             }
         }
@@ -402,7 +401,7 @@ impl OnChainConfig {
                     EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
                         .unwrap()
                         .to_string();
-                debug!("latest block number is {}", block_number);
+                println!("latest block number is {}", block_number);
             }
             None => panic!("fail to get latest block number"),
         }
@@ -499,7 +498,7 @@ impl OnChainConfig {
                 "".to_string()
             }
         );
-        info!("fetching abi from {}", endpoint);
+        println!("fetching abi from {}", endpoint);
         match self.get(endpoint.clone()) {
             Some(resp) => {
                 let json = serde_json::from_str::<Value>(&resp);
@@ -521,7 +520,7 @@ impl OnChainConfig {
                 }
             }
             None => {
-                error!("failed to fetch abi from {}", endpoint);
+                println!("failed to fetch abi from {}", endpoint);
                 None
             }
         }
@@ -551,14 +550,14 @@ impl OnChainConfig {
                         return json.get("result").cloned();
                     }
                     Err(e) => {
-                        error!("{:?}", e);
+                        println!("{:?}", e);
                         None
                     }
                 }
             }
 
             None => {
-                error!("failed to fetch from {}", self.endpoint_url);
+                println!("failed to fetch from {}", self.endpoint_url);
                 None
             }
         }
@@ -579,14 +578,14 @@ impl OnChainConfig {
                         return json.get("result").cloned();
                     }
                     Err(e) => {
-                        error!("{:?}", e);
+                        println!("{:?}", e);
                         None
                     }
                 }
             }
 
             None => {
-                error!("failed to fetch from {}", self.endpoint_url);
+                println!("failed to fetch from {}", self.endpoint_url);
                 None
             }
         }
@@ -612,7 +611,7 @@ impl OnChainConfig {
             }
         };
         let balance = EVMU256::from_str(&resp_string).unwrap();
-        debug!(
+        println!(
             "balance of {address:?} at {} is {balance}",
             self.block_number
         );
@@ -697,7 +696,7 @@ impl OnChainConfig {
             return Bytecode::default();
         }
 
-        info!("fetching code from {}", hex::encode(address));
+        println!("fetching code from {}", hex::encode(address));
 
         let resp_string = {
             let mut params = String::from("[");
@@ -715,7 +714,7 @@ impl OnChainConfig {
         };
         let code = resp_string.trim_start_matches("0x");
         if code.is_empty() {
-            debug!("{address} empty code");
+            println!("{address} empty code");
             self.code_cache.insert(address, Bytecode::new());
             return Bytecode::new();
         }
@@ -868,7 +867,7 @@ impl OnChainConfig {
 impl OnChainConfig {
     fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
         let token = token.to_lowercase();
-        info!("fetching pairs for {token}");
+        println!("fetching pairs for {token}");
         if self
             .pair_cache
             .contains_key(&EVMAddress::from_str(&token).unwrap())
@@ -978,7 +977,7 @@ impl OnChainConfig {
             "data": "0x0902f1ac",
             "id": 1
         }, self.block_number]);
-            debug!("fetching reserve for {pair} {} {params}", self.block_number);
+            println!("fetching reserve for {pair} {} {params}", self.block_number);
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
@@ -1210,7 +1209,7 @@ mod tests {
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
         );
-        debug!("{:?}", v)
+        println!("{:?}", v)
     }
 
     #[test]
@@ -1220,7 +1219,7 @@ mod tests {
             EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             false,
         );
-        debug!("{:?}", v)
+        println!("{:?}", v)
     }
 
     #[test]
@@ -1231,7 +1230,7 @@ mod tests {
             EVMU256::from(3),
             false,
         );
-        debug!("{:?}", v)
+        println!("{:?}", v)
     }
 
     #[test]
@@ -1239,7 +1238,7 @@ mod tests {
         let mut config = OnChainConfig::new(BSC, 0);
         let v = config
             .fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
-        debug!("{:?}", v)
+        println!("{:?}", v)
     }
 
     #[test]
@@ -1295,7 +1294,7 @@ mod tests {
         let v = config.get_balance(
             EVMAddress::from_str("0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326").unwrap(),
         );
-        debug!("{:?}", v);
+        println!("{:?}", v);
         assert!(v == EVMU256::from(439351222497229612i64));
     }
 
@@ -1308,7 +1307,7 @@ mod tests {
     //     let v = config.fetch_token_price(
     //         EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
     //     );
-    //     debug!("{:?}", v)
+    //     println!("{:?}", v)
     // }
     //
     // #[test]
@@ -1317,7 +1316,7 @@ mod tests {
     //     let v = config.fetch_storage_all(
     //         EVMAddress::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
     //     );
-    //     debug!("{:?}", v)
+    //     println!("{:?}", v)
     // }
 
     // #[test]

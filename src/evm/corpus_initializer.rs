@@ -47,7 +47,6 @@ use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
-use tracing::{error, debug, info};
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
@@ -187,7 +186,8 @@ where
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
         for contract in &mut loader.contracts {
-            info!("Deploying contract: {}", contract.name);
+            println!();
+            println!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(
                     Bytecode::new_raw(Bytes::from(contract.code.clone())),
@@ -197,13 +197,13 @@ where
                 ) {
                     Some(addr) => addr,
                     None => {
-                        error!("Failed to deploy contract: {}", contract.name);
+                        println!("Failed to deploy contract: {}", contract.name);
                         // we could also panic here
                         continue;
                     }
                 }
             } else {
-                debug!("Contract {} is already deployed", contract.name);
+                println!("Contract {} is already deployed", contract.name);
                 // directly set bytecode
                 let contract_code = Bytecode::new_raw(Bytes::from(contract.code.clone()));
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
@@ -213,13 +213,13 @@ where
                 contract.deployed_address
             };
             contract.deployed_address = deployed_address;
-            debug!(
+            println!(
                 "Contract {} deployed to: {deployed_address:?}",
                 contract.name
             );
             self.state.add_address(&deployed_address);
         }
-        debug!("Deployed all contracts\n");
+        println!("Deployed all contracts\n");
     }
 
     pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
@@ -238,7 +238,7 @@ where
                 // 1. Extract abi from bytecode, and see do we have any function sig available in state
                 // 2. Use Heimdall to extract abi
                 // 3. Reconfirm on failures of heimdall
-                debug!("Contract {} has no abi", contract.name);
+                println!("Contract {} has no abi", contract.name);
                 let contract_code = hex::encode(contract.code.clone());
                 let sigs = extract_sig_from_contract(&contract_code);
                 let mut unknown_sigs: usize = 0;
@@ -251,7 +251,7 @@ where
                 }
 
                 if unknown_sigs >= sigs.len() / 30 {
-                    debug!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
+                    println!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()
                         .map(|abi| {

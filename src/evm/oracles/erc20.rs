@@ -119,7 +119,7 @@ impl
 
                 // prev_balance is nonexistent
                 // #[cfg(feature = "flashloan_debug")]
-                // debug!(
+                // println!(
                 //     "Balance: {} -> {} for {:?} @ {:?}",
                 //     prev_balance, new_balance, caller, token
                 // );
@@ -134,7 +134,7 @@ impl
 
             let mut liquidation_txs = vec![];
 
-            // debug!("Liquidations earned: {:?}", liquidations_earned);
+            // println!("Liquidations earned: {:?}", liquidations_earned);
             for (caller, token_info, amount) in liquidations_earned {
                 let txs = generate_uniswap_router_sell(
                     token_info,
@@ -152,15 +152,15 @@ impl
                         .map(|(abi, _, addr)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
             }
-            // debug!(
+            // println!(
             //     "Liquidation txs: {:?}",
             //     liquidation_txs
             // );
 
-            // debug!("Earned before liquidation: {:?}", ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
+            // println!("Earned before liquidation: {:?}", ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
             let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
-            // debug!("results: {:?}", out);
-            // debug!("result state: {:?}", state.flashloan_data);
+            // println!("results: {:?}", out);
+            // println!("result state: {:?}", state.flashloan_data);
             ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
         }
 

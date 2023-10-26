@@ -2,7 +2,6 @@ use std::{fs::{File, self}, sync::OnceLock, path::Path, str::FromStr, time::Syst
 
 use handlebars::Handlebars;
 use serde::Serialize;
-use tracing::error;
 
 use crate::{input::SolutionTx, evm::types::checksum};
 use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}, types::{EVMAddress, EVMU256}};
@@ -39,29 +38,29 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
 pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     let trace: Vec<Tx> = inputs.iter().map(|x| Tx::from(x)).collect();
     if trace.is_empty() {
-        error!("generate_test error: no trace found.");
+        println!("generate_test error: no trace found.");
         return;
     }
     let args = TemplateArgs::new(solution, trace);
     if let Err(e) = args {
-        error!("generate_test error: {}", e);
+        println!("generate_test error: {}", e);
         return;
     }
     let args = args.unwrap();
     if fs::create_dir_all(&args.output_dir).is_err() {
-        error!("generate_test error: failed to create output dir {:?}.", args.output_dir);
+        println!("generate_test error: failed to create output dir {:?}.", args.output_dir);
         return;
     }
     let mut handlebars = Handlebars::new();
     if handlebars.register_template_file("foundry_test", TEMPLATE_PATH).is_err() {
-        error!("generate_test error: failed to register template file.");
+        println!("generate_test error: failed to register template file.");
         return;
     }
 
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
     let mut output = File::create(&path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
-        error!("generate_test error: failed to render template: {:?}", e);
+        println!("generate_test error: failed to render template: {:?}", e);
     }
 }
 

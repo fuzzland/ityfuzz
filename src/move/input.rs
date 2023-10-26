@@ -292,7 +292,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
                 continue;
             }
 
-            // debug!("Slash arg {:?} with type {:?}", arg, ty);
+            // println!("Slash arg {:?} with type {:?}", arg, ty);
             match ty {
 
                 // If the final vector inner type is a struct, we need to slash it (clear all)
@@ -381,7 +381,7 @@ impl CloneableValue {
             ValueImpl::Container(v) => {
                 match v {
                     Container::VecU8(v) => {
-                        // debug!("{:?}", v.borrow().deref());
+                        // println!("{:?}", v.borrow().deref());
                         return leb_tns!(vec, v)
                     }
                     Container::VecU64(v) => {
@@ -539,10 +539,10 @@ impl MoveFunctionInput {
             Container::Locals(_) => {unreachable!("locals cant be mutated")}
             Container::Vec(v) => {unreachable!("wtf is this")}
             Container::Struct(ref mut v) => {
-                // debug!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
+                // println!("vm_state.sample_value(is_resolved:{}, value:{:?}) {:?} for {:?}", is_resolved, value, vm_state, ty);
                 // resolved structs shall be returned to the vm state
                 if is_resolved {
-                    // debug!("returing resolved struct to vm state {:?} for {:?}", value, ref_ty);
+                    // println!("returing resolved struct to vm state {:?} for {:?}", value, ref_ty);
                     vm_state.restock_struct(
                         ty,
                         value.value,
@@ -593,7 +593,7 @@ impl MoveFunctionInput {
                     let orig = *$v;
                     while *$v == orig {
                         *$v = _state.rand_mut().below(<$ty>::MAX as u64) as $ty;
-                        // debug!("mutate_u: {} {}", $v, orig);
+                        // println!("mutate_u: {} {}", $v, orig);
                     }
                     MutationResult::Mutated
                 }
@@ -655,7 +655,7 @@ impl MoveFunctionInput {
                         } else {
                             unreachable!("not a reference")
                         };
-                        // debug!("mutating container ref {:?} {:?} {:?}", v, inner_ty, gate);
+                        // println!("mutating container ref {:?} {:?} {:?}", v, inner_ty, gate);
                         MutateType::Container(v, inner_ty, gate)
                     }
                     ContainerRef::Global { .. } => {unreachable!("global cant be mutated")}
@@ -736,7 +736,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             return MutationResult::Skipped;
         }
 
-        // debug!("mutating arg!!!! {:?} {:?}", self.args[nth], ty.clone());
+        // println!("mutating arg!!!! {:?} {:?}", self.args[nth], ty.clone());
         let res = Self::mutate_value_impl(
             _state,
             &mut self.args[nth],
@@ -746,7 +746,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             self._resolved
         );
 
-        // debug!("after mutating arg!!!! {:?}", self.args[nth]);
+        // println!("after mutating arg!!!! {:?}", self.args[nth]);
         res
     }
 
@@ -859,7 +859,6 @@ mod tests {
     use libafl::prelude::HasMetadata;
     use move_binary_format::file_format::{Ability, AbilitySet};
     use crate::r#move::types::MoveStagedVMState;
-    use tracing::debug;
 
 
     macro_rules! get_dummy_func {
@@ -910,7 +909,7 @@ mod tests {
 
             let mut v = dummy_input!($init_v, $tys);
             v.mutate::<MoveFuzzState>(&mut state);
-            // debug!("{:?}", v.args[0]);
+            // println!("{:?}", v.args[0]);
             let o = (v.args[0].value.equals(&Value($init_v)).expect("failed to compare"));
             assert!(!o, "value was not mutated");
         };
@@ -984,7 +983,7 @@ mod tests {
                     let res = v.mutate::<MoveFuzzState>($state);
                     (v, res)
                 };
-                // debug!("{:?}", v.args[0]);
+                // println!("{:?}", v.args[0]);
                 (res, Value($init_v), v.args[0].value.clone(), v.vm_state.clone())
             }
         };
@@ -1030,9 +1029,9 @@ mod tests {
             },
             &mut state
         );
-        debug!("initial value {:?}", init_v);
-        debug!("mutated value {:?}", mutated_v);
-        debug!("ref in use {:?}", vm_state.state.ref_in_use);
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
         assert_eq!(mutation_result, MutationResult::Mutated);
     }
 
@@ -1092,9 +1091,9 @@ mod tests {
             },
             &mut state
         );
-        debug!("initial value {:?}", init_v);
-        debug!("mutated value {:?}", mutated_v);
-        debug!("ref in use {:?}", vm_state.state.ref_in_use);
+        println!("initial value {:?}", init_v);
+        println!("mutated value {:?}", mutated_v);
+        println!("ref in use {:?}", vm_state.state.ref_in_use);
         assert!(vm_state.state.ref_in_use.len() > 0);
         assert_eq!(mutation_result, MutationResult::Mutated);
     }
@@ -1135,7 +1134,7 @@ mod tests {
             vec![Type::Reference(Box::new(Type::Struct(CachedStructIndex(0))))]
         );
         inp.slash(&mut state);
-        debug!("{:?}", inp.args[0].value);
+        println!("{:?}", inp.args[0].value);
     }
 
     #[test]

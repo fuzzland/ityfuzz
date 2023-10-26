@@ -7,7 +7,6 @@ use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use tracing::info;
 
 use crate::{
     evm::contract_utils::FIX_DEPLOYER, evm::host::FuzzHost, evm::vm::EVMExecutor,
@@ -61,7 +60,7 @@ pub fn move_fuzzer(
 ) {
     let mut state: MoveFuzzState = FuzzState::new(config.seed);
     let mut vm: MoveVM<MoveFunctionInput, MoveFuzzState> = MoveVM::new();
-    let monitor = SimpleMonitor::new(|s| info!("{}", s));
+    let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
     let infant_scheduler = MoveVMStateScheduler {
