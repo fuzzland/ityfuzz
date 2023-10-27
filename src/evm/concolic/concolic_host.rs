@@ -1415,6 +1415,7 @@ where
         by: &Bytes,
     ) {
         self.pop_ctx();
+        self.call_depth -= 1;
     }
 
     fn get_type(&self) -> MiddlewareType {
