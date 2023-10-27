@@ -853,7 +853,6 @@ where
                 .cloned()
                 .chain(self.host.current_integer_overflow.iter().cloned()),
         );
-        // println!("{}", r.new_state.integer_overflow.len());
 
         // println!("r.ret: {:?}", r.ret);
 
