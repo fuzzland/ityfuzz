@@ -94,7 +94,7 @@ impl
                 EVMBugResult::new(
                     "IntegerOverflow".to_string(),
                     real_bug_idx,
-                    format!("IntegerOverflow",),
+                    format!("IntegerOverflow on Contract: {addr:?} , PC: {pc:?}"),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                     srcmap,
                     Some(name.clone()),
