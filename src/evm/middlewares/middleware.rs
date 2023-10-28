@@ -33,7 +33,8 @@ pub enum MiddlewareType {
     Sha3Bypass,
     Sha3TaintAnalysis,
     CallPrinter,
-    Reentrancy
+    Reentrancy,
+    Cheatcode,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

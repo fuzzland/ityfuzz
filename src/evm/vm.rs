@@ -384,6 +384,21 @@ impl EVMState {
     pub fn set_balance(&mut self, address: EVMAddress, balance: EVMU256) {
         self.balance.insert(address, balance);
     }
+
+    /// Loads a storage slot from an address.
+    pub fn sload(&self, address: EVMAddress, slot: EVMU256) -> Option<EVMU256> {
+        self.state
+            .get(&address)
+            .and_then(|slots| slots.get(&slot).cloned())
+    }
+
+    /// Stores a value to an address' storage slot.
+    pub fn sstore(&mut self, address: EVMAddress, slot: EVMU256, value: EVMU256) {
+        self.state
+            .entry(address)
+            .or_insert_with(HashMap::new)
+            .insert(slot, value);
+    }
 }
 
 /// Is current EVM execution fast call
