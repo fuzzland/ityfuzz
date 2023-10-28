@@ -1,12 +1,13 @@
 use std::clone::Clone;
+use std::cmp::min;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use alloy_sol_types::SolInterface;
+use alloy_sol_types::{SolInterface, SolValue};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls};
 use libafl::prelude::Input;
-use revm_interpreter::{Interpreter, InstructionResult};
+use revm_interpreter::Interpreter;
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
@@ -53,96 +54,121 @@ where
 
     /// Sets `block.timestamp`.
     #[inline]
-    fn warp(&self, env: &mut Env, args: Vm::warpCall) {
+    fn warp(&self, env: &mut Env, args: Vm::warpCall) -> Option<Vec<u8>> {
         env.block.timestamp = args.newTimestamp;
+        None
     }
 
     /// Sets `block.height`.
     #[inline]
-    fn roll(&self, env: &mut Env, args: Vm::rollCall) {
+    fn roll(&self, env: &mut Env, args: Vm::rollCall) -> Option<Vec<u8>> {
         env.block.number = args.newHeight;
+        None
     }
 
     /// Sets `block.basefee`.
     #[inline]
-    fn fee(&self, env: &mut Env, args: Vm::feeCall) {
+    fn fee(&self, env: &mut Env, args: Vm::feeCall) -> Option<Vec<u8>> {
         env.block.basefee = args.newBasefee;
+        None
     }
 
     /// Sets `block.difficulty`.
     /// Not available on EVM versions from Paris onwards. Use `prevrandao` instead.
     #[inline]
-    fn difficulty(&self, env: &mut Env, args: Vm::difficultyCall) {
-        if env.cfg.spec_id >= SpecId::MERGE {
-            return;
+    fn difficulty(&self, env: &mut Env, args: Vm::difficultyCall) -> Option<Vec<u8>> {
+        if env.cfg.spec_id < SpecId::MERGE {
+            env.block.difficulty = args.newDifficulty;
         }
-        env.block.difficulty = args.newDifficulty;
+        None
     }
 
     /// Sets `block.prevrandao`.
     /// Not available on EVM versions before Paris. Use `difficulty` instead.
     #[inline]
-    fn prevrandao(&self, env: &mut Env, args: Vm::prevrandaoCall) {
-        if env.cfg.spec_id < SpecId::MERGE {
-            return;
+    fn prevrandao(&self, env: &mut Env, args: Vm::prevrandaoCall) -> Option<Vec<u8>> {
+        if env.cfg.spec_id >= SpecId::MERGE {
+            env.block.prevrandao = Some(args.newPrevrandao.0.into());
         }
-        env.block.prevrandao = Some(args.newPrevrandao.0.into());
+        None
     }
 
     /// Sets `block.chainid`.
     #[inline]
-    fn chain_id(&self, env: &mut Env, args: Vm::chainIdCall) {
-        if args.newChainId > U256::from(u64::MAX) {
-            return;
+    fn chain_id(&self, env: &mut Env, args: Vm::chainIdCall) -> Option<Vec<u8>> {
+        if args.newChainId <= U256::from(u64::MAX) {
+            env.cfg.chain_id = args.newChainId;
         }
-        env.cfg.chain_id = args.newChainId;
+        None
     }
 
     /// Sets `tx.gasprice`.
     #[inline]
-    fn tx_gas_price(&self, env: &mut Env, args: Vm::txGasPriceCall) {
+    fn tx_gas_price(&self, env: &mut Env, args: Vm::txGasPriceCall) -> Option<Vec<u8>> {
         env.tx.gas_price = args.newGasPrice;
+        None
     }
 
     /// Sets `block.coinbase`.
     #[inline]
-    fn coinbase(&self, env: &mut Env, args: Vm::coinbaseCall) {
+    fn coinbase(&self, env: &mut Env, args: Vm::coinbaseCall) -> Option<Vec<u8>> {
         env.block.coinbase = B160(args.newCoinbase.into());
+        None
     }
 
     /// Loads a storage slot from an address.
     #[inline]
-    fn load(&self, interp: &mut Interpreter, state: &EVMState, args: Vm::loadCall) {
-        todo!()
+    fn load(&self, state: &EVMState, args: Vm::loadCall) -> Option<Vec<u8>> {
+        let Vm::loadCall { target, slot } = args;
+        state.sload(B160(target.into()), slot.into())
+            .map(|v| v.abi_encode())
     }
 
     /// Stores a value to an address' storage slot.
     #[inline]
-    fn store(&self, state: &mut EVMState, args: Vm::storeCall) {
+    fn store(&self, state: &mut EVMState, args: Vm::storeCall) -> Option<Vec<u8>> {
         let Vm::storeCall { target, slot, value} = args;
         state.sstore(B160(target.into()), slot.into(), value.into());
+        None
     }
 
     /// Sets an address' code.
     #[inline]
-    fn etch(&self, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, args: Vm::etchCall)
-    {
+    fn etch(&self, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, args: Vm::etchCall) -> Option<Vec<u8>> {
         let Vm::etchCall { target, newRuntimeBytecode } = args;
         let bytecode = Bytecode::new_raw(Bytes::from(newRuntimeBytecode));
         host.set_code(B160(target.into()), bytecode, state);
+        None
     }
 
     /// Sets an address' balance.
     #[inline]
-    fn deal(&self, state: &mut EVMState, args: Vm::dealCall) {
+    fn deal(&self, state: &mut EVMState, args: Vm::dealCall) -> Option<Vec<u8>> {
         let Vm::dealCall { account, newBalance } = args;
         state.set_balance(B160(account.into()), newBalance.into());
+        None
     }
 
     /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
     #[inline]
-    fn read_callers(&self) {
+    fn read_callers(&self) -> Option<Vec<u8>> {
         todo!()
+    }
+
+    /// Records all storage reads and writes.
+    #[inline]
+    fn record(&self) -> Option<Vec<u8>> {
+        todo!()
+    }
+
+    unsafe fn pop_out_info(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
+        if opcode == 0xf1 || opcode == 0xf2 {
+            let _ = interp.stack.pop_unsafe();
+        }
+        let (_, _, _, _) = interp.stack.pop4_unsafe();
+        let (out_offset, out_len) = interp.stack.pop2_unsafe();
+
+        (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
     }
 }
 
@@ -176,8 +202,12 @@ where
             return;
         }
 
-        // handle cheatcode
-        match VmCalls::abi_decode(&contract.input, false).expect("decode cheatcode failed") {
+        // handle a vm call
+        let input = contract.input.clone();
+        interp.return_data_buffer = Bytes::new();
+        let (out_offset, out_len) =  self.pop_out_info(interp, opcode);
+
+        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
             VmCalls::roll(args) => self.roll(&mut host.env, args),
             VmCalls::fee(args) => self.fee(&mut host.env, args),
@@ -186,13 +216,23 @@ where
             VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
             VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
             VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
-            VmCalls::load(args) => self.load(interp, &host.evmstate, args),
+            VmCalls::load(args) => self.load(&host.evmstate, args),
             VmCalls::store(args) => self.store(&mut host.evmstate, args),
             VmCalls::etch(args) => self.etch(host, state, args),
             VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
             VmCalls::readCallers(_) => self.read_callers(),
-            _ => {}
+            _ => None,
+        };
+
+        if let Some(return_data) = res {
+            interp.return_data_buffer = Bytes::from(return_data);
         }
+        let target_len = min(out_len, interp.return_data_buffer.len());
+        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
+        let _ = interp.stack.push(U256::from(1));
+
+        // step over the cheatcode call
+        interp.instruction_pointer = interp.instruction_pointer.offset(1);
     }
 
     fn get_type(&self) -> MiddlewareType {
