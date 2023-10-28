@@ -1,11 +1,13 @@
 use std::clone::Clone;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use alloy_sol_types::{SolInterface, SolValue};
+use alloy_primitives::Address;
 use bytes::Bytes;
-use foundry_cheatcodes::Vm::{self, VmCalls};
+use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
 use revm_interpreter::Interpreter;
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
@@ -29,7 +31,56 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
 pub struct Cheatcode<I, VS, S, SC> {
+    /// Prank information
+    pub prank: Option<Prank>,
+    /// Recorded storage reads and writes
+    pub accesses: Option<RecordAccess>,
+
     _phantom: PhantomData<(I, VS, S, SC)>,
+}
+
+
+/// Prank information.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Prank {
+    /// Address of the contract that initiated the prank
+    pub prank_caller: EVMAddress,
+    /// Address of `tx.origin` when the prank was initiated
+    pub prank_origin: EVMAddress,
+    /// The address to assign to `msg.sender`
+    pub new_caller: EVMAddress,
+    /// The address to assign to `tx.origin`
+    pub new_origin: Option<EVMAddress>,
+    /// Whether the prank stops by itself after the next call
+    pub single_call: bool,
+}
+
+impl Prank {
+    /// Create a new prank.
+    pub fn new(
+        prank_caller: EVMAddress,
+        prank_origin: EVMAddress,
+        new_caller: EVMAddress,
+        new_origin: Option<EVMAddress>,
+        single_call: bool,
+    ) -> Prank {
+        Prank {
+            prank_caller,
+            prank_origin,
+            new_caller,
+            new_origin,
+            single_call,
+        }
+    }
+}
+
+/// Records storage slots reads and writes.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct RecordAccess {
+    /// Storage slots reads.
+    pub reads: HashMap<EVMAddress, Vec<U256>>,
+    /// Storage slots writes.
+    pub writes: HashMap<EVMAddress, Vec<U256>>,
 }
 
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
@@ -48,6 +99,8 @@ where
 {
     pub fn new() -> Self {
         Self {
+            prank: None,
+            accesses: None,
             _phantom: PhantomData,
         }
     }
@@ -151,8 +204,22 @@ where
 
     /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
     #[inline]
-    fn read_callers(&self) -> Option<Vec<u8>> {
-        todo!()
+    fn read_callers(&self, default_caller: &EVMAddress) -> Option<Vec<u8>> {
+        let (mut mode, mut sender, mut origin) = (CallerMode::None, default_caller, default_caller);
+
+        if let Some(ref prank) = self.prank {
+            mode = if prank.single_call {
+                CallerMode::Prank
+            } else {
+                CallerMode::RecurrentPrank
+            };
+            sender = &prank.new_caller;
+            if let Some(ref new_origin) = prank.new_origin {
+                origin = new_origin;
+            }
+        }
+
+        Some((mode, Address::from(sender.0), Address::from(origin.0)).abi_encode_params())
     }
 
     /// Records all storage reads and writes.
@@ -203,6 +270,7 @@ where
         }
 
         // handle a vm call
+        let caller = contract.caller.clone();
         let input = contract.input.clone();
         interp.return_data_buffer = Bytes::new();
         let (out_offset, out_len) =  self.pop_out_info(interp, opcode);
@@ -220,7 +288,7 @@ where
             VmCalls::store(args) => self.store(&mut host.evmstate, args),
             VmCalls::etch(args) => self.etch(host, state, args),
             VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(),
+            VmCalls::readCallers(_) => self.read_callers(&caller),
             _ => None,
         };
 

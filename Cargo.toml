@@ -117,3 +117,4 @@ handlebars = "4.4"
 foundry-abi = { git = "https://github.com/foundry-rs/foundry.git", package = "foundry-abi", rev = "93f64c7e4fae2d9302cc43f4f7bfcba721a00c13" }
 foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", package = "foundry-cheatcodes", rev = "93f64c7e4fae2d9302cc43f4f7bfcba721a00c13" }
 alloy-sol-types = "0.4"
+alloy-primitives = "0.4"
