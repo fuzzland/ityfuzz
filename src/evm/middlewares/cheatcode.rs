@@ -1,5 +1,6 @@
 use std::clone::Clone;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 
 use alloy_sol_types::SolInterface;
 use bytes::Bytes;
@@ -26,9 +27,11 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
 ]);
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
-pub struct Cheatcode;
+pub struct Cheatcode<I, VS, S, SC> {
+    _phantom: PhantomData<(I, VS, S, SC)>,
+}
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode
+impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
@@ -41,6 +44,121 @@ where
         + Debug,
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
+{
+    pub fn new() -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Sets `block.timestamp`.
+    #[inline]
+    fn warp(&self, env: &mut Env, args: Vm::warpCall) {
+        env.block.timestamp = args.newTimestamp;
+    }
+
+    /// Sets `block.height`.
+    #[inline]
+    fn roll(&self, env: &mut Env, args: Vm::rollCall) {
+        env.block.number = args.newHeight;
+    }
+
+    /// Sets `block.basefee`.
+    #[inline]
+    fn fee(&self, env: &mut Env, args: Vm::feeCall) {
+        env.block.basefee = args.newBasefee;
+    }
+
+    /// Sets `block.difficulty`.
+    /// Not available on EVM versions from Paris onwards. Use `prevrandao` instead.
+    #[inline]
+    fn difficulty(&self, env: &mut Env, args: Vm::difficultyCall) {
+        if env.cfg.spec_id >= SpecId::MERGE {
+            return;
+        }
+        env.block.difficulty = args.newDifficulty;
+    }
+
+    /// Sets `block.prevrandao`.
+    /// Not available on EVM versions before Paris. Use `difficulty` instead.
+    #[inline]
+    fn prevrandao(&self, env: &mut Env, args: Vm::prevrandaoCall) {
+        if env.cfg.spec_id < SpecId::MERGE {
+            return;
+        }
+        env.block.prevrandao = Some(args.newPrevrandao.0.into());
+    }
+
+    /// Sets `block.chainid`.
+    #[inline]
+    fn chain_id(&self, env: &mut Env, args: Vm::chainIdCall) {
+        if args.newChainId > U256::from(u64::MAX) {
+            return;
+        }
+        env.cfg.chain_id = args.newChainId;
+    }
+
+    /// Sets `tx.gasprice`.
+    #[inline]
+    fn tx_gas_price(&self, env: &mut Env, args: Vm::txGasPriceCall) {
+        env.tx.gas_price = args.newGasPrice;
+    }
+
+    /// Sets `block.coinbase`.
+    #[inline]
+    fn coinbase(&self, env: &mut Env, args: Vm::coinbaseCall) {
+        env.block.coinbase = B160(args.newCoinbase.into());
+    }
+
+    /// Loads a storage slot from an address.
+    #[inline]
+    fn load(&self, interp: &mut Interpreter, state: &EVMState, args: Vm::loadCall) {
+        todo!()
+    }
+
+    /// Stores a value to an address' storage slot.
+    #[inline]
+    fn store(&self, state: &mut EVMState, args: Vm::storeCall) {
+        let Vm::storeCall { target, slot, value} = args;
+        state.sstore(B160(target.into()), slot.into(), value.into());
+    }
+
+    /// Sets an address' code.
+    #[inline]
+    fn etch(&self, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, args: Vm::etchCall)
+    {
+        let Vm::etchCall { target, newRuntimeBytecode } = args;
+        let bytecode = Bytecode::new_raw(Bytes::from(newRuntimeBytecode));
+        host.set_code(B160(target.into()), bytecode, state);
+    }
+
+    /// Sets an address' balance.
+    #[inline]
+    fn deal(&self, state: &mut EVMState, args: Vm::dealCall) {
+        let Vm::dealCall { account, newBalance } = args;
+        state.set_balance(B160(account.into()), newBalance.into());
+    }
+
+    /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
+    #[inline]
+    fn read_callers(&self) {
+        todo!()
+    }
+}
+
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    S: State
+        + HasCorpus<Input = I>
+        + HasCaller<EVMAddress>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + HasMetadata
+        + HasRand
+        + Clone
+        + Debug,
+    VS: VMStateT,
+    SC: Scheduler<State = S> + Clone + Debug,
 {
     unsafe fn on_step(
         &mut self,
@@ -60,19 +178,19 @@ where
 
         // handle cheatcode
         match VmCalls::abi_decode(&contract.input, false).expect("decode cheatcode failed") {
-            VmCalls::warp(args) => warp(&mut host.env, args),
-            VmCalls::roll(args) => roll(&mut host.env, args),
-            VmCalls::fee(args) => fee(&mut host.env, args),
-            VmCalls::difficulty(args) => difficulty(&mut host.env, args),
-            VmCalls::prevrandao(args) => prevrandao(&mut host.env, args),
-            VmCalls::chainId(args) => chain_id(&mut host.env, args),
-            VmCalls::txGasPrice(args) => tx_gas_price(&mut host.env, args),
-            VmCalls::coinbase(args) => coinbase(&mut host.env, args),
-            VmCalls::load(args) => load(interp, &host.evmstate, args),
-            VmCalls::store(args) => store(&mut host.evmstate, args),
-            VmCalls::etch(args) => etch(host, state, args),
-            VmCalls::deal(args) => deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => read_callers(),
+            VmCalls::warp(args) => self.warp(&mut host.env, args),
+            VmCalls::roll(args) => self.roll(&mut host.env, args),
+            VmCalls::fee(args) => self.fee(&mut host.env, args),
+            VmCalls::difficulty(args) => self.difficulty(&mut host.env, args),
+            VmCalls::prevrandao(args) => self.prevrandao(&mut host.env, args),
+            VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
+            VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
+            VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
+            VmCalls::load(args) => self.load(interp, &host.evmstate, args),
+            VmCalls::store(args) => self.store(&mut host.evmstate, args),
+            VmCalls::etch(args) => self.etch(host, state, args),
+            VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
+            VmCalls::readCallers(_) => self.read_callers(),
             _ => {}
         }
     }
@@ -80,97 +198,4 @@ where
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Cheatcode
     }
-}
-
-/// Sets `block.timestamp`.
-fn warp(env: &mut Env, args: Vm::warpCall) {
-    env.block.timestamp = args.newTimestamp;
-}
-
-/// Sets `block.height`.
-fn roll(env: &mut Env, args: Vm::rollCall) {
-    env.block.number = args.newHeight;
-}
-
-/// Sets `block.basefee`.
-fn fee(env: &mut Env, args: Vm::feeCall) {
-    env.block.basefee = args.newBasefee;
-}
-
-/// Sets `block.difficulty`.
-/// Not available on EVM versions from Paris onwards. Use `prevrandao` instead.
-fn difficulty(env: &mut Env, args: Vm::difficultyCall) {
-    if env.cfg.spec_id >= SpecId::MERGE {
-        return;
-    }
-    env.block.difficulty = args.newDifficulty;
-}
-
-/// Sets `block.prevrandao`.
-/// Not available on EVM versions before Paris. Use `difficulty` instead.
-fn prevrandao(env: &mut Env, args: Vm::prevrandaoCall) {
-    if env.cfg.spec_id < SpecId::MERGE {
-        return;
-    }
-    env.block.prevrandao = Some(args.newPrevrandao.0.into());
-}
-
-/// Sets `block.chainid`.
-fn chain_id(env: &mut Env, args: Vm::chainIdCall) {
-    if args.newChainId > U256::from(u64::MAX) {
-        return;
-    }
-    env.cfg.chain_id = args.newChainId;
-}
-
-/// Sets `tx.gasprice`.
-fn tx_gas_price(env: &mut Env, args: Vm::txGasPriceCall) {
-    env.tx.gas_price = args.newGasPrice;
-}
-
-/// Sets `block.coinbase`.
-fn coinbase(env: &mut Env, args: Vm::coinbaseCall) {
-    env.block.coinbase = B160(args.newCoinbase.into());
-}
-
-/// Loads a storage slot from an address.
-fn load(interp: &mut Interpreter, state: &EVMState, args: Vm::loadCall) {
-    todo!()
-}
-
-/// Stores a value to an address' storage slot.
-fn store(state: &mut EVMState, args: Vm::storeCall) {
-    let Vm::storeCall { target, slot, value} = args;
-    state.sstore(B160(target.into()), slot.into(), value.into());
-}
-
-/// Sets an address' code.
-fn etch<VS, I, S, SC>(host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, args: Vm::etchCall)
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
-{
-    let Vm::etchCall { target, newRuntimeBytecode } = args;
-    let bytecode = Bytecode::new_raw(Bytes::from(newRuntimeBytecode));
-    host.set_code(B160(target.into()), bytecode, state);
-}
-
-/// Sets an address' balance.
-fn deal(state: &mut EVMState, args: Vm::dealCall) {
-    let Vm::dealCall { account, newBalance } = args;
-    state.set_balance(B160(account.into()), newBalance.into());
-}
-
-/// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
-fn read_callers() {
-    todo!()
 }
