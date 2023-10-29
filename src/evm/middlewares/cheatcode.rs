@@ -13,7 +13,6 @@ use revm_interpreter::Interpreter;
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
-use serde::{Deserialize, Serialize};
 
 use crate::evm::host::FuzzHost;
 use crate::evm::vm::EVMState;
@@ -29,24 +28,26 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
     113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
 ]);
 
-#[derive(Clone, Debug, Serialize, Default, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Cheatcode<I, VS, S, SC> {
     /// Prank information
     pub prank: Option<Prank>,
     /// Recorded storage reads and writes
     pub accesses: Option<RecordAccess>,
+    /// Recorded logs
+    pub recorded_logs: Option<Vec<Vm::Log>>,
 
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
 
 
 /// Prank information.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Prank {
     /// Address of the contract that initiated the prank
-    pub prank_caller: EVMAddress,
+    pub old_caller: EVMAddress,
     /// Address of `tx.origin` when the prank was initiated
-    pub prank_origin: EVMAddress,
+    pub old_origin: Option<EVMAddress>,
     /// The address to assign to `msg.sender`
     pub new_caller: EVMAddress,
     /// The address to assign to `tx.origin`
@@ -58,15 +59,15 @@ pub struct Prank {
 impl Prank {
     /// Create a new prank.
     pub fn new(
-        prank_caller: EVMAddress,
-        prank_origin: EVMAddress,
+        old_caller: EVMAddress,
+        old_origin: Option<EVMAddress>,
         new_caller: EVMAddress,
         new_origin: Option<EVMAddress>,
         single_call: bool,
     ) -> Prank {
         Prank {
-            prank_caller,
-            prank_origin,
+            old_caller,
+            old_origin,
             new_caller,
             new_origin,
             single_call,
@@ -75,12 +76,12 @@ impl Prank {
 }
 
 /// Records storage slots reads and writes.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct RecordAccess {
     /// Storage slots reads.
-    pub reads: HashMap<EVMAddress, Vec<U256>>,
+    pub reads: HashMap<Address, Vec<U256>>,
     /// Storage slots writes.
-    pub writes: HashMap<EVMAddress, Vec<U256>>,
+    pub writes: HashMap<Address, Vec<U256>>,
 }
 
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
@@ -101,6 +102,7 @@ where
         Self {
             prank: None,
             accesses: None,
+            recorded_logs: None,
             _phantom: PhantomData,
         }
     }
@@ -204,8 +206,8 @@ where
 
     /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
     #[inline]
-    fn read_callers(&self, default_caller: &EVMAddress) -> Option<Vec<u8>> {
-        let (mut mode, mut sender, mut origin) = (CallerMode::None, default_caller, default_caller);
+    fn read_callers(&self, default_sender: &EVMAddress, default_origin: &EVMAddress) -> Option<Vec<u8>> {
+        let (mut mode, mut sender, mut origin) = (CallerMode::None, default_sender, default_origin);
 
         if let Some(ref prank) = self.prank {
             mode = if prank.single_call {
@@ -224,11 +226,130 @@ where
 
     /// Records all storage reads and writes.
     #[inline]
-    fn record(&self) -> Option<Vec<u8>> {
-        todo!()
+    fn record(&mut self) -> Option<Vec<u8>> {
+        self.accesses = Some(RecordAccess::default());
+        None
     }
 
-    unsafe fn pop_out_info(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
+    /// Gets all accessed reads and write slot from a `vm.record` session, for a given address.
+    #[inline]
+    fn accesses(&mut self, args: Vm::accessesCall) -> Option<Vec<u8>> {
+        let Vm::accessesCall { target } = args;
+        let result = self
+            .accesses
+            .as_mut()
+            .map(|accesses| {
+                (
+                    &accesses.reads.entry(target).or_default()[..],
+                    &accesses.writes.entry(target).or_default()[..],
+                )
+            })
+            .unwrap_or_default();
+        Some(result.abi_encode_params())
+    }
+
+    /// Record all the transaction logs.
+    #[inline]
+    fn record_logs(&mut self) -> Option<Vec<u8>> {
+        self.recorded_logs = Some(Default::default());
+        None
+    }
+
+    /// Gets all the recorded logs.
+    #[inline]
+    fn get_recorded_logs(&mut self) -> Option<Vec<u8>> {
+        let result = self.recorded_logs.replace(Default::default()).unwrap_or_default();
+        Some(result.abi_encode())
+    }
+
+    /// Sets the *next* call's `msg.sender` to be the input address.
+    #[inline]
+    fn prank0(&mut self, old_caller: &EVMAddress, args: Vm::prank_0Call) -> Option<Vec<u8>> {
+        let Vm::prank_0Call { msgSender } = args;
+        self.prank = Some(
+            Prank::new(
+                old_caller.clone(),
+                None,
+                B160(msgSender.into()),
+                None,
+                true,
+            )
+        );
+
+        None
+    }
+
+    /// Sets the *next* call's `msg.sender` to be the input address,
+    /// and the `tx.origin` to be the second input.
+    #[inline]
+    fn prank1(
+        &mut self,
+        old_caller: &EVMAddress,
+        old_origin: &EVMAddress,
+        args: Vm::prank_1Call
+    ) -> Option<Vec<u8>> {
+        let Vm::prank_1Call { msgSender, txOrigin } = args;
+        self.prank = Some(
+            Prank::new(
+                old_caller.clone(),
+                Some(old_origin.clone()),
+                B160(msgSender.into()),
+                Some(B160(txOrigin.into())),
+                true,
+            )
+        );
+
+        None
+    }
+
+    /// Sets all subsequent calls' `msg.sender` to be the input address until `stopPrank` is called.
+    #[inline]
+    fn start_prank0(&mut self, old_caller: &EVMAddress, args: Vm::startPrank_0Call) -> Option<Vec<u8>> {
+        let Vm::startPrank_0Call { msgSender } = args;
+        self.prank = Some(
+            Prank::new(
+                old_caller.clone(),
+                None,
+                B160(msgSender.into()),
+                None,
+                false,
+            )
+        );
+
+        None
+    }
+
+    /// Sets all subsequent calls' `msg.sender` to be the input address until `stopPrank` is called,
+    /// and the `tx.origin` to be the second input.
+    #[inline]
+    fn start_prank1(
+        &mut self,
+        old_caller: &EVMAddress,
+        old_origin: &EVMAddress,
+        args: Vm::startPrank_1Call
+    ) -> Option<Vec<u8>> {
+        let Vm::startPrank_1Call { msgSender, txOrigin } = args;
+        self.prank = Some(
+            Prank::new(
+                old_caller.clone(),
+                Some(old_origin.clone()),
+                B160(msgSender.into()),
+                Some(B160(txOrigin.into())),
+                false,
+            )
+        );
+
+        None
+    }
+
+    /// Resets subsequent calls' `msg.sender` to be `address(this)`.
+    #[inline]
+    fn stop_prank(&mut self) -> Option<Vec<u8>> {
+        self.prank = None;
+        None
+    }
+
+    unsafe fn pop_return_location(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
         if opcode == 0xf1 || opcode == 0xf2 {
             let _ = interp.stack.pop_unsafe();
         }
@@ -270,10 +391,11 @@ where
         }
 
         // handle a vm call
-        let caller = contract.caller.clone();
         let input = contract.input.clone();
+        let caller = contract.caller.clone();
+        let tx_origin = host.env.tx.caller.clone();
         interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) =  self.pop_out_info(interp, opcode);
+        let (out_offset, out_len) = self.pop_return_location(interp, opcode);
 
         let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
@@ -288,10 +410,20 @@ where
             VmCalls::store(args) => self.store(&mut host.evmstate, args),
             VmCalls::etch(args) => self.etch(host, state, args),
             VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(&caller),
+            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
+            VmCalls::record(_) => self.record(),
+            VmCalls::accesses(args) => self.accesses(args),
+            VmCalls::recordLogs(_) => self.record_logs(),
+            VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
+            VmCalls::prank_0(args) => self.prank0(&caller, args),
+            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
+            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
+            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
+            VmCalls::stopPrank(_) => self.stop_prank(),
             _ => None,
         };
 
+        // set up return data
         if let Some(return_data) = res {
             interp.return_data_buffer = Bytes::from(return_data);
         }
@@ -299,7 +431,7 @@ where
         interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
         let _ = interp.stack.push(U256::from(1));
 
-        // step over the cheatcode call
+        // step over the instruction
         interp.instruction_pointer = interp.instruction_pointer.offset(1);
     }
 
