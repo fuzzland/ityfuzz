@@ -1,11 +1,11 @@
 use std::clone::Clone;
 use std::cmp::min;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use alloy_sol_types::{SolInterface, SolValue};
-use alloy_primitives::Address;
+use alloy_primitives::{Address, Log as RawLog};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
@@ -31,45 +31,85 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
 #[derive(Clone, Debug, Default)]
 pub struct Cheatcode<I, VS, S, SC> {
     /// Prank information
-    pub prank: Option<Prank>,
+    prank: Option<Prank>,
     /// Recorded storage reads and writes
-    pub accesses: Option<RecordAccess>,
+    accesses: Option<RecordAccess>,
     /// Recorded logs
-    pub recorded_logs: Option<Vec<Vm::Log>>,
+    recorded_logs: Option<Vec<Vm::Log>>,
     /// Expected revert information
-    pub expected_revert: Option<ExpectedRevert>,
-
+    expected_revert: Option<ExpectedRevert>,
+    /// Expected emits
+    expected_emits: VecDeque<ExpectedEmit>,
+    /// Depth of call stack
+    call_depth: u64,
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
 
 /// Prank information.
 #[derive(Clone, Debug, Default)]
-pub struct Prank {
+struct Prank {
     /// Address of the contract that initiated the prank
-    pub old_caller: EVMAddress,
+    old_caller: EVMAddress,
     /// Address of `tx.origin` when the prank was initiated
-    pub old_origin: Option<EVMAddress>,
+    old_origin: Option<EVMAddress>,
     /// The address to assign to `msg.sender`
-    pub new_caller: EVMAddress,
+    new_caller: EVMAddress,
     /// The address to assign to `tx.origin`
-    pub new_origin: Option<EVMAddress>,
+    new_origin: Option<EVMAddress>,
     /// Whether the prank stops by itself after the next call
-    pub single_call: bool,
+    single_call: bool,
+    /// The depth at which the prank was called
+    depth: u64,
 }
 
 /// Records storage slots reads and writes.
 #[derive(Clone, Debug, Default)]
-pub struct RecordAccess {
+struct RecordAccess {
     /// Storage slots reads.
-    pub reads: HashMap<Address, Vec<U256>>,
+    reads: HashMap<Address, Vec<U256>>,
     /// Storage slots writes.
-    pub writes: HashMap<Address, Vec<U256>>,
+    writes: HashMap<Address, Vec<U256>>,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ExpectedRevert {
+struct ExpectedRevert {
     /// The expected data returned by the revert, None being any
-    pub reason: Option<Bytes>,
+    reason: Option<Bytes>,
+    /// The depth at which the revert is expected
+    depth: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ExpectedEmit {
+    /// The depth at which we expect this emit to have occurred
+    depth: u64,
+    /// The log we expect
+    log: Option<RawLog>,
+    /// The checks to perform:
+    ///
+    /// ┌───────┬───────┬───────┬────┐
+    /// │topic 1│topic 2│topic 3│data│
+    /// └───────┴───────┴───────┴────┘
+    checks: [bool; 4],
+    /// If present, check originating address against this
+    address: Option<Address>,
+    /// Whether the log was actually found in the subcalls
+    found: bool,
+}
+
+enum OpcodeType {
+    /// CALL cheatcode address
+    CheatCall,
+    /// CALL other addresses
+    RealCall,
+    /// SLOAD, SSTORE
+    Storage,
+    /// LOG0~LOG4
+    Log,
+    /// REVERT
+    Revert,
+    /// Others we don't care about
+    Careless,
 }
 
 impl Prank {
@@ -80,6 +120,7 @@ impl Prank {
         new_caller: EVMAddress,
         new_origin: Option<EVMAddress>,
         single_call: bool,
+        depth: u64,
     ) -> Prank {
         Prank {
             old_caller,
@@ -87,6 +128,7 @@ impl Prank {
             new_caller,
             new_origin,
             single_call,
+            depth,
         }
     }
 }
@@ -111,6 +153,8 @@ where
             accesses: None,
             recorded_logs: None,
             expected_revert: None,
+            expected_emits: VecDeque::new(),
+            call_depth: 0,
             _phantom: PhantomData,
         }
     }
@@ -281,6 +325,7 @@ where
                 B160(msgSender.into()),
                 None,
                 true,
+                self.call_depth,
             )
         );
 
@@ -304,6 +349,7 @@ where
                 B160(msgSender.into()),
                 Some(B160(txOrigin.into())),
                 true,
+                self.call_depth,
             )
         );
 
@@ -321,6 +367,7 @@ where
                 B160(msgSender.into()),
                 None,
                 false,
+                self.call_depth,
             )
         );
 
@@ -344,6 +391,7 @@ where
                 B160(msgSender.into()),
                 Some(B160(txOrigin.into())),
                 false,
+                self.call_depth,
             )
         );
 
@@ -360,7 +408,10 @@ where
     /// Expects an error on next call with any revert data.
     #[inline]
     fn expect_revert0(&mut self) -> Option<Vec<u8>> {
-        self.expected_revert = Some(ExpectedRevert { reason: None });
+        self.expected_revert = Some(ExpectedRevert {
+            reason: None,
+            depth: self.call_depth,
+        });
         None
     }
 
@@ -369,7 +420,10 @@ where
     fn expect_revert1(&mut self, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
-        self.expected_revert = Some(ExpectedRevert { reason });
+        self.expected_revert = Some(ExpectedRevert {
+            reason,
+            depth: self.call_depth,
+        });
         None
     }
 
@@ -378,8 +432,145 @@ where
     fn expect_revert2(&mut self, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData));
-        self.expected_revert = Some(ExpectedRevert { reason });
+        self.expected_revert = Some(ExpectedRevert {
+            reason,
+            depth: self.call_depth,
+        });
         None
+    }
+
+    /// Prepare an expected log with (bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData.).
+    /// Call this function, then emit an event, then call a function. Internally after the call, we check if
+    /// logs were emitted in the expected order with the expected topics and data (as specified by the booleans).
+    #[inline]
+    fn expect_emit0(&mut self, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+        let Vm::expectEmit_0Call { checkTopic1, checkTopic2, checkTopic3, checkData } = args;
+        let expected = ExpectedEmit {
+            depth: self.call_depth,
+            checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
+            ..Default::default()
+        };
+        self.expected_emits.push_back(expected);
+        None
+    }
+
+    /// Same as the previous method, but also checks supplied address against emitting contract.
+    #[inline]
+    fn expect_emit1(&mut self, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+        let Vm::expectEmit_1Call {
+            checkTopic1,
+            checkTopic2,
+            checkTopic3,
+            checkData,
+            emitter,
+        } = args;
+        let expected = ExpectedEmit {
+            depth: self.call_depth,
+            checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
+            address: Some(emitter),
+            ..Default::default()
+        };
+        self.expected_emits.push_back(expected);
+        None
+    }
+
+    /// Prepare an expected log with all topic and data checks enabled.
+    /// Call this function, then emit an event, then call a function. Internally after the call, we check if
+    /// logs were emitted in the expected order with the expected topics and data.
+    #[inline]
+    fn expect_emit2(&mut self) -> Option<Vec<u8>> {
+        let expected = ExpectedEmit {
+            depth: self.call_depth,
+            checks: [true, true, true, true],
+            ..Default::default()
+        };
+        self.expected_emits.push_back(expected);
+        None
+    }
+
+
+    /// Same as the previous method, but also checks supplied address against emitting contract.
+    #[inline]
+    fn expect_emit3(&mut self, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+        let Vm::expectEmit_3Call { emitter } = args;
+        let expected = ExpectedEmit {
+            depth: self.call_depth,
+            checks: [true, true, true, true],
+            address: Some(emitter),
+            ..Default::default()
+        };
+        self.expected_emits.push_back(expected);
+        None
+    }
+
+    /// Call cheatcode address
+    pub fn cheat_call(
+        &mut self, interp:
+        &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        let opcode = interp.current_opcode();
+        let input = interp.contract().input.clone();
+        let caller = interp.contract().caller.clone();
+        let tx_origin = host.env.tx.caller.clone();
+
+        interp.return_data_buffer = Bytes::new();
+        let (out_offset, out_len) = unsafe { self.pop_return_location(interp, opcode) };
+
+        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
+            VmCalls::warp(args) => self.warp(&mut host.env, args),
+            VmCalls::roll(args) => self.roll(&mut host.env, args),
+            VmCalls::fee(args) => self.fee(&mut host.env, args),
+            VmCalls::difficulty(args) => self.difficulty(&mut host.env, args),
+            VmCalls::prevrandao(args) => self.prevrandao(&mut host.env, args),
+            VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
+            VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
+            VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
+            VmCalls::load(args) => self.load(&host.evmstate, args),
+            VmCalls::store(args) => self.store(&mut host.evmstate, args),
+            VmCalls::etch(args) => self.etch(host, state, args),
+            VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
+            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
+            VmCalls::record(_) => self.record(),
+            VmCalls::accesses(args) => self.accesses(args),
+            VmCalls::recordLogs(_) => self.record_logs(),
+            VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
+            VmCalls::prank_0(args) => self.prank0(&caller, args),
+            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
+            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
+            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
+            VmCalls::stopPrank(_) => self.stop_prank(),
+            VmCalls::expectRevert_0(_) => self.expect_revert0(),
+            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
+            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
+            VmCalls::expectEmit_0(args) => self.expect_emit0(args),
+            VmCalls::expectEmit_1(args) => self.expect_emit1(args),
+            VmCalls::expectEmit_2(_) => self.expect_emit2(),
+            VmCalls::expectEmit_3(args) => self.expect_emit3(args),
+            _ => None,
+        };
+
+        // set up return data
+        if let Some(return_data) = res {
+            interp.return_data_buffer = Bytes::from(return_data);
+        }
+        let target_len = min(out_len, interp.return_data_buffer.len());
+        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
+        let _ = interp.stack.push(U256::from(1));
+
+        // step over the instruction
+        interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
+    }
+
+    /// Call real addresses
+    pub fn real_call(
+        &mut self, interp:
+        &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        self.call_depth += 1;
     }
 
     unsafe fn pop_return_location(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
@@ -413,65 +604,46 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
-        // check if we are calling cheatcode
         let opcode = interp.current_opcode();
-        if opcode != 0xf1 && opcode != 0xf2 && opcode != 0xf4 && opcode != 0xfa {
-            return;
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(opcode, contract_addr) {
+            OpcodeType::CheatCall => self.cheat_call(interp, host, state),
+            _ => ()
         }
-        let contract = interp.contract();
-        if contract.address != CHEATCODE_ADDRESS {
-            return;
+    }
+
+    unsafe fn on_return(
+            &mut self,
+            interp: &mut Interpreter,
+            host: &mut FuzzHost<VS, I, S, SC>,
+            state: &mut S,
+            ret: &Bytes,
+        ) {
+        let opcode = interp.current_opcode();
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(opcode, contract_addr) {
+            OpcodeType::RealCall => self.call_depth -= 1,
+            _ => ()
         }
-
-        // handle a vm call
-        let input = contract.input.clone();
-        let caller = contract.caller.clone();
-        let tx_origin = host.env.tx.caller.clone();
-        interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) = self.pop_return_location(interp, opcode);
-
-        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
-            VmCalls::warp(args) => self.warp(&mut host.env, args),
-            VmCalls::roll(args) => self.roll(&mut host.env, args),
-            VmCalls::fee(args) => self.fee(&mut host.env, args),
-            VmCalls::difficulty(args) => self.difficulty(&mut host.env, args),
-            VmCalls::prevrandao(args) => self.prevrandao(&mut host.env, args),
-            VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
-            VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
-            VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
-            VmCalls::load(args) => self.load(&host.evmstate, args),
-            VmCalls::store(args) => self.store(&mut host.evmstate, args),
-            VmCalls::etch(args) => self.etch(host, state, args),
-            VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
-            VmCalls::record(_) => self.record(),
-            VmCalls::accesses(args) => self.accesses(args),
-            VmCalls::recordLogs(_) => self.record_logs(),
-            VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
-            VmCalls::prank_0(args) => self.prank0(&caller, args),
-            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
-            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
-            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
-            VmCalls::stopPrank(_) => self.stop_prank(),
-            VmCalls::expectRevert_0(_) => self.expect_revert0(),
-            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
-            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
-            _ => None,
-        };
-
-        // set up return data
-        if let Some(return_data) = res {
-            interp.return_data_buffer = Bytes::from(return_data);
-        }
-        let target_len = min(out_len, interp.return_data_buffer.len());
-        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
-        let _ = interp.stack.push(U256::from(1));
-
-        // step over the instruction
-        interp.instruction_pointer = interp.instruction_pointer.offset(1);
     }
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Cheatcode
+    }
+}
+
+fn get_opcode_type(opcode: u8, contract: &B160) -> OpcodeType {
+    if opcode != 0xf1 && opcode != 0xf2 && opcode != 0xf4 && opcode != 0xfa {
+        if contract == &CHEATCODE_ADDRESS {
+            return OpcodeType::CheatCall;
+        }
+        return OpcodeType::RealCall;
+    }
+
+    match opcode {
+        0x54 | 0x55 => OpcodeType::Storage,
+        0xa0..=0xa4 => OpcodeType::Log,
+        0xfd => OpcodeType::Revert,
+        _ => OpcodeType::Careless,
     }
 }
