@@ -40,7 +40,6 @@ pub struct Cheatcode<I, VS, S, SC> {
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
 
-
 /// Prank information.
 #[derive(Clone, Debug, Default)]
 pub struct Prank {
@@ -54,6 +53,15 @@ pub struct Prank {
     pub new_origin: Option<EVMAddress>,
     /// Whether the prank stops by itself after the next call
     pub single_call: bool,
+}
+
+/// Records storage slots reads and writes.
+#[derive(Clone, Debug, Default)]
+pub struct RecordAccess {
+    /// Storage slots reads.
+    pub reads: HashMap<Address, Vec<U256>>,
+    /// Storage slots writes.
+    pub writes: HashMap<Address, Vec<U256>>,
 }
 
 impl Prank {
@@ -73,15 +81,6 @@ impl Prank {
             single_call,
         }
     }
-}
-
-/// Records storage slots reads and writes.
-#[derive(Clone, Debug, Default)]
-pub struct RecordAccess {
-    /// Storage slots reads.
-    pub reads: HashMap<Address, Vec<U256>>,
-    /// Storage slots writes.
-    pub writes: HashMap<Address, Vec<U256>>,
 }
 
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
@@ -346,6 +345,12 @@ where
     #[inline]
     fn stop_prank(&mut self) -> Option<Vec<u8>> {
         self.prank = None;
+        None
+    }
+
+    /// Expects an error on next call with any revert data.
+    #[inline]
+    fn expect_revert(&self) -> Option<Vec<u8>> {
         None
     }
 
