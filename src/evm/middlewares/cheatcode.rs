@@ -35,6 +35,8 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
 /// This then allows us to customize the matching behavior for each call data on the
 /// `ExpectedCallData` struct and track how many times we've actually seen the call on the second
 /// element of the tuple.
+///
+/// BTreeMap<Address, BTreeMap<Calldata, (ExpectedCallData, count)>>
 pub type ExpectedCallTracker = BTreeMap<Address, BTreeMap<Vec<u8>, (ExpectedCallData, u64)>>;
 
 #[derive(Clone, Debug, Default)]
@@ -241,6 +243,14 @@ where
             VmCalls::expectEmit_1(args) => self.expect_emit1(args),
             VmCalls::expectEmit_2(_) => self.expect_emit2(),
             VmCalls::expectEmit_3(args) => self.expect_emit3(args),
+            VmCalls::expectCall_0(args) => self.expect_call0(args),
+            VmCalls::expectCall_1(args) => self.expect_call1(args),
+            VmCalls::expectCall_2(args) => self.expect_call2(args),
+            VmCalls::expectCall_3(args) => self.expect_call3(args),
+            VmCalls::expectCall_4(args) => self.expect_call4(args),
+            VmCalls::expectCall_5(args) => self.expect_call5(args),
+            VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(args),
+            VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(args),
             _ => None,
         };
 
@@ -680,6 +690,136 @@ where
             ..Default::default()
         };
         self.expected_emits.push_back(expected);
+        None
+    }
+
+    /// Expects a call to an address with the specified calldata.
+    /// Calldata can either be a strict or a partial match.
+    #[inline]
+    fn expect_call0(&mut self, args: Vm::expectCall_0Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_0Call { callee, data } = args;
+        self.expect_call_non_count(callee, data, None, None, None)
+    }
+
+    /// Expects given number of calls to an address with the specified calldata.
+    #[inline]
+    fn expect_call1(&mut self, args: Vm::expectCall_1Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_1Call { callee, data, count } = args;
+        self.expect_call_with_count(callee, data, None, None, None, count)
+    }
+
+    /// Expects a call to an address with the specified `msg.value` and calldata.
+    #[inline]
+    fn expect_call2(&mut self, args: Vm::expectCall_2Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_2Call { callee, msgValue, data } = args;
+        self.expect_call_non_count(callee, data, Some(msgValue), None, None)
+    }
+
+    /// Expects given number of calls to an address with the specified `msg.value` and calldata.
+    #[inline]
+    fn expect_call3(&mut self, args: Vm::expectCall_3Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_3Call { callee, msgValue, data, count } = args;
+        self.expect_call_with_count(callee, data, Some(msgValue), None, None, count)
+    }
+
+    /// Expect a call to an address with the specified `msg.value`, gas, and calldata.
+    #[inline]
+    fn expect_call4(&mut self, args: Vm::expectCall_4Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_4Call { callee, msgValue, gas, data } = args;
+        self.expect_call_non_count(
+            callee,
+            data,
+            Some(msgValue),
+            Some(gas),
+            None,
+        )
+    }
+
+    /// Expects given number of calls to an address with the specified `msg.value`, gas, and calldata.
+    #[inline]
+    fn expect_call5(&mut self, args: Vm::expectCall_5Call) -> Option<Vec<u8>> {
+        let Vm::expectCall_5Call { callee, msgValue, gas, data, count } = args;
+        self.expect_call_with_count(
+            callee,
+            data,
+            Some(msgValue),
+            Some(gas),
+            None,
+            count,
+        )
+    }
+
+    /// Expect a call to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
+    #[inline]
+    fn expect_call_mingas0(&mut self, args: Vm::expectCallMinGas_0Call) -> Option<Vec<u8>> {
+        let Vm::expectCallMinGas_0Call { callee, msgValue, minGas, data } = args;
+        self.expect_call_non_count(
+            callee,
+            data,
+            Some(msgValue),
+            None,
+            Some(minGas),
+        )
+    }
+
+    /// Expect given number of calls to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
+    #[inline]
+    fn expect_call_mingas1(&mut self, args: Vm::expectCallMinGas_1Call) -> Option<Vec<u8>> {
+        let Vm::expectCallMinGas_1Call { callee, msgValue, minGas, data, count } = args;
+        self.expect_call_with_count(
+            callee,
+            data,
+            Some(msgValue),
+            None,
+            Some(minGas),
+            count,
+        )
+    }
+
+    fn expect_call_non_count(
+        &mut self,
+        target: Address,
+        calldata: Vec<u8>,
+        value: Option<U256>,
+        gas: Option<u64>,
+        min_gas: Option<u64>,
+    ) -> Option<Vec<u8>> {
+        let expecteds = self.expected_calls.entry(target).or_default();
+        // Check if the expected calldata exists.
+        // If it does, increment the count by one as we expect to see it one more time.
+        if let Some(expected) = expecteds.get_mut(&calldata) {
+            expected.0.count += 1;
+        } else {
+            // If it does not exist, then create it.
+            let (count, call_type) = (1, ExpectedCallType::NonCount);
+            expecteds.insert(
+                calldata,
+                (ExpectedCallData { value, gas, min_gas, count, call_type }, 0),
+            );
+        }
+
+        None
+    }
+
+    fn expect_call_with_count(
+        &mut self,
+        target: Address,
+        calldata: Vec<u8>,
+        value: Option<U256>,
+        gas: Option<u64>,
+        min_gas: Option<u64>,
+        count: u64,
+    ) -> Option<Vec<u8>> {
+        let expecteds = self.expected_calls.entry(target).or_default();
+        // In this case, as we're using counted expectCalls, we should not be able to set them
+        // more than once.
+        if expecteds.contains_key(&calldata) {
+            return None;
+        }
+
+        let call_type = ExpectedCallType::Count;
+        expecteds
+            .insert(calldata, (ExpectedCallData { value, gas, min_gas, count, call_type }, 0));
         None
     }
 }
