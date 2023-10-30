@@ -9,7 +9,7 @@ use alloy_primitives::{Address, Log as RawLog};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
-use revm_interpreter::Interpreter;
+use revm_interpreter::{Interpreter, CallInputs};
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
@@ -115,10 +115,6 @@ struct ExpectedEmit {
 pub struct ExpectedCallData {
     /// The expected value sent in the call
     pub value: Option<U256>,
-    /// The expected gas supplied to the call
-    pub gas: Option<u64>,
-    /// The expected *minimum* gas supplied to the call
-    pub min_gas: Option<u64>,
     /// The number of times the call is expected to be made.
     /// If the type of call is `NonCount`, this is the lower bound for the number of calls
     /// that must be seen.
@@ -206,14 +202,12 @@ where
         state: &mut S,
     ) {
         let opcode = interp.current_opcode();
-        let input = interp.contract().input.clone();
-        let caller = interp.contract().caller.clone();
-        let tx_origin = host.env.tx.caller.clone();
-
         interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) = unsafe { self.pop_return_location(interp, opcode) };
+        let (out_offset, out_len) = unsafe { pop_return_location(interp, opcode) };
+        let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller);
 
-        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
+        // handle vm calls
+        let res = match VmCalls::abi_decode(input, false).expect("decode cheatcode failed") {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
             VmCalls::roll(args) => self.roll(&mut host.env, args),
             VmCalls::fee(args) => self.fee(&mut host.env, args),
@@ -226,15 +220,15 @@ where
             VmCalls::store(args) => self.store(&mut host.evmstate, args),
             VmCalls::etch(args) => self.etch(host, state, args),
             VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
+            VmCalls::readCallers(_) => self.read_callers(caller, tx_origin),
             VmCalls::record(_) => self.record(),
             VmCalls::accesses(args) => self.accesses(args),
             VmCalls::recordLogs(_) => self.record_logs(),
             VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
-            VmCalls::prank_0(args) => self.prank0(&caller, args),
-            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
-            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
-            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
+            VmCalls::prank_0(args) => self.prank0(caller, args),
+            VmCalls::prank_1(args) => self.prank1(caller, tx_origin, args),
+            VmCalls::startPrank_0(args) => self.start_prank0(caller, args),
+            VmCalls::startPrank_1(args) => self.start_prank1(caller, tx_origin, args),
             VmCalls::stopPrank(_) => self.stop_prank(),
             VmCalls::expectRevert_0(_) => self.expect_revert0(),
             VmCalls::expectRevert_1(args) => self.expect_revert1(args),
@@ -267,23 +261,60 @@ where
     }
 
     /// Call real addresses
-    pub fn real_call(
-        &mut self, interp:
-        &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
+    pub fn real_call(&mut self, interp: &mut Interpreter) {
+        // Handle expected calls
+        let target = Address::from(interp.contract().address.0);
+        // Grab the different calldatas expected.
+        if let Some(expected_calls_for_target) = self.expected_calls.get_mut(&target) {
+            let contract = interp.contract();
+            let (input, value) = (&contract.input, contract.value);
+            // Match every partial/full calldata
+            for (calldata, (expected, actual_count)) in expected_calls_for_target {
+                // Increment actual times seen if the calldata is at most, as big as this call's input, and
+                if calldata.len() <= input.len() &&
+                    // Both calldata match, taking the length of the assumed smaller one (which will have at least the selector), and
+                    *calldata == input[..calldata.len()] &&
+                    // The value matches, if provided
+                    expected
+                        .value
+                        .map_or(true, |v| v == value)
+                {
+                    *actual_count += 1;
+                }
+            }
+        }
+
+        // Update self.call_depth after applying the prank
+    }
+
+    /// Apply our prank
+    pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs, env: &mut Env) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
+                // At the target depth we set `msg.sender`
+                if self.call_depth == prank.depth {
+                    input.context.caller = prank.new_caller;
+                    input.transfer.source = prank.new_caller;
+                }
+
+                // At the target depth, or deeper, we set `tx.origin`
+                if let Some(new_origin) = prank.new_origin {
+                    env.tx.caller = new_origin;
+                }
+            }
+        }
+
         self.call_depth += 1;
     }
 
-    unsafe fn pop_return_location(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
-        if opcode == 0xf1 || opcode == 0xf2 {
-            let _ = interp.stack.pop_unsafe();
+    /// Check and store logs
+    pub fn logs(&mut self, interp: &mut Interpreter) {
+        if self.expected_emits.is_empty() && self.record_logs().is_none() {
+            return;
         }
-        let (_, _, _, _) = interp.stack.pop4_unsafe();
-        let (out_offset, out_len) = interp.stack.pop2_unsafe();
 
-        (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
+        let address = &interp.contract().address;
+        let opcode = interp.current_opcode();
     }
 }
 
@@ -311,6 +342,7 @@ where
         let contract_addr = &interp.contract().address;
         match get_opcode_type(opcode, contract_addr) {
             OpcodeType::CheatCall => self.cheat_call(interp, host, state),
+            OpcodeType::RealCall => self.real_call(interp),
             _ => ()
         }
     }
@@ -325,7 +357,10 @@ where
         let opcode = interp.current_opcode();
         let contract_addr = &interp.contract().address;
         match get_opcode_type(opcode, contract_addr) {
-            OpcodeType::RealCall => self.call_depth -= 1,
+            OpcodeType::RealCall => {
+                self.call_depth -= 1;
+                // clean up prank
+            }
             _ => ()
         }
     }
@@ -698,82 +733,60 @@ where
     #[inline]
     fn expect_call0(&mut self, args: Vm::expectCall_0Call) -> Option<Vec<u8>> {
         let Vm::expectCall_0Call { callee, data } = args;
-        self.expect_call_non_count(callee, data, None, None, None)
+        self.expect_call_non_count(callee, data, None)
     }
 
     /// Expects given number of calls to an address with the specified calldata.
     #[inline]
     fn expect_call1(&mut self, args: Vm::expectCall_1Call) -> Option<Vec<u8>> {
         let Vm::expectCall_1Call { callee, data, count } = args;
-        self.expect_call_with_count(callee, data, None, None, None, count)
+        self.expect_call_with_count(callee, data, None, count)
     }
 
     /// Expects a call to an address with the specified `msg.value` and calldata.
     #[inline]
     fn expect_call2(&mut self, args: Vm::expectCall_2Call) -> Option<Vec<u8>> {
         let Vm::expectCall_2Call { callee, msgValue, data } = args;
-        self.expect_call_non_count(callee, data, Some(msgValue), None, None)
+        self.expect_call_non_count(callee, data, Some(msgValue))
     }
 
     /// Expects given number of calls to an address with the specified `msg.value` and calldata.
     #[inline]
     fn expect_call3(&mut self, args: Vm::expectCall_3Call) -> Option<Vec<u8>> {
         let Vm::expectCall_3Call { callee, msgValue, data, count } = args;
-        self.expect_call_with_count(callee, data, Some(msgValue), None, None, count)
+        self.expect_call_with_count(callee, data, Some(msgValue), count)
     }
 
     /// Expect a call to an address with the specified `msg.value`, gas, and calldata.
     #[inline]
     fn expect_call4(&mut self, args: Vm::expectCall_4Call) -> Option<Vec<u8>> {
-        let Vm::expectCall_4Call { callee, msgValue, gas, data } = args;
-        self.expect_call_non_count(
-            callee,
-            data,
-            Some(msgValue),
-            Some(gas),
-            None,
-        )
+        // ignore gas
+        let Vm::expectCall_4Call { callee, msgValue, data, .. } = args;
+        self.expect_call_non_count(callee, data, Some(msgValue))
     }
 
     /// Expects given number of calls to an address with the specified `msg.value`, gas, and calldata.
     #[inline]
     fn expect_call5(&mut self, args: Vm::expectCall_5Call) -> Option<Vec<u8>> {
-        let Vm::expectCall_5Call { callee, msgValue, gas, data, count } = args;
-        self.expect_call_with_count(
-            callee,
-            data,
-            Some(msgValue),
-            Some(gas),
-            None,
-            count,
-        )
+        // ignore gas
+        let Vm::expectCall_5Call { callee, msgValue, data, count, .. } = args;
+        self.expect_call_with_count(callee, data, Some(msgValue), count)
     }
 
     /// Expect a call to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
     #[inline]
     fn expect_call_mingas0(&mut self, args: Vm::expectCallMinGas_0Call) -> Option<Vec<u8>> {
-        let Vm::expectCallMinGas_0Call { callee, msgValue, minGas, data } = args;
-        self.expect_call_non_count(
-            callee,
-            data,
-            Some(msgValue),
-            None,
-            Some(minGas),
-        )
+        // ignore gas
+        let Vm::expectCallMinGas_0Call { callee, msgValue, data, .. } = args;
+        self.expect_call_non_count(callee, data, Some(msgValue))
     }
 
     /// Expect given number of calls to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
     #[inline]
     fn expect_call_mingas1(&mut self, args: Vm::expectCallMinGas_1Call) -> Option<Vec<u8>> {
-        let Vm::expectCallMinGas_1Call { callee, msgValue, minGas, data, count } = args;
-        self.expect_call_with_count(
-            callee,
-            data,
-            Some(msgValue),
-            None,
-            Some(minGas),
-            count,
-        )
+        // ignore gas
+        let Vm::expectCallMinGas_1Call { callee, msgValue, data, count, .. } = args;
+        self.expect_call_with_count(callee, data, Some(msgValue), count)
     }
 
     fn expect_call_non_count(
@@ -781,8 +794,6 @@ where
         target: Address,
         calldata: Vec<u8>,
         value: Option<U256>,
-        gas: Option<u64>,
-        min_gas: Option<u64>,
     ) -> Option<Vec<u8>> {
         let expecteds = self.expected_calls.entry(target).or_default();
         // Check if the expected calldata exists.
@@ -794,7 +805,7 @@ where
             let (count, call_type) = (1, ExpectedCallType::NonCount);
             expecteds.insert(
                 calldata,
-                (ExpectedCallData { value, gas, min_gas, count, call_type }, 0),
+                (ExpectedCallData { value, count, call_type }, 0),
             );
         }
 
@@ -806,8 +817,6 @@ where
         target: Address,
         calldata: Vec<u8>,
         value: Option<U256>,
-        gas: Option<u64>,
-        min_gas: Option<u64>,
         count: u64,
     ) -> Option<Vec<u8>> {
         let expecteds = self.expected_calls.entry(target).or_default();
@@ -819,9 +828,20 @@ where
 
         let call_type = ExpectedCallType::Count;
         expecteds
-            .insert(calldata, (ExpectedCallData { value, gas, min_gas, count, call_type }, 0));
+            .insert(calldata, (ExpectedCallData { value, count, call_type }, 0));
         None
     }
+}
+
+
+unsafe fn pop_return_location(interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
+    if opcode == 0xf1 || opcode == 0xf2 {
+        let _ = interp.stack.pop_unsafe();
+    }
+    let (_, _, _, _) = interp.stack.pop4_unsafe();
+    let (out_offset, out_len) = interp.stack.pop2_unsafe();
+
+    (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
 }
 
 fn get_opcode_type(opcode: u8, contract: &B160) -> OpcodeType {
