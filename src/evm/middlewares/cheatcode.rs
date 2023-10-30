@@ -1,11 +1,11 @@
 use std::clone::Clone;
 use std::cmp::min;
-use std::collections::{HashMap, VecDeque, BTreeMap};
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use alloy_sol_types::{SolInterface, SolValue};
-use alloy_primitives::{Address, Log as RawLog};
+use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
@@ -29,15 +29,17 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
 ]);
 
 /// Tracks the expected calls per address.
+///
 /// For each address, we track the expected calls per call data. We track it in such manner
 /// so that we don't mix together calldatas that only contain selectors and calldatas that contain
 /// selector and arguments (partial and full matches).
+///
 /// This then allows us to customize the matching behavior for each call data on the
 /// `ExpectedCallData` struct and track how many times we've actually seen the call on the second
 /// element of the tuple.
 ///
 /// BTreeMap<Address, BTreeMap<Calldata, (ExpectedCallData, count)>>
-pub type ExpectedCallTracker = BTreeMap<Address, BTreeMap<Vec<u8>, (ExpectedCallData, u64)>>;
+pub type ExpectedCallTracker = HashMap<Address, HashMap<Vec<u8>, (ExpectedCallData, u64)>>;
 
 #[derive(Clone, Debug, Default)]
 pub struct Cheatcode<I, VS, S, SC> {
@@ -111,7 +113,7 @@ struct ExpectedEmit {
     found: bool,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ExpectedCallData {
     /// The expected value sent in the call
     pub value: Option<U256>,
@@ -124,11 +126,13 @@ pub struct ExpectedCallData {
     pub call_type: ExpectedCallType,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// The type of expected call.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExpectedCallType {
-    #[default]
-    Count,
+    /// The call is expected to be made at least once.
     NonCount,
+    /// The exact number of calls expected.
+    Count,
 }
 
 enum OpcodeType {
@@ -138,10 +142,10 @@ enum OpcodeType {
     RealCall,
     /// SLOAD, SSTORE
     Storage,
-    /// LOG0~LOG4
-    Log,
     /// REVERT
     Revert,
+    /// LOG0~LOG4
+    Log,
     /// Others we don't care about
     Careless,
 }
@@ -313,8 +317,94 @@ where
             return;
         }
 
-        let address = &interp.contract().address;
         let opcode = interp.current_opcode();
+        let data = unsafe { peek_log_data(interp) };
+        let topics = unsafe { peek_log_topics(interp, opcode) };
+        let address = &interp.contract().address;
+
+        // Handle expect emit
+        if !self.expected_emits.is_empty() {
+            self.handle_expect_emit(&Address::from(address.0), &topics, &data);
+        }
+
+        // Stores this log if `recordLogs` has been called
+        if let Some(storage_recorded_logs) = &mut self.recorded_logs {
+            storage_recorded_logs.push(Vm::Log {
+                topics: topics,
+                data: data.to_vec(),
+                emitter: Address::from((*address).0),
+            });
+        }
+    }
+
+    fn handle_expect_emit(&mut self, address: &Address, topics: &[B256], data: &AlloyBytes) {
+        // Fill or check the expected emits.
+        // We expect for emit checks to be filled as they're declared (from oldest to newest),
+        // so we fill them and push them to the back of the queue.
+        // If the user has properly filled all the emits, they'll end up in their original order.
+        // If not, the queue will not be in the order the events will be intended to be filled,
+        // and we'll be able to later detect this and bail.
+
+        // First, we can return early if all events have been matched.
+        // This allows a contract to arbitrarily emit more events than expected (additive behavior),
+        // as long as all the previous events were matched in the order they were expected to be.
+        if self.expected_emits.iter().all(|expected| expected.found) {
+            return
+        }
+
+        // if there's anything to fill, we need to pop back.
+        // Otherwise, if there are any events that are unmatched, we try to match to match them
+        // in the order declared, so we start popping from the front (like a queue).
+        let mut event_to_fill_or_check =
+            if self.expected_emits.iter().any(|expected| expected.log.is_none()) {
+                self.expected_emits.pop_back()
+            } else {
+                self.expected_emits.pop_front()
+            }
+            .expect("we should have an emit to fill or check");
+
+        let Some(expected) = &event_to_fill_or_check.log else {
+            // Fill the event.
+            event_to_fill_or_check.log = Some(RawLog::new_unchecked(topics.to_vec(), data.clone()));
+            self.expected_emits.push_back(event_to_fill_or_check);
+            return
+        };
+
+        let expected_topic_0 = expected.topics().first();
+        let log_topic_0 = topics.first();
+
+        if expected_topic_0
+            .zip(log_topic_0)
+            .map_or(false, |(a, b)| a == b && expected.topics().len() == topics.len())
+        {
+            // Match topics
+            event_to_fill_or_check.found = topics
+                .iter()
+                .skip(1)
+                .enumerate()
+                .filter(|(i, _)| event_to_fill_or_check.checks[*i])
+                .all(|(i, topic)| topic == &expected.topics()[i + 1]);
+
+            // Maybe match source address
+            if let Some(addr) = event_to_fill_or_check.address {
+                event_to_fill_or_check.found &= addr == *address;
+            }
+
+            // Maybe match data
+            if event_to_fill_or_check.checks[3] {
+                event_to_fill_or_check.found &= expected.data == *data;
+            }
+        }
+
+        // If we found the event, we can push it to the back of the queue
+        // and begin expecting the next event.
+        if event_to_fill_or_check.found {
+            self.expected_emits.push_back(event_to_fill_or_check);
+        } else {
+            // We did not match this event, so we need to keep waiting for the right one to
+            // appear.
+            self.expected_emits.push_front(event_to_fill_or_check);
+        }
     }
 }
 
@@ -842,6 +932,45 @@ unsafe fn pop_return_location(interp: &mut Interpreter, opcode: u8) -> (usize, u
     let (out_offset, out_len) = interp.stack.pop2_unsafe();
 
     (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
+}
+
+unsafe fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
+    let stack_len = interp.stack().len();
+    let offset = interp.stack.data()[stack_len - 1];
+    let len = interp.stack.data()[stack_len - 2];
+    let (offset, len) = (offset.as_limbs()[0] as usize, len.as_limbs()[0] as usize);
+    if len == 0 {
+        return AlloyBytes::new();
+    }
+
+    // resize memory if necessary
+    let new_size = offset.checked_add(len).expect("Recorded log data exceeds memory size");
+    #[cfg(feature = "memory_limit")]
+    if new_size > interp.memory_limit as usize {
+        panic!("Recorded log data exceeds memory limit");
+    }
+    if new_size > interp.memory.len() {
+        interp.memory.resize(new_size);
+    }
+
+    AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len))
+}
+
+unsafe fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
+    let n = (opcode - 0xa0) as usize;
+    if interp.stack.len() < n + 2 {
+        panic!("Not enough topics on the stack");
+    }
+
+    let stack_len = interp.stack().len();
+    let mut topics = Vec::with_capacity(n);
+    for i in 0..n {
+        topics.push(B256::from(unsafe {
+            interp.stack.data()[stack_len - 3 - i].to_be_bytes()
+        }));
+    }
+
+    topics
 }
 
 fn get_opcode_type(opcode: u8, contract: &B160) -> OpcodeType {
