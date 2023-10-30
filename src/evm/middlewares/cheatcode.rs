@@ -36,6 +36,8 @@ pub struct Cheatcode<I, VS, S, SC> {
     pub accesses: Option<RecordAccess>,
     /// Recorded logs
     pub recorded_logs: Option<Vec<Vm::Log>>,
+    /// Expected revert information
+    pub expected_revert: Option<ExpectedRevert>,
 
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
@@ -62,6 +64,12 @@ pub struct RecordAccess {
     pub reads: HashMap<Address, Vec<U256>>,
     /// Storage slots writes.
     pub writes: HashMap<Address, Vec<U256>>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ExpectedRevert {
+    /// The expected data returned by the revert, None being any
+    pub reason: Option<Bytes>,
 }
 
 impl Prank {
@@ -102,6 +110,7 @@ where
             prank: None,
             accesses: None,
             recorded_logs: None,
+            expected_revert: None,
             _phantom: PhantomData,
         }
     }
@@ -350,7 +359,26 @@ where
 
     /// Expects an error on next call with any revert data.
     #[inline]
-    fn expect_revert(&self) -> Option<Vec<u8>> {
+    fn expect_revert0(&mut self) -> Option<Vec<u8>> {
+        self.expected_revert = Some(ExpectedRevert { reason: None });
+        None
+    }
+
+    /// Expects an error on next call that starts with the revert data.
+    #[inline]
+    fn expect_revert1(&mut self, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+        let Vm::expectRevert_1Call{ revertData } = args;
+        let reason = Some(Bytes::from(revertData.0.to_vec()));
+        self.expected_revert = Some(ExpectedRevert { reason });
+        None
+    }
+
+    /// Expects an error on next call that exactly matches the revert data.
+    #[inline]
+    fn expect_revert2(&mut self, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+        let Vm::expectRevert_2Call{ revertData } = args;
+        let reason = Some(Bytes::from(revertData));
+        self.expected_revert = Some(ExpectedRevert { reason });
         None
     }
 
@@ -425,6 +453,9 @@ where
             VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
             VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
             VmCalls::stopPrank(_) => self.stop_prank(),
+            VmCalls::expectRevert_0(_) => self.expect_revert0(),
+            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
+            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
             _ => None,
         };
 
