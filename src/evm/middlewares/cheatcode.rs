@@ -196,8 +196,8 @@ where
 
     /// Call cheatcode address
     pub fn cheat_call(
-        &mut self, interp:
-        &mut Interpreter,
+        &mut self,
+        interp: &mut Interpreter,
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
