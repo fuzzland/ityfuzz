@@ -9,7 +9,7 @@ use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
-use revm_interpreter::{Interpreter, CallInputs, opcode};
+use revm_interpreter::{Interpreter, CallInputs, opcode, InstructionResult};
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
@@ -187,6 +187,8 @@ where
         match get_opcode_type(op, contract_addr) {
             OpcodeType::CheatCall => self.cheat_call(interp, host, state),
             OpcodeType::RealCall => self.real_call(interp),
+            OpcodeType::Storage => self.record_accesses(interp),
+            OpcodeType::Log => self.log(interp),
             _ => ()
         }
     }
@@ -388,15 +390,15 @@ where
         }
     }
 
-    /// Check and store logs
-    pub fn logs(&mut self, interp: &mut Interpreter) {
+    /// Check emits / Record logs
+    pub fn log(&mut self, interp: &mut Interpreter) {
         if self.expected_emits.is_empty() && self.record_logs().is_none() {
             return;
         }
 
         let op = interp.current_opcode();
-        let data =  peek_log_data(interp);
-        let topics = peek_log_topics(interp, op);
+        let data = try_or_continue!(peek_log_data(interp));
+        let topics = try_or_continue!(peek_log_topics(interp, op));
         let address = &interp.contract().address;
 
         // Handle expect emit
@@ -950,39 +952,6 @@ where
     }
 }
 
-
-unsafe fn pop_return_location(interp: &mut Interpreter, op: u8) -> (usize, usize) {
-    if op == opcode::CALL || op == opcode::CALLCODE {
-        let _ = interp.stack.pop_unsafe();
-    }
-    let (_, _, _, _) = interp.stack.pop4_unsafe();
-    let (out_offset, out_len) = interp.stack.pop2_unsafe();
-
-    (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
-}
-
-fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
-    let stack_len = interp.stack().len();
-    let offset = interp.stack.data()[stack_len - 1];
-    let len = interp.stack.data()[stack_len - 2];
-    let (offset, len) = (offset.as_limbs()[0] as usize, len.as_limbs()[0] as usize);
-    if len == 0 {
-        return AlloyBytes::new();
-    }
-
-    // resize memory if necessary
-    let new_size = offset.checked_add(len).expect("Recorded log data exceeds memory size");
-    #[cfg(feature = "memory_limit")]
-    if new_size > interp.memory_limit as usize {
-        panic!("Recorded log data exceeds memory limit");
-    }
-    if new_size > interp.memory.len() {
-        interp.memory.resize(new_size);
-    }
-
-    AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len))
-}
-
 impl Prank {
     /// Create a new prank.
     pub fn new(
@@ -1004,19 +973,48 @@ impl Prank {
     }
 }
 
-fn peek_log_topics(interp: &mut Interpreter, op: u8) -> Vec<B256> {
+unsafe fn pop_return_location(interp: &mut Interpreter, op: u8) -> (usize, usize) {
+    if op == opcode::CALL || op == opcode::CALLCODE {
+        let _ = interp.stack.pop_unsafe();
+    }
+    let (_, _, _, _) = interp.stack.pop4_unsafe();
+    let (out_offset, out_len) = interp.stack.pop2_unsafe();
+
+    (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
+}
+
+fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResult> {
+    let offset = interp.stack().peek(0)?;
+    let len = interp.stack().peek(1)?;
+    let (offset, len) = (offset.as_limbs()[0] as usize, len.as_limbs()[0] as usize);
+    if len == 0 {
+        return Ok(AlloyBytes::new());
+    }
+
+    // resize memory if necessary
+    let new_size = offset.saturating_add(len);
+    #[cfg(feature = "memory_limit")]
+    if new_size > interp.memory_limit as usize {
+        return Err(InstructionResult::MemoryLimitOOG);
+    }
+    if new_size > interp.memory.len() {
+        interp.memory.resize(new_size);
+    }
+
+    Ok(AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len)))
+}
+
+fn peek_log_topics(interp: &mut Interpreter, op: u8) -> Result<Vec<B256>, InstructionResult> {
     let n = (op - opcode::LOG0) as usize;
-    if interp.stack.len() < n + 2 {
-        panic!("Not enough topics on the stack");
-    }
-
-    let stack_len = interp.stack().len();
     let mut topics = Vec::with_capacity(n);
-    for i in 0..n {
-        topics.push(B256::from(interp.stack.data()[stack_len - 3 - i].to_be_bytes()));
+
+    // Start from idx 2. The first two elements are the offset and len of the data.
+    for i in 2..(n+2) {
+        let topic = interp.stack().peek(i)?;
+        topics.push(B256::from(topic.to_be_bytes()));
     }
 
-    topics
+    Ok(topics)
 }
 
 fn get_opcode_type(op: u8, contract: &B160) -> OpcodeType {
