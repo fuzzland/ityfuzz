@@ -197,16 +197,16 @@ where
             &mut self,
             interp: &mut Interpreter,
             host: &mut FuzzHost<VS, I, S, SC>,
-            state: &mut S,
-            ret: &Bytes,
+            _state: &mut S,
+            _ret: &Bytes,
         ) {
         let op = interp.current_opcode();
         let contract_addr = &interp.contract().address;
         match get_opcode_type(op, contract_addr) {
             OpcodeType::RealCall => {
                 self.call_depth -= 1;
-                // clean up prank
-            }
+                self.clean_prank(&mut host.env);
+            },
             _ => ()
         }
     }
@@ -215,8 +215,6 @@ where
         MiddlewareType::Cheatcode
     }
 }
-
-
 
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
 where
@@ -338,7 +336,7 @@ where
         // Update self.call_depth after applying the prank
     }
 
-    /// Apply our prank
+    /// Apply the prank
     pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs, env: &mut Env) {
         if let Some(prank) = &self.prank {
             if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
@@ -356,6 +354,21 @@ where
         }
 
         self.call_depth += 1;
+    }
+
+    /// Clean up the prank
+    pub fn clean_prank(&mut self, env: &mut Env) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth != prank.depth {
+                return;
+            }
+            if let Some(old_origin) = prank.old_origin {
+                env.tx.caller = old_origin;
+            }
+            if prank.single_call {
+                let _ = self.prank.take();
+            }
+        }
     }
 
     /// Record storage writes and reads if `record` has been called
@@ -416,17 +429,9 @@ where
         }
     }
 
+    // Handle an emitting log and update `self.expected_emits` which will be
+    // checked when the call returns (`on_return`).
     fn handle_expect_emit(&mut self, address: &Address, topics: &[B256], data: &AlloyBytes) {
-        // Fill or check the expected emits.
-        // We expect for emit checks to be filled as they're declared (from oldest to newest),
-        // so we fill them and push them to the back of the queue.
-        // If the user has properly filled all the emits, they'll end up in their original order.
-        // If not, the queue will not be in the order the events will be intended to be filled,
-        // and we'll be able to later detect this and bail.
-
-        // First, we can return early if all events have been matched.
-        // This allows a contract to arbitrarily emit more events than expected (additive behavior),
-        // as long as all the previous events were matched in the order they were expected to be.
         if self.expected_emits.iter().all(|expected| expected.found) {
             return
         }
