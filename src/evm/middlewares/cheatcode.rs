@@ -9,7 +9,7 @@ use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
-use revm_interpreter::{Interpreter, CallInputs};
+use revm_interpreter::{Interpreter, CallInputs, opcode};
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
@@ -82,9 +82,9 @@ struct Prank {
 #[derive(Clone, Debug, Default)]
 struct RecordAccess {
     /// Storage slots reads.
-    reads: HashMap<Address, Vec<U256>>,
+    reads: HashMap<EVMAddress, Vec<U256>>,
     /// Storage slots writes.
-    writes: HashMap<Address, Vec<U256>>,
+    writes: HashMap<EVMAddress, Vec<U256>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -150,26 +150,71 @@ enum OpcodeType {
     Careless,
 }
 
-impl Prank {
-    /// Create a new prank.
-    pub fn new(
-        old_caller: EVMAddress,
-        old_origin: Option<EVMAddress>,
-        new_caller: EVMAddress,
-        new_origin: Option<EVMAddress>,
-        single_call: bool,
-        depth: u64,
-    ) -> Prank {
-        Prank {
-            old_caller,
-            old_origin,
-            new_caller,
-            new_origin,
-            single_call,
-            depth,
+macro_rules! try_or_continue {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => {
+                println!("skip cheatcode due to: {:?}", e);
+                return
+            },
+        }
+    };
+}
+
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    S: State
+        + HasCorpus<Input = I>
+        + HasCaller<EVMAddress>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + HasMetadata
+        + HasRand
+        + Clone
+        + Debug,
+    VS: VMStateT,
+    SC: Scheduler<State = S> + Clone + Debug,
+{
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        let op = interp.current_opcode();
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(op, contract_addr) {
+            OpcodeType::CheatCall => self.cheat_call(interp, host, state),
+            OpcodeType::RealCall => self.real_call(interp),
+            _ => ()
         }
     }
+
+    unsafe fn on_return(
+            &mut self,
+            interp: &mut Interpreter,
+            host: &mut FuzzHost<VS, I, S, SC>,
+            state: &mut S,
+            ret: &Bytes,
+        ) {
+        let op = interp.current_opcode();
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(op, contract_addr) {
+            OpcodeType::RealCall => {
+                self.call_depth -= 1;
+                // clean up prank
+            }
+            _ => ()
+        }
+    }
+
+    fn get_type(&self) -> MiddlewareType {
+        MiddlewareType::Cheatcode
+    }
 }
+
+
 
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
 where
@@ -205,9 +250,9 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
-        let opcode = interp.current_opcode();
+        let op = interp.current_opcode();
         interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) = unsafe { pop_return_location(interp, opcode) };
+        let (out_offset, out_len) = unsafe { pop_return_location(interp, op) };
         let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller);
 
         // handle vm calls
@@ -311,15 +356,47 @@ where
         self.call_depth += 1;
     }
 
+    /// Record storage writes and reads if `record` has been called
+    pub fn record_accesses(&mut self, interp: &mut Interpreter) {
+        if let Some(storage_accesses) = &mut self.accesses {
+            match interp.current_opcode() {
+                opcode::SLOAD => {
+                    let key = try_or_continue!(interp.stack().peek(0));
+                    storage_accesses
+                        .reads
+                        .entry(interp.contract().address)
+                        .or_default()
+                        .push(key);
+                }
+                opcode::SSTORE => {
+                    let key = try_or_continue!(interp.stack().peek(0));
+
+                    // An SSTORE does an SLOAD internally
+                    storage_accesses
+                        .reads
+                        .entry(interp.contract().address)
+                        .or_default()
+                        .push(key);
+                    storage_accesses
+                        .writes
+                        .entry(interp.contract().address)
+                        .or_default()
+                        .push(key);
+                }
+                _ => (),
+            }
+        }
+    }
+
     /// Check and store logs
     pub fn logs(&mut self, interp: &mut Interpreter) {
         if self.expected_emits.is_empty() && self.record_logs().is_none() {
             return;
         }
 
-        let opcode = interp.current_opcode();
+        let op = interp.current_opcode();
         let data =  peek_log_data(interp);
-        let topics = peek_log_topics(interp, opcode);
+        let topics = peek_log_topics(interp, op);
         let address = &interp.contract().address;
 
         // Handle expect emit
@@ -408,59 +485,7 @@ where
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone + Debug,
-{
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
-        let opcode = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(opcode, contract_addr) {
-            OpcodeType::CheatCall => self.cheat_call(interp, host, state),
-            OpcodeType::RealCall => self.real_call(interp),
-            _ => ()
-        }
-    }
-
-    unsafe fn on_return(
-            &mut self,
-            interp: &mut Interpreter,
-            host: &mut FuzzHost<VS, I, S, SC>,
-            state: &mut S,
-            ret: &Bytes,
-        ) {
-        let opcode = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(opcode, contract_addr) {
-            OpcodeType::RealCall => {
-                self.call_depth -= 1;
-                // clean up prank
-            }
-            _ => ()
-        }
-    }
-
-    fn get_type(&self) -> MiddlewareType {
-        MiddlewareType::Cheatcode
-    }
-}
-
-/// Cheat calls
+/// Cheat VmCalls
 impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
@@ -603,6 +628,8 @@ where
     #[inline]
     fn accesses(&mut self, args: Vm::accessesCall) -> Option<Vec<u8>> {
         let Vm::accessesCall { target } = args;
+        let target = B160(target.into());
+
         let result = self
             .accesses
             .as_mut()
@@ -924,8 +951,8 @@ where
 }
 
 
-unsafe fn pop_return_location(interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
-    if opcode == 0xf1 || opcode == 0xf2 {
+unsafe fn pop_return_location(interp: &mut Interpreter, op: u8) -> (usize, usize) {
+    if op == opcode::CALL || op == opcode::CALLCODE {
         let _ = interp.stack.pop_unsafe();
     }
     let (_, _, _, _) = interp.stack.pop4_unsafe();
@@ -956,8 +983,29 @@ fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
     AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len))
 }
 
-fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
-    let n = (opcode - 0xa0) as usize;
+impl Prank {
+    /// Create a new prank.
+    pub fn new(
+        old_caller: EVMAddress,
+        old_origin: Option<EVMAddress>,
+        new_caller: EVMAddress,
+        new_origin: Option<EVMAddress>,
+        single_call: bool,
+        depth: u64,
+    ) -> Prank {
+        Prank {
+            old_caller,
+            old_origin,
+            new_caller,
+            new_origin,
+            single_call,
+            depth,
+        }
+    }
+}
+
+fn peek_log_topics(interp: &mut Interpreter, op: u8) -> Vec<B256> {
+    let n = (op - opcode::LOG0) as usize;
     if interp.stack.len() < n + 2 {
         panic!("Not enough topics on the stack");
     }
@@ -971,18 +1019,18 @@ fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
     topics
 }
 
-fn get_opcode_type(opcode: u8, contract: &B160) -> OpcodeType {
-    if opcode != 0xf1 && opcode != 0xf2 && opcode != 0xf4 && opcode != 0xfa {
-        if contract == &CHEATCODE_ADDRESS {
-            return OpcodeType::CheatCall;
-        }
-        return OpcodeType::RealCall;
-    }
-
-    match opcode {
-        0x54 | 0x55 => OpcodeType::Storage,
-        0xa0..=0xa4 => OpcodeType::Log,
-        0xfd => OpcodeType::Revert,
+fn get_opcode_type(op: u8, contract: &B160) -> OpcodeType {
+    match op {
+        opcode::CALL | opcode::CALLCODE | opcode::DELEGATECALL | opcode::STATICCALL => {
+            if contract == &CHEATCODE_ADDRESS {
+                OpcodeType::CheatCall
+            } else {
+                OpcodeType::RealCall
+            }
+        },
+        opcode::SLOAD | opcode::SSTORE => OpcodeType::Storage,
+        opcode::LOG0..=opcode::LOG4 => OpcodeType::Log,
+        opcode::REVERT => OpcodeType::Revert,
         _ => OpcodeType::Careless,
     }
 }
