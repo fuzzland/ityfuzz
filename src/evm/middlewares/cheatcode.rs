@@ -53,10 +53,10 @@ pub struct Cheatcode<I, VS, S, SC> {
     expected_revert: Option<ExpectedRevert>,
     /// Expected emits
     expected_emits: VecDeque<ExpectedEmit>,
-    /// Depth of call stack
-    call_depth: u64,
     /// Expected calls
     expected_calls: ExpectedCallTracker,
+    /// Depth of call stack
+    call_depth: u64,
 
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
@@ -318,8 +318,8 @@ where
         }
 
         let opcode = interp.current_opcode();
-        let data = unsafe { peek_log_data(interp) };
-        let topics = unsafe { peek_log_topics(interp, opcode) };
+        let data =  peek_log_data(interp);
+        let topics = peek_log_topics(interp, opcode);
         let address = &interp.contract().address;
 
         // Handle expect emit
@@ -934,7 +934,7 @@ unsafe fn pop_return_location(interp: &mut Interpreter, opcode: u8) -> (usize, u
     (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
 }
 
-unsafe fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
+fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
     let stack_len = interp.stack().len();
     let offset = interp.stack.data()[stack_len - 1];
     let len = interp.stack.data()[stack_len - 2];
@@ -956,7 +956,7 @@ unsafe fn peek_log_data(interp: &mut Interpreter) -> AlloyBytes {
     AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len))
 }
 
-unsafe fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
+fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
     let n = (opcode - 0xa0) as usize;
     if interp.stack.len() < n + 2 {
         panic!("Not enough topics on the stack");
@@ -965,9 +965,7 @@ unsafe fn peek_log_topics(interp: &mut Interpreter, opcode: u8) -> Vec<B256> {
     let stack_len = interp.stack().len();
     let mut topics = Vec::with_capacity(n);
     for i in 0..n {
-        topics.push(B256::from(unsafe {
-            interp.stack.data()[stack_len - 3 - i].to_be_bytes()
-        }));
+        topics.push(B256::from(interp.stack.data()[stack_len - 3 - i].to_be_bytes()));
     }
 
     topics
