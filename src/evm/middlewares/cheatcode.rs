@@ -1,6 +1,6 @@
 use std::clone::Clone;
 use std::cmp::min;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, BTreeMap};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -28,6 +28,15 @@ pub const CHEATCODE_ADDRESS: B160 = B160([
     113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
 ]);
 
+/// Tracks the expected calls per address.
+/// For each address, we track the expected calls per call data. We track it in such manner
+/// so that we don't mix together calldatas that only contain selectors and calldatas that contain
+/// selector and arguments (partial and full matches).
+/// This then allows us to customize the matching behavior for each call data on the
+/// `ExpectedCallData` struct and track how many times we've actually seen the call on the second
+/// element of the tuple.
+pub type ExpectedCallTracker = BTreeMap<Address, BTreeMap<Vec<u8>, (ExpectedCallData, u64)>>;
+
 #[derive(Clone, Debug, Default)]
 pub struct Cheatcode<I, VS, S, SC> {
     /// Prank information
@@ -42,6 +51,9 @@ pub struct Cheatcode<I, VS, S, SC> {
     expected_emits: VecDeque<ExpectedEmit>,
     /// Depth of call stack
     call_depth: u64,
+    /// Expected calls
+    expected_calls: ExpectedCallTracker,
+
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
 
@@ -95,6 +107,30 @@ struct ExpectedEmit {
     address: Option<Address>,
     /// Whether the log was actually found in the subcalls
     found: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ExpectedCallData {
+    /// The expected value sent in the call
+    pub value: Option<U256>,
+    /// The expected gas supplied to the call
+    pub gas: Option<u64>,
+    /// The expected *minimum* gas supplied to the call
+    pub min_gas: Option<u64>,
+    /// The number of times the call is expected to be made.
+    /// If the type of call is `NonCount`, this is the lower bound for the number of calls
+    /// that must be seen.
+    /// If the type of call is `Count`, this is the exact number of calls that must be seen.
+    pub count: u64,
+    /// The type of call
+    pub call_type: ExpectedCallType,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ExpectedCallType {
+    #[default]
+    Count,
+    NonCount,
 }
 
 enum OpcodeType {
@@ -155,10 +191,155 @@ where
             expected_revert: None,
             expected_emits: VecDeque::new(),
             call_depth: 0,
+            expected_calls: ExpectedCallTracker::new(),
             _phantom: PhantomData,
         }
     }
 
+    /// Call cheatcode address
+    pub fn cheat_call(
+        &mut self, interp:
+        &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        let opcode = interp.current_opcode();
+        let input = interp.contract().input.clone();
+        let caller = interp.contract().caller.clone();
+        let tx_origin = host.env.tx.caller.clone();
+
+        interp.return_data_buffer = Bytes::new();
+        let (out_offset, out_len) = unsafe { self.pop_return_location(interp, opcode) };
+
+        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
+            VmCalls::warp(args) => self.warp(&mut host.env, args),
+            VmCalls::roll(args) => self.roll(&mut host.env, args),
+            VmCalls::fee(args) => self.fee(&mut host.env, args),
+            VmCalls::difficulty(args) => self.difficulty(&mut host.env, args),
+            VmCalls::prevrandao(args) => self.prevrandao(&mut host.env, args),
+            VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
+            VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
+            VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
+            VmCalls::load(args) => self.load(&host.evmstate, args),
+            VmCalls::store(args) => self.store(&mut host.evmstate, args),
+            VmCalls::etch(args) => self.etch(host, state, args),
+            VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
+            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
+            VmCalls::record(_) => self.record(),
+            VmCalls::accesses(args) => self.accesses(args),
+            VmCalls::recordLogs(_) => self.record_logs(),
+            VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
+            VmCalls::prank_0(args) => self.prank0(&caller, args),
+            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
+            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
+            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
+            VmCalls::stopPrank(_) => self.stop_prank(),
+            VmCalls::expectRevert_0(_) => self.expect_revert0(),
+            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
+            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
+            VmCalls::expectEmit_0(args) => self.expect_emit0(args),
+            VmCalls::expectEmit_1(args) => self.expect_emit1(args),
+            VmCalls::expectEmit_2(_) => self.expect_emit2(),
+            VmCalls::expectEmit_3(args) => self.expect_emit3(args),
+            _ => None,
+        };
+
+        // set up return data
+        if let Some(return_data) = res {
+            interp.return_data_buffer = Bytes::from(return_data);
+        }
+        let target_len = min(out_len, interp.return_data_buffer.len());
+        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
+        let _ = interp.stack.push(U256::from(1));
+
+        // step over the instruction
+        interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
+    }
+
+    /// Call real addresses
+    pub fn real_call(
+        &mut self, interp:
+        &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        self.call_depth += 1;
+    }
+
+    unsafe fn pop_return_location(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
+        if opcode == 0xf1 || opcode == 0xf2 {
+            let _ = interp.stack.pop_unsafe();
+        }
+        let (_, _, _, _) = interp.stack.pop4_unsafe();
+        let (out_offset, out_len) = interp.stack.pop2_unsafe();
+
+        (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
+    }
+}
+
+impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    S: State
+        + HasCorpus<Input = I>
+        + HasCaller<EVMAddress>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + HasMetadata
+        + HasRand
+        + Clone
+        + Debug,
+    VS: VMStateT,
+    SC: Scheduler<State = S> + Clone + Debug,
+{
+    unsafe fn on_step(
+        &mut self,
+        interp: &mut Interpreter,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+    ) {
+        let opcode = interp.current_opcode();
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(opcode, contract_addr) {
+            OpcodeType::CheatCall => self.cheat_call(interp, host, state),
+            _ => ()
+        }
+    }
+
+    unsafe fn on_return(
+            &mut self,
+            interp: &mut Interpreter,
+            host: &mut FuzzHost<VS, I, S, SC>,
+            state: &mut S,
+            ret: &Bytes,
+        ) {
+        let opcode = interp.current_opcode();
+        let contract_addr = &interp.contract().address;
+        match get_opcode_type(opcode, contract_addr) {
+            OpcodeType::RealCall => self.call_depth -= 1,
+            _ => ()
+        }
+    }
+
+    fn get_type(&self) -> MiddlewareType {
+        MiddlewareType::Cheatcode
+    }
+}
+
+/// Cheat calls
+impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
+where
+    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
+    S: State
+        + HasCorpus<Input = I>
+        + HasCaller<EVMAddress>
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + HasMetadata
+        + HasRand
+        + Clone
+        + Debug,
+    VS: VMStateT,
+    SC: Scheduler<State = S> + Clone,
+{
     /// Sets `block.timestamp`.
     #[inline]
     fn warp(&self, env: &mut Env, args: Vm::warpCall) -> Option<Vec<u8>> {
@@ -488,7 +669,6 @@ where
         None
     }
 
-
     /// Same as the previous method, but also checks supplied address against emitting contract.
     #[inline]
     fn expect_emit3(&mut self, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
@@ -501,134 +681,6 @@ where
         };
         self.expected_emits.push_back(expected);
         None
-    }
-
-    /// Call cheatcode address
-    pub fn cheat_call(
-        &mut self, interp:
-        &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
-        let opcode = interp.current_opcode();
-        let input = interp.contract().input.clone();
-        let caller = interp.contract().caller.clone();
-        let tx_origin = host.env.tx.caller.clone();
-
-        interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) = unsafe { self.pop_return_location(interp, opcode) };
-
-        let res = match VmCalls::abi_decode(&input, false).expect("decode cheatcode failed") {
-            VmCalls::warp(args) => self.warp(&mut host.env, args),
-            VmCalls::roll(args) => self.roll(&mut host.env, args),
-            VmCalls::fee(args) => self.fee(&mut host.env, args),
-            VmCalls::difficulty(args) => self.difficulty(&mut host.env, args),
-            VmCalls::prevrandao(args) => self.prevrandao(&mut host.env, args),
-            VmCalls::chainId(args) => self.chain_id(&mut host.env, args),
-            VmCalls::txGasPrice(args) => self.tx_gas_price(&mut host.env, args),
-            VmCalls::coinbase(args) => self.coinbase(&mut host.env, args),
-            VmCalls::load(args) => self.load(&host.evmstate, args),
-            VmCalls::store(args) => self.store(&mut host.evmstate, args),
-            VmCalls::etch(args) => self.etch(host, state, args),
-            VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(&caller, &tx_origin),
-            VmCalls::record(_) => self.record(),
-            VmCalls::accesses(args) => self.accesses(args),
-            VmCalls::recordLogs(_) => self.record_logs(),
-            VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
-            VmCalls::prank_0(args) => self.prank0(&caller, args),
-            VmCalls::prank_1(args) => self.prank1(&caller, &tx_origin, args),
-            VmCalls::startPrank_0(args) => self.start_prank0(&caller, args),
-            VmCalls::startPrank_1(args) => self.start_prank1(&caller, &tx_origin, args),
-            VmCalls::stopPrank(_) => self.stop_prank(),
-            VmCalls::expectRevert_0(_) => self.expect_revert0(),
-            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
-            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
-            VmCalls::expectEmit_0(args) => self.expect_emit0(args),
-            VmCalls::expectEmit_1(args) => self.expect_emit1(args),
-            VmCalls::expectEmit_2(_) => self.expect_emit2(),
-            VmCalls::expectEmit_3(args) => self.expect_emit3(args),
-            _ => None,
-        };
-
-        // set up return data
-        if let Some(return_data) = res {
-            interp.return_data_buffer = Bytes::from(return_data);
-        }
-        let target_len = min(out_len, interp.return_data_buffer.len());
-        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
-        let _ = interp.stack.push(U256::from(1));
-
-        // step over the instruction
-        interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
-    }
-
-    /// Call real addresses
-    pub fn real_call(
-        &mut self, interp:
-        &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
-        self.call_depth += 1;
-    }
-
-    unsafe fn pop_return_location(&self, interp: &mut Interpreter, opcode: u8) -> (usize, usize) {
-        if opcode == 0xf1 || opcode == 0xf2 {
-            let _ = interp.stack.pop_unsafe();
-        }
-        let (_, _, _, _) = interp.stack.pop4_unsafe();
-        let (out_offset, out_len) = interp.stack.pop2_unsafe();
-
-        (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
-    }
-}
-
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone + Debug,
-{
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
-        let opcode = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(opcode, contract_addr) {
-            OpcodeType::CheatCall => self.cheat_call(interp, host, state),
-            _ => ()
-        }
-    }
-
-    unsafe fn on_return(
-            &mut self,
-            interp: &mut Interpreter,
-            host: &mut FuzzHost<VS, I, S, SC>,
-            state: &mut S,
-            ret: &Bytes,
-        ) {
-        let opcode = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(opcode, contract_addr) {
-            OpcodeType::RealCall => self.call_depth -= 1,
-            _ => ()
-        }
-    }
-
-    fn get_type(&self) -> MiddlewareType {
-        MiddlewareType::Cheatcode
     }
 }
 
