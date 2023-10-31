@@ -85,22 +85,6 @@ where
                     host.current_integer_overflow.push((addr, pc));
                 }
             }
-            0x1b => {
-                // SHL
-                let (l, r) = l_r!();
-                if l.overflowing_shl(as_u64(r) as usize).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} << {}", addr, pc, l, r);
-                    host.current_integer_overflow.push((addr, pc));
-                }
-            }
-            0x1c => {
-                // SHR
-                let (l, r) = l_r!();
-                if l.overflowing_shr(as_u64(r) as usize).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} >> {}", addr, pc, l, r);
-                    host.current_integer_overflow.push((addr, pc));
-                }
-            }
             _ => {}
         }
     }
