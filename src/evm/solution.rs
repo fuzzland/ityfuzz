@@ -54,8 +54,8 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         return;
     }
     let args = TemplateArgs::new(solution, trace);
-    if let Err(e) = args {
-        println!("generate_test error: {}", e);
+    if args.is_err() {
+        println!("skip generating test: not evm solution.");
         return;
     }
     let args = args.unwrap();
