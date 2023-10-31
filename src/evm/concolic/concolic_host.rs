@@ -42,7 +42,7 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 
 lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-    static ref ALL_SOLUTIONS: Arc<Mutex<Vec<Solution>>> = Arc::new(Mutex::new(Vec::new()));
+    pub static ref ALL_SOLUTIONS: Arc<Mutex<Vec<Solution>>> = Arc::new(Mutex::new(Vec::new()));
     pub static ref ALL_WORKER_THREADS: Mutex<Vec::<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
 }
 
@@ -1414,18 +1414,6 @@ where
         //     .load_input()
         //     .expect("Failed loading input")
         //     .clone();
-
-        let mut solutions = ALL_SOLUTIONS.lock().unwrap().clone();
-        if solutions.len() > 0 {
-            let meta = state
-                .metadata_map_mut()
-                .get_mut::<ConcolicPrioritizationMetadata>()
-                .expect("Failed to get metadata");
-            for solution in solutions.clone() {
-                meta.solutions.push((solution, self.testcase_ref.clone()));
-            }
-            solutions.clear();
-        }
     }
 
     unsafe fn on_return(
