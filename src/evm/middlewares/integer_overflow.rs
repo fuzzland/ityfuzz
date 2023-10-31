@@ -57,7 +57,7 @@ where
                 // +ADD
                 let (l, r) = l_r!();
                 if l.overflowing_add(r).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} + {}", addr, pc, l, r);
+                    println!("contract {:?} overflow on pc[{pc:x}]: {} + {}", addr, l, r);
                     host.current_integer_overflow.push((addr, pc));
                 }
             }
@@ -65,7 +65,7 @@ where
                 // *MUL
                 let (l, r) = l_r!();
                 if l.overflowing_mul(r).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} * {}", addr, pc, l, r);
+                    println!("contract {:?} overflow on pc[{pc:x}]: {} * {}", addr, l, r);
                     host.current_integer_overflow.push((addr, pc));
                 }
             }
@@ -73,7 +73,7 @@ where
                 // -SUB
                 let (l, r) = l_r!();
                 if l.overflowing_sub(r).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} - {}", addr, pc, l, r);
+                    println!("contract {:?} overflow on pc[{pc:x}]: {} - {}", addr, l, r);
                     host.current_integer_overflow.push((addr, pc));
                 }
             }
@@ -81,7 +81,7 @@ where
                 // ** EXP
                 let (l, r) = l_r!();
                 if l.overflowing_pow(r).1 {
-                    println!("contract {:?} overflow on pc[{}]: {} ** {}", addr, pc, l, r);
+                    println!("contract {:?} overflow on pc[{pc:x}]: {} ** {}", addr, l, r);
                     host.current_integer_overflow.push((addr, pc));
                 }
             }
