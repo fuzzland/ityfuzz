@@ -265,6 +265,10 @@ pub struct EvmArgs {
     /// Offchain Config File. If specified, will deploy based on offchain config file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
+
+    /// Whether to use cheatcode, which is required for foundry contracts.
+    #[arg(long, default_value = "false")]
+    cheatcode: bool,
 }
 
 enum EVMTargetType {
@@ -597,6 +601,7 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Glob => Some(args.target),
             _ => None,
         },
+        cheatcode: args.cheatcode,
     };
 
     match config.fuzzer_type {
