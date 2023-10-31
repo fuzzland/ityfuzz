@@ -333,6 +333,7 @@ pub fn evm_fuzzer(
         config.concolic_caller,
         evm_executor_ref.clone(),
         srcmap,
+        config.concolic_num_threads
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 

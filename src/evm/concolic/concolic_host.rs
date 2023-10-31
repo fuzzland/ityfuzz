@@ -585,10 +585,11 @@ pub struct ConcolicHost<I, VS> {
     pub phantom: PhantomData<(I, VS)>,
 
     pub source_map: ProjectSourceMapTy,
+    pub num_threads: usize,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy, num_threads: usize) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -601,6 +602,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             phantom: Default::default(),
             ctxs: vec![],
             source_map: sourcemap,
+            num_threads,
         }
     }
 
@@ -683,6 +685,12 @@ impl<I, VS> ConcolicHost<I, VS> {
         let solutions_clone = ALL_SOLUTIONS.clone();
         let input_bytes = self.input_bytes.clone();
         let constraints = self.constraints.clone();
+
+        let mut worker_threads = ALL_WORKER_THREADS.lock().unwrap();
+        if worker_threads.len() >= self.num_threads {
+            let handle = worker_threads.pop().unwrap();
+            handle.join().unwrap();
+        }
 
         let handle = std::thread::spawn(move || {
             let context = Context::new(&Config::default());

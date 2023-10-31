@@ -75,6 +75,7 @@ either = "1.8.0"
 regex = "1"
 typetag = "0.2.13"
 lazy_static = "1.4.0"
+num_cpus = "1.0"
 
 revm = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
     "no_gas_measuring",

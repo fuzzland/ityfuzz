@@ -48,6 +48,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
+use num_cpus;
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -155,6 +156,10 @@ pub struct EvmArgs {
     /// Time limit for concolic execution (ms) (Default: 1000, 0 for no limit)
     #[arg(long, default_value = "1000")]
     concolic_timeout: u32,
+
+    /// Number of threads for concolic execution (Default: number of cpus)
+    #[arg(long, default_value = "0")]
+    concolic_num_threads: usize,
 
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
@@ -550,6 +555,13 @@ pub fn evm_main(args: EvmArgs) {
         concolic: args.concolic,
         concolic_caller: args.concolic_caller,
         concolic_timeout: args.concolic_timeout,
+        concolic_num_threads: {
+            if args.concolic_num_threads == 0 {
+                num_cpus::get()
+            } else {
+                args.concolic_num_threads
+            }
+        },
         oracle: oracles,
         producers,
         flashloan: args.flashloan,
