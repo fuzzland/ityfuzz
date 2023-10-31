@@ -54,6 +54,7 @@ use revm_primitives::{
 };
 
 use super::vm::{MEM_LIMIT, IS_FAST_CALL};
+use super::middlewares::cheatcode::Prank;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -164,6 +165,11 @@ where
     pub leak_ctx: Vec<SinglePostExecution>,
 
     pub jumpi_trace: usize,
+
+    /// Depth of call stack
+    pub call_depth: u64,
+    /// Prank information
+    pub prank: Option<Prank>,
 }
 
 impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
@@ -237,6 +243,8 @@ where
             mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
             jumpi_trace: self.jumpi_trace,
+            prank: self.prank.clone(),
+            call_depth: self.call_depth,
         }
     }
 }
@@ -303,6 +311,8 @@ where
             mapping_sstore_pcs: Default::default(),
             mapping_sstore_pcs_to_slot: Default::default(),
             jumpi_trace: 37,
+            prank: None,
+            call_depth: 0,
         }
     }
 
@@ -736,6 +746,39 @@ where
             ),
         }
     }
+
+    /// Apply the prank
+    pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
+                // At the target depth we set `msg.sender`
+                if self.call_depth == prank.depth {
+                    input.context.caller = prank.new_caller;
+                    input.transfer.source = prank.new_caller;
+                }
+
+                // At the target depth, or deeper, we set `tx.origin`
+                if let Some(new_origin) = prank.new_origin {
+                    self.env.tx.caller = new_origin;
+                }
+            }
+        }
+    }
+
+    /// Clean up the prank
+    pub fn clean_prank(&mut self) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth != prank.depth {
+                return;
+            }
+            if let Some(old_origin) = prank.old_origin {
+                self.env.tx.caller = old_origin;
+            }
+            if prank.single_call {
+                let _ = self.prank.take();
+            }
+        }
+    }
 }
 
 macro_rules! process_rw_key {
@@ -977,10 +1020,18 @@ where
 
     fn step_end(
         &mut self,
-        _interp: &mut Interpreter,
+        interp: &mut Interpreter,
         _ret: InstructionResult,
         _: &mut S,
     ) -> InstructionResult {
+        match interp.current_opcode() {
+            // Call
+            0xf1 | 0xf2 | 0xf4 | 0xfa => {
+                self.clean_prank();
+            },
+            _ => (),
+        }
+
         Continue
     }
 
@@ -1244,6 +1295,9 @@ where
         output_info: (usize, usize),
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
+        self.apply_prank(&interp.contract().caller, input);
+        self.call_depth += 1;
+
         let value = EVMU256::from(input.transfer.value);
         if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
             let sender = input.transfer.source;
@@ -1278,6 +1332,7 @@ where
 
         let ret_buffer = res.2.clone();
 
+        self.call_depth -= 1;
         unsafe {
             if self.middlewares_enabled {
                 for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut() {

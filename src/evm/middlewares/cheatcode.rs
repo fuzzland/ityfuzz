@@ -43,8 +43,6 @@ pub type ExpectedCallTracker = HashMap<Address, HashMap<Vec<u8>, (ExpectedCallDa
 
 #[derive(Clone, Debug, Default)]
 pub struct Cheatcode<I, VS, S, SC> {
-    /// Prank information
-    prank: Option<Prank>,
     /// Recorded storage reads and writes
     accesses: Option<RecordAccess>,
     /// Recorded logs
@@ -55,27 +53,25 @@ pub struct Cheatcode<I, VS, S, SC> {
     expected_emits: VecDeque<ExpectedEmit>,
     /// Expected calls
     expected_calls: ExpectedCallTracker,
-    /// Depth of call stack
-    call_depth: u64,
 
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
 
 /// Prank information.
 #[derive(Clone, Debug, Default)]
-struct Prank {
+pub struct Prank {
     /// Address of the contract that initiated the prank
-    old_caller: EVMAddress,
+    pub old_caller: EVMAddress,
     /// Address of `tx.origin` when the prank was initiated
-    old_origin: Option<EVMAddress>,
+    pub old_origin: Option<EVMAddress>,
     /// The address to assign to `msg.sender`
-    new_caller: EVMAddress,
+    pub new_caller: EVMAddress,
     /// The address to assign to `tx.origin`
-    new_origin: Option<EVMAddress>,
+    pub new_origin: Option<EVMAddress>,
     /// Whether the prank stops by itself after the next call
-    single_call: bool,
+    pub single_call: bool,
     /// The depth at which the prank was called
-    depth: u64,
+    pub depth: u64,
 }
 
 /// Records storage slots reads and writes.
@@ -203,10 +199,6 @@ where
         let op = interp.current_opcode();
         let contract_addr = &interp.contract().address;
         match get_opcode_type(op, contract_addr) {
-            OpcodeType::RealCall => {
-                self.call_depth -= 1;
-                self.clean_prank(&mut host.env);
-            },
             _ => ()
         }
     }
@@ -232,12 +224,10 @@ where
 {
     pub fn new() -> Self {
         Self {
-            prank: None,
             accesses: None,
             recorded_logs: None,
             expected_revert: None,
             expected_emits: VecDeque::new(),
-            call_depth: 0,
             expected_calls: ExpectedCallTracker::new(),
             _phantom: PhantomData,
         }
@@ -253,7 +243,7 @@ where
         let op = interp.current_opcode();
         interp.return_data_buffer = Bytes::new();
         let (out_offset, out_len) = unsafe { pop_return_location(interp, op) };
-        let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller);
+        let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller.clone());
 
         // handle vm calls
         let res = match VmCalls::abi_decode(input, false).expect("decode cheatcode failed") {
@@ -269,23 +259,23 @@ where
             VmCalls::store(args) => self.store(&mut host.evmstate, args),
             VmCalls::etch(args) => self.etch(host, state, args),
             VmCalls::deal(args) => self.deal(&mut host.evmstate, args),
-            VmCalls::readCallers(_) => self.read_callers(caller, tx_origin),
+            VmCalls::readCallers(_) => self.read_callers(&host.prank, caller, tx_origin),
             VmCalls::record(_) => self.record(),
             VmCalls::accesses(args) => self.accesses(args),
             VmCalls::recordLogs(_) => self.record_logs(),
             VmCalls::getRecordedLogs(_) => self.get_recorded_logs(),
-            VmCalls::prank_0(args) => self.prank0(caller, args),
-            VmCalls::prank_1(args) => self.prank1(caller, tx_origin, args),
-            VmCalls::startPrank_0(args) => self.start_prank0(caller, args),
-            VmCalls::startPrank_1(args) => self.start_prank1(caller, tx_origin, args),
-            VmCalls::stopPrank(_) => self.stop_prank(),
-            VmCalls::expectRevert_0(_) => self.expect_revert0(),
-            VmCalls::expectRevert_1(args) => self.expect_revert1(args),
-            VmCalls::expectRevert_2(args) => self.expect_revert2(args),
-            VmCalls::expectEmit_0(args) => self.expect_emit0(args),
-            VmCalls::expectEmit_1(args) => self.expect_emit1(args),
-            VmCalls::expectEmit_2(_) => self.expect_emit2(),
-            VmCalls::expectEmit_3(args) => self.expect_emit3(args),
+            VmCalls::prank_0(args) => self.prank0(host, caller, args),
+            VmCalls::prank_1(args) => self.prank1(host, caller, tx_origin, args),
+            VmCalls::startPrank_0(args) => self.start_prank0(host, caller, args),
+            VmCalls::startPrank_1(args) => self.start_prank1(host, caller, tx_origin, args),
+            VmCalls::stopPrank(_) => self.stop_prank(host),
+            VmCalls::expectRevert_0(_) => self.expect_revert0(host.call_depth),
+            VmCalls::expectRevert_1(args) => self.expect_revert1(host.call_depth, args),
+            VmCalls::expectRevert_2(args) => self.expect_revert2(host.call_depth, args),
+            VmCalls::expectEmit_0(args) => self.expect_emit0(host.call_depth, args),
+            VmCalls::expectEmit_1(args) => self.expect_emit1(host.call_depth, args),
+            VmCalls::expectEmit_2(_) => self.expect_emit2(host.call_depth),
+            VmCalls::expectEmit_3(args) => self.expect_emit3(host.call_depth, args),
             VmCalls::expectCall_0(args) => self.expect_call0(args),
             VmCalls::expectCall_1(args) => self.expect_call1(args),
             VmCalls::expectCall_2(args) => self.expect_call2(args),
@@ -330,43 +320,6 @@ where
                 {
                     *actual_count += 1;
                 }
-            }
-        }
-
-        // Update self.call_depth after applying the prank
-    }
-
-    /// Apply the prank
-    pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs, env: &mut Env) {
-        if let Some(prank) = &self.prank {
-            if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
-                // At the target depth we set `msg.sender`
-                if self.call_depth == prank.depth {
-                    input.context.caller = prank.new_caller;
-                    input.transfer.source = prank.new_caller;
-                }
-
-                // At the target depth, or deeper, we set `tx.origin`
-                if let Some(new_origin) = prank.new_origin {
-                    env.tx.caller = new_origin;
-                }
-            }
-        }
-
-        self.call_depth += 1;
-    }
-
-    /// Clean up the prank
-    pub fn clean_prank(&mut self, env: &mut Env) {
-        if let Some(prank) = &self.prank {
-            if self.call_depth != prank.depth {
-                return;
-            }
-            if let Some(old_origin) = prank.old_origin {
-                env.tx.caller = old_origin;
-            }
-            if prank.single_call {
-                let _ = self.prank.take();
             }
         }
     }
@@ -606,10 +559,15 @@ where
 
     /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
     #[inline]
-    fn read_callers(&self, default_sender: &EVMAddress, default_origin: &EVMAddress) -> Option<Vec<u8>> {
+    fn read_callers(
+        &self,
+        prank: &Option<Prank>,
+        default_sender: &EVMAddress,
+        default_origin: &EVMAddress
+    ) -> Option<Vec<u8>> {
         let (mut mode, mut sender, mut origin) = (CallerMode::None, default_sender, default_origin);
 
-        if let Some(ref prank) = self.prank {
+        if let Some(ref prank) = prank {
             mode = if prank.single_call {
                 CallerMode::Prank
             } else {
@@ -666,16 +624,21 @@ where
 
     /// Sets the *next* call's `msg.sender` to be the input address.
     #[inline]
-    fn prank0(&mut self, old_caller: &EVMAddress, args: Vm::prank_0Call) -> Option<Vec<u8>> {
+    fn prank0(
+        &mut self,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        old_caller: &EVMAddress,
+        args: Vm::prank_0Call
+    ) -> Option<Vec<u8>> {
         let Vm::prank_0Call { msgSender } = args;
-        self.prank = Some(
+        host.prank = Some(
             Prank::new(
                 old_caller.clone(),
                 None,
                 B160(msgSender.into()),
                 None,
                 true,
-                self.call_depth,
+                host.call_depth,
             )
         );
 
@@ -687,19 +650,20 @@ where
     #[inline]
     fn prank1(
         &mut self,
+        host: &mut FuzzHost<VS, I, S, SC>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::prank_1Call
     ) -> Option<Vec<u8>> {
         let Vm::prank_1Call { msgSender, txOrigin } = args;
-        self.prank = Some(
+        host.prank = Some(
             Prank::new(
                 old_caller.clone(),
                 Some(old_origin.clone()),
                 B160(msgSender.into()),
                 Some(B160(txOrigin.into())),
                 true,
-                self.call_depth,
+                host.call_depth,
             )
         );
 
@@ -708,16 +672,21 @@ where
 
     /// Sets all subsequent calls' `msg.sender` to be the input address until `stopPrank` is called.
     #[inline]
-    fn start_prank0(&mut self, old_caller: &EVMAddress, args: Vm::startPrank_0Call) -> Option<Vec<u8>> {
+    fn start_prank0(
+        &mut self,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        old_caller: &EVMAddress,
+        args: Vm::startPrank_0Call
+    ) -> Option<Vec<u8>> {
         let Vm::startPrank_0Call { msgSender } = args;
-        self.prank = Some(
+        host.prank = Some(
             Prank::new(
                 old_caller.clone(),
                 None,
                 B160(msgSender.into()),
                 None,
                 false,
-                self.call_depth,
+                host.call_depth,
             )
         );
 
@@ -729,19 +698,20 @@ where
     #[inline]
     fn start_prank1(
         &mut self,
+        host: &mut FuzzHost<VS, I, S, SC>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::startPrank_1Call
     ) -> Option<Vec<u8>> {
         let Vm::startPrank_1Call { msgSender, txOrigin } = args;
-        self.prank = Some(
+        host.prank = Some(
             Prank::new(
                 old_caller.clone(),
                 Some(old_origin.clone()),
                 B160(msgSender.into()),
                 Some(B160(txOrigin.into())),
                 false,
-                self.call_depth,
+                host.call_depth,
             )
         );
 
@@ -750,41 +720,41 @@ where
 
     /// Resets subsequent calls' `msg.sender` to be `address(this)`.
     #[inline]
-    fn stop_prank(&mut self) -> Option<Vec<u8>> {
-        self.prank = None;
+    fn stop_prank(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
+        let _ = host.prank.take();
         None
     }
 
     /// Expects an error on next call with any revert data.
     #[inline]
-    fn expect_revert0(&mut self) -> Option<Vec<u8>> {
+    fn expect_revert0(&mut self, call_depth: u64) -> Option<Vec<u8>> {
         self.expected_revert = Some(ExpectedRevert {
             reason: None,
-            depth: self.call_depth,
+            depth: call_depth,
         });
         None
     }
 
     /// Expects an error on next call that starts with the revert data.
     #[inline]
-    fn expect_revert1(&mut self, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+    fn expect_revert1(&mut self, call_depth: u64, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
         self.expected_revert = Some(ExpectedRevert {
             reason,
-            depth: self.call_depth,
+            depth: call_depth,
         });
         None
     }
 
     /// Expects an error on next call that exactly matches the revert data.
     #[inline]
-    fn expect_revert2(&mut self, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+    fn expect_revert2(&mut self, call_depth: u64, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData));
         self.expected_revert = Some(ExpectedRevert {
             reason,
-            depth: self.call_depth,
+            depth: call_depth,
         });
         None
     }
@@ -793,10 +763,10 @@ where
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data (as specified by the booleans).
     #[inline]
-    fn expect_emit0(&mut self, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+    fn expect_emit0(&mut self, call_depth: u64, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_0Call { checkTopic1, checkTopic2, checkTopic3, checkData } = args;
         let expected = ExpectedEmit {
-            depth: self.call_depth,
+            depth: call_depth,
             checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
             ..Default::default()
         };
@@ -806,7 +776,7 @@ where
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
     #[inline]
-    fn expect_emit1(&mut self, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+    fn expect_emit1(&mut self, call_depth: u64, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_1Call {
             checkTopic1,
             checkTopic2,
@@ -815,7 +785,7 @@ where
             emitter,
         } = args;
         let expected = ExpectedEmit {
-            depth: self.call_depth,
+            depth: call_depth,
             checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
             address: Some(emitter),
             ..Default::default()
@@ -828,9 +798,9 @@ where
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data.
     #[inline]
-    fn expect_emit2(&mut self) -> Option<Vec<u8>> {
+    fn expect_emit2(&mut self, call_depth: u64) -> Option<Vec<u8>> {
         let expected = ExpectedEmit {
-            depth: self.call_depth,
+            depth: call_depth,
             checks: [true, true, true, true],
             ..Default::default()
         };
@@ -840,10 +810,10 @@ where
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
     #[inline]
-    fn expect_emit3(&mut self, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+    fn expect_emit3(&mut self, call_depth: u64, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_3Call { emitter } = args;
         let expected = ExpectedEmit {
-            depth: self.call_depth,
+            depth: call_depth,
             checks: [true, true, true, true],
             address: Some(emitter),
             ..Default::default()
