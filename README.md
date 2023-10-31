@@ -1,2 +1,1 @@
-Please find installation instructions and usage on <a href="https://fuzzland.gitbook.io/ityfuzz/" target="_blank">ItyFuzz Docs</a>
- 
+Please find installation instructions and usage on [ItyFuzz Docs](https://fuzzland.gitbook.io/ityfuzz/)
