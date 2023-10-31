@@ -7,6 +7,7 @@ use crate::invoke_middlewares;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::onchain::flashloan::Flashloan;
+use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput};
@@ -23,7 +24,7 @@ use revm_interpreter::{
 use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -54,7 +55,7 @@ use revm_primitives::{
 };
 
 use super::vm::{MEM_LIMIT, IS_FAST_CALL};
-use super::middlewares::cheatcode::Prank;
+use super::middlewares::cheatcode::{Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker};
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -170,6 +171,12 @@ where
     pub call_depth: u64,
     /// Prank information
     pub prank: Option<Prank>,
+    /// Expected revert information
+    pub expected_revert: Option<ExpectedRevert>,
+    /// Expected emits
+    pub expected_emits: VecDeque<ExpectedEmit>,
+    /// Expected calls
+    pub expected_calls: ExpectedCallTracker,
 }
 
 impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
@@ -243,8 +250,11 @@ where
             mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
             jumpi_trace: self.jumpi_trace,
-            prank: self.prank.clone(),
             call_depth: self.call_depth,
+            prank: self.prank.clone(),
+            expected_emits: self.expected_emits.clone(),
+            expected_revert: self.expected_revert.clone(),
+            expected_calls: self.expected_calls.clone(),
         }
     }
 }
@@ -311,8 +321,11 @@ where
             mapping_sstore_pcs: Default::default(),
             mapping_sstore_pcs_to_slot: Default::default(),
             jumpi_trace: 37,
-            prank: None,
             call_depth: 0,
+            prank: None,
+            expected_revert: None,
+            expected_emits: VecDeque::new(),
+            expected_calls: ExpectedCallTracker::new(),
         }
     }
 
@@ -779,6 +792,37 @@ where
             }
         }
     }
+
+    /// Check expected emits
+    pub fn check_expected_emits(
+        &mut self,
+        call: &CallInputs,
+        result: InstructionResult,
+        gas: Gas,
+        retdata: Bytes,
+    ) -> (InstructionResult, Gas, Bytes) {
+        let should_check_emits = self
+            .expected_emits
+            .iter()
+            .any(|expected| expected.depth == self.call_depth) &&
+            // Ignore staticcalls
+            !call.is_static;
+        if !should_check_emits {
+            return (result, gas, retdata);
+        }
+
+        // Not all emits were matched.
+        if self.expected_emits.iter().any(|expected| !expected.found) {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "log != expected log".abi_encode().into(),
+            )
+        }
+
+        self.expected_emits.clear();
+        return (result, gas, retdata);
+    }
 }
 
 macro_rules! process_rw_key {
@@ -1020,18 +1064,10 @@ where
 
     fn step_end(
         &mut self,
-        interp: &mut Interpreter,
+        _interp: &mut Interpreter,
         _ret: InstructionResult,
         _: &mut S,
     ) -> InstructionResult {
-        match interp.current_opcode() {
-            // Call
-            0xf1 | 0xf2 | 0xf4 | 0xfa => {
-                self.clean_prank();
-            },
-            _ => (),
-        }
-
         Continue
     }
 
@@ -1322,7 +1358,7 @@ where
             };
         }
 
-        let res = if is_precompile(input.contract, self.precompiles.len()) {
+        let mut res = if is_precompile(input.contract, self.precompiles.len()) {
             self.call_precompile(input, state)
         } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
             self.call_forbid_control_leak(input, state)
@@ -1333,6 +1369,9 @@ where
         let ret_buffer = res.2.clone();
 
         self.call_depth -= 1;
+        res = self.check_expected_emits(input, res.0, res.1, res.2);
+        self.clean_prank();
+
         unsafe {
             if self.middlewares_enabled {
                 for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut() {

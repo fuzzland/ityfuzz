@@ -9,7 +9,7 @@ use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
-use revm_interpreter::{Interpreter, CallInputs, opcode, InstructionResult};
+use revm_interpreter::{Interpreter, opcode, InstructionResult};
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
@@ -47,12 +47,6 @@ pub struct Cheatcode<I, VS, S, SC> {
     accesses: Option<RecordAccess>,
     /// Recorded logs
     recorded_logs: Option<Vec<Vm::Log>>,
-    /// Expected revert information
-    expected_revert: Option<ExpectedRevert>,
-    /// Expected emits
-    expected_emits: VecDeque<ExpectedEmit>,
-    /// Expected calls
-    expected_calls: ExpectedCallTracker,
 
     _phantom: PhantomData<(I, VS, S, SC)>,
 }
@@ -84,29 +78,29 @@ struct RecordAccess {
 }
 
 #[derive(Clone, Debug, Default)]
-struct ExpectedRevert {
+pub struct ExpectedRevert {
     /// The expected data returned by the revert, None being any
-    reason: Option<Bytes>,
+    pub reason: Option<Bytes>,
     /// The depth at which the revert is expected
-    depth: u64,
+    pub depth: u64,
 }
 
 #[derive(Clone, Debug, Default)]
-struct ExpectedEmit {
+pub struct ExpectedEmit {
     /// The depth at which we expect this emit to have occurred
-    depth: u64,
+    pub depth: u64,
     /// The log we expect
-    log: Option<RawLog>,
+    pub log: Option<RawLog>,
     /// The checks to perform:
     ///
     /// ┌───────┬───────┬───────┬────┐
     /// │topic 1│topic 2│topic 3│data│
     /// └───────┴───────┴───────┴────┘
-    checks: [bool; 4],
+    pub checks: [bool; 4],
     /// If present, check originating address against this
-    address: Option<Address>,
+    pub address: Option<Address>,
     /// Whether the log was actually found in the subcalls
-    found: bool,
+    pub found: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -182,9 +176,9 @@ where
         let contract_addr = &interp.contract().address;
         match get_opcode_type(op, contract_addr) {
             OpcodeType::CheatCall => self.cheat_call(interp, host, state),
-            OpcodeType::RealCall => self.real_call(interp),
+            OpcodeType::RealCall => self.real_call(interp, &mut host.expected_calls),
             OpcodeType::Storage => self.record_accesses(interp),
-            OpcodeType::Log => self.log(interp),
+            OpcodeType::Log => self.log(interp, &mut host.expected_emits),
             _ => ()
         }
     }
@@ -226,9 +220,6 @@ where
         Self {
             accesses: None,
             recorded_logs: None,
-            expected_revert: None,
-            expected_emits: VecDeque::new(),
-            expected_calls: ExpectedCallTracker::new(),
             _phantom: PhantomData,
         }
     }
@@ -240,11 +231,7 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
-        let op = interp.current_opcode();
-        interp.return_data_buffer = Bytes::new();
-        let (out_offset, out_len) = unsafe { pop_return_location(interp, op) };
         let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller.clone());
-
         // handle vm calls
         let res = match VmCalls::abi_decode(input, false).expect("decode cheatcode failed") {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
@@ -269,25 +256,28 @@ where
             VmCalls::startPrank_0(args) => self.start_prank0(host, caller, args),
             VmCalls::startPrank_1(args) => self.start_prank1(host, caller, tx_origin, args),
             VmCalls::stopPrank(_) => self.stop_prank(host),
-            VmCalls::expectRevert_0(_) => self.expect_revert0(host.call_depth),
-            VmCalls::expectRevert_1(args) => self.expect_revert1(host.call_depth, args),
-            VmCalls::expectRevert_2(args) => self.expect_revert2(host.call_depth, args),
-            VmCalls::expectEmit_0(args) => self.expect_emit0(host.call_depth, args),
-            VmCalls::expectEmit_1(args) => self.expect_emit1(host.call_depth, args),
-            VmCalls::expectEmit_2(_) => self.expect_emit2(host.call_depth),
-            VmCalls::expectEmit_3(args) => self.expect_emit3(host.call_depth, args),
-            VmCalls::expectCall_0(args) => self.expect_call0(args),
-            VmCalls::expectCall_1(args) => self.expect_call1(args),
-            VmCalls::expectCall_2(args) => self.expect_call2(args),
-            VmCalls::expectCall_3(args) => self.expect_call3(args),
-            VmCalls::expectCall_4(args) => self.expect_call4(args),
-            VmCalls::expectCall_5(args) => self.expect_call5(args),
-            VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(args),
-            VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(args),
+            VmCalls::expectRevert_0(_) => self.expect_revert0(host),
+            VmCalls::expectRevert_1(args) => self.expect_revert1(host, args),
+            VmCalls::expectRevert_2(args) => self.expect_revert2(host, args),
+            VmCalls::expectEmit_0(args) => self.expect_emit0(host, args),
+            VmCalls::expectEmit_1(args) => self.expect_emit1(host, args),
+            VmCalls::expectEmit_2(_) => self.expect_emit2(host),
+            VmCalls::expectEmit_3(args) => self.expect_emit3(host, args),
+            VmCalls::expectCall_0(args) => self.expect_call0(&mut host.expected_calls, args),
+            VmCalls::expectCall_1(args) => self.expect_call1(&mut host.expected_calls, args),
+            VmCalls::expectCall_2(args) => self.expect_call2(&mut host.expected_calls, args),
+            VmCalls::expectCall_3(args) => self.expect_call3(&mut host.expected_calls, args),
+            VmCalls::expectCall_4(args) => self.expect_call4(&mut host.expected_calls, args),
+            VmCalls::expectCall_5(args) => self.expect_call5(&mut host.expected_calls, args),
+            VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(&mut host.expected_calls, args),
+            VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(&mut host.expected_calls, args),
             _ => None,
         };
 
         // set up return data
+        let op = interp.current_opcode();
+        let (out_offset, out_len) = unsafe { pop_return_location(interp, op) };
+        interp.return_data_buffer = Bytes::new();
         if let Some(return_data) = res {
             interp.return_data_buffer = Bytes::from(return_data);
         }
@@ -300,11 +290,11 @@ where
     }
 
     /// Call real addresses
-    pub fn real_call(&mut self, interp: &mut Interpreter) {
+    pub fn real_call(&self, interp: &Interpreter, expected_calls: &mut ExpectedCallTracker) {
         // Handle expected calls
         let target = Address::from(interp.contract().address.0);
         // Grab the different calldatas expected.
-        if let Some(expected_calls_for_target) = self.expected_calls.get_mut(&target) {
+        if let Some(expected_calls_for_target) = expected_calls.get_mut(&target) {
             let contract = interp.contract();
             let (input, value) = (&contract.input, contract.value);
             // Match every partial/full calldata
@@ -357,8 +347,8 @@ where
     }
 
     /// Check emits / Record logs
-    pub fn log(&mut self, interp: &mut Interpreter) {
-        if self.expected_emits.is_empty() && self.record_logs().is_none() {
+    pub fn log(&mut self, interp: &mut Interpreter, expected_emits: &mut VecDeque<ExpectedEmit>) {
+        if expected_emits.is_empty() && self.record_logs().is_none() {
             return;
         }
 
@@ -368,8 +358,8 @@ where
         let address = &interp.contract().address;
 
         // Handle expect emit
-        if !self.expected_emits.is_empty() {
-            self.handle_expect_emit(&Address::from(address.0), &topics, &data);
+        if !expected_emits.is_empty() {
+            handle_expect_emit(expected_emits, &Address::from(address.0), &topics, &data);
         }
 
         // Stores this log if `recordLogs` has been called
@@ -379,68 +369,6 @@ where
                 data: data.to_vec(),
                 emitter: Address::from((*address).0),
             });
-        }
-    }
-
-    // Handle an emitting log and update `self.expected_emits` which will be
-    // checked when the call returns (`on_return`).
-    fn handle_expect_emit(&mut self, address: &Address, topics: &[B256], data: &AlloyBytes) {
-        if self.expected_emits.iter().all(|expected| expected.found) {
-            return
-        }
-
-        // if there's anything to fill, we need to pop back.
-        // Otherwise, if there are any events that are unmatched, we try to match to match them
-        // in the order declared, so we start popping from the front (like a queue).
-        let mut event_to_fill_or_check =
-            if self.expected_emits.iter().any(|expected| expected.log.is_none()) {
-                self.expected_emits.pop_back()
-            } else {
-                self.expected_emits.pop_front()
-            }
-            .expect("we should have an emit to fill or check");
-
-        let Some(expected) = &event_to_fill_or_check.log else {
-            // Fill the event.
-            event_to_fill_or_check.log = Some(RawLog::new_unchecked(topics.to_vec(), data.clone()));
-            self.expected_emits.push_back(event_to_fill_or_check);
-            return
-        };
-
-        let expected_topic_0 = expected.topics().first();
-        let log_topic_0 = topics.first();
-
-        if expected_topic_0
-            .zip(log_topic_0)
-            .map_or(false, |(a, b)| a == b && expected.topics().len() == topics.len())
-        {
-            // Match topics
-            event_to_fill_or_check.found = topics
-                .iter()
-                .skip(1)
-                .enumerate()
-                .filter(|(i, _)| event_to_fill_or_check.checks[*i])
-                .all(|(i, topic)| topic == &expected.topics()[i + 1]);
-
-            // Maybe match source address
-            if let Some(addr) = event_to_fill_or_check.address {
-                event_to_fill_or_check.found &= addr == *address;
-            }
-
-            // Maybe match data
-            if event_to_fill_or_check.checks[3] {
-                event_to_fill_or_check.found &= expected.data == *data;
-            }
-        }
-
-        // If we found the event, we can push it to the back of the queue
-        // and begin expecting the next event.
-        if event_to_fill_or_check.found {
-            self.expected_emits.push_back(event_to_fill_or_check);
-        } else {
-            // We did not match this event, so we need to keep waiting for the right one to
-            // appear.
-            self.expected_emits.push_front(event_to_fill_or_check);
         }
     }
 }
@@ -727,34 +655,34 @@ where
 
     /// Expects an error on next call with any revert data.
     #[inline]
-    fn expect_revert0(&mut self, call_depth: u64) -> Option<Vec<u8>> {
-        self.expected_revert = Some(ExpectedRevert {
+    fn expect_revert0(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
+        host.expected_revert = Some(ExpectedRevert {
             reason: None,
-            depth: call_depth,
+            depth: host.call_depth,
         });
         None
     }
 
     /// Expects an error on next call that starts with the revert data.
     #[inline]
-    fn expect_revert1(&mut self, call_depth: u64, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+    fn expect_revert1(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
-        self.expected_revert = Some(ExpectedRevert {
+        host.expected_revert = Some(ExpectedRevert {
             reason,
-            depth: call_depth,
+            depth: host.call_depth,
         });
         None
     }
 
     /// Expects an error on next call that exactly matches the revert data.
     #[inline]
-    fn expect_revert2(&mut self, call_depth: u64, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+    fn expect_revert2(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call{ revertData } = args;
         let reason = Some(Bytes::from(revertData));
-        self.expected_revert = Some(ExpectedRevert {
+        host.expected_revert = Some(ExpectedRevert {
             reason,
-            depth: call_depth,
+            depth: host.call_depth,
         });
         None
     }
@@ -763,20 +691,20 @@ where
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data (as specified by the booleans).
     #[inline]
-    fn expect_emit0(&mut self, call_depth: u64, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+    fn expect_emit0(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_0Call { checkTopic1, checkTopic2, checkTopic3, checkData } = args;
         let expected = ExpectedEmit {
-            depth: call_depth,
+            depth: host.call_depth,
             checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
             ..Default::default()
         };
-        self.expected_emits.push_back(expected);
+        host.expected_emits.push_back(expected);
         None
     }
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
     #[inline]
-    fn expect_emit1(&mut self, call_depth: u64, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+    fn expect_emit1(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_1Call {
             checkTopic1,
             checkTopic2,
@@ -785,12 +713,12 @@ where
             emitter,
         } = args;
         let expected = ExpectedEmit {
-            depth: call_depth,
+            depth: host.call_depth,
             checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
             address: Some(emitter),
             ..Default::default()
         };
-        self.expected_emits.push_back(expected);
+        host.expected_emits.push_back(expected);
         None
     }
 
@@ -798,132 +726,89 @@ where
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data.
     #[inline]
-    fn expect_emit2(&mut self, call_depth: u64) -> Option<Vec<u8>> {
+    fn expect_emit2(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
         let expected = ExpectedEmit {
-            depth: call_depth,
+            depth: host.call_depth,
             checks: [true, true, true, true],
             ..Default::default()
         };
-        self.expected_emits.push_back(expected);
+        host.expected_emits.push_back(expected);
         None
     }
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
     #[inline]
-    fn expect_emit3(&mut self, call_depth: u64, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+    fn expect_emit3(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_3Call { emitter } = args;
         let expected = ExpectedEmit {
-            depth: call_depth,
+            depth: host.call_depth,
             checks: [true, true, true, true],
             address: Some(emitter),
             ..Default::default()
         };
-        self.expected_emits.push_back(expected);
+        host.expected_emits.push_back(expected);
         None
     }
 
     /// Expects a call to an address with the specified calldata.
     /// Calldata can either be a strict or a partial match.
     #[inline]
-    fn expect_call0(&mut self, args: Vm::expectCall_0Call) -> Option<Vec<u8>> {
+    fn expect_call0(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_0Call) -> Option<Vec<u8>> {
         let Vm::expectCall_0Call { callee, data } = args;
-        self.expect_call_non_count(callee, data, None)
+        expect_call_non_count(expected_calls, callee, data, None)
     }
 
     /// Expects given number of calls to an address with the specified calldata.
     #[inline]
-    fn expect_call1(&mut self, args: Vm::expectCall_1Call) -> Option<Vec<u8>> {
+    fn expect_call1(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_1Call) -> Option<Vec<u8>> {
         let Vm::expectCall_1Call { callee, data, count } = args;
-        self.expect_call_with_count(callee, data, None, count)
+        expect_call_with_count(expected_calls, callee, data, None, count)
     }
 
     /// Expects a call to an address with the specified `msg.value` and calldata.
     #[inline]
-    fn expect_call2(&mut self, args: Vm::expectCall_2Call) -> Option<Vec<u8>> {
+    fn expect_call2(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_2Call) -> Option<Vec<u8>> {
         let Vm::expectCall_2Call { callee, msgValue, data } = args;
-        self.expect_call_non_count(callee, data, Some(msgValue))
+        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
     }
 
     /// Expects given number of calls to an address with the specified `msg.value` and calldata.
     #[inline]
-    fn expect_call3(&mut self, args: Vm::expectCall_3Call) -> Option<Vec<u8>> {
+    fn expect_call3(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_3Call) -> Option<Vec<u8>> {
         let Vm::expectCall_3Call { callee, msgValue, data, count } = args;
-        self.expect_call_with_count(callee, data, Some(msgValue), count)
+        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
     }
 
     /// Expect a call to an address with the specified `msg.value`, gas, and calldata.
     #[inline]
-    fn expect_call4(&mut self, args: Vm::expectCall_4Call) -> Option<Vec<u8>> {
+    fn expect_call4(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_4Call) -> Option<Vec<u8>> {
         // ignore gas
         let Vm::expectCall_4Call { callee, msgValue, data, .. } = args;
-        self.expect_call_non_count(callee, data, Some(msgValue))
+        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
     }
 
     /// Expects given number of calls to an address with the specified `msg.value`, gas, and calldata.
     #[inline]
-    fn expect_call5(&mut self, args: Vm::expectCall_5Call) -> Option<Vec<u8>> {
+    fn expect_call5(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCall_5Call) -> Option<Vec<u8>> {
         // ignore gas
         let Vm::expectCall_5Call { callee, msgValue, data, count, .. } = args;
-        self.expect_call_with_count(callee, data, Some(msgValue), count)
+        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
     }
 
     /// Expect a call to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
     #[inline]
-    fn expect_call_mingas0(&mut self, args: Vm::expectCallMinGas_0Call) -> Option<Vec<u8>> {
+    fn expect_call_mingas0(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCallMinGas_0Call) -> Option<Vec<u8>> {
         // ignore gas
         let Vm::expectCallMinGas_0Call { callee, msgValue, data, .. } = args;
-        self.expect_call_non_count(callee, data, Some(msgValue))
+        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
     }
 
     /// Expect given number of calls to an address with the specified `msg.value` and calldata, and a *minimum* amount of gas.
     #[inline]
-    fn expect_call_mingas1(&mut self, args: Vm::expectCallMinGas_1Call) -> Option<Vec<u8>> {
+    fn expect_call_mingas1(&self, expected_calls: &mut ExpectedCallTracker, args: Vm::expectCallMinGas_1Call) -> Option<Vec<u8>> {
         // ignore gas
         let Vm::expectCallMinGas_1Call { callee, msgValue, data, count, .. } = args;
-        self.expect_call_with_count(callee, data, Some(msgValue), count)
-    }
-
-    fn expect_call_non_count(
-        &mut self,
-        target: Address,
-        calldata: Vec<u8>,
-        value: Option<U256>,
-    ) -> Option<Vec<u8>> {
-        let expecteds = self.expected_calls.entry(target).or_default();
-        // Check if the expected calldata exists.
-        // If it does, increment the count by one as we expect to see it one more time.
-        if let Some(expected) = expecteds.get_mut(&calldata) {
-            expected.0.count += 1;
-        } else {
-            // If it does not exist, then create it.
-            let (count, call_type) = (1, ExpectedCallType::NonCount);
-            expecteds.insert(
-                calldata,
-                (ExpectedCallData { value, count, call_type }, 0),
-            );
-        }
-
-        None
-    }
-
-    fn expect_call_with_count(
-        &mut self,
-        target: Address,
-        calldata: Vec<u8>,
-        value: Option<U256>,
-        count: u64,
-    ) -> Option<Vec<u8>> {
-        let expecteds = self.expected_calls.entry(target).or_default();
-        // In this case, as we're using counted expectCalls, we should not be able to set them
-        // more than once.
-        if expecteds.contains_key(&calldata) {
-            return None;
-        }
-
-        let call_type = ExpectedCallType::Count;
-        expecteds
-            .insert(calldata, (ExpectedCallData { value, count, call_type }, 0));
-        None
+        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
     }
 }
 
@@ -979,7 +864,7 @@ fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResu
     Ok(AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len)))
 }
 
-fn peek_log_topics(interp: &mut Interpreter, op: u8) -> Result<Vec<B256>, InstructionResult> {
+fn peek_log_topics(interp: &Interpreter, op: u8) -> Result<Vec<B256>, InstructionResult> {
     let n = (op - opcode::LOG0) as usize;
     let mut topics = Vec::with_capacity(n);
 
@@ -1006,4 +891,108 @@ fn get_opcode_type(op: u8, contract: &B160) -> OpcodeType {
         opcode::REVERT => OpcodeType::Revert,
         _ => OpcodeType::Careless,
     }
+}
+
+// Handle an emitting log and update `expected_emits` which will be checked before the call returns.
+fn handle_expect_emit(expected_emits: &mut VecDeque<ExpectedEmit>, address: &Address, topics: &[B256], data: &AlloyBytes) {
+    if expected_emits.iter().all(|expected| expected.found) {
+        return
+    }
+
+    // if there's anything to fill, we need to pop back.
+    // Otherwise, if there are any events that are unmatched, we try to match to match them
+    // in the order declared, so we start popping from the front (like a queue).
+    let mut event_to_fill_or_check =
+        if expected_emits.iter().any(|expected| expected.log.is_none()) {
+            expected_emits.pop_back()
+        } else {
+            expected_emits.pop_front()
+        }
+        .expect("we should have an emit to fill or check");
+
+    let Some(expected) = &event_to_fill_or_check.log else {
+        // Fill the event.
+        event_to_fill_or_check.log = Some(RawLog::new_unchecked(topics.to_vec(), data.clone()));
+        expected_emits.push_back(event_to_fill_or_check);
+        return
+    };
+
+    let expected_topic_0 = expected.topics().first();
+    let log_topic_0 = topics.first();
+
+    if expected_topic_0
+        .zip(log_topic_0)
+        .map_or(false, |(a, b)| a == b && expected.topics().len() == topics.len())
+    {
+        // Match topics
+        event_to_fill_or_check.found = topics
+            .iter()
+            .skip(1)
+            .enumerate()
+            .filter(|(i, _)| event_to_fill_or_check.checks[*i])
+            .all(|(i, topic)| topic == &expected.topics()[i + 1]);
+
+        // Maybe match source address
+        if let Some(addr) = event_to_fill_or_check.address {
+            event_to_fill_or_check.found &= addr == *address;
+        }
+
+        // Maybe match data
+        if event_to_fill_or_check.checks[3] {
+            event_to_fill_or_check.found &= expected.data == *data;
+        }
+    }
+
+    // If we found the event, we can push it to the back of the queue
+    // and begin expecting the next event.
+    if event_to_fill_or_check.found {
+        expected_emits.push_back(event_to_fill_or_check);
+    } else {
+        // We did not match this event, so we need to keep waiting for the right one to
+        // appear.
+        expected_emits.push_front(event_to_fill_or_check);
+    }
+}
+
+fn expect_call_non_count(
+    expected_calls: &mut ExpectedCallTracker,
+    target: Address,
+    calldata: Vec<u8>,
+    value: Option<U256>,
+) -> Option<Vec<u8>> {
+    let expecteds = expected_calls.entry(target).or_default();
+    // Check if the expected calldata exists.
+    // If it does, increment the count by one as we expect to see it one more time.
+    if let Some(expected) = expecteds.get_mut(&calldata) {
+        expected.0.count += 1;
+    } else {
+        // If it does not exist, then create it.
+        let (count, call_type) = (1, ExpectedCallType::NonCount);
+        expecteds.insert(
+            calldata,
+            (ExpectedCallData { value, count, call_type }, 0),
+        );
+    }
+
+    None
+}
+
+fn expect_call_with_count(
+    expected_calls: &mut ExpectedCallTracker,
+    target: Address,
+    calldata: Vec<u8>,
+    value: Option<U256>,
+    count: u64,
+) -> Option<Vec<u8>> {
+    let expecteds = expected_calls.entry(target).or_default();
+    // In this case, as we're using counted expectCalls, we should not be able to set them
+    // more than once.
+    if expecteds.contains_key(&calldata) {
+        return None;
+    }
+
+    let call_type = ExpectedCallType::Count;
+    expecteds
+        .insert(calldata, (ExpectedCallData { value, count, call_type }, 0));
+    None
 }
