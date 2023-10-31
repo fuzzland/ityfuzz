@@ -48,6 +48,8 @@ lazy_static! {
 
 pub static mut CONCOLIC_TIMEOUT: u32 = 1000;  // 1s
 
+const MAX_CALL_DEPTH: usize = 3;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
     Caller,
@@ -586,6 +588,7 @@ pub struct ConcolicHost<I, VS> {
 
     pub source_map: ProjectSourceMapTy,
     pub num_threads: usize,
+    pub call_depth: usize,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
@@ -603,6 +606,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             ctxs: vec![],
             source_map: sourcemap,
             num_threads,
+            call_depth: 0,
         }
     }
 
@@ -801,6 +805,8 @@ where
 
         macro_rules! concrete_eval_with_action {
             ($in_cnt: expr, $out_cnt: expr, $pp: ident) => {{
+                self.call_depth += 1;
+
                 // println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
                 for _ in 0..$in_cnt {
                     self.symbolic_stack.pop();
@@ -1228,40 +1234,46 @@ where
                 /*
                  * Skip rules:
                  * 1. r"^(library|contract|function)(.|\n)*\}$" // skip library, contract, function
-                 * TODO: 2. global variable signature?
+                 * 2. call depth > MAX_CALL_DEPTH
+                 * TODO: 3. global variable signature?
                  */
 
                 // Get the source map of current pc
                 let mut need_solve = true;
-                let pc = interp.program_counter();
-                let address = interp.contract.address;
-                // println!("[concolic] address: {:?} pc: {:x}", address, pc);
-                // println!("input: {:?}", self.input_bytes);
-                if let Some(Some(srcmap)) = self.source_map.get(&address) {
-                    // println!("source line: {:?}", srcmap.get(&pc).unwrap());
-                    let source_map_loc = if srcmap.get(&pc).is_some() {
-                        srcmap.get(&pc).unwrap()
-                    } else {
-                        &SourceMapLocation {
-                            file: None,
-                            file_idx: None,
-                            offset: 0,
-                            length: 0,
-                            skip_on_concolic: false,
-                        }
-                    };
-                    if let Some(_file) = &source_map_loc.file {
-                        if source_map_loc.skip_on_concolic {
+                if self.call_depth > MAX_CALL_DEPTH {
+                    println!("[concolic] skip solving due to call depth: {}", self.call_depth);
+                    need_solve = false;
+                } else {
+                    let pc = interp.program_counter();
+                    let address = interp.contract.address;
+                    // println!("[concolic] address: {:?} pc: {:x}", address, pc);
+                    // println!("input: {:?}", self.input_bytes);
+                    if let Some(Some(srcmap)) = self.source_map.get(&address) {
+                        // println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                        let source_map_loc = if srcmap.get(&pc).is_some() {
+                            srcmap.get(&pc).unwrap()
+                        } else {
+                            &SourceMapLocation {
+                                file: None,
+                                file_idx: None,
+                                offset: 0,
+                                length: 0,
+                                skip_on_concolic: false,
+                            }
+                        };
+                        if let Some(_file) = &source_map_loc.file {
+                            if source_map_loc.skip_on_concolic {
+                                need_solve = false;
+                            }
+                        } else {
+                            // FIXME: This might not hold true for all cases
+                            println!("[concolic] skip solve for None file");
                             need_solve = false;
                         }
                     } else {
-                        // FIXME: This might not hold true for all cases
-                        println!("[concolic] skip solve for None file");
-                        need_solve = false;
+                        // Is this possible?
+                        // panic!("source line: None");
                     }
-                } else {
-                    // Is this possible?
-                    // panic!("source line: None");
                 }
 
                 let real_path_constraint = if br {
@@ -1432,6 +1444,7 @@ where
         by: &Bytes,
     ) {
         self.pop_ctx();
+        self.call_depth -= 1;
     }
 
     fn get_type(&self) -> MiddlewareType {
