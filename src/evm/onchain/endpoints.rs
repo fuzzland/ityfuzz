@@ -1278,6 +1278,8 @@ mod tests {
     fn test_get_pair() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", false);
+
+        println!("{:?}", v);
         assert!(!v.is_empty());
     }
 
