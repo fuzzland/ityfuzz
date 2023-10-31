@@ -29,6 +29,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
+use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -55,7 +56,10 @@ use revm_primitives::{
 };
 
 use super::vm::{MEM_LIMIT, IS_FAST_CALL};
-use super::middlewares::cheatcode::{Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker, ERROR_PREFIX, REVERT_PREFIX};
+use super::middlewares::cheatcode::{
+    Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker,
+    ERROR_PREFIX, REVERT_PREFIX, ExpectedCallData, ExpectedCallType
+};
 use alloy_dyn_abi::DynSolType;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
@@ -805,9 +809,13 @@ where
         if res.0 == Revert {
             return res;
         }
-
         // Check expected emits
-        self.check_expected_emits(call, res)
+        let res = self.check_expected_emits(call, res);
+        if res.0 == Revert {
+            return res;
+        }
+        // Check expected calls
+        self.check_expected_calls(res)
     }
 
     /// Check expected reverts
@@ -886,6 +894,35 @@ where
 
         self.expected_emits.clear();
         return (result, gas, retdata);
+    }
+
+    /// Check expected calls
+    fn check_expected_calls(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        // Only check expected calls at the root call
+        if self.call_depth > 0 {
+            return res;
+        }
+
+        let (result, gas, retdata) = res;
+        let expected_calls = mem::replace(&mut self.expected_calls, ExpectedCallTracker::new());
+        for (_, calldatas) in expected_calls {
+            // Loop over each address, and for each address, loop over each calldata it expects.
+            for (_, (expected, actual_count)) in calldatas {
+                // Grab the values we expect to see
+                let ExpectedCallData { count, call_type, .. } = expected;
+
+                let failed = match call_type {
+                    ExpectedCallType::Count => count != actual_count,
+                    ExpectedCallType::NonCount => count > actual_count,
+                };
+                if failed {
+                    let msg = "expected call count mismatch";
+                    return (InstructionResult::Revert, gas, msg.abi_encode().into());
+                }
+            }
+        }
+
+        (result, gas, retdata)
     }
 }
 

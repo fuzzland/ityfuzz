@@ -189,20 +189,6 @@ where
         }
     }
 
-    unsafe fn on_return(
-            &mut self,
-            interp: &mut Interpreter,
-            host: &mut FuzzHost<VS, I, S, SC>,
-            _state: &mut S,
-            _ret: &Bytes,
-        ) {
-        let op = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(op, contract_addr) {
-            _ => ()
-        }
-    }
-
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Cheatcode
     }
