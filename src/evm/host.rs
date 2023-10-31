@@ -19,7 +19,7 @@ use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::analysis::to_analysed;
 use revm_interpreter::{
     BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host,
-    InstructionResult, Interpreter, SelfDestructResult,
+    InstructionResult, Interpreter, SelfDestructResult, return_ok,
 };
 use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
 use std::cell::RefCell;
@@ -55,7 +55,8 @@ use revm_primitives::{
 };
 
 use super::vm::{MEM_LIMIT, IS_FAST_CALL};
-use super::middlewares::cheatcode::{Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker};
+use super::middlewares::cheatcode::{Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker, ERROR_PREFIX, REVERT_PREFIX};
+use alloy_dyn_abi::DynSolType;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -793,13 +794,75 @@ where
         }
     }
 
-    /// Check expected emits
-    pub fn check_expected_emits(
+    /// Check expected
+    pub fn check_expected(
         &mut self,
         call: &CallInputs,
-        result: InstructionResult,
-        gas: Gas,
-        retdata: Bytes,
+        res: (InstructionResult, Gas, Bytes),
+    ) -> (InstructionResult, Gas, Bytes) {
+        // Check expected reverts
+        let res = self.check_expected_revert(res);
+        if res.0 == Revert {
+            return res;
+        }
+
+        // Check expected emits
+        self.check_expected_emits(call, res)
+    }
+
+    /// Check expected reverts
+    fn check_expected_revert(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        // Check if we should check for reverts
+        if self.expected_revert.is_none() {
+            return res;
+        }
+        let expected_revert = self.expected_revert.as_ref().unwrap();
+        if self.call_depth > expected_revert.depth {
+            return res;
+        }
+        let (result, gas, retdata) = res;
+        let mut expected_revert = self.expected_revert.take().unwrap();
+
+        // Check result
+        if !matches!(result, return_ok!()) {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "Call did not revert as expected".abi_encode().into(),
+            );
+        }
+
+        // Check revert reason
+        if expected_revert.reason.is_none() {
+            return (InstructionResult::Return, gas, retdata);
+        }
+        let expected_reason = expected_revert.reason.take().unwrap();
+        let mut actual_reason = retdata.clone();
+        if actual_reason.len() >= 4 &&
+            matches!(actual_reason[..4].try_into(), Ok(ERROR_PREFIX | REVERT_PREFIX))
+        {
+            if let Ok(parsed_bytes) = DynSolType::Bytes.abi_decode(&actual_reason[4..]) {
+                if let Some(bytes) = parsed_bytes.as_bytes().map(|b| b.to_vec()) {
+                    actual_reason = bytes.into();
+                }
+            }
+        }
+        if actual_reason != expected_reason {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "Revert reason mismatch".abi_encode().into(),
+            );
+        }
+
+        (InstructionResult::Return, gas, retdata)
+    }
+
+    /// Check expected emits
+    fn check_expected_emits(
+        &mut self,
+        call: &CallInputs,
+        res: (InstructionResult, Gas, Bytes),
     ) -> (InstructionResult, Gas, Bytes) {
         let should_check_emits = self
             .expected_emits
@@ -808,9 +871,10 @@ where
             // Ignore staticcalls
             !call.is_static;
         if !should_check_emits {
-            return (result, gas, retdata);
+            return res;
         }
 
+        let (result, gas, retdata) = res;
         // Not all emits were matched.
         if self.expected_emits.iter().any(|expected| !expected.found) {
             return (
@@ -1369,7 +1433,7 @@ where
         let ret_buffer = res.2.clone();
 
         self.call_depth -= 1;
-        res = self.check_expected_emits(input, res.0, res.1, res.2);
+        res = self.check_expected(input, res);
         self.clean_prank();
 
         unsafe {

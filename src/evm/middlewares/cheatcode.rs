@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 use alloy_sol_types::{SolInterface, SolValue};
 use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
+use foundry_cheatcodes::CHEATCODE_ADDRESS;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
 use revm_interpreter::{Interpreter, opcode, InstructionResult};
@@ -23,10 +24,15 @@ use crate::evm::types::EVMAddress;
 use crate::evm::input::{ConciseEVMInput, EVMInputT};
 use super::middleware::{Middleware, MiddlewareType};
 
-/// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
-pub const CHEATCODE_ADDRESS: B160 = B160([
-    113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
-]);
+/// Solidity revert prefix.
+///
+/// `keccak256("Error(String)")[..4] == 0x08c379a0`
+pub const REVERT_PREFIX: [u8; 4] = [8, 195, 121, 160];
+
+/// Custom Cheatcode error prefix.
+///
+/// `keccak256("CheatCodeError")[..4] == 0x0bc44503`
+pub const ERROR_PREFIX: [u8; 4] = [11, 196, 69, 3];
 
 /// Tracks the expected calls per address.
 ///
@@ -880,7 +886,7 @@ fn peek_log_topics(interp: &Interpreter, op: u8) -> Result<Vec<B256>, Instructio
 fn get_opcode_type(op: u8, contract: &B160) -> OpcodeType {
     match op {
         opcode::CALL | opcode::CALLCODE | opcode::DELEGATECALL | opcode::STATICCALL => {
-            if contract == &CHEATCODE_ADDRESS {
+            if contract.as_slice() == CHEATCODE_ADDRESS.as_slice() {
                 OpcodeType::CheatCall
             } else {
                 OpcodeType::RealCall
