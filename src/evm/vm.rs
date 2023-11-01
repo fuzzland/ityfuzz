@@ -61,7 +61,9 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use super::middlewares::middleware;
 use super::middlewares::reentrancy::ReentrancyData;
+use super::presets::presets::ExploitTemplate;
 
 pub const MEM_LIMIT: u64 = 10 * 1024;
 const MAX_POST_EXECUTION: usize = 10;
@@ -1054,7 +1056,7 @@ where
         data: &Vec<(EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> (Vec<Vec<u8>>) {
+    ) -> Vec<Vec<u8>> {
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state
@@ -1079,15 +1081,15 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::StaticCall,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
+                let code = self.host.code.get(address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
-                    vec![]
-                } else {
+                if is_call_success!(ret) {
                     interp.return_value().to_vec()
+                } else {
+                    vec![]
                 }
             })
             .collect::<Vec<Vec<u8>>>();
@@ -1104,20 +1106,22 @@ where
         data: &Vec<(EVMAddress, EVMAddress, Bytes)>,
         vm_state: &VS,
         state: &mut S,
-    ) -> (Vec<Vec<u8>>, VS) {
+    ) -> (Vec<(Vec<u8>, bool)>, VS) {
         unsafe {
-            IS_FAST_CALL_STATIC = true;
+            // IS_FAST_CALL = true;
             self.host.evmstate = vm_state
                 .as_any()
                 .downcast_ref_unchecked::<EVMState>()
                 .clone();
-            self.host.current_self_destructs = vec![];
-            self.host.current_arbitrary_calls = vec![];
-            self.host.call_count = 0;
-            self.host.jumpi_trace = 37;
-            self.host.current_typed_bug = vec![];
-            self.host.randomness = vec![9];
         }
+        self.host.current_self_destructs = vec![];
+        self.host.current_arbitrary_calls = vec![];
+        self.host.call_count = 0;
+        self.host.jumpi_trace = 37;
+        self.host.current_typed_bug = vec![];
+        self.host.randomness = vec![9];
+
+        // self.host.add_middlewares(middleware.clone());
 
         let res = data
             .iter()
@@ -1129,21 +1133,22 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::Call,
                 };
-                let code = self.host.code.get(&address).expect("no code").clone();
+                let code = self.host.code.get(address).expect("no code").clone();
                 let call = Contract::new_with_context_analyzed(by.clone(), code.clone(), &ctx);
                 let mut interp =
                     Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
                 let ret = self.host.run_inspect(&mut interp, state);
-                if !is_call_success!(ret) {
-                    vec![]
+                // println!("ret: {:?} {} {}", ret,hex::encode(by.clone()), hex::encode(interp.return_data_buffer.clone()));
+                if is_call_success!(ret) {
+                    (interp.return_value().to_vec(), true)
                 } else {
-                    interp.return_value().to_vec()
+                    (vec![], false)
                 }
             })
-            .collect::<Vec<Vec<u8>>>();
+            .collect::<Vec<(Vec<u8>, bool)>>();
 
         unsafe {
-            IS_FAST_CALL_STATIC = false;
+            // IS_FAST_CALL = false;
         }
         (res, unsafe {
             self.host
@@ -1179,6 +1184,7 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::evm::host::{FuzzHost, JMP_MAP};
     use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
