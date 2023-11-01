@@ -250,11 +250,7 @@ impl BoxedABI {
 
     /// Get function signature
     pub fn get_func_signature(&self) -> Option<String> {
-        unsafe {
-            FUNCTION_SIG
-                .get(&self.function)
-                .cloned()
-        }
+        unsafe { FUNCTION_SIG.get(&self.function).cloned() }
     }
 
     /// Get function name

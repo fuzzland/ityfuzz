@@ -79,6 +79,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub typed_bug: bool,
     pub selfdestruct_bug: bool,
     pub arbitrary_external_call: bool,
+    pub integer_overflow_oracle: bool,
     pub builder: Option<BuildJob>,
     pub local_files_basedir_pattern: Option<String>,
     #[cfg(feature = "use_presets")]

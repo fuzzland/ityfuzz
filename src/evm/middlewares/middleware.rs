@@ -27,13 +27,14 @@ pub enum MiddlewareType {
     OnChain,
     Concolic,
     Flashloan,
-    Selfdestruct,
+    // Selfdestruct,
     InstructionCoverage,
     BranchCoverage,
     Sha3Bypass,
     Sha3TaintAnalysis,
     CallPrinter,
-    Reentrancy
+    Reentrancy,
+    IntegerOverflow,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -106,7 +107,8 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
         ret: &Bytes,
-    ) { }
+    ) {
+    }
 
     unsafe fn before_execute(
         &mut self,
@@ -116,14 +118,17 @@ where
         is_step: bool,
         data: &mut Bytes,
         evm_state: &mut EVMState,
-    ) { }
+    ) {
+    }
 
-    unsafe fn on_insert(&mut self,
-                        interp: Option<&mut Interpreter>,
-                        host: &mut FuzzHost<VS, I, S, SC>,
-                        state: &mut S,
-                        bytecode: &mut Bytecode,
-                        address: EVMAddress,
-                    ) {}
+    unsafe fn on_insert(
+        &mut self,
+        interp: Option<&mut Interpreter>,
+        host: &mut FuzzHost<VS, I, S, SC>,
+        state: &mut S,
+        bytecode: &mut Bytecode,
+        address: EVMAddress,
+    ) {
+    }
     fn get_type(&self) -> MiddlewareType;
 }
