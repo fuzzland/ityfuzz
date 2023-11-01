@@ -823,7 +823,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Serialize + DeserializeOwned + Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>) {
