@@ -1,8 +1,9 @@
 /// Implements fuzzing logic for ItyFuzz
 use crate::{
+    evm::solution,
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
-    state_input::StagedVMState, evm::solution,
+    state_input::StagedVMState,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -515,10 +516,9 @@ where
                 match self.should_replace(&input, unsafe { &JMP_MAP }) {
                     Some((hash, new_fav_factor, old_testcase_idx)) => {
                         let mut testcase = Testcase::new(input.clone());
-                        state.corpus_mut().replace(
-                            old_testcase_idx.into(),
-                            testcase
-                        )?;
+                        state
+                            .corpus_mut()
+                            .replace(old_testcase_idx.into(), testcase)?;
                         self.infant_scheduler
                             .report_corpus(state.get_infant_state_state(), state_idx);
                         // self.scheduler.on_add(state, new_testcase_idx)?;

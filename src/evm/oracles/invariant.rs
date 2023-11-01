@@ -1,28 +1,37 @@
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::ECHIDNA_BUG_IDX;
+use crate::evm::oracles::INVARIANT_BUG_IDX;
 use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
+use crate::fuzzer::ORACLE_OUTPUT;
 use crate::oracle::{Oracle, OracleCtx};
 use crate::state::HasExecutionResult;
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::Bytecode;
 use std::collections::HashMap;
+use std::str::FromStr;
 
-pub struct EchidnaOracle {
-    pub batch_call_txs: Vec<(EVMAddress, Bytes)>,
+pub struct InvariantOracle {
+    pub batch_call_txs: Vec<(EVMAddress, EVMAddress, Bytes)>,
     pub names: HashMap<Vec<u8>, String>,
 }
 
-impl EchidnaOracle {
-    pub fn new(echidna_funcs: Vec<(EVMAddress, Vec<u8>)>, names: HashMap<Vec<u8>, String>) -> Self {
+impl InvariantOracle {
+    pub fn new(
+        invariant_funcs: Vec<(EVMAddress, Vec<u8>)>,
+        names: HashMap<Vec<u8>, String>,
+    ) -> Self {
         Self {
-            batch_call_txs: echidna_funcs
+            batch_call_txs: invariant_funcs
                 .iter()
-                .map(|(address, echidna_func)| {
-                    let echidna_txn = Bytes::from(echidna_func.clone());
-                    (*address, echidna_txn)
+                .map(|(address, invariant_func)| {
+                    let invariant_tx = Bytes::from(invariant_func.clone());
+                    (
+                        EVMAddress::from_str("0x0000000000000000000000000000000000007777").unwrap(),
+                        *address,
+                        invariant_tx,
+                    )
                 })
                 .collect_vec(),
             names,
@@ -42,7 +51,7 @@ impl
         EVMInput,
         EVMFuzzState,
         ConciseEVMInput,
-    > for EchidnaOracle
+    > for InvariantOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -64,19 +73,21 @@ impl
         >,
         _stage: u64,
     ) -> Vec<u64> {
-        ctx.call_post_batch(&self.batch_call_txs)
+        ctx.call_post_batch_dyn(&self.batch_call_txs)
+            .0
             .iter()
-            .map(|out| out.iter().map(|x| *x == 0).all(|x| x))
             .enumerate()
-            .map(|(idx, x)| {
-                if x {
-                    let name = self
-                        .names
-                        .get(&self.batch_call_txs[idx].1.to_vec())
-                        .unwrap();
-                    let bug_idx = (idx << 8) as u64 + ECHIDNA_BUG_IDX;
+            .map(|(idx, (_, succ))| {
+                let name = self
+                    .names
+                    .get(&self.batch_call_txs[idx].2.to_vec())
+                    .unwrap();
+                if *succ {
+                    0
+                } else {
+                    let bug_idx = (idx << 8) as u64 + INVARIANT_BUG_IDX;
                     EVMBugResult::new(
-                        "echidna".to_string(),
+                        "invariant".to_string(),
                         bug_idx,
                         format!("{:?} violated", name),
                         ConciseEVMInput::from_input(
@@ -88,8 +99,6 @@ impl
                     )
                     .push_to_output();
                     bug_idx
-                } else {
-                    0
                 }
             })
             .filter(|x| *x != 0)

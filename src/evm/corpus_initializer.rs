@@ -64,6 +64,7 @@ where
     work_dir: String,
 }
 
+#[derive(Default)]
 pub struct EVMInitializationArtifacts {
     pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_bytecode: HashMap<EVMAddress, Bytecode>,
@@ -329,7 +330,18 @@ where
             }
 
             for abi in contract.abi.clone() {
-                self.add_abi(&abi, contract.deployed_address, &mut artifacts);
+                let name = &abi.function_name;
+
+                if name.starts_with("invariant_") || name.starts_with("echidna_") || name == "setUp" || name == "failed" {
+                    println!("Skipping function: {}", name);
+                    continue;
+                }
+
+                self.add_abi(
+                    &abi,
+                    contract.deployed_address,
+                    &mut artifacts,
+                );
             }
         }
         artifacts.initial_state =

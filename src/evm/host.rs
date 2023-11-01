@@ -21,6 +21,7 @@ use revm_interpreter::{
     InstructionResult, Interpreter, SelfDestructResult,
 };
 use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
+use core::panic;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -53,7 +54,7 @@ use revm_primitives::{
     PetersburgSpec, ShanghaiSpec, SpecId, SpuriousDragonSpec, TangerineSpec,
 };
 
-use super::vm::{MEM_LIMIT, IS_FAST_CALL};
+use super::vm::{IS_FAST_CALL, MEM_LIMIT};
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -594,7 +595,11 @@ where
                 record_func_hash!();
                 push_interp!();
                 // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
+                return (
+                    InstructionResult::AddressUnboundedStaticCall,
+                    Gas::new(0),
+                    Bytes::new(),
+                );
             }
         }
 
@@ -673,7 +678,9 @@ where
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
         match res.0 {
-            ControlLeak | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) | InstructionResult::AddressUnboundedStaticCall => {
+            ControlLeak
+            | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
+            | InstructionResult::AddressUnboundedStaticCall => {
                 self.leak_ctx.push(SinglePostExecution::from_interp(
                     interp,
                     (out_offset, out_len),
@@ -703,6 +710,7 @@ where
                 false,
                 MEM_LIMIT,
             );
+
             let ret = self.run_inspect(&mut interp, state);
             return (ret, Gas::new(0), interp.return_value());
         }
@@ -1198,8 +1206,11 @@ where
                             }
 
                             let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                            abi_instance
-                                .set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                            abi_instance.set_func_with_signature(
+                                abi.function,
+                                &abi.function_name,
+                                &abi.abi,
+                            );
                             register_abi_instance(r_addr, abi_instance.clone(), state);
 
                             let input = EVMInput {
