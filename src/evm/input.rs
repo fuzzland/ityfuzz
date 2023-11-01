@@ -300,12 +300,12 @@ impl ConciseEVMInput {
             )),
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
-                    "{:?} => {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value, liq
+                    "{:?} => {:?} with {} ETH, liq percent: {}",
+                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
                 )),
                 EVMInputTy::Borrow => Some(format!(
-                    "{:?} borrow token {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value, liq
+                    "{:?} borrow token {:?} with {} ETH, liq percent: {}",
+                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
                 )),
                 EVMInputTy::Liquidate => None,
             },
