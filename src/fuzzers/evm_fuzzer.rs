@@ -200,7 +200,7 @@ pub fn evm_fuzzer(
                 true,
                 config.onchain.clone().unwrap(),
                 config.price_oracle,
-                onchain_middleware.unwrap(),
+                onchain_middleware.clone().unwrap(),
                 config.flashloan_oracle,
             ));
         }
