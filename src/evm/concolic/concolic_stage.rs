@@ -1,4 +1,4 @@
-use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution};
+use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution, ALL_WORKER_THREADS, ALL_SOLUTIONS};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::MiddlewareType;
 use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy};
@@ -32,6 +32,7 @@ pub struct ConcolicStage<OT> {
     pub vm_executor: Rc<RefCell<EVMQueueExecutor>>,
     pub phantom: std::marker::PhantomData<OT>,
     pub sourcemap: ProjectSourceMapTy,
+    pub num_threads: usize,
 }
 
 impl<OT> UsesState for ConcolicStage<OT> {
@@ -44,6 +45,7 @@ impl<OT> ConcolicStage<OT> {
         allow_symbolic_addresses: bool,
         vm_executor: Rc<RefCell<EVMQueueExecutor>>,
         source_map: ProjectSourceMapTy,
+        num_threads: usize,
     ) -> Self {
         Self {
             enabled,
@@ -52,6 +54,7 @@ impl<OT> ConcolicStage<OT> {
             vm_executor,
             phantom: std::marker::PhantomData,
             sourcemap: source_map,
+            num_threads,
         }
     }
 }
@@ -125,8 +128,28 @@ where
                     .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
                         testcase_ref.clone(),
                         self.sourcemap.clone(),
+                        self.num_threads,
                     ))));
                 vm.execute(&testcase_ref, state);
+
+                let mut worker_threads = ALL_WORKER_THREADS.lock().unwrap();
+                while worker_threads.len() > 0 {
+                    let curr_thread = worker_threads.remove(0);
+                    curr_thread.join().unwrap();
+                }
+
+                let mut solutions = ALL_SOLUTIONS.lock().unwrap();
+                if solutions.len() > 0 {
+                    let meta = state
+                        .metadata_map_mut()
+                        .get_mut::<ConcolicPrioritizationMetadata>()
+                        .expect("Failed to get metadata");
+                    for solution in solutions.iter() {
+                        meta.solutions.push((solution.clone(), testcase_ref.clone()));
+                    }
+                    solutions.clear();
+                }
+
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);
             }
         }
@@ -141,10 +164,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                println!(
-                    "We have a solution from concolic execution: {}",
-                    solution.to_string()
-                );
+                // println!("We have a solution from concolic execution: {}", solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 
