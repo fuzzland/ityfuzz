@@ -2,10 +2,10 @@ use crate::generic_vm::vm_state::VMStateT;
 
 use crate::state_input::StagedVMState;
 
+use crate::input::ConciseSerde;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use crate::input::ConciseSerde;
 
 pub const MAP_SIZE: usize = 4096;
 
@@ -16,7 +16,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     pub output: Out,
     pub reverted: bool,
@@ -31,7 +31,7 @@ where
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
     Out: Default,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     pub fn empty_result() -> Self {
         Self {
@@ -59,14 +59,24 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         Out: Default,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static;
 
-    fn fast_static_call(&mut self, data: &Vec<(Addr, By)>, vm_state: &VS, state: &mut S) -> Vec<Out>
+    fn fast_static_call(
+        &mut self,
+        data: &Vec<(Addr, By)>,
+        vm_state: &VS,
+        state: &mut S,
+    ) -> Vec<Out>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default;
-    
-    fn fast_call(&mut self, data: &Vec<(Addr,Addr, By)>, vm_state: &VS, state: &mut S) -> (Vec<Out>, VS)
+
+    fn fast_call(
+        &mut self,
+        data: &Vec<(Addr, Addr, By)>,
+        vm_state: &VS,
+        state: &mut S,
+    ) -> (Vec<(Out, bool)>, VS)
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,

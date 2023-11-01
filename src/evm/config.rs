@@ -54,6 +54,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub concolic: bool,
     pub concolic_caller: bool,
     pub concolic_timeout: u32,
+    pub concolic_num_threads: usize,
     pub fuzzer_type: FuzzerTypes,
     pub contract_loader: ContractLoader,
     pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
@@ -71,6 +72,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub sha3_bypass: bool,
     pub base_path: String,
     pub echidna_oracle: bool,
+    pub invariant_oracle: bool,
     pub panic_on_bug: bool,
     pub spec_id: String,
     pub only_fuzz: HashSet<EVMAddress>,
@@ -80,6 +82,8 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub integer_overflow_oracle: bool,
     pub builder: Option<BuildJob>,
     pub local_files_basedir_pattern: Option<String>,
+    #[cfg(feature = "use_presets")]
+    pub preset_file_path: String,
 }
 
 impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug

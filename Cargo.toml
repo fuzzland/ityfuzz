@@ -14,6 +14,7 @@ default = [
     "evm",
     "print_txn_corpus",
     "full_trace",
+    # "flashloan_v2",
 ]
 evm = []
 cmp = []
@@ -75,18 +76,19 @@ either = "1.8.0"
 regex = "1"
 typetag = "0.2.13"
 lazy_static = "1.4.0"
+num_cpus = "1.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "60d409c17d9fff11d1063b985f05be3e3280fe80", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",

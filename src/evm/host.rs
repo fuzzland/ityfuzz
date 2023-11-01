@@ -21,6 +21,7 @@ use revm_interpreter::{
     InstructionResult, Interpreter, SelfDestructResult,
 };
 use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
+use core::panic;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -713,6 +714,7 @@ where
                 false,
                 MEM_LIMIT,
             );
+
             let ret = self.run_inspect(&mut interp, state);
             return (ret, Gas::new(0), interp.return_value());
         }

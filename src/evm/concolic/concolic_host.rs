@@ -42,8 +42,13 @@ use z3::{ast::Ast, Config, Context, Params, Solver};
 
 lazy_static! {
     static ref ALREADY_SOLVED: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-} // 1s
-pub static mut CONCOLIC_TIMEOUT: u32 = 1000;
+    pub static ref ALL_SOLUTIONS: Arc<Mutex<Vec<Solution>>> = Arc::new(Mutex::new(Vec::new()));
+    pub static ref ALL_WORKER_THREADS: Mutex<Vec::<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
+}
+
+pub static mut CONCOLIC_TIMEOUT: u32 = 1000;  // 1s
+
+const MAX_CALL_DEPTH: usize = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Field {
@@ -272,6 +277,7 @@ impl<'a> Solving<'a> {
     }
 
     pub fn solve(&mut self, optimistic: bool) -> Vec<Solution> {
+        // println!("solving on tid {:?}", std::thread::current().id());
         let context = self.context;
         let solver = Solver::new(context);
         // println!("Constraints: {:?}", self.constraints);
@@ -581,10 +587,12 @@ pub struct ConcolicHost<I, VS> {
     pub phantom: PhantomData<(I, VS)>,
 
     pub source_map: ProjectSourceMapTy,
+    pub num_threads: usize,
+    pub call_depth: usize,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy, num_threads: usize) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -597,6 +605,8 @@ impl<I, VS> ConcolicHost<I, VS> {
             phantom: Default::default(),
             ctxs: vec![],
             source_map: sourcemap,
+            num_threads,
+            call_depth: 0,
         }
     }
 
@@ -673,6 +683,40 @@ impl<I, VS> ConcolicHost<I, VS> {
             &self.constraints,
         );
         solving.solve(false)
+    }
+
+    pub fn threaded_solve(&self) {
+        let solutions_clone = ALL_SOLUTIONS.clone();
+        let input_bytes = self.input_bytes.clone();
+        let constraints = self.constraints.clone();
+
+        let mut worker_threads = ALL_WORKER_THREADS.lock().unwrap();
+        if worker_threads.len() >= self.num_threads {
+            let handle = worker_threads.pop().unwrap();
+            handle.join().unwrap();
+        }
+
+        let handle = std::thread::spawn(move || {
+            let context = Context::new(&Config::default());
+            let callvalue = BV::new_const(&context, "callvalue", 256);
+            let caller = BV::new_const(&context, "caller", 256);
+            let balance = BV::new_const(&context, "balance", 256);
+
+            let mut solving = Solving::new(
+                &context,
+                &input_bytes,
+                &balance,
+                &callvalue,
+                &caller,
+                &constraints,
+            );
+
+            let solutions = solving.solve(false);
+            let mut solutions_clone = solutions_clone.lock().unwrap();
+            solutions_clone.extend(solutions);
+        });
+
+        ALL_WORKER_THREADS.lock().unwrap().push(handle);
     }
 
     pub fn get_input_slice_from_ctx(&self, idx: usize, length: usize) -> Box<Expr> {
@@ -761,6 +805,8 @@ where
 
         macro_rules! concrete_eval_with_action {
             ($in_cnt: expr, $out_cnt: expr, $pp: ident) => {{
+                self.call_depth += 1;
+
                 // println!("[concolic] concrete_eval: {} {}", $in_cnt, $out_cnt);
                 for _ in 0..$in_cnt {
                     self.symbolic_stack.pop();
@@ -772,8 +818,6 @@ where
                 vec![]
             }};
         }
-
-        let mut solutions = vec![];
 
         // if self.ctxs.len() > 0 {
         //     return;
@@ -1190,40 +1234,46 @@ where
                 /*
                  * Skip rules:
                  * 1. r"^(library|contract|function)(.|\n)*\}$" // skip library, contract, function
-                 * TODO: 2. global variable signature?
+                 * 2. call depth > MAX_CALL_DEPTH
+                 * TODO: 3. global variable signature?
                  */
 
                 // Get the source map of current pc
                 let mut need_solve = true;
-                let pc = interp.program_counter();
-                let address = interp.contract.address;
-                // println!("[concolic] address: {:?} pc: {:x}", address, pc);
-                // println!("input: {:?}", self.input_bytes);
-                if let Some(Some(srcmap)) = self.source_map.get(&address) {
-                    // println!("source line: {:?}", srcmap.get(&pc).unwrap());
-                    let source_map_loc = if srcmap.get(&pc).is_some() {
-                        srcmap.get(&pc).unwrap()
-                    } else {
-                        &SourceMapLocation {
-                            file: None,
-                            file_idx: None,
-                            offset: 0,
-                            length: 0,
-                            skip_on_concolic: false,
-                        }
-                    };
-                    if let Some(_file) = &source_map_loc.file {
-                        if source_map_loc.skip_on_concolic {
+                if self.call_depth > MAX_CALL_DEPTH {
+                    println!("[concolic] skip solving due to call depth: {}", self.call_depth);
+                    need_solve = false;
+                } else {
+                    let pc = interp.program_counter();
+                    let address = interp.contract.address;
+                    // println!("[concolic] address: {:?} pc: {:x}", address, pc);
+                    // println!("input: {:?}", self.input_bytes);
+                    if let Some(Some(srcmap)) = self.source_map.get(&address) {
+                        // println!("source line: {:?}", srcmap.get(&pc).unwrap());
+                        let source_map_loc = if srcmap.get(&pc).is_some() {
+                            srcmap.get(&pc).unwrap()
+                        } else {
+                            &SourceMapLocation {
+                                file: None,
+                                file_idx: None,
+                                offset: 0,
+                                length: 0,
+                                skip_on_concolic: false,
+                            }
+                        };
+                        if let Some(_file) = &source_map_loc.file {
+                            if source_map_loc.skip_on_concolic {
+                                need_solve = false;
+                            }
+                        } else {
+                            // FIXME: This might not hold true for all cases
+                            println!("[concolic] skip solve for None file");
                             need_solve = false;
                         }
                     } else {
-                        // FIXME: This might not hold true for all cases
-                        println!("[concolic] skip solve for None file");
-                        need_solve = false;
+                        // Is this possible?
+                        // panic!("source line: None");
                     }
-                } else {
-                    // Is this possible?
-                    // panic!("source line: None");
                 }
 
                 let real_path_constraint = if br {
@@ -1252,9 +1302,10 @@ where
                             );
                             self.constraints.push(intended_path_constraint);
 
-                            solutions.extend(self.solve());
-                            #[cfg(feature = "z3_debug")]
-                            println!("[concolic] Solutions: {:?}", solutions);
+                            self.threaded_solve();
+
+                            // #[cfg(feature = "z3_debug")]
+                            // println!("[concolic] Solutions: {:?}", solutions);
                             self.constraints.pop();
 
                             ALREADY_SOLVED
@@ -1383,16 +1434,6 @@ where
         //     .load_input()
         //     .expect("Failed loading input")
         //     .clone();
-
-        if solutions.len() > 0 {
-            let meta = state
-                .metadata_map_mut()
-                .get_mut::<ConcolicPrioritizationMetadata>()
-                .expect("Failed to get metadata");
-            for solution in solutions {
-                meta.solutions.push((solution, self.testcase_ref.clone()));
-            }
-        }
     }
 
     unsafe fn on_return(
@@ -1403,6 +1444,7 @@ where
         by: &Bytes,
     ) {
         self.pop_ctx();
+        self.call_depth -= 1;
     }
 
     fn get_type(&self) -> MiddlewareType {
