@@ -15,7 +15,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     pub output: Out,
@@ -30,12 +30,12 @@ where
     VS: Default + VMStateT + 'static,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
 {
     pub fn empty_result() -> Self {
         Self {
-            output: Out::default(),
+            output: Default::default(),
             reverted: false,
             new_state: StagedVMState::new_uninitialized(),
             additional_info: None,
@@ -56,7 +56,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default,
+        Out: Default + Into<Vec<u8>> + Clone,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static;
 
     fn fast_static_call(&mut self, data: &Vec<(Addr, By)>, vm_state: &VS, state: &mut S) -> Vec<Out>
@@ -64,14 +64,14 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default;
-    
+        Out: Default + Into<Vec<u8>> + Clone;
+
     fn fast_call(&mut self, data: &Vec<(Addr,Addr, By)>, vm_state: &VS, state: &mut S) -> (Vec<Out>, VS)
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default;
+        Out: Default + Into<Vec<u8>> + Clone;
 
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.

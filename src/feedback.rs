@@ -95,7 +95,7 @@ where
         VS: Default + VMStateT,
         Addr: Serialize + DeserializeOwned + Debug + Clone,
         Loc: Serialize + DeserializeOwned + Debug + Clone,
-        Out: Default,
+        Out: Default + Into<Vec<u8>> + Clone,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`OracleFeedback`]
@@ -116,7 +116,7 @@ where
         }
     }
 
-    /// Determines whether the current execution reproduces the bug 
+    /// Determines whether the current execution reproduces the bug
     /// specified in the bug_idx.
     pub fn reproduces(
         &mut self,
@@ -181,7 +181,7 @@ where
 
         before_exit!();
         bug_to_hit.is_empty()
-    } 
+    }
 }
 
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<S>
@@ -198,7 +198,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// since OracleFeedback is just a wrapper around one stateless oracle
@@ -359,7 +359,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
@@ -508,7 +508,7 @@ where
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_state(&mut self, _state: &mut S0) -> Result<(), Error> {
