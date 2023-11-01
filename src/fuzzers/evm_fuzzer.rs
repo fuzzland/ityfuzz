@@ -15,6 +15,7 @@ use crate::{
     },
     evm::host::FuzzHost,
     evm::{
+        abi::BoxedABI,
         contract_utils::{copy_local_source_code, modify_concolic_skip},
         types::ProjectSourceMapTy,
         vm::EVMExecutor, oracles::reentrancy::ReentrancyOracle, middlewares::reentrancy::ReentrancyTracer,
@@ -45,7 +46,7 @@ use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasCaller, HasExecutionResult};
+use crate::state::{FuzzState, HasCaller, HasExecutionResult, HasPresets};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
@@ -70,8 +71,8 @@ use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
-use crate::evm::presets::pair::PairPreset;
-use crate::evm::srcmap::parser::{SourceMapLocation, BASE_PATH};
+use crate::evm::presets::{pair::PairPreset, presets::ExploitTemplate};
+use crate::evm::srcmap::parser::{BASE_PATH, SourceMapLocation};
 use crate::evm::types::{
     fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
 };
@@ -238,9 +239,6 @@ pub fn evm_fuzzer(
         config.work_dir.clone(),
     );
 
-    #[cfg(feature = "use_presets")]
-    corpus_initializer.register_preset(&PairPreset {});
-
     let mut artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     let mut instance_map = ABIAddressToInstanceMap::new();
@@ -251,6 +249,47 @@ pub fn evm_fuzzer(
             instance_map.map.insert(addr.clone(), abi.clone());
         });
 
+    #[cfg(feature = "use_presets")]
+    {
+        let (has_preset_match, matched_templates, sig_to_addr_abi_map): (bool, Vec<ExploitTemplate>, HashMap<[u8; 4], (EVMAddress, BoxedABI)>) = if config.preset_file_path.len() > 0 {
+            let mut sig_to_addr_abi_map = HashMap::new();
+            let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
+            let mut matched_templates = vec![];
+            for template in exploit_templates {
+                // to match, all function_sigs in the template
+                // must exists in all abi.function
+                let mut function_sigs = template.function_sigs.clone();
+                for (addr, abis) in &artifacts.address_to_abi_object {
+                    for abi in abis {
+                        for (idx, function_sig) in function_sigs.iter().enumerate() {
+                            if abi.function == function_sig.value {
+                                println!("matched: {:?} @ {:?}", abi.function, addr);
+                                sig_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
+                                function_sigs.remove(idx);
+                                break;
+                            }
+                        }
+                    }
+                    if function_sigs.len() == 0 {
+                        matched_templates.push(template);
+                        break;
+                    }
+                }
+            }
+
+            if matched_templates.len() > 0 {
+                (true, matched_templates, sig_to_addr_abi_map)
+            }
+            else {
+                (false, vec![], HashMap::new())
+            }
+        } else {
+            (false, vec![], HashMap::new())
+        };
+        println!("has_preset_match: {} {}", has_preset_match, matched_templates.len());
+
+        state.init_presets(has_preset_match, matched_templates.clone(), sig_to_addr_abi_map);
+    }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
         artifacts.address_to_name.clone(),

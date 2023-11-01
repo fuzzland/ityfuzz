@@ -270,6 +270,11 @@ pub struct EvmArgs {
     /// Offchain Config File. If specified, will deploy based on offchain config file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
+
+    /// Preset file. If specified, will load the preset file and match past exploit template.
+    #[cfg(feature = "use_presets")]
+    #[arg(long, default_value = "")]
+    preset_file_path: String,
 }
 
 enum EVMTargetType {
@@ -609,6 +614,8 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Glob => Some(args.target),
             _ => None,
         },
+        #[cfg(feature = "use_presets")]
+        preset_file_path: args.preset_file_path,
     };
 
     match config.fuzzer_type {

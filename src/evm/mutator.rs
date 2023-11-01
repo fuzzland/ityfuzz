@@ -15,7 +15,7 @@ use libafl_bolts::Named;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::evm::abi::ABIAddressToInstanceMap;
+use crate::evm::abi::{ABIAddressToInstanceMap, BoxedABI};
 #[cfg(feature = "flashloan_v2")]
 use crate::evm::input::EVMInputTy::Borrow;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
@@ -23,7 +23,7 @@ use crate::evm::vm::{Constraint, EVMStateT};
 use revm_interpreter::Interpreter;
 use std::fmt::Debug;
 
-use crate::state::HasItyState;
+use crate::state::{HasItyState, HasPresets};
 
 /// [`AccessPattern`] records the access pattern of the input during execution. This helps
 /// to determine what is needed to be fuzzed. For instance, we don't need to mutate caller
@@ -220,7 +220,8 @@ where
         + HasMaxSize
         + HasItyState<Loc, Addr, VS, CI>
         + HasCaller<Addr>
-        + HasMetadata,
+        + HasMetadata
+        + HasPresets,
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + EVMStateT,
     Addr: PartialEq + Debug + Serialize + DeserializeOwned + Clone,
@@ -240,6 +241,31 @@ where
             input.set_staged_state(concrete.1, concrete.0);
         }
 
+        // use exploit template
+        if state.has_preset() && state.rand_mut().below(100) < 20 {
+
+            // if flashloan_v2, we don't mutate if it's a borrow
+            #[cfg(feature = "flashloan_v2")]
+            {
+                if input.get_input_type() != Borrow {
+                    match state.get_next_call() {
+                        Some((addr, abi)) => {
+                            input.set_contract_and_abi(addr, Some(abi));
+                            input.mutate(state);
+                            return Ok(MutationResult::Mutated);
+                        },
+                        None => {
+                            // println!("cannot find next call");
+                        }
+                    }
+                }
+            }
+
+            #[cfg(not(feature = "flashloan_v2"))]
+            {
+                // todo!("set function")
+            }
+        }
         // determine whether we should conduct havoc
         // (a sequence of mutations in batch vs single mutation)
         // let mut amount_of_args = input.get_data_abi().map(|abi| abi.b.get_size()).unwrap_or(0) / 32 + 1;

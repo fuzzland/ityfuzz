@@ -80,6 +80,8 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub arbitrary_external_call: bool,
     pub builder: Option<BuildJob>,
     pub local_files_basedir_pattern: Option<String>,
+    #[cfg(feature = "use_presets")]
+    pub preset_file_path: String,
 }
 
 impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug

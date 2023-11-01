@@ -1,3 +1,4 @@
+use crate::evm::abi::BoxedABI;
 /// Implements LibAFL's State trait supporting our fuzzing logic.
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::input::{ConciseSerde, VMInputT};
@@ -10,7 +11,7 @@ use libafl::prelude::{HasMetadata, Scheduler, UsesInput, HasTestcase, CorpusId};
 use libafl_bolts::{current_nanos, bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand}};
 use std::borrow::BorrowMut;
 use std::cell::{Ref, RefMut};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -28,6 +29,7 @@ use libafl::Error;
 use serde::de::DeserializeOwned;
 use std::path::Path;
 use crate::evm::types::EVMAddress;
+use crate::evm::presets::presets::ExploitTemplate;
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -120,6 +122,12 @@ where
     fn set_execution_result(&mut self, res: ExecutionResult<Loc, Addr, VS, Out, CI>);
 }
 
+pub trait HasPresets {
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>);
+    fn has_preset(&self) -> bool;
+    fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)>;
+}
+
 /// The global state of ItyFuzz, containing all the information needed for fuzzing
 /// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference
 ///
@@ -185,6 +193,10 @@ where
     /// The last time we reported progress (if available/used).
     /// This information is used by fuzzer `maybe_report_progress` and updated by event_manager.
     last_report_time: Option<Duration>,
+
+    pub interesting_signatures: Vec<[u8; 4]>,
+
+    pub sig_to_addr_abi_map: std::collections::HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
 
     pub phantom: std::marker::PhantomData<(VI, Addr)>,
 }
@@ -258,6 +270,8 @@ where
             hash_to_address: Default::default(),
             last_report_time: None,
             phantom: Default::default(),
+            interesting_signatures: Vec::new(),
+            sig_to_addr_abi_map: Default::default(),
         }
     }
 
@@ -800,5 +814,47 @@ where
     /// This information is used by fuzzer `maybe_report_progress`.
     fn last_report_time_mut(&mut self) -> &mut Option<Duration> {
         &mut self.last_report_time
+    }
+}
+
+impl<VI, VS, Loc, Addr, Out, CI> HasPresets for FuzzState<VI, VS, Loc, Addr, Out, CI>
+where
+    VS: Default + VMStateT,
+    VI: VMInputT<VS, Loc, Addr, CI> + Input,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>) {
+        for template in templates {
+            for sig in template.calls {
+                self.interesting_signatures.push(sig.value);
+            }
+        }
+        self.sig_to_addr_abi_map = sig_to_addr_abi_map;
+    }
+
+    fn has_preset(&self) -> bool {
+        self.interesting_signatures.len() > 0
+    }
+
+    fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)> {
+        if self.interesting_signatures.len() == 0 {
+            return None;
+        }
+
+        let sig = self.interesting_signatures[self.rand_generator.below(self.interesting_signatures.len() as u64) as usize];
+
+        // find the abi
+        match self.sig_to_addr_abi_map.get(&sig) {
+            Some((addr, abi)) => {
+                return Some((addr.clone(), abi.clone()))
+            },
+            None => {
+                println!("No abi found for sig: {:?}", sig);
+                return None;
+            }
+        };
     }
 }
