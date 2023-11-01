@@ -17,9 +17,12 @@ use crate::{
     evm::{
         abi::BoxedABI,
         contract_utils::{copy_local_source_code, modify_concolic_skip},
-        middlewares::reentrancy::ReentrancyTracer,
+        middlewares::{integer_overflow::IntegerOverflowMiddleware, reentrancy::ReentrancyTracer},
         oracle,
-        oracles::{invariant::InvariantOracle, reentrancy::ReentrancyOracle},
+        oracles::{
+            integer_overflow::IntegerOverflowOracle, invariant::InvariantOracle,
+            reentrancy::ReentrancyOracle,
+        },
         types::ProjectSourceMapTy,
         vm::EVMExecutor,
     },
@@ -75,7 +78,7 @@ use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
 use crate::evm::presets::{pair::PairPreset, presets::ExploitTemplate};
-use crate::evm::srcmap::parser::{BASE_PATH, SourceMapLocation};
+use crate::evm::srcmap::parser::{SourceMapLocation, BASE_PATH};
 use crate::evm::types::{
     fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
 };
@@ -218,6 +221,10 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
     }
 
+    if config.integer_overflow_oracle {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new())));
+    }
+
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
 
     if config.replay_file.is_some() {
@@ -247,7 +254,11 @@ pub fn evm_fuzzer(
 
     #[cfg(feature = "use_presets")]
     {
-        let (has_preset_match, matched_templates, sig_to_addr_abi_map): (bool, Vec<ExploitTemplate>, HashMap<[u8; 4], (EVMAddress, BoxedABI)>) = if config.preset_file_path.len() > 0 {
+        let (has_preset_match, matched_templates, sig_to_addr_abi_map): (
+            bool,
+            Vec<ExploitTemplate>,
+            HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
+        ) = if config.preset_file_path.len() > 0 {
             let mut sig_to_addr_abi_map = HashMap::new();
             let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
             let mut matched_templates = vec![];
@@ -260,7 +271,8 @@ pub fn evm_fuzzer(
                         for (idx, function_sig) in function_sigs.iter().enumerate() {
                             if abi.function == function_sig.value {
                                 println!("matched: {:?} @ {:?}", abi.function, addr);
-                                sig_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
+                                sig_to_addr_abi_map
+                                    .insert(function_sig.value, (addr.clone(), abi.clone()));
                                 function_sigs.remove(idx);
                                 break;
                             }
@@ -275,16 +287,23 @@ pub fn evm_fuzzer(
 
             if matched_templates.len() > 0 {
                 (true, matched_templates, sig_to_addr_abi_map)
-            }
-            else {
+            } else {
                 (false, vec![], HashMap::new())
             }
         } else {
             (false, vec![], HashMap::new())
         };
-        println!("has_preset_match: {} {}", has_preset_match, matched_templates.len());
+        println!(
+            "has_preset_match: {} {}",
+            has_preset_match,
+            matched_templates.len()
+        );
 
-        state.init_presets(has_preset_match, matched_templates.clone(), sig_to_addr_abi_map);
+        state.init_presets(
+            has_preset_match,
+            matched_templates.clone(),
+            sig_to_addr_abi_map,
+        );
     }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
@@ -366,7 +385,7 @@ pub fn evm_fuzzer(
         config.concolic_caller,
         evm_executor_ref.clone(),
         srcmap,
-        config.concolic_num_threads
+        config.concolic_num_threads,
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
@@ -493,6 +512,13 @@ pub fn evm_fuzzer(
 
     if config.reentrancy_oracle {
         oracles.push(Rc::new(RefCell::new(ReentrancyOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
+    if config.integer_overflow_oracle {
+        oracles.push(Rc::new(RefCell::new(IntegerOverflowOracle::new(
             artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
