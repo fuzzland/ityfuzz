@@ -1004,7 +1004,12 @@ where
             }
             // SHA3
             0x20 => {
+              if self.call_depth > MAX_CALL_DEPTH {
+                  println!("[concolic] skip solving due to call depth: {}", self.call_depth);
+                  vec![None]
+              } else {
                 concrete_eval!(2, 1)
+              }
             }
             // ADDRESS
             0x30 => {
