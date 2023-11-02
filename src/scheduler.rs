@@ -464,13 +464,29 @@ impl<S> PowerABIScheduler<S> {
             }
         };
         let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect("function sig not found") };
+        let tc_func_slug = {
+            let amount_args = tc_func_name.matches(',').count() + {
+                if tc_func_name.contains("()") {
+                    0
+                } else {
+                    1
+                }
+            };
+            let name = tc_func_name.split('(').next().unwrap();
+            format!("{}:{}", name, amount_args)
+        };
         for (_filename, ast) in artifact.asts.iter() {
             let contracts = ast["contracts"].as_array().unwrap();
             for contract in contracts {
                 let funcs = contract["functions"].as_array().unwrap();
                 for func in funcs {
-                    let func_name = func["name"].as_str().unwrap();
-                    if tc_func_name == func_name {
+                    let func_slug = {
+                        let arg_len = func["args"].as_array().unwrap().len();
+                        let name = func["name"].as_str().unwrap();
+                        format!("{}:{}", name, arg_len)
+                    };
+
+                    if tc_func_slug == func_slug {
                         let func_source = func["source"].as_str().unwrap();
                         let num_lines = func_source.matches('\n').count() + 1;
                         if num_lines <= 1 {
@@ -579,8 +595,7 @@ where
         artifacts: &EVMInitializationArtifacts,
     ) -> Result<(), Error> {
         let mut testcase = state.testcase_mut(idx).unwrap();
-        let current_idx = *state.corpus().current();
-        testcase.set_parent_id_optional(current_idx);
+        testcase.set_parent_id_optional(None);
         let input = testcase.input().clone().unwrap();
         let artifact = match artifacts.build_artifacts.get(&input.contract) {
             Some(artifact) => artifact,

@@ -33,7 +33,7 @@ pub struct BuildJob {
 }
 
 pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
-const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources,ast";
+const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources,ast,compiler_args";
 
 impl BuildJob {
     pub fn new(
