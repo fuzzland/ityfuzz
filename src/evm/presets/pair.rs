@@ -1,4 +1,4 @@
-use crate::evm::abi::{BoxedABI, A256, A256InnerType};
+use crate::evm::abi::{BoxedABI, A256};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::presets::presets::Preset;
 use crate::evm::vm::EVMExecutor;
@@ -40,7 +40,6 @@ where
                         data: addr.to_vec(),
                         is_address: true,
                         dont_mutate: true,
-                        inner_type: A256InnerType::Address,
                     }),
                     function: [0xbc, 0x25, 0xcf, 0x77],
                 });

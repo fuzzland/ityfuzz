@@ -15,7 +15,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default + Into<Vec<u8>> + Clone,
+    Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     pub output: Out,
@@ -30,12 +30,12 @@ where
     VS: Default + VMStateT + 'static,
     Addr: Serialize + DeserializeOwned + Debug,
     Loc: Serialize + DeserializeOwned + Debug,
-    Out: Default + Into<Vec<u8>> + Clone,
+    Out: Default,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     pub fn empty_result() -> Self {
         Self {
-            output: Default::default(),
+            output: Out::default(),
             reverted: false,
             new_state: StagedVMState::new_uninitialized(),
             additional_info: None,
@@ -56,7 +56,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default + Into<Vec<u8>> + Clone,
+        Out: Default,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static;
 
     fn fast_static_call(
@@ -69,7 +69,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default + Into<Vec<u8>> + Clone;
+        Out: Default;
 
     fn fast_call(
         &mut self,
@@ -81,7 +81,7 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
-        Out: Default + Into<Vec<u8>> + Clone;
+        Out: Default;
 
     // all these method should be implemented via a global variable, instead of getting data from
     // the `self`. `self` here is only to make the trait object work.
