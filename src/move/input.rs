@@ -824,10 +824,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
         todo!()
     }
 
-    fn get_concise<Out: Default + Into<Vec<u8>> + Clone>(
-        &self,
-        _exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, ConciseMoveInput>
-    ) -> ConciseMoveInput {
+    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<ModuleId, AccountAddress, MoveVMState, Out, ConciseMoveInput>) -> ConciseMoveInput {
         ConciseMoveInput {
             module: self.module.clone(),
             function: self.function.clone(),

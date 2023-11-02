@@ -1,4 +1,4 @@
-use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256, A256InnerType};
+use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256};
 use crate::evm::onchain::endpoints::Chain;
 use crate::evm::types::{EVMAddress, EVMU256};
 use std::cell::RefCell;
@@ -109,7 +109,6 @@ pub fn generate_uniswap_router_buy(
                     data: vec![0; 32],
                     is_address: false,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Uint,
                 })),
                 BoxedABI::new(Box::new(AArray {
                     data: path
@@ -119,7 +118,6 @@ pub fn generate_uniswap_router_buy(
                                 data: addr.as_bytes().to_vec(),
                                 is_address: true,
                                 dont_mutate: false,
-                                inner_type: A256InnerType::Address,
                             }))
                         })
                         .collect(),
@@ -129,13 +127,11 @@ pub fn generate_uniswap_router_buy(
                     data: to.0.to_vec(),
                     is_address: true,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Address,
                 })),
                 BoxedABI::new(Box::new(A256 {
                     data: vec![0xff; 32],
                     is_address: false,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Uint,
                 })),
             ],
             dynamic_size: false,
@@ -182,7 +178,6 @@ pub fn generate_uniswap_router_sell(
         data: amount.to_vec(),
         is_address: false,
         dont_mutate: false,
-        inner_type: A256InnerType::Uint,
     }));
 
     if token.is_weth {
@@ -211,7 +206,6 @@ pub fn generate_uniswap_router_sell(
                     data: vec![0; 32],
                     is_address: false,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Uint,
                 })),
                 BoxedABI::new(Box::new(AArray {
                     data: path
@@ -221,7 +215,6 @@ pub fn generate_uniswap_router_sell(
                                 data: addr.as_bytes().to_vec(),
                                 is_address: true,
                                 dont_mutate: false,
-                                inner_type: A256InnerType::Address,
                             }))
                         })
                         .collect(),
@@ -231,13 +224,11 @@ pub fn generate_uniswap_router_sell(
                     data: to.0.to_vec(),
                     is_address: true,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Address,
                 })),
                 BoxedABI::new(Box::new(A256 {
                     data: vec![0xff; 32],
                     is_address: false,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Uint,
                 })),
             ],
             dynamic_size: false,
@@ -264,13 +255,11 @@ pub fn generate_uniswap_router_sell(
                     data: router.0.to_vec(),
                     is_address: true,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Address,
                 })),
                 BoxedABI::new(Box::new(A256 {
                     data: vec![0xff; 32],
                     is_address: false,
                     dont_mutate: false,
-                    inner_type: A256InnerType::Uint,
                 })),
             ],
             dynamic_size: false,

@@ -21,12 +21,6 @@ pub struct MoveOutput {
     pub vars: Vec<TypedValue>
 }
 
-impl From<MoveOutput> for Vec<u8> {
-    fn from(_output: MoveOutput) -> Self {
-        vec![]
-    }
-}
-
 pub type MoveStagedVMState = StagedVMState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>;
 pub type MoveInfantStateState = InfantStateState<ModuleId, AccountAddress, MoveVMState, ConciseMoveInput>;
 
@@ -37,3 +31,4 @@ pub type MoveFuzzState = FuzzState<
 pub type MoveOracleCtx<'a> = OracleCtx<'a, MoveVMState, AccountAddress, CompiledModule, MoveFunctionInput, ModuleId, u128, MoveOutput, MoveFunctionInput, MoveFuzzState, ConciseMoveInput>;
 
 pub type TypedValue = (Type, Value);
+
