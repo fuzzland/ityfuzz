@@ -15,9 +15,16 @@ use crate::{
     },
     evm::host::FuzzHost,
     evm::{
+        abi::BoxedABI,
         contract_utils::{copy_local_source_code, modify_concolic_skip},
+        middlewares::{integer_overflow::IntegerOverflowMiddleware, reentrancy::ReentrancyTracer},
+        oracle,
+        oracles::{
+            integer_overflow::IntegerOverflowOracle, invariant::InvariantOracle,
+            reentrancy::ReentrancyOracle,
+        },
         types::ProjectSourceMapTy,
-        vm::EVMExecutor, oracles::reentrancy::ReentrancyOracle, middlewares::reentrancy::ReentrancyTracer,
+        vm::EVMExecutor,
     },
     executor::FuzzExecutor,
     fuzzer::ItyFuzzer,
@@ -45,7 +52,7 @@ use crate::evm::vm::EVMState;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 
 use crate::scheduler::SortedDroppingScheduler;
-use crate::state::{FuzzState, HasCaller, HasExecutionResult};
+use crate::state::{FuzzState, HasCaller, HasExecutionResult, HasPresets};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
@@ -63,7 +70,7 @@ use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
 use crate::evm::middlewares::cheatcode::Cheatcode;
-use crate::evm::mutator::{AccessPattern, FuzzMutator};
+use crate::evm::mutator::FuzzMutator;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
 use crate::evm::oracles::arb_call::ArbitraryCallOracle;
@@ -71,7 +78,7 @@ use crate::evm::oracles::echidna::EchidnaOracle;
 use crate::evm::oracles::selfdestruct::SelfdestructOracle;
 use crate::evm::oracles::state_comp::StateCompOracle;
 use crate::evm::oracles::typed_bug::TypedBugOracle;
-use crate::evm::presets::pair::PairPreset;
+use crate::evm::presets::{pair::PairPreset, presets::ExploitTemplate};
 use crate::evm::srcmap::parser::{SourceMapLocation, BASE_PATH};
 use crate::evm::types::{
     fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256,
@@ -80,18 +87,7 @@ use crate::fuzzer::{REPLAY, RUN_FOREVER};
 use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
 use primitive_types::{H160, U256};
-use revm_primitives::bitvec::view::BitViewSized;
-use revm_primitives::{BlockEnv, Bytecode, Env};
-
-struct ABIConfig {
-    abi: String,
-    function: [u8; 4],
-}
-
-struct ContractInfo {
-    name: String,
-    abi: Vec<ABIConfig>,
-}
+use revm_primitives::Bytecode;
 
 pub fn evm_fuzzer(
     config: Config<
@@ -118,8 +114,8 @@ pub fn evm_fuzzer(
 
     let monitor = SimpleMonitor::new(|s| println!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
-    let mut infant_scheduler = SortedDroppingScheduler::new();
-    let mut scheduler = QueueScheduler::new();
+    let infant_scheduler = SortedDroppingScheduler::new();
+    let scheduler = QueueScheduler::new();
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
@@ -133,10 +129,9 @@ pub fn evm_fuzzer(
 
     // **Note**: cheatcode should be the first middleware because it consumes the step if it is
     // a call to cheatcode_address, and this step should not be visible to other middlewares.
-    if config.cheatcode {
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
-    }
+    fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
 
+    #[allow(unused_variables)]
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
@@ -152,6 +147,7 @@ pub fn evm_fuzzer(
                     mid.borrow_mut().add_builder(builder);
                 }
 
+                println!("onchain middleware enabled");
                 fuzz_host.add_middlewares(mid.clone());
                 mid
             })
@@ -185,7 +181,7 @@ pub fn evm_fuzzer(
         PANIC_ON_BUG = config.panic_on_bug;
     }
 
-    if config.only_fuzz.len() > 0 {
+    if !config.only_fuzz.is_empty() {
         unsafe {
             WHITELIST_ADDR = Some(config.only_fuzz.clone());
         }
@@ -213,7 +209,7 @@ pub fn evm_fuzzer(
                 true,
                 config.onchain.clone().unwrap(),
                 config.price_oracle,
-                onchain_middleware.unwrap(),
+                onchain_middleware.clone().unwrap(),
                 config.flashloan_oracle,
             ));
         }
@@ -221,11 +217,17 @@ pub fn evm_fuzzer(
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
 
     if config.sha3_bypass {
+        println!("sha3 bypass enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
     if config.reentrancy_oracle {
+        println!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
+    }
+
+    if config.integer_overflow_oracle {
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new())));
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -245,9 +247,6 @@ pub fn evm_fuzzer(
         config.work_dir.clone(),
     );
 
-    #[cfg(feature = "use_presets")]
-    corpus_initializer.register_preset(&PairPreset {});
-
     let mut artifacts = corpus_initializer.initialize(&mut config.contract_loader.clone());
 
     let mut instance_map = ABIAddressToInstanceMap::new();
@@ -255,9 +254,62 @@ pub fn evm_fuzzer(
         .address_to_abi_object
         .iter()
         .for_each(|(addr, abi)| {
-            instance_map.map.insert(addr.clone(), abi.clone());
+            instance_map.map.insert(*addr, abi.clone());
         });
 
+    #[cfg(feature = "use_presets")]
+    {
+        let (has_preset_match, matched_templates, sig_to_addr_abi_map): (
+            bool,
+            Vec<ExploitTemplate>,
+            HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
+        ) = if config.preset_file_path.len() > 0 {
+            let mut sig_to_addr_abi_map = HashMap::new();
+            let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
+            let mut matched_templates = vec![];
+            for template in exploit_templates {
+                // to match, all function_sigs in the template
+                // must exists in all abi.function
+                let mut function_sigs = template.function_sigs.clone();
+                for (addr, abis) in &artifacts.address_to_abi_object {
+                    for abi in abis {
+                        for (idx, function_sig) in function_sigs.iter().enumerate() {
+                            if abi.function == function_sig.value {
+                                println!("matched: {:?} @ {:?}", abi.function, addr);
+                                sig_to_addr_abi_map
+                                    .insert(function_sig.value, (addr.clone(), abi.clone()));
+                                function_sigs.remove(idx);
+                                break;
+                            }
+                        }
+                    }
+                    if function_sigs.len() == 0 {
+                        matched_templates.push(template);
+                        break;
+                    }
+                }
+            }
+
+            if matched_templates.len() > 0 {
+                (true, matched_templates, sig_to_addr_abi_map)
+            } else {
+                (false, vec![], HashMap::new())
+            }
+        } else {
+            (false, vec![], HashMap::new())
+        };
+        println!(
+            "has_preset_match: {} {}",
+            has_preset_match,
+            matched_templates.len()
+        );
+
+        state.init_presets(
+            has_preset_match,
+            matched_templates.clone(),
+            sig_to_addr_abi_map,
+        );
+    }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
         artifacts.address_to_sourcemap.clone(),
         artifacts.address_to_name.clone(),
@@ -301,19 +353,17 @@ pub fn evm_fuzzer(
     feedback.init_state(state).expect("Failed to init state");
     // let calibration = CalibrationStage::new(&feedback);
     if config.concolic {
-        unsafe {
-            unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
-        }
+        unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
     }
 
     let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
     for (addr, build_job_result) in &artifacts.build_artifacts {
         let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
-        remote_addr_sourcemaps.insert(addr.clone(), Some(sourcemap));
+        remote_addr_sourcemaps.insert(*addr, Some(sourcemap));
     }
 
     // check if we use the remote or local
-    let mut srcmap = if remote_addr_sourcemaps.len() > 0 {
+    let mut srcmap = if !remote_addr_sourcemaps.is_empty() {
         save_builder_source_code(&artifacts.build_artifacts, &config.work_dir);
         remote_addr_sourcemaps
     } else {
@@ -340,6 +390,7 @@ pub fn evm_fuzzer(
         config.concolic_caller,
         evm_executor_ref.clone(),
         srcmap,
+        config.concolic_num_threads,
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
@@ -374,27 +425,55 @@ pub fn evm_fuzzer(
             artifacts
                 .address_to_abi
                 .iter()
-                .map(|(address, abis)| {
+                .flat_map(|(address, abis)| {
                     abis.iter()
                         .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
-                        .map(|abi| (address.clone(), abi.function.to_vec()))
+                        .map(|abi| (*address, abi.function.to_vec()))
                         .collect_vec()
                 })
-                .flatten()
                 .collect_vec(),
             artifacts
                 .address_to_abi
                 .iter()
-                .map(|(address, abis)| {
+                .flat_map(|(_address, abis)| {
                     abis.iter()
                         .filter(|abi| abi.function_name.starts_with("echidna_") && abi.abi == "()")
                         .map(|abi| (abi.function.to_vec(), abi.function_name.clone()))
                         .collect_vec()
                 })
-                .flatten()
                 .collect::<HashMap<Vec<u8>, String>>(),
         );
         oracles.push(Rc::new(RefCell::new(echidna_oracle)));
+    }
+
+    if config.invariant_oracle {
+        let invariant_oracle = InvariantOracle::new(
+            artifacts
+                .address_to_abi
+                .iter()
+                .flat_map(|(address, abis)| {
+                    abis.iter()
+                        .filter(|abi| {
+                            abi.function_name.starts_with("invariant_") && abi.abi == "()"
+                        })
+                        .map(|abi| (*address, abi.function.to_vec()))
+                        .collect_vec()
+                })
+                .collect_vec(),
+            artifacts
+                .address_to_abi
+                .iter()
+                .flat_map(|(_address, abis)| {
+                    abis.iter()
+                        .filter(|abi| {
+                            abi.function_name.starts_with("invariant_") && abi.abi == "()"
+                        })
+                        .map(|abi| (abi.function.to_vec(), abi.function_name.clone()))
+                        .collect_vec()
+                })
+                .collect::<HashMap<Vec<u8>, String>>(),
+        );
+        oracles.push(Rc::new(RefCell::new(invariant_oracle)));
     }
 
     if let Some(path) = config.state_comp_oracle {
@@ -441,6 +520,17 @@ pub fn evm_fuzzer(
             artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
+    }
+
+    if config.integer_overflow_oracle {
+        oracles.push(Rc::new(RefCell::new(IntegerOverflowOracle::new(
+            artifacts.address_to_sourcemap.clone(),
+            artifacts.address_to_name.clone(),
+        ))));
+    }
+
+    if let Some(m) = onchain_middleware {
+        m.borrow_mut().add_abi(artifacts.address_to_abi.clone());
     }
 
     let mut producers = config.producers;
@@ -563,7 +653,6 @@ pub fn evm_fuzzer(
             //     EVAL_COVERAGE = false;
             //     CALL_UNTIL = u32::MAX;
             // }
-
 
             // fuzzer
             //     .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)

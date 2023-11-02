@@ -11,18 +11,18 @@ pub mod feedbacks;
 pub mod host;
 pub mod input;
 pub mod middlewares;
+pub mod minimizer;
 pub mod mutator;
 pub mod onchain;
 pub mod oracle;
 pub mod oracles;
 pub mod presets;
 pub mod producers;
+pub mod solution;
 pub mod srcmap;
 pub mod types;
 pub mod uniswap;
 pub mod vm;
-pub mod solution;
-pub mod minimizer;
 
 use crate::fuzzers::evm_fuzzer::evm_fuzzer;
 use crate::oracle::{Oracle, Producer};
@@ -48,6 +48,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
+use num_cpus;
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -156,6 +157,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "1000")]
     concolic_timeout: u32,
 
+    /// Number of threads for concolic execution (Default: number of cpus)
+    #[arg(long, default_value = "0")]
+    concolic_num_threads: usize,
+
     /// Enable flashloan
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
@@ -187,8 +192,14 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
 
+    #[arg(long, default_value = "false")]
+    integer_overflow_oracle: bool,
+
     #[arg(long, default_value = "true")]
     echidna_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    invariant_oracle: bool,
 
     ///Enable oracle for detecting whether bug() / typed_bug() is called
     #[arg(long, default_value = "true")]
@@ -265,16 +276,12 @@ pub struct EvmArgs {
     /// Offchain Config File. If specified, will deploy based on offchain config file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
-
-    /// Whether to use cheatcode, which is required for foundry contracts.
-    #[arg(long, default_value = "false")]
-    cheatcode: bool,
 }
 
 enum EVMTargetType {
     Glob,
     Address,
-    ArtifactAndProxy,
+    AnvilFork,
     Config,
 }
 
@@ -459,13 +466,13 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     let offchain_artifacts = if args.builder_artifacts_url.len() > 0 {
-        target_type = EVMTargetType::ArtifactAndProxy;
+        target_type = EVMTargetType::AnvilFork;
         Some(
             OffChainArtifact::from_json_url(args.builder_artifacts_url)
                 .expect("failed to parse builder artifacts"),
         )
     } else if args.builder_artifacts_file.len() > 0 {
-        target_type = EVMTargetType::ArtifactAndProxy;
+        target_type = EVMTargetType::AnvilFork;
         Some(
             OffChainArtifact::from_file(args.builder_artifacts_file)
                 .expect("failed to parse builder artifacts"),
@@ -502,14 +509,17 @@ pub fn evm_main(args: EvmArgs) {
                 &offchain_artifacts.expect("offchain artifacts is required for config target type"),
                 &offchain_config.expect("offchain config is required for config target type"),
             ),
-
-            EVMTargetType::ArtifactAndProxy => {
-                // ContractLoader::from_artifacts_and_proxy(
-                //     &offchain_artifacts.expect("offchain artifacts is required for artifact and proxy target type"),
-                //     &proxy_deploy_codes,
-                // )
-                todo!("Artifact and proxy is not supported yet")
-            }
+            EVMTargetType::AnvilFork => {
+                let addresses: Vec<EVMAddress> = args.target
+                    .split(',')
+                    .map(|s| EVMAddress::from_str(s).unwrap())
+                    .collect();
+                ContractLoader::from_fork(
+                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                    onchain.as_mut().expect("onchain is required to fork anvil"),
+                    HashSet::from_iter(addresses),
+                )
+            },
             EVMTargetType::Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
@@ -520,31 +530,31 @@ pub fn evm_main(args: EvmArgs) {
                     const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
                     const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
                     if "bsc" == onchain.as_ref().unwrap().chain_name {
-                        if args_target.find(BSC_ADDRESS) == None {
-                            args_target.push_str(",");
+                        if !args_target.contains(BSC_ADDRESS) {
+                            args_target.push(',');
                             args_target.push_str(BSC_ADDRESS);
                         }
-                    } else if "eth" == onchain.as_ref().unwrap().chain_name {
-                        if args_target.find(ETH_ADDRESS) == None {
-                            args_target.push_str(",");
-                            args_target.push_str(ETH_ADDRESS);
-                        }
+                    } else if "eth" == onchain.as_ref().unwrap().chain_name
+                        && !args_target.contains(ETH_ADDRESS)
+                    {
+                        args_target.push(',');
+                        args_target.push_str(ETH_ADDRESS);
                     }
                 }
                 let addresses: Vec<EVMAddress> = args_target
-                    .split(",")
+                    .split(',')
                     .map(|s| EVMAddress::from_str(s).unwrap())
                     .collect();
                 ContractLoader::from_address(
-                    &mut onchain.as_mut().unwrap(),
+                    onchain.as_mut().unwrap(),
                     HashSet::from_iter(addresses),
                     builder.clone(),
                 )
             }
         },
-        only_fuzz: if args.only_fuzz.len() > 0 {
+        only_fuzz: if !args.only_fuzz.is_empty() {
             args.only_fuzz
-                .split(",")
+                .split(',')
                 .map(|s| EVMAddress::from_str(s).expect("failed to parse only fuzz"))
                 .collect()
         } else {
@@ -554,6 +564,13 @@ pub fn evm_main(args: EvmArgs) {
         concolic: args.concolic,
         concolic_caller: args.concolic_caller,
         concolic_timeout: args.concolic_timeout,
+        concolic_num_threads: {
+            if args.concolic_num_threads == 0 {
+                num_cpus::get()
+            } else {
+                args.concolic_num_threads
+            }
+        },
         oracle: oracles,
         producers,
         flashloan: args.flashloan,
@@ -591,17 +608,18 @@ pub fn evm_main(args: EvmArgs) {
         sha3_bypass: args.sha3_bypass,
         base_path: args.base_path,
         echidna_oracle: args.echidna_oracle,
+        invariant_oracle: args.invariant_oracle,
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
         arbitrary_external_call: args.arbitrary_external_call_oracle,
+        integer_overflow_oracle: args.integer_overflow_oracle,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
             _ => None,
         },
-        cheatcode: args.cheatcode,
     };
 
     match config.fuzzer_type {

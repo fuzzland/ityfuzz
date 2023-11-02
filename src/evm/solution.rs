@@ -1,13 +1,23 @@
-use std::{fs::{File, self}, sync::OnceLock, path::Path, str::FromStr, time::SystemTime};
+use std::{
+    fs::{self, File},
+    path::Path,
+    str::FromStr,
+    sync::OnceLock,
+    time::SystemTime,
+};
 
 use handlebars::Handlebars;
 use serde::Serialize;
 
-use crate::{input::SolutionTx, evm::types::checksum};
-use super::{OnChainConfig, Chain, uniswap::{self, UniswapProvider}, types::{EVMAddress, EVMU256}};
+use super::{
+    types::{EVMAddress, EVMU256},
+    uniswap::{self, UniswapProvider},
+    Chain, OnChainConfig,
+};
+use crate::{evm::types::checksum, input::SolutionTx};
 
 const TEMPLATE_PATH: &str = "./foundry_test.hbs";
-/// Cli args for generating a test command.
+/// Cli args.
 static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 
 /// Initialize CLI_ARGS.
@@ -16,9 +26,11 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
         Some(oc) => {
             let weth = get_weth(&oc);
             let block_number = oc.block_number.clone();
-            let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16).unwrap().to_string();
+            let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
+                .unwrap()
+                .to_string();
             (oc.chain_name.clone(), weth, number)
-        },
+        }
         None => (String::from(""), String::from(""), String::from("")),
     };
 
@@ -36,7 +48,7 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
 
 /// Generate a foundry test file.
 pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
-    let trace: Vec<Tx> = inputs.iter().map(|x| Tx::from(x)).collect();
+    let trace: Vec<Tx> = inputs.iter().map(Tx::from).collect();
     if trace.is_empty() {
         println!("generate_test error: no trace found.");
         return;
@@ -48,11 +60,17 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     }
     let args = args.unwrap();
     if fs::create_dir_all(&args.output_dir).is_err() {
-        println!("generate_test error: failed to create output dir {:?}.", args.output_dir);
+        println!(
+            "generate_test error: failed to create output dir {:?}.",
+            args.output_dir
+        );
         return;
     }
     let mut handlebars = Handlebars::new();
-    if handlebars.register_template_file("foundry_test", TEMPLATE_PATH).is_err() {
+    if handlebars
+        .register_template_file("foundry_test", TEMPLATE_PATH)
+        .is_err()
+    {
         println!("generate_test error: failed to register template file.");
         return;
     }
@@ -63,7 +81,6 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         println!("generate_test error: failed to render template: {:?}", e);
     }
 }
-
 
 #[derive(Debug, Clone)]
 struct CliArgs {
@@ -134,12 +151,17 @@ impl TemplateArgs {
 
         // Stepping with return
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
-        let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
+        let mut trace: Vec<Tx> = trace
+            .into_iter()
+            .filter(|tx| tx.fn_selector != "0x00000000")
+            .collect();
 
         setup_trace(&mut trace, &cli_args);
         let router = get_router(&cli_args.chain);
         let contract_name = make_contract_name(&cli_args);
-        let include_interface = trace.iter().any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
+        let include_interface = trace
+            .iter()
+            .any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
 
         Ok(Self {
             contract_name,
@@ -197,11 +219,16 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 
     let code = match tx.fn_signature.as_str() {
-        "" => format!("IERC20({}).transfer({}, {});", tx.caller, tx.contract, tx.value),
+        "" => format!(
+            "IERC20({}).transfer({}, {});",
+            tx.caller, tx.contract, tx.value
+        ),
         "balanceOf(address)" => format!("IERC20({}).balanceOf({});", tx.contract, tx.fn_args),
         "approve(address,uint256)" => format!("IERC20({}).approve({});", tx.contract, tx.fn_args),
         "transfer(address,uint256)" => format!("IERC20({}).transfer({});", tx.contract, tx.fn_args),
-        "transferFrom(address,address,uint256)" => format!("IERC20({}).transferFrom({});", tx.contract, tx.fn_args),
+        "transferFrom(address,address,uint256)" => {
+            format!("IERC20({}).transferFrom({});", tx.contract, tx.fn_args)
+        }
         "mint(address)" => format!("IERC20({}).mint({});", tx.contract, tx.fn_args),
         "burn(address)" => format!("IERC20({}).burn({});", tx.contract, tx.fn_args),
         "skim(address)" => format!("IERC20({}).skim({});", tx.contract, tx.fn_args),
@@ -232,23 +259,29 @@ fn get_router(chain: &String) -> String {
 
 fn make_contract_name(cli_args: &CliArgs) -> String {
     if cli_args.is_onchain {
-        return format!("C{}", &cli_args.target[2..6])
+        return format!("C{}", &cli_args.target[2..6]);
     }
 
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let default_name = format!("C{}", now);
 
     let path = Path::new(&cli_args.target);
     match path.parent() {
         Some(parent) => {
             let dirname = parent.file_name().unwrap().to_str().unwrap();
-            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+            let name: String = dirname
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
             if name.is_empty() {
                 default_name
             } else {
                 format!("{}{}", &name[..1].to_uppercase(), &name[1..])
             }
-        },
+        }
         None => default_name,
     }
 }
