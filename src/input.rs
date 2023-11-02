@@ -95,7 +95,9 @@ where
     fn get_direct_data(&self) -> Vec<u8>;
 
     /// Compressed representation of the input
-    fn get_concise<Out: Default>(&self, exec_res: &ExecutionResult<Loc, Addr, VS, Out, CI>) -> CI;
+    fn get_concise<Out>(&self, exec_res: &ExecutionResult<Loc, Addr, VS, Out, CI>) -> CI
+    where
+        Out: Default + Into<Vec<u8>> + Clone;
 }
 
 pub trait ConciseSerde {
