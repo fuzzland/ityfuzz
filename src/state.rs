@@ -109,7 +109,7 @@ where
     VS: Default + VMStateT,
     Loc: Clone + Debug + Serialize + DeserializeOwned,
     Addr: Clone + Debug + Serialize + DeserializeOwned,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the current execution result
@@ -144,7 +144,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Debug + Serialize + DeserializeOwned + Clone,
     Loc: Debug + Serialize + DeserializeOwned + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// InfantStateState wraps the infant state corpus with [`State`] trait so that it is easier to use
@@ -207,7 +207,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     type Input = VI;
@@ -219,7 +219,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
@@ -241,7 +241,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`FuzzState`] with default values
@@ -287,7 +287,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`FuzzState`] with default values
@@ -302,7 +302,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Clone + Debug + PartialEq,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get a random address from the address pool, used for ABI mutation
@@ -430,7 +430,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the hash to address map
@@ -506,7 +506,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input + 'static,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get a infant state from the infant state corpus using the scheduler
@@ -555,7 +555,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the current input index
@@ -576,7 +576,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the infant state state ([`InfantStateState`])
@@ -591,7 +591,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the maximum size of the input
@@ -611,7 +611,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     type Rand = StdRand;
@@ -633,7 +633,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the number of executions
@@ -653,7 +653,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the metadata
@@ -673,7 +673,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     #[cfg(not(feature = "evaluation"))]
@@ -698,7 +698,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     type Solutions = OnDiskCorpus<VI>;
@@ -720,7 +720,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the client performance monitor
@@ -741,7 +741,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default + Clone,
+    Out: Default + Into<Vec<u8>> + Clone + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the execution result
@@ -770,7 +770,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get the named metadata
@@ -790,7 +790,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Serialize + DeserializeOwned + Default,
+    Out: Serialize + DeserializeOwned + Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
 }
@@ -801,7 +801,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// The last time we reported progress,if available/used.
@@ -823,7 +823,7 @@ where
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Serialize + DeserializeOwned + Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>) {

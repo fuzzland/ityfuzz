@@ -184,6 +184,9 @@ pub struct ConciseEVMInput {
 
     /// When to control leak, after `call_leak` number of calls
     pub call_leak: u32,
+
+    /// return data
+    pub return_data: Option<Vec<u8>>,
 }
 
 impl ConciseEVMInput {
@@ -193,8 +196,13 @@ impl ConciseEVMInput {
     ) -> Self
     where
         I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-        Out: Default,
+        Out: Default + Into<Vec<u8>> + Clone,
     {
+        let return_data = match execution_result.output.clone().into() {
+            v if v.is_empty() => None,
+            v => Some(v),
+        };
+
         Self {
             #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
@@ -219,6 +227,7 @@ impl ConciseEVMInput {
                 Some(ref info) => info[0] as u32,
                 None => u32::MAX,
             },
+            return_data,
         }
     }
 
@@ -249,7 +258,8 @@ impl ConciseEVMInput {
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
             layer: input.get_state().get_post_execution_len(),
-            call_leak
+            call_leak,
+            return_data: None,
         }
     }
 
@@ -285,11 +295,11 @@ impl ConciseEVMInput {
 
     #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
-        let liq = self.liquidation_percent;
+        let liq: u8 = self.liquidation_percent;
 
         #[cfg(not(feature = "debug"))]
-        match self.data {
-            Some(ref d) => Some(format!(
+        let mut output = match self.data {
+            Some(ref d) => format!(
                 "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
                 self.caller,
                 self.contract,
@@ -297,48 +307,65 @@ impl ConciseEVMInput {
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes()),
                 liq
-            )),
+            ),
             None => match self.input_type {
-                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => Some(format!(
-                    "{:?} => {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value, liq
-                )),
-                EVMInputTy::Borrow => Some(format!(
-                    "{:?} borrow token {:?} with {:?} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value, liq
-                )),
-                EVMInputTy::Liquidate => None,
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => format!(
+                    "{:?} => {:?} with {} ETH, liq percent: {}",
+                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
+                ),
+                EVMInputTy::Borrow => format!(
+                    "{:?} borrow token {:?} with {} ETH, liq percent: {}",
+                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
+                ),
+                EVMInputTy::Liquidate => "".to_string(),
             },
-        }
+        };
 
         #[cfg(feature = "debug")]
-        Some(format!(
+        let mut output = format!(
             "{:?} => {:?} with {:?} ETH, {}",
             self.caller,
             self.contract,
             self.txn_value,
             hex::encode(self.direct_data.clone())
-        ))
+        );
+
+        if !output.is_empty() && self.return_data.is_some() {
+            let return_data = hex::encode(self.return_data.as_ref().unwrap());
+            output.push_str(format!(", return data: 0x{}", return_data).as_str());
+        }
+
+        if output.is_empty() {
+            None
+        } else {
+            Some(output)
+        }
     }
 
     #[cfg(not(feature = "flashloan_v2"))]
     fn pretty_txn(&self) -> Option<String> {
-        match self.data {
-            Some(ref d) => Some(format!(
+        let mut output = match self.data {
+            Some(ref d) => format!(
                 "{:?} => {:?} {} with {} ETH ({})",
                 self.caller,
                 self.contract,
                 d.to_string(),
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes())
-            )),
-            None => Some(format!(
+            ),
+            None => format!(
                 "{:?} => {:?} transfer {} ETH",
                 self.caller,
                 self.contract,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
-            )),
+            ),
+        };
+
+        if self.return_data.is_some() {
+            let return_data = hex::encode(self.return_data.as_ref().unwrap());
+            output.push_str(format!(", return data: 0x{}", return_data).as_str());
         }
+        Some(output)
     }
 }
 
@@ -837,7 +864,7 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
         self.txn_value
     }
 
-    fn get_concise<Out: Default>(
+    fn get_concise<Out: Default + Into<Vec<u8>> + Clone>(
         &self,
         exec_res: &ExecutionResult<EVMAddress, EVMAddress, EVMState, Out, ConciseEVMInput>,
     ) -> ConciseEVMInput {

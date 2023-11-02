@@ -42,6 +42,7 @@ pub struct ABIConfig {
     pub is_static: bool,
     pub is_payable: bool,
     pub is_constructor: bool,
+    #[serde(default)]
     pub should_add_corpus: bool,
 }
 
@@ -541,15 +542,15 @@ impl ContractLoader {
         if candidates.len() == 0 {
             candidates = all_candidates;
         }
-        
+
         let diffs = candidates.iter().map(|(idx, loc)| {
             let artifact = &offchain_artifacts[*idx].contracts[loc];
             is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
         }).collect::<Vec<_>>();
-        
+
         let mut min_diff = usize::MAX;
         let mut selected_idx = 0;
-        
+
         for (idx, diff) in diffs.iter().enumerate() {
             if *diff < min_diff {
                 min_diff = *diff;
