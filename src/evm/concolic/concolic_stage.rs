@@ -31,7 +31,6 @@ pub struct ConcolicStage<OT> {
     pub known_state_input: HashSet<(usize, usize)>,
     pub vm_executor: Rc<RefCell<EVMQueueExecutor>>,
     pub phantom: std::marker::PhantomData<OT>,
-    pub sourcemap: ProjectSourceMapTy,
 }
 
 impl<OT> UsesState for ConcolicStage<OT> {
@@ -43,7 +42,6 @@ impl<OT> ConcolicStage<OT> {
         enabled: bool,
         allow_symbolic_addresses: bool,
         vm_executor: Rc<RefCell<EVMQueueExecutor>>,
-        source_map: ProjectSourceMapTy,
     ) -> Self {
         Self {
             enabled,
@@ -51,7 +49,6 @@ impl<OT> ConcolicStage<OT> {
             known_state_input: HashSet::new(),
             vm_executor,
             phantom: std::marker::PhantomData,
-            sourcemap: source_map,
         }
     }
 }
@@ -124,7 +121,6 @@ where
                 vm.host
                     .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
                         testcase_ref.clone(),
-                        self.sourcemap.clone(),
                     ))));
                 vm.execute(&testcase_ref, state);
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);

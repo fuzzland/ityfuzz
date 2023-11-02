@@ -49,7 +49,7 @@ use crate::state::{FuzzState, HasCaller, HasExecutionResult};
 use crate::state_input::StagedVMState;
 
 use crate::evm::config::Config;
-use crate::evm::corpus_initializer::EVMCorpusInitializer;
+use crate::evm::corpus_initializer::{EVMCorpusInitializer, SourceMapMap};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::abi::ABIAddressToInstanceMap;
@@ -299,6 +299,7 @@ pub fn evm_fuzzer(
         }
     }
 
+
     let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
     for (addr, build_job_result) in &artifacts.build_artifacts {
         let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
@@ -328,11 +329,17 @@ pub fn evm_fuzzer(
     };
 
     modify_concolic_skip(&mut srcmap, config.work_dir.clone());
+
+    let srcmap = SourceMapMap {
+        address_to_sourcemap: srcmap,
+    };
+
+    state.metadata_map_mut().insert(srcmap);
+
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
         evm_executor_ref.clone(),
-        srcmap,
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 

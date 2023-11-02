@@ -2,6 +2,7 @@ use bytes::Bytes;
 use libafl::schedulers::Scheduler;
 
 use crate::evm::abi::BoxedABI;
+use crate::evm::corpus_initializer::SourceMapMap;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::MiddlewareType::Concolic;
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
@@ -582,12 +583,11 @@ pub struct ConcolicHost<I, VS> {
     // For current PC, the number of times it has been visited
     pub phantom: PhantomData<(I, VS)>,
 
-    pub source_map: ProjectSourceMapTy,
     pub call_depth: usize,
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>, sourcemap: ProjectSourceMapTy) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -599,7 +599,6 @@ impl<I, VS> ConcolicHost<I, VS> {
             testcase_ref,
             phantom: Default::default(),
             ctxs: vec![],
-            source_map: sourcemap,
             call_depth: 0,
         }
     }
@@ -1210,7 +1209,9 @@ where
                     let address = interp.contract.address;
                     // println!("[concolic] address: {:?} pc: {:x}", address, pc);
                     // println!("input: {:?}", self.input_bytes);
-                    if let Some(Some(srcmap)) = self.source_map.get(&address) {
+
+                    // get the map from state
+                    if let Some(Some(srcmap)) = state.metadata_map().get::<SourceMapMap>().unwrap().get(&address) {
                         // println!("source line: {:?}", srcmap.get(&pc).unwrap());
                         let source_map_loc = if srcmap.get(&pc).is_some() {
                             srcmap.get(&pc).unwrap()

@@ -48,6 +48,8 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
+use super::srcmap::parser::SourceMapLocation;
+
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
 pub struct EVMCorpusInitializer<'a, SC, ISC>
@@ -92,6 +94,27 @@ impl ABIMap {
 
     pub fn get(&self, signature: &[u8; 4]) -> Option<&ABIConfig> {
         self.signature_to_abi.get(signature)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct SourceMapMap {
+    pub address_to_sourcemap: ProjectSourceMapTy,
+}
+
+impl_serdeany!(SourceMapMap);
+
+impl SourceMapMap {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, address: EVMAddress, sourcemap: Option<HashMap<usize, SourceMapLocation>>) {
+        self.address_to_sourcemap.insert(address, sourcemap);
+    }
+
+    pub fn get(&self, address: &EVMAddress) -> Option<&Option<HashMap<usize, SourceMapLocation>>> {
+        self.address_to_sourcemap.get(address)
     }
 }
 
