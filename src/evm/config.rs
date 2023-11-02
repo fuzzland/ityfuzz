@@ -117,7 +117,6 @@ impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
             .field("only_fuzz", &self.only_fuzz)
             .field("typed_bug", &self.typed_bug)
             .field("selfdestruct_bug", &self.selfdestruct_bug)
-            .field("cheatcode", &self.cheatcode)
             // .field("builder", &self.builder)
             .finish()
     }

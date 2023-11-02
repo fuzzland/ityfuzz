@@ -276,6 +276,11 @@ pub struct EvmArgs {
     /// Offchain Config File. If specified, will deploy based on offchain config file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
+
+    /// Preset file. If specified, will load the preset file and match past exploit template.
+    #[cfg(feature = "use_presets")]
+    #[arg(long, default_value = "")]
+    preset_file_path: String,
 }
 
 enum EVMTargetType {
@@ -620,29 +625,11 @@ pub fn evm_main(args: EvmArgs) {
             EVMTargetType::Glob => Some(args.target),
             _ => None,
         },
+        #[cfg(feature = "use_presets")]
+        preset_file_path: args.preset_file_path,
     };
 
-    match config.fuzzer_type {
-        FuzzerTypes::CMP => evm_fuzzer(config, &mut state),
-        // FuzzerTypes::BASIC => basic_fuzzer(config)
-        _ => {}
+    if let FuzzerTypes::CMP = config.fuzzer_type {
+        evm_fuzzer(config, &mut state)
     }
-    //
-    //     Some(v) => {
-    //         match v.as_str() {
-    //             "cmp" => {
-    //                 cmp_fuzzer(&String::from(args.target), args.target_contract);
-    //             }
-    //             "df" => {
-    //                 df_fuzzer(&String::from(args.target), args.target_contract);
-    //             }
-    //             _ => {
-    //                 println!("Fuzzer type not supported");
-    //             }
-    //         }
-    //     },
-    //     _ => {
-    //         df_fuzzer(&String::from(args.target), args.target_contract);
-    //     }
-    // }
 }

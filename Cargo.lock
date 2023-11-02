@@ -135,6 +135,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-dyn-abi"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e0daba57ddaba12dc9b21f608b843251f3de017f94a431dca4e7f4f72e5ba9"
+dependencies = [
+ "alloy-json-abi",
+ "alloy-primitives",
+ "alloy-sol-type-parser",
+ "alloy-sol-types",
+ "const-hex",
+ "itoa",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "alloy-json-abi"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63c9319ad8b2b623c6a3ac15899f8ffb71479224762dbaedc385c16efbb6cfe3"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-type-parser",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "alloy-primitives"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0628ec0ba5b98b3370bb6be17b12f23bfce8ee4ad83823325a20546d9b03b78"
+dependencies = [
+ "alloy-rlp",
+ "bytes",
+ "cfg-if 1.0.0",
+ "const-hex",
+ "derive_more",
+ "hex-literal 0.4.1",
+ "itoa",
+ "proptest",
+ "rand 0.8.5",
+ "ruint",
+ "serde",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "alloy-rlp"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -143,6 +191,44 @@ dependencies = [
  "arrayvec 0.7.4",
  "bytes",
  "smol_str",
+]
+
+[[package]]
+name = "alloy-sol-macro"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a98ad1696a2e17f010ae8e43e9f2a1e930ed176a8e3ff77acfeff6dfb07b42c"
+dependencies = [
+ "const-hex",
+ "dunce",
+ "heck 0.4.1",
+ "proc-macro-error",
+ "proc-macro2 1.0.69",
+ "quote 1.0.33",
+ "syn 2.0.38",
+ "syn-solidity",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "alloy-sol-type-parser"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81c61ccc29e7c58bf16a2f780898852348183f58b127bde03ced6d07ad544787"
+dependencies = [
+ "winnow 0.5.18",
+]
+
+[[package]]
+name = "alloy-sol-types"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98d7107bed88e8f09f0ddcc3335622d87bfb6821f3e0c7473329fb1cfad5e015"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-macro",
+ "const-hex",
+ "serde",
 ]
 
 [[package]]
@@ -4414,6 +4500,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundry-abi"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=dee41819c6e6bd1ea5419c613d226498ed7a2c59#dee41819c6e6bd1ea5419c613d226498ed7a2c59"
+dependencies = [
+ "ethers-contract",
+ "ethers-contract-abigen",
+ "ethers-core",
+ "ethers-providers",
+ "eyre",
+ "foundry-macros",
+ "syn 2.0.38",
+]
+
+[[package]]
+name = "foundry-cheatcodes"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=dee41819c6e6bd1ea5419c613d226498ed7a2c59#dee41819c6e6bd1ea5419c613d226498ed7a2c59"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
+ "foundry-macros",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "foundry-macros"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=dee41819c6e6bd1ea5419c613d226498ed7a2c59#dee41819c6e6bd1ea5419c613d226498ed7a2c59"
+dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "ethers-core",
+ "foundry-macros-impl",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "foundry-macros-impl"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=dee41819c6e6bd1ea5419c613d226498ed7a2c59#dee41819c6e6bd1ea5419c613d226498ed7a2c59"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2 1.0.69",
+ "quote 1.0.33",
+ "syn 2.0.38",
+]
+
+[[package]]
 name = "fragile"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5035,7 +5171,7 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 [[package]]
 name = "heimdall-cache"
 version = "0.6.1"
-source = "git+https://github.com/fuzzland/heimdall-rs.git#3d95f04146bbef2e0e88e6949a06519c938b47d7"
+source = "git+https://github.com/fuzzland/heimdall-rs.git?rev=3d95f04146bbef2e0e88e6949a06519c938b47d7#3d95f04146bbef2e0e88e6949a06519c938b47d7"
 dependencies = [
  "bincode",
  "clap 3.2.25",
@@ -5045,7 +5181,7 @@ dependencies = [
 [[package]]
 name = "heimdall-common"
 version = "0.6.1"
-source = "git+https://github.com/fuzzland/heimdall-rs.git#3d95f04146bbef2e0e88e6949a06519c938b47d7"
+source = "git+https://github.com/fuzzland/heimdall-rs.git?rev=3d95f04146bbef2e0e88e6949a06519c938b47d7#3d95f04146bbef2e0e88e6949a06519c938b47d7"
 dependencies = [
  "async-openai",
  "async-recursion",
@@ -5070,7 +5206,7 @@ dependencies = [
 [[package]]
 name = "heimdall-config"
 version = "0.6.1"
-source = "git+https://github.com/fuzzland/heimdall-rs.git#3d95f04146bbef2e0e88e6949a06519c938b47d7"
+source = "git+https://github.com/fuzzland/heimdall-rs.git?rev=3d95f04146bbef2e0e88e6949a06519c938b47d7#3d95f04146bbef2e0e88e6949a06519c938b47d7"
 dependencies = [
  "clap 3.2.25",
  "clap-verbosity-flag",
@@ -5082,7 +5218,7 @@ dependencies = [
 [[package]]
 name = "heimdall-core"
 version = "0.6.1"
-source = "git+https://github.com/fuzzland/heimdall-rs.git#3d95f04146bbef2e0e88e6949a06519c938b47d7"
+source = "git+https://github.com/fuzzland/heimdall-rs.git?rev=3d95f04146bbef2e0e88e6949a06519c938b47d7#3d95f04146bbef2e0e88e6949a06519c938b47d7"
 dependencies = [
  "backtrace",
  "clap 3.2.25",
@@ -5704,11 +5840,16 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 name = "ityfuzz"
 version = "0.1.0"
 dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "alloy-sol-types",
  "bytes",
  "clap 4.4.7",
  "criterion",
  "either",
  "ethers",
+ "foundry-abi",
+ "foundry-cheatcodes",
  "glob",
  "handlebars",
  "heimdall-core",
@@ -11587,6 +11728,18 @@ dependencies = [
  "proc-macro2 1.0.69",
  "quote 1.0.33",
  "unicode-ident",
+]
+
+[[package]]
+name = "syn-solidity"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86b837ef12ab88835251726eb12237655e61ec8dc8a280085d1961cdc3dfd047"
+dependencies = [
+ "paste",
+ "proc-macro2 1.0.69",
+ "quote 1.0.33",
+ "syn 2.0.38",
 ]
 
 [[package]]
