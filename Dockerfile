@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y clang pkg-config cmake \
 FROM build_environment as builder
 WORKDIR /builder
 
-COPY Cargo.toml .
+COPY Cargo.toml Cargo.lock ./
 COPY rust-toolchain.toml .
 COPY src ./src
 COPY benches ./benches
