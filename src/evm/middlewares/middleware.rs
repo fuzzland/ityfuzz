@@ -34,7 +34,7 @@ pub enum MiddlewareType {
     Sha3TaintAnalysis,
     CallPrinter,
     Reentrancy,
-    IntegerOverflow,,
+    IntegerOverflow,
     Cheatcode,
 }
 
