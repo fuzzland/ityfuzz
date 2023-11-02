@@ -24,7 +24,7 @@ use std::ops::{Deref, DerefMut};
 use super::types::checksum;
 
 /// Mapping from known signature to function name
-static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(HashMap::new);
+pub static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(HashMap::new);
 
 /// todo: remove this
 static mut CONCOLIC_COUNTER: u64 = 0;

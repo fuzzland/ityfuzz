@@ -518,6 +518,8 @@ impl ContractLoader {
                     more_info.deploy_bytecode,
                     more_info.abi.clone(),
                     more_info.source_map_replacements.clone(),
+                    // TODO: offchain ast
+                    Vec::new()
                 )),
             });
         }
@@ -606,6 +608,8 @@ impl ContractLoader {
                     more_info.deploy_bytecode.clone(),
                     more_info.abi.clone(),
                     more_info.source_map_replacements.clone(),
+                    // TODO: offchain ast
+                    Vec::new()
                 )),
             });
         }
