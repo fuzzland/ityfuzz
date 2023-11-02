@@ -56,7 +56,7 @@ main() {
     # Enter local repo and build
     say "installing from $ITYFUZZ_LOCAL_REPO"
     cd "$ITYFUZZ_LOCAL_REPO"
-    ensure cargo build --bins --release --locked --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features # need 4 speed
+    ensure cargo build --bins --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features # need 4 speed
 
     for bin in "${BINS[@]}"; do
       # Remove prior installations if they exist
@@ -192,7 +192,7 @@ EOF
     fi
 
     # Build the repo and install the binaries locally to the .ityfuzz bin directory.
-    ensure cargo build --bins --release --locked --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
+    ensure cargo build --bins --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
     for bin in "${BINS[@]}"; do
       for try_path in target/release/$bin target/release/$bin.exe; do
         if [ -f "$try_path" ]; then
