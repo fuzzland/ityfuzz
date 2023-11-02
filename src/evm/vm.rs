@@ -65,7 +65,7 @@ use super::middlewares::middleware;
 use super::middlewares::reentrancy::ReentrancyData;
 use super::presets::presets::ExploitTemplate;
 
-pub const MEM_LIMIT: u64 = 10 * 1024;
+pub const MEM_LIMIT: u64 = 500 * 1024;
 const MAX_POST_EXECUTION: usize = 10;
 
 /// Get the token context from the flashloan middleware,
