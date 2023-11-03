@@ -154,12 +154,12 @@ jobs:
       - name: Build binaries
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
-        run: cargo build --release --bins --target ${{ matrix.job.target }} --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
+        run: cargo build --release --locked --bins --target ${{ matrix.job.target }} --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
 
       - name: Build binaries with flashloan
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
-        run: cargo build --release --bins --target ${{ matrix.job.target }} --target-dir "target_f" --features "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache" --no-default-features
+        run: cargo build --release --locked --bins --target ${{ matrix.job.target }} --target-dir "target_f" --features "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache" --no-default-features
 
       - name: Archive binaries
         id: artifacts

@@ -477,7 +477,7 @@ where
         _data: &Vec<(AccountAddress, AccountAddress, MoveFunctionInput)>,
         _vm_state: &MoveVMState,
         _state: &mut S,
-    ) -> (Vec<MoveOutput>, MoveVMState)
+    ) -> (Vec<(MoveOutput, bool)>, MoveVMState)
     where
         MoveVMState: VMStateT,
         AccountAddress: Serialize + DeserializeOwned + Debug,
