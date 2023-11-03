@@ -1221,11 +1221,11 @@ where
                                 file_idx: None,
                                 offset: 0,
                                 length: 0,
-                                skip_on_concolic: false,
+                                pc_has_source_match: false,
                             }
                         };
                         if let Some(_file) = &source_map_loc.file {
-                            if source_map_loc.skip_on_concolic {
+                            if source_map_loc.pc_has_source_match {
                                 need_solve = false;
                             }
                         } else {
