@@ -8,7 +8,7 @@ use crate::evm::srcmap::parser::SourceMapLocation;
 use crate::executor::FuzzExecutor;
 use crate::generic_vm::vm_executor::ExecutionResult;
 use crate::oracle::OracleCtx;
-use crate::scheduler::SortedDroppingScheduler;
+use crate::scheduler::{SortedDroppingScheduler, PowerABIScheduler};
 use crate::state::{FuzzState, InfantStateState};
 use crate::state_input::StagedVMState;
 use bytes::Bytes;
@@ -70,7 +70,7 @@ pub type EVMFuzzExecutor<OT> = FuzzExecutor<
 >;
 
 pub type EVMQueueExecutor =
-    EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, QueueScheduler<EVMFuzzState>>;
+    EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_H160(v: [u8; 20]) -> H160 {

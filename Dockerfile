@@ -19,6 +19,7 @@ FROM build_environment as builder
 WORKDIR /builder
 
 COPY Cargo.toml .
+COPY Cargo.lock .
 COPY rust-toolchain.toml .
 COPY src ./src
 COPY benches ./benches
