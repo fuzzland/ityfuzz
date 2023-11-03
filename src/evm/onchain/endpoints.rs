@@ -438,7 +438,7 @@ impl OnChainConfig {
         address: EVMAddress,
     ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         if let Some(storage) = self.storage_dump_cache.get(&address) {
-            return storage.clone();
+            storage.clone()
         } else {
             let storage = self.fetch_storage_dump_uncached(address);
             self.storage_dump_cache.insert(address, storage.clone());
@@ -924,6 +924,7 @@ impl OnChainConfig {
             "eth" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             "mumbai" => panic!("Not supported"),
             _ => panic!("Unknown network"),
         }
@@ -966,6 +967,10 @@ impl OnChainConfig {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+            "local" => [("ZERO", "0x0000000000000000000000000000000000000000")]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
             _ => panic!("[Flashloan] Network is not supported"),
         }
     }
@@ -1273,6 +1278,8 @@ mod tests {
     fn test_get_pair() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", false);
+
+        println!("{:?}", v);
         assert!(!v.is_empty());
     }
 

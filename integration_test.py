@@ -12,7 +12,7 @@ crashed_any = False
 def read_onchain_tests():
     tests = ""
     with open("onchain_tests.txt", "r") as file:
-        tests = file.read()
+        tests = file.read().strip()
 
     tests = tests.strip().split("\n")
     tests = [test.split("\t") for test in tests]
@@ -121,6 +121,7 @@ def test_onchain(test):
         return
     my_env = os.environ.copy()
     my_env["ETH_RPC_URL"] = os.getenv(f"{chain.upper()}_RPC_URL")
+    my_env["RUST_BACKTRACE"] = "1"
 
     cmd = [
         TIMEOUT_BIN,
@@ -140,6 +141,8 @@ def test_onchain(test):
         "-p",
         "--onchain-etherscan-api-key",
         etherscan_key,
+        "--onchain-builder",
+        "https://solc-builder.fuzz.land/",
         "--work-dir",
         f"w_{name}",
         # "--run-forever"
@@ -188,6 +191,7 @@ def build_fuzzer():
         "cargo",
         "build",
         "--release",
+        "--locked",
         "--features",
         "cmp dataflow evm print_txn_corpus full_trace",
         "--no-default-features"
@@ -200,6 +204,7 @@ def build_flash_loan_v2_fuzzer():
         "cargo",
         "build",
         "--release",
+        "--locked",
         "--features",
         "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache",
         "--no-default-features"

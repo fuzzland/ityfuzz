@@ -6,6 +6,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::ConciseSerde;
 use crate::mutation_utils::{byte_mutator, byte_mutator_with_expansion};
 use crate::state::{HasCaller, HasItyState};
+use ethers::types::I256;
 use itertools::Itertools;
 use libafl::inputs::{HasBytesVec, Input};
 use libafl::mutators::MutationResult;
@@ -14,6 +15,7 @@ use libafl::state::{HasMaxSize, HasRand, State};
 use libafl_bolts::bolts_prelude::Rand;
 use libafl_bolts::impl_serdeany;
 use once_cell::sync::Lazy;
+use revm_primitives::U256;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -24,7 +26,7 @@ use std::ops::{Deref, DerefMut};
 use super::types::checksum;
 
 /// Mapping from known signature to function name
-static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(HashMap::new);
+pub static mut FUNCTION_SIG: Lazy<HashMap<[u8; 4], String>> = Lazy::new(HashMap::new);
 
 /// todo: remove this
 static mut CONCOLIC_COUNTER: u64 = 0;
@@ -242,7 +244,6 @@ impl BoxedABI {
 
     /// Set the function hash with function signature, so that we can print the function signature or name instead of hash
     pub fn set_func_with_signature(&mut self, function: [u8; 4], fn_name: &str, fn_args: &str) {
-        println!("set_func_with_signature: {}{}", fn_name, fn_args);
         self.function = function;
         unsafe {
             FUNCTION_SIG.insert(function, format!("{}{}", fn_name, fn_args));
@@ -251,11 +252,7 @@ impl BoxedABI {
 
     /// Get function signature
     pub fn get_func_signature(&self) -> Option<String> {
-        unsafe {
-            FUNCTION_SIG
-                .get(&self.function)
-                .cloned()
-        }
+        unsafe { FUNCTION_SIG.get(&self.function).cloned() }
     }
 
     /// Get function name
@@ -303,11 +300,13 @@ where
                 data: vec![0; 32],
                 is_address: false,
                 dont_mutate: false,
+                inner_type: (state.rand_mut().below(100) % 4).into(),
             })),
             1 => BoxedABI::new(Box::new(A256 {
                 data: state.get_rand_address().0.into(),
                 is_address: true,
                 dont_mutate: false,
+                inner_type: A256InnerType::Address,
             })),
             _ => unreachable!(),
         }
@@ -553,6 +552,29 @@ pub struct A256 {
     pub is_address: bool,
     /// whether this arg should not be mutated
     pub dont_mutate: bool,
+    /// Inner type, for better logging
+    pub inner_type: A256InnerType,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum A256InnerType {
+    Int = 0,
+    Uint,
+    Bool,
+    Bytes,
+    Address,
+}
+
+impl From<u64> for A256InnerType {
+    fn from(x: u64) -> Self {
+        match x {
+            0 => A256InnerType::Int,
+            1 => A256InnerType::Uint,
+            2 => A256InnerType::Bool,
+            3 => A256InnerType::Bytes,
+            _ => A256InnerType::Address,
+        }
+    }
 }
 
 impl Input for A256 {
@@ -609,10 +631,26 @@ impl ABI for A256 {
     }
 
     fn to_string(&self) -> String {
-        if self.is_address {
-            checksum(&EVMAddress::from_slice(&self.data))
-        } else {
-            vec_to_hex(&self.data)
+        match self.inner_type {
+            A256InnerType::Int => {
+                I256::from_hex_str(&vec_to_hex(&self.data))
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            A256InnerType::Uint => {
+                U256::try_from_be_slice(&self.data)
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            A256InnerType::Bool => {
+                if &self.data == &[0] {
+                    "false".to_string()
+                } else {
+                    "true".to_string()
+                }
+            }
+            A256InnerType::Bytes => vec_to_hex(&self.data),
+            A256InnerType::Address => checksum(&EVMAddress::from_slice(&self.data)),
         }
     }
 
@@ -1160,20 +1198,29 @@ fn get_abi_type_basic(
     with_address: &Option<Vec<u8>>,
 ) -> Box<dyn ABI> {
     match abi_name {
-        "uint" | "int" => Box::new(A256 {
+        "int" => Box::new(A256 {
             data: vec![0; abi_bs],
             is_address: false,
             dont_mutate: false,
+            inner_type: A256InnerType::Int,
+        }),
+        "uint" => Box::new(A256 {
+            data: vec![0; abi_bs],
+            is_address: false,
+            dont_mutate: false,
+            inner_type: A256InnerType::Uint,
         }),
         "address" => Box::new(A256 {
             data: with_address.to_owned().unwrap_or(vec![0; 20]),
             is_address: true,
             dont_mutate: false,
+            inner_type: A256InnerType::Address,
         }),
         "bool" => Box::new(A256 {
             data: vec![0; 1],
             is_address: false,
             dont_mutate: false,
+            inner_type: A256InnerType::Bool,
         }),
         "bytes" => Box::new(ADynamic {
             data: Vec::new(),
@@ -1206,6 +1253,7 @@ fn get_abi_type_basic(
                     data: vec![0; len],
                     is_address: false,
                     dont_mutate: false,
+                    inner_type: A256InnerType::Bytes,
                 });
             } else if abi_name.is_empty() {
                 return Box::new(AEmpty {});

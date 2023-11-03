@@ -1,8 +1,9 @@
 /// Implements fuzzing logic for ItyFuzz
 use crate::{
+    evm::solution,
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
-    state_input::StagedVMState, evm::solution,
+    state_input::StagedVMState,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -24,7 +25,7 @@ use libafl::{
         Corpus, CorpusId, Event, EventConfig, EventManager, Executor, Feedback, HasObservers,
         ObserversTuple, Testcase, UsesInput,
     },
-    schedulers::Scheduler,
+    schedulers::{Scheduler, RemovableScheduler},
     stages::StagesTuple,
     start_timer,
     state::{
@@ -377,7 +378,7 @@ macro_rules! dump_txn {
 impl<VS, Loc, Addr, Out, E, EM, I, S, CS, IS, F, IF, IFR, OF, OT, CI, SM> Evaluator<E, EM>
     for ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
-    CS: Scheduler<State = S>,
+    CS: Scheduler<State = S> + RemovableScheduler,
     IS: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
         + HasReportCorpus<InfantStateState<Loc, Addr, VS, CI>>,
     F: Feedback<S>,
@@ -402,7 +403,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    Out: Default,
+    Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + SolutionTx,
     SM: SequentialMinimizer<S, E, Loc, Addr, CI, OF>,
 {
@@ -515,13 +516,12 @@ where
                 match self.should_replace(&input, unsafe { &JMP_MAP }) {
                     Some((hash, new_fav_factor, old_testcase_idx)) => {
                         let mut testcase = Testcase::new(input.clone());
-                        state.corpus_mut().replace(
-                            old_testcase_idx.into(),
-                            testcase
-                        )?;
+                        let prev = state
+                            .corpus_mut()
+                            .replace(old_testcase_idx.into(), testcase)?;
                         self.infant_scheduler
                             .report_corpus(state.get_infant_state_state(), state_idx);
-                        // self.scheduler.on_add(state, new_testcase_idx)?;
+                        self.scheduler.on_replace(state, old_testcase_idx.into(), &prev)?;
                         self.on_replace_corpus(
                             (hash, new_fav_factor, old_testcase_idx),
                             old_testcase_idx.into(),

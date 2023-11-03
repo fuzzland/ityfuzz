@@ -1,10 +1,10 @@
-use std::error::Error;
+use crate::evm::blaz::builder::BuildJobResult;
+use crate::evm::blaz::{get_client, is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::HashMap;
 use serde_json::Value;
-use crate::evm::blaz::{get_client, is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
-use crate::evm::blaz::builder::BuildJobResult;
+use std::error::Error;
 
 #[derive(Clone, Debug)]
 pub struct ContractArtifact {
@@ -23,8 +23,7 @@ pub struct OffChainArtifact {
 impl OffChainArtifact {
     pub fn from_json_url(url: String) -> Result<Vec<Self>, Box<dyn Error>> {
         let client = get_client();
-        let resp = client.get(&url)
-            .send()?;
+        let resp = client.get(&url).send()?;
         Self::from_json(resp.text().expect("parse json failed"))
     }
 
@@ -41,13 +40,14 @@ impl OffChainArtifact {
             if json["success"].as_bool().expect("get status failed") != true {
                 return Err("retrieve onchain job failed".into());
             }
-            println!("json: {:?}", json);
+            // println!("json: {:?}", json);
             let bytecodes = json["bytecode"].as_object().expect("get bytecode failed");
             for (filename, contract) in bytecodes {
                 let contract_obj = contract.as_object().expect("get contract failed");
                 for (contract_name, bytecode) in contract_obj {
                     let bytecode = bytecode.as_str().expect("get bytecode failed");
-                    let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                    let bytecode =
+                        Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
                     all_bytecode.insert((filename.clone(), contract_name.clone()), bytecode);
                 }
             }
@@ -68,7 +68,10 @@ impl OffChainArtifact {
                 let contract_obj = contract.as_object().expect("get contract failed");
                 for (contract_name, source_map) in contract_obj {
                     let source_map = source_map.as_str().expect("get source_map failed");
-                    all_source_map.insert((filename.clone(), contract_name.clone()), source_map.to_string());
+                    all_source_map.insert(
+                        (filename.clone(), contract_name.clone()),
+                        source_map.to_string(),
+                    );
                 }
             }
 
@@ -77,15 +80,24 @@ impl OffChainArtifact {
                 for (filename, contract) in source_maps_replacement {
                     let contract_obj = contract.as_object().expect("get contract failed");
                     for (contract_name, source_map_replacements) in contract_obj {
-                        let source_map_replacements = source_map_replacements.as_array().expect("get source_map_replacements failed");
-                        all_source_maps_replacement.insert((filename.clone(), contract_name.clone()), source_map_replacements.iter().map(
-                            |replacements| {
-                                let replacements = replacements.as_array().expect("get replacements failed");
-                                let source = replacements[0].as_str().expect("get source failed");
-                                let target = replacements[1].as_str().expect("get target failed");
-                                (source.to_string(), target.to_string())
-                            }
-                        ).collect_vec());
+                        let source_map_replacements = source_map_replacements
+                            .as_array()
+                            .expect("get source_map_replacements failed");
+                        all_source_maps_replacement.insert(
+                            (filename.clone(), contract_name.clone()),
+                            source_map_replacements
+                                .iter()
+                                .map(|replacements| {
+                                    let replacements =
+                                        replacements.as_array().expect("get replacements failed");
+                                    let source =
+                                        replacements[0].as_str().expect("get source failed");
+                                    let target =
+                                        replacements[1].as_str().expect("get target failed");
+                                    (source.to_string(), target.to_string())
+                                })
+                                .collect_vec(),
+                        );
                     }
                 }
             }
@@ -102,17 +114,23 @@ impl OffChainArtifact {
             for (loc, _) in &all_bytecode {
                 let bytecode = all_bytecode.get(loc).expect("get bytecode failed").clone();
                 let abi = all_abi.get(loc).expect("get abi failed").clone();
-                let source_map = all_source_map.get(loc).expect("get source_map failed").clone();
+                let source_map = all_source_map
+                    .get(loc)
+                    .expect("get source_map failed")
+                    .clone();
                 let source_map_replacements = all_source_maps_replacement
                     .get(loc)
-                    .map(|x| x.clone())
+                    .cloned()
                     .unwrap_or(vec![]);
-                contracts.insert(loc.clone(), ContractArtifact {
-                    deploy_bytecode: bytecode,
-                    abi,
-                    source_map,
-                    source_map_replacements,
-                });
+                contracts.insert(
+                    loc.clone(),
+                    ContractArtifact {
+                        deploy_bytecode: bytecode,
+                        abi,
+                        source_map,
+                        source_map_replacements,
+                    },
+                );
             }
             artifacts.push(Self {
                 contracts,

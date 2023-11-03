@@ -93,6 +93,16 @@ impl CoverageResult {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SuccintCoverageResult {
+    pub instruction_coverage: usize,
+    pub total_instructions: usize,
+    pub branch_coverage: usize,
+    pub total_branches: usize,
+    pub address: EVMAddress,
+}
+
+
+#[derive(Clone, Debug, Serialize)]
 pub struct CoverageReport {
     pub coverage: HashMap<String, CoverageResult>,
     #[serde(skip)]
@@ -105,6 +115,20 @@ impl CoverageReport {
             coverage: HashMap::new(),
             files: Default::default(),
         }
+    }
+
+    pub fn succint(&self) -> HashMap<String, SuccintCoverageResult> {
+        let mut succint_cov_map = HashMap::new();
+        for (contract, cov) in &self.coverage {
+            succint_cov_map.insert(contract.clone(), SuccintCoverageResult {
+                instruction_coverage: cov.instruction_coverage,
+                total_instructions: cov.total_instructions,
+                branch_coverage: cov.branch_coverage,
+                total_branches: cov.total_branches,
+                address: cov.address,
+            });
+        }
+        succint_cov_map
     }
 
     pub fn to_string(&self) -> String {
@@ -138,35 +162,59 @@ impl CoverageReport {
     }
 
     pub fn dump_file(&self, work_dir: String) {
+        // write text file
         let mut text_file = OpenOptions::new()
             .write(true)
             .append(false)
             .create(true)
             .truncate(true)
-            .open(format!("{}/cov_{}.txt", work_dir.clone(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros()))
+            .open(format!("{}/coverage.txt", work_dir.clone()))
             .unwrap();
         text_file.write_all(self.to_string().as_bytes()).unwrap();
         text_file.flush().unwrap();
 
-        let mut json_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/cov_{}.json", work_dir, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros()))
-            .unwrap();
-        json_file.write_all(serde_json::to_string(self).unwrap().as_bytes()).unwrap();
-        json_file.flush().unwrap();
 
+        // write file information
         let mut file_json_file = OpenOptions::new()
             .write(true)
             .append(false)
             .create(true)
             .truncate(true)
-            .open(format!("{}/../files.json", work_dir))
+            .open(format!("{}/files.json", work_dir))
             .unwrap();
         file_json_file.write_all(serde_json::to_string(&self.files).unwrap().as_bytes()).unwrap();
         file_json_file.flush().unwrap();
+
+
+        // write json file
+        let mut json_file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}/coverage.json", work_dir))
+            .unwrap();
+        json_file.write_all(serde_json::to_string(self).unwrap().as_bytes()).unwrap();
+        json_file.flush().unwrap();
+
+        // write succint json file
+        let succint_cov_map = self.succint();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros();
+        if !Path::new(&format!("{}/coverage", work_dir)).exists() {
+            fs::create_dir_all(format!("{}/coverage", work_dir)).unwrap();
+        }
+        let mut diff_json_file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}/coverage/cov_{}.json", work_dir, timestamp))
+            .unwrap();
+        diff_json_file.write_all(serde_json::to_string(&succint_cov_map).unwrap().as_bytes()).unwrap();
+        diff_json_file.flush().unwrap();
     }
 
     pub fn summarize(&self) {
@@ -188,11 +236,6 @@ impl Coverage {
         address_to_name: HashMap<EVMAddress, String>,
         work_dir: String,
     ) -> Self {
-        let work_dir = format!("{}/coverage", work_dir);
-        if !Path::new(&work_dir).exists() {
-            fs::create_dir_all(&work_dir).unwrap();
-        }
-
         Self {
             pc_coverage: HashMap::new(),
             total_instr_set: HashMap::new(),
