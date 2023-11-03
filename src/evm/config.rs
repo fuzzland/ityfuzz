@@ -82,6 +82,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub integer_overflow_oracle: bool,
     pub builder: Option<BuildJob>,
     pub local_files_basedir_pattern: Option<String>,
+    pub load_corpus: String,
     #[cfg(feature = "use_presets")]
     pub preset_file_path: String,
 }

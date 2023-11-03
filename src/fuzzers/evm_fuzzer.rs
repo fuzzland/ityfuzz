@@ -576,13 +576,61 @@ pub fn evm_fuzzer(
             EVMMinimizer::new(evm_executor_ref.clone()),
             config.work_dir,
         );
+
+    let initial_vm_state = artifacts.initial_state.clone();
+    let mut testcases = vec![];
+    let to_load_glob: String;
+
+    if let Some(files) = config.replay_file.clone() {
+        to_load_glob = files;
+    } else {
+        to_load_glob = config.load_corpus;
+    }
+
+    if !to_load_glob.is_empty() {
+        'process_file: for file in glob(to_load_glob.as_str()).expect("Failed to read glob pattern") {
+            let mut f = File::open(file.as_ref().expect("glob issue")).expect("Failed to open file");
+            let mut transactions = String::new();
+            let mut deserialized_transactions = vec![];
+            f.read_to_string(&mut transactions)
+                .expect("Failed to read file");
+            for txn in transactions.split("\n") {
+                if txn.len() < 4 {
+                    continue;
+                }
+                let deserialized_tx = serde_json::from_slice::<ConciseEVMInput>(txn.as_bytes());
+                if deserialized_tx.is_err() {
+                    println!("Failed to deserialize file: {:?}", file);
+                    continue 'process_file;
+                }
+                deserialized_transactions.push(deserialized_tx.unwrap());
+            }
+            testcases.push(deserialized_transactions);
+        }
+    }
+
+
     match config.replay_file {
         None => {
+            // load initial corpus
+            for testcase in testcases {
+                let mut vm_state = initial_vm_state.clone();
+                for txn in testcase {
+                    let (inp, call_until) = txn.to_input(vm_state.clone());
+                    unsafe {
+                        CALL_UNTIL = call_until;
+                    }
+                    fuzzer
+                        .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
+                        .unwrap();
+                    vm_state = state.get_execution_result().new_state.clone();
+                }
+            }
             fuzzer
                 .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
                 .expect("Fuzzing failed");
         }
-        Some(files) => {
+        Some(_) => {
             unsafe {
                 EVAL_COVERAGE = true;
             }
@@ -596,29 +644,14 @@ pub fn evm_fuzzer(
                 .host
                 .add_middlewares(printer.clone());
 
-            let initial_vm_state = artifacts.initial_state.clone();
-            for file in glob(files.as_str()).expect("Failed to read glob pattern") {
-                let mut f = File::open(file.expect("glob issue")).expect("Failed to open file");
-                let mut transactions = String::new();
-                f.read_to_string(&mut transactions)
-                    .expect("Failed to read file");
-
+            for testcase in testcases {
                 let mut vm_state = initial_vm_state.clone();
-
                 let mut idx = 0;
-
-                for txn in transactions.split("\n") {
+                for txn in testcase {
                     idx += 1;
                     // let splitter = txn.split(" ").collect::<Vec<&str>>();
-                    if txn.len() < 4 {
-                        continue;
-                    }
                     println!("============ Execution {} ===============", idx);
-
-                    // [is_step] [caller] [target] [input] [value]
-                    let temp = txn.as_bytes();
-                    let temp = ConciseEVMInput::deserialize_concise(temp);
-                    let (inp, call_until) = temp.to_input(vm_state.clone());
+                    let (inp, call_until) = txn.to_input(vm_state.clone());
                     printer.borrow_mut().cleanup();
 
                     unsafe {
