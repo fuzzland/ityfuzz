@@ -609,7 +609,7 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
     )
 }
 
-pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) {
+pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: &String) {
     // key: full_path, value: file_content
     let mut file_contents = HashMap::<String, String>::new();
     // panic!("{:?}", orginal);

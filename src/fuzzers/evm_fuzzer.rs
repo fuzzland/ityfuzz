@@ -328,7 +328,7 @@ pub fn evm_fuzzer(
         artifacts.address_to_sourcemap.clone()
     };
 
-    modify_concolic_skip(&mut srcmap, config.work_dir.clone());
+    modify_concolic_skip(&mut srcmap, &config.work_dir);
 
     let srcmap = SourceMapMap {
         address_to_sourcemap: srcmap,

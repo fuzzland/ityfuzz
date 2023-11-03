@@ -1,7 +1,7 @@
 use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
 use crate::evm::bytecode_analyzer;
 use crate::evm::config::StorageFetchingMode;
-use crate::evm::contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader};
+use crate::evm::contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader, save_builder_addr_source_code, modify_concolic_skip};
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
 
 use crate::evm::host::FuzzHost;
@@ -29,7 +29,7 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 
 use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJob};
-use crate::evm::corpus_initializer::ABIMap;
+use crate::evm::corpus_initializer::{ABIMap, SourceMapMap};
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::types::{convert_u256_to_h160, EVMAddress, EVMU256};
 use itertools::Itertools;
@@ -341,7 +341,7 @@ where
                     let build_job =
                         builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
 
-                    if let Some(job) = build_job {
+                    if let Some(mut job) = build_job {
                         abi = Some(job.abi.clone());
                         // replace the code with the one from builder
                         // println!("replace code for {:?} with builder's", address_h160);
@@ -350,7 +350,15 @@ where
                             .metadata_map_mut()
                             .get_mut::<ArtifactInfoMetadata>()
                             .expect("artifact info metadata")
-                            .add(address_h160, job);
+                            .add(address_h160, job.clone());
+
+                        let srcmap = job.get_sourcemap(
+                            contract_code.bytecode.to_vec()
+                        );
+
+                        save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
+                        let mut global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
+                        modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
                     }
                 }
 
