@@ -42,6 +42,7 @@ pub struct ABIConfig {
     pub is_static: bool,
     pub is_payable: bool,
     pub is_constructor: bool,
+    #[serde(default)]
     pub should_add_corpus: bool,
 }
 
@@ -543,15 +544,15 @@ impl ContractLoader {
         if candidates.len() == 0 {
             candidates = all_candidates;
         }
-        
+
         let diffs = candidates.iter().map(|(idx, loc)| {
             let artifact = &offchain_artifacts[*idx].contracts[loc];
             is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
         }).collect::<Vec<_>>();
-        
+
         let mut min_diff = usize::MAX;
         let mut selected_idx = 0;
-        
+
         for (idx, diff) in diffs.iter().enumerate() {
             if *diff < min_diff {
                 min_diff = *diff;
@@ -703,7 +704,7 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
     )
 }
 
-pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) {
+pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: &String) {
     // key: full_path, value: file_content
     let mut file_contents = HashMap::<String, String>::new();
     // panic!("{:?}", orginal);
@@ -737,7 +738,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
             let re = Regex::new(r"^(library|contract|function)(.|\n)*\}$").unwrap();
             // println!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
             if re.is_match(&mapped_source) {
-                // update loc's skip_on_concolic to true
+                // update loc's pc_has_source_match to true
                 source_map.as_mut().unwrap().insert(
                     pc,
                     SourceMapLocation {
@@ -745,7 +746,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
                         length: loc.length,
                         file: loc.file,
                         file_idx: loc.file_idx,
-                        skip_on_concolic: true,
+                        pc_has_source_match: true,
                     },
                 );
                 // println!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
