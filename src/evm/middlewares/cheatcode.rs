@@ -3,11 +3,11 @@ use std::cmp::min;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::{BitAnd, Not};
 
 use alloy_sol_types::{SolInterface, SolValue};
 use alloy_primitives::{Address, Log as RawLog, B256, Bytes as AlloyBytes};
 use bytes::Bytes;
-use foundry_cheatcodes::CHEATCODE_ADDRESS;
 use foundry_cheatcodes::Vm::{self, VmCalls, CallerMode};
 use libafl::prelude::Input;
 use revm_interpreter::{Interpreter, opcode, InstructionResult};
@@ -23,6 +23,12 @@ use crate::state::{HasCaller, HasItyState};
 use crate::evm::types::EVMAddress;
 use crate::evm::input::{ConciseEVMInput, EVMInputT};
 use super::middleware::{Middleware, MiddlewareType};
+
+/// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
+/// address(bytes20(uint160(uint256(keccak256('hevm cheat code')))))
+pub const CHEATCODE_ADDRESS: B160 = B160([
+    113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
+]);
 
 /// Solidity revert prefix.
 ///
@@ -131,6 +137,7 @@ pub enum ExpectedCallType {
     Count,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum OpcodeType {
     /// CALL cheatcode address
     CheatCall,
@@ -179,8 +186,7 @@ where
         state: &mut S,
     ) {
         let op = interp.current_opcode();
-        let contract_addr = &interp.contract().address;
-        match get_opcode_type(op, contract_addr) {
+        match get_opcode_type(op, interp) {
             OpcodeType::CheatCall => self.cheat_call(interp, host, state),
             OpcodeType::RealCall => self.real_call(interp, &mut host.expected_calls),
             OpcodeType::Storage => self.record_accesses(interp),
@@ -223,9 +229,22 @@ where
         host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
     ) {
-        let (input, caller, tx_origin) = (&interp.contract().input, &interp.contract().caller, &host.env.tx.caller.clone());
+        let op = interp.current_opcode();
+        let calldata = unsafe { pop_cheatcall_stack(interp, op) };
+        if let Err(err) = calldata {
+            println!("[cheatcode] failed to get calldata {:?}", err);
+            interp.instruction_result = err;
+            let _ = interp.stack.push(U256::ZERO);
+            interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
+            return;
+        }
+
+        let (input, out_offset, out_len) = calldata.unwrap();
+        let (caller, tx_origin) = (&interp.contract().caller, &host.env.tx.caller.clone());
         // handle vm calls
-        let res = match VmCalls::abi_decode(input, false).expect("decode cheatcode failed") {
+        let vm_call = VmCalls::abi_decode(&input, false).expect("decode cheatcode failed");
+        println!("[cheatcode] vm.{:?}", vm_call);
+        let res = match vm_call {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
             VmCalls::roll(args) => self.roll(&mut host.env, args),
             VmCalls::fee(args) => self.fee(&mut host.env, args),
@@ -263,12 +282,12 @@ where
             VmCalls::expectCall_5(args) => self.expect_call5(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(&mut host.expected_calls, args),
+            VmCalls::addr(args) => self.addr(args),
             _ => None,
         };
 
         // set up return data
-        let op = interp.current_opcode();
-        let (out_offset, out_len) = unsafe { pop_return_location(interp, op) };
+        interp.instruction_result = InstructionResult::Continue;
         interp.return_data_buffer = Bytes::new();
         if let Some(return_data) = res {
             interp.return_data_buffer = Bytes::from(return_data);
@@ -276,7 +295,6 @@ where
         let target_len = min(out_len, interp.return_data_buffer.len());
         interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
         let _ = interp.stack.push(U256::from(1));
-
         // step over the instruction
         interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
     }
@@ -802,6 +820,13 @@ where
         let Vm::expectCallMinGas_1Call { callee, msgValue, data, count, .. } = args;
         expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
     }
+
+    /// Gets the address for a given private key.
+    fn addr(&self, args: Vm::addrCall) -> Option<Vec<u8>> {
+        let Vm::addrCall { privateKey } = args;
+        let address: Address = privateKey.to_be_bytes::<{ U256::BYTES }>()[..20].try_into().unwrap();
+        Some(address.abi_encode())
+    }
 }
 
 impl Prank {
@@ -825,14 +850,56 @@ impl Prank {
     }
 }
 
-unsafe fn pop_return_location(interp: &mut Interpreter, op: u8) -> (usize, usize) {
+macro_rules! memory_resize {
+    ($interp:expr, $offset:expr, $len:expr) => {{
+        let len: usize = $len;
+        let offset: usize = $offset;
+        let new_size = {
+            let x = offset.saturating_add(len);
+            // Rounds up `x` to the closest multiple of 32. If `x % 32 == 0` then `x` is returned.
+            let r = x.bitand(31).not().wrapping_add(1).bitand(31);
+            x.checked_add(r)
+        };
+
+        if let Some(new_size) = new_size {
+            #[cfg(feature = "memory_limit")]
+            if new_size > ($interp.memory_limit as usize) {
+                return Err(InstructionResult::MemoryLimitOOG);
+            }
+            if new_size > $interp.memory.len() {
+                $interp.memory.resize(new_size);
+            }
+        } else {
+            return Err(InstructionResult::MemoryOOG);
+        }
+    }};
+}
+
+unsafe fn pop_cheatcall_stack(interp: &mut Interpreter, op: u8) -> Result<(Bytes, usize, usize), InstructionResult> {
+    // Pop gas, addr, val
     if op == opcode::CALL || op == opcode::CALLCODE {
         let _ = interp.stack.pop_unsafe();
     }
-    let (_, _, _, _) = interp.stack.pop4_unsafe();
-    let (out_offset, out_len) = interp.stack.pop2_unsafe();
+    let _ = interp.stack.pop2_unsafe();
 
-    (out_offset.as_limbs()[0] as usize, out_len.as_limbs()[0] as usize)
+    let (in_offset, in_len, out_offset, out_len) = {
+        let (in_offset, in_len, out_offset, out_len) = interp.stack.pop4_unsafe();
+        (
+            in_offset.as_limbs()[0] as usize,
+            in_len.as_limbs()[0] as usize,
+            out_offset.as_limbs()[0] as usize,
+            out_len.as_limbs()[0] as usize,
+        )
+    };
+
+    let input = if in_len != 0 {
+        memory_resize!(interp, in_offset, in_len);
+        Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+    } else {
+        Bytes::new()
+    };
+
+    Ok((input, out_offset, out_len))
 }
 
 fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResult> {
@@ -843,16 +910,7 @@ fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResu
         return Ok(AlloyBytes::new());
     }
 
-    // resize memory if necessary
-    let new_size = offset.saturating_add(len);
-    #[cfg(feature = "memory_limit")]
-    if new_size > interp.memory_limit as usize {
-        return Err(InstructionResult::MemoryLimitOOG);
-    }
-    if new_size > interp.memory.len() {
-        interp.memory.resize(new_size);
-    }
-
+    memory_resize!(interp, offset, len);
     Ok(AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len)))
 }
 
@@ -869,10 +927,19 @@ fn peek_log_topics(interp: &Interpreter, op: u8) -> Result<Vec<B256>, Instructio
     Ok(topics)
 }
 
-fn get_opcode_type(op: u8, contract: &B160) -> OpcodeType {
+fn get_opcode_type(op: u8, interp: &Interpreter) -> OpcodeType {
     match op {
         opcode::CALL | opcode::CALLCODE | opcode::DELEGATECALL | opcode::STATICCALL => {
-            if contract.as_slice() == CHEATCODE_ADDRESS.as_slice() {
+            let target: B160 = B160(
+                interp.stack()
+                .peek(1)
+                .unwrap()
+                .to_be_bytes::<{ U256::BYTES }>()[12..]
+                .try_into()
+                .unwrap()
+            );
+
+            if target.as_slice() == CHEATCODE_ADDRESS.as_slice() {
                 OpcodeType::CheatCall
             } else {
                 OpcodeType::RealCall
@@ -987,4 +1054,114 @@ fn expect_call_with_count(
     expecteds
         .insert(calldata, (ExpectedCallData { value, count, call_type }, 0));
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::evm::host::FuzzHost;
+    use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
+    use crate::evm::mutator::AccessPattern;
+    use crate::evm::types::{generate_random_address, EVMFuzzState, EVMU256};
+    use crate::evm::vm::{EVMExecutor, EVMState};
+    use crate::generic_vm::vm_executor::GenericVM;
+    use crate::state::FuzzState;
+    use crate::state_input::StagedVMState;
+    use bytes::Bytes;
+    use libafl::prelude::StdScheduler;
+    use revm_primitives::Bytecode;
+    use std::cell::RefCell;
+    use std::path::Path;
+    use std::rc::Rc;
+
+    use super::*;
+
+    /*
+    contract VMTest is Test {
+        function test() external {
+            string memory s = string(abi.encodePacked(block.timestamp));
+            address randomAddr = makeAddr(s);
+            uint256 random = uint160(randomAddr);
+
+            assertNotEq(block.timestamp, random);
+            vm.warp(random);
+            assertEq(block.timestamp, random);
+
+            assertNotEq(block.number, random);
+            vm.roll(random);
+            assertEq(block.number, random);
+
+            assertNotEq(block.chainid, 100);
+            vm.chainId(100);
+            assertEq(block.chainid, 100);
+        }
+    }
+    */
+    const BYTECODE: &'static str = "608060405260078054600160ff199182168117909255600b8054909116909117905534801561002d57600080fd5b506111ef8061003d6000396000f3fe608060405234801561001057600080fd5b50600436106100b45760003560e01c8063916a17c611610071578063916a17c614610126578063b5508aa91461012e578063ba414fa614610136578063e20c9f711461014e578063f8a8fd6d14610156578063fa7626d41461016057600080fd5b80631ed7831c146100b95780632ade3880146100d75780633e5e3c23146100ec5780633f7286f4146100f457806366d9a9a0146100fc57806385226c8114610111575b600080fd5b6100c161016d565b6040516100ce9190610e42565b60405180910390f35b6100df6101cf565b6040516100ce9190610edf565b6100c1610311565b6100c1610371565b6101046103d1565b6040516100ce9190610f9f565b6101196104b7565b6040516100ce9190611052565b610104610587565b61011961066d565b61013e61073d565b60405190151581526020016100ce565b6100c161086a565b61015e6108ca565b005b60075461013e9060ff1681565b606060148054806020026020016040519081016040528092919081815260200182805480156101c557602002820191906000526020600020905b81546001600160a01b031681526001909101906020018083116101a7575b5050505050905090565b6060601b805480602002602001604051908101604052809291908181526020016000905b8282101561030857600084815260208082206040805180820182526002870290920180546001600160a01b03168352600181018054835181870281018701909452808452939591948681019491929084015b828210156102f1578382906000526020600020018054610264906110b4565b80601f0160208091040260200160405190810160405280929190818152602001828054610290906110b4565b80156102dd5780601f106102b2576101008083540402835291602001916102dd565b820191906000526020600020905b8154815290600101906020018083116102c057829003601f168201915b505050505081526020019060010190610245565b5050505081525050815260200190600101906101f3565b50505050905090565b606060168054806020026020016040519081016040528092919081815260200182805480156101c5576020028201919060005260206000209081546001600160a01b031681526001909101906020018083116101a7575050505050905090565b606060158054806020026020016040519081016040528092919081815260200182805480156101c5576020028201919060005260206000209081546001600160a01b031681526001909101906020018083116101a7575050505050905090565b60606019805480602002602001604051908101604052809291908181526020016000905b828210156103085760008481526020908190206040805180820182526002860290920180546001600160a01b0316835260018101805483518187028101870190945280845293949193858301939283018282801561049f57602002820191906000526020600020906000905b82829054906101000a900460e01b6001600160e01b031916815260200190600401906020826003010492830192600103820291508084116104615790505b505050505081525050815260200190600101906103f5565b60606018805480602002602001604051908101604052809291908181526020016000905b828210156103085783829060005260206000200180546104fa906110b4565b80601f0160208091040260200160405190810160405280929190818152602001828054610526906110b4565b80156105735780601f1061054857610100808354040283529160200191610573565b820191906000526020600020905b81548152906001019060200180831161055657829003601f168201915b5050505050815260200190600101906104db565b6060601a805480602002602001604051908101604052809291908181526020016000905b828210156103085760008481526020908190206040805180820182526002860290920180546001600160a01b0316835260018101805483518187028101870190945280845293949193858301939283018282801561065557602002820191906000526020600020906000905b82829054906101000a900460e01b6001600160e01b031916815260200190600401906020826003010492830192600103820291508084116106175790505b505050505081525050815260200190600101906105ab565b60606017805480602002602001604051908101604052809291908181526020016000905b828210156103085783829060005260206000200180546106b0906110b4565b80601f01602080910402602001604051908101604052809291908181526020018280546106dc906110b4565b80156107295780601f106106fe57610100808354040283529160200191610729565b820191906000526020600020905b81548152906001019060200180831161070c57829003601f168201915b505050505081526020019060010190610691565b600754600090610100900460ff161561075f5750600754610100900460ff1690565b6000737109709ecfa91a80626ff3989d68f67f5b1dd12d3b156108655760408051737109709ecfa91a80626ff3989d68f67f5b1dd12d602082018190526519985a5b195960d21b828401528251808303840181526060830190935260009290916107ed917f667f9d70ca411d70ead50d8d5c22070dafc36ad75f3dcf5e7237b22ade9aecc4916080016110ee565b60408051601f19818403018152908290526108079161111f565b6000604051808303816000865af19150503d8060008114610844576040519150601f19603f3d011682016040523d82523d6000602084013e610849565b606091505b5091505080806020019051810190610861919061113b565b9150505b919050565b606060138054806020026020016040519081016040528092919081815260200182805480156101c5576020028201919060005260206000209081546001600160a01b031681526001909101906020018083116101a7575050505050905090565b6040805142602082015260009101604051602081830303815290604052905060006108f482610a72565b90506001600160a01b03811661090a4282610a84565b6040516372eb5f8160e11b815260048101829052737109709ecfa91a80626ff3989d68f67f5b1dd12d9063e5d6bf0290602401600060405180830381600087803b15801561095757600080fd5b505af115801561096b573d6000803e3d6000fd5b505050506109794282610baf565b6109834382610a84565b6040516301f7b4f360e41b815260048101829052737109709ecfa91a80626ff3989d68f67f5b1dd12d90631f7b4f3090602401600060405180830381600087803b1580156109d057600080fd5b505af11580156109e4573d6000803e3d6000fd5b505050506109f24382610baf565b6109fd466064610a84565b604051632024eee960e11b815260646004820152737109709ecfa91a80626ff3989d68f67f5b1dd12d90634049ddd290602401600060405180830381600087803b158015610a4a57600080fd5b505af1158015610a5e573d6000803e3d6000fd5b50505050610a6d466064610baf565b505050565b6000610a7d82610c20565b5092915050565b808203610bab577f41304facd9323d75b11bcdd609cb38effffdb05710f7caf0e9b16c6d9d709f50604051610af59060208082526022908201527f4572726f723a206120213d2062206e6f7420736174697366696564205b75696e604082015261745d60f01b606082015260800190565b60405180910390a160408051818152600a81830152690808080808081319599d60b21b60608201526020810184905290517fb2de2fbe801a0df6c0cbddfd448ba3c41d48a040ca35c56c8196ef0fcae721a89181900360800190a160408051818152600a81830152690808080808149a59da1d60b21b60608201526020810183905290517fb2de2fbe801a0df6c0cbddfd448ba3c41d48a040ca35c56c8196ef0fcae721a89181900360800190a1610bab610d36565b5050565b808214610bab577f41304facd9323d75b11bcdd609cb38effffdb05710f7caf0e9b16c6d9d709f50604051610af59060208082526022908201527f4572726f723a2061203d3d2062206e6f7420736174697366696564205b75696e604082015261745d60f01b606082015260800190565b60008082604051602001610c34919061111f565b60408051808303601f190181529082905280516020909101206001625e79b760e01b03198252600482018190529150737109709ecfa91a80626ff3989d68f67f5b1dd12d9063ffa1864990602401602060405180830381865afa158015610c9f573d6000803e3d6000fd5b505050506040513d601f19601f82011682018060405250810190610cc39190611164565b6040516318caf8e360e31b8152909250737109709ecfa91a80626ff3989d68f67f5b1dd12d9063c657c71890610cff908590879060040161118d565b600060405180830381600087803b158015610d1957600080fd5b505af1158015610d2d573d6000803e3d6000fd5b50505050915091565b737109709ecfa91a80626ff3989d68f67f5b1dd12d3b15610e315760408051737109709ecfa91a80626ff3989d68f67f5b1dd12d602082018190526519985a5b195960d21b9282019290925260016060820152600091907f70ca10bbd0dbfd9020a9f4b13402c16cb120705e0d1c0aeab10fa353ae586fc49060800160408051601f1981840301815290829052610dd092916020016110ee565b60408051601f1981840301815290829052610dea9161111f565b6000604051808303816000865af19150503d8060008114610e27576040519150601f19603f3d011682016040523d82523d6000602084013e610e2c565b606091505b505050505b6007805461ff001916610100179055565b6020808252825182820181905260009190848201906040850190845b81811015610e835783516001600160a01b031683529284019291840191600101610e5e565b50909695505050505050565b60005b83811015610eaa578181015183820152602001610e92565b50506000910152565b60008151808452610ecb816020860160208601610e8f565b601f01601f19169290920160200192915050565b602080825282518282018190526000919060409081850190600581811b8701840188860187805b85811015610f8f57603f198b8503018752825180516001600160a01b031685528901518985018990528051898601819052908a0190606081881b870181019190870190855b81811015610f7957605f19898503018352610f67848651610eb3565b948e01949350918d0191600101610f4b565b505050978a019794505091880191600101610f06565b50919a9950505050505050505050565b60006020808301818452808551808352604092508286019150828160051b8701018488016000805b8481101561104357898403603f19018652825180516001600160a01b03168552880151888501889052805188860181905290890190839060608701905b8083101561102e5783516001600160e01b0319168252928b019260019290920191908b0190611004565b50978a01979550505091870191600101610fc7565b50919998505050505050505050565b6000602080830181845280855180835260408601915060408160051b870101925083870160005b828110156110a757603f19888603018452611095858351610eb3565b94509285019290850190600101611079565b5092979650505050505050565b600181811c908216806110c857607f821691505b6020821081036110e857634e487b7160e01b600052602260045260246000fd5b50919050565b6001600160e01b0319831681528151600090611111816004850160208701610e8f565b919091016004019392505050565b60008251611131818460208701610e8f565b9190910192915050565b60006020828403121561114d57600080fd5b8151801515811461115d57600080fd5b9392505050565b60006020828403121561117657600080fd5b81516001600160a01b038116811461115d57600080fd5b6001600160a01b03831681526040602082018190526000906111b190830184610eb3565b94935050505056fea264697066735822122059ef7cf7423935eef1a9e8c7f566ef711d444b32e7236d4d2819d7622c40a5c064736f6c63430008150033";
+
+    #[test]
+    fn test_foundry_contract() {
+        let mut state: EVMFuzzState = FuzzState::new(0);
+        let path = Path::new("work_dir");
+        if !path.exists() {
+            std::fs::create_dir(path).unwrap();
+        }
+        let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+        fuzz_host.set_code(
+            CHEATCODE_ADDRESS,
+            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+            &mut state,
+        );
+
+        let mut evm_executor: EVMExecutor<
+            EVMInput,
+            EVMFuzzState,
+            EVMState,
+            ConciseEVMInput,
+            StdScheduler<EVMFuzzState>,
+        > = EVMExecutor::new(fuzz_host,generate_random_address(&mut state));
+
+        let bytecode = hex::decode(BYTECODE).unwrap();
+        let contract_addr = evm_executor.deploy(
+            Bytecode::new_raw(Bytes::from(bytecode)),
+            None,
+            generate_random_address(&mut state),
+            &mut FuzzState::new(0),
+        ).unwrap();
+        println!("deployed to address: {:?}", contract_addr);
+
+        let code_addrs = evm_executor.host.code.keys().cloned().collect::<Vec<_>>();
+        println!("code_addrs: {:?}", code_addrs);
+
+        // test()
+        let function_hash = hex::decode("f8a8fd6d").unwrap();
+        let input = EVMInput {
+            caller: generate_random_address(&mut state),
+            contract: contract_addr,
+            data: None,
+            sstate: StagedVMState::new_uninitialized(),
+            sstate_idx: 0,
+            txn_value: Some(EVMU256::ZERO),
+            step: false,
+            env: Default::default(),
+            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+            #[cfg(feature = "flashloan_v2")]
+            liquidation_percent: 0,
+            direct_data: Bytes::from(
+                [
+                    function_hash.clone(),
+                    hex::decode("0000000000000000000000000000000000000000000000000000000000000000")
+                        .unwrap(),
+                ]
+                .concat(),
+            ),
+            #[cfg(feature = "flashloan_v2")]
+            input_type: EVMInputTy::ABI,
+            randomness: vec![],
+            repeat: 1,
+        };
+        let mut state = FuzzState::new(0);
+        let res = evm_executor.execute(&input, &mut state);
+        assert_eq!(res.reverted, false);
+    }
 }
