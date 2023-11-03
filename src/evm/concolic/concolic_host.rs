@@ -592,7 +592,7 @@ pub struct ConcolicHost<I, VS> {
 }
 
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>, , num_threads: usize) -> Self {
+    pub fn new(testcase_ref: Arc<EVMInput>, num_threads: usize) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
