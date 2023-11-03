@@ -13,7 +13,7 @@ use crate::{
     evm::contract_utils::{
         parse_buildjob_result_sourcemap, save_builder_source_code, FIX_DEPLOYER,
     },
-    evm::host::FuzzHost,
+    evm::{host::FuzzHost, onchain},
     evm::{
         abi::BoxedABI,
         contract_utils::{copy_local_source_code, modify_concolic_skip},
@@ -532,7 +532,7 @@ pub fn evm_fuzzer(
         ))));
     }
 
-    if let Some(m) = onchain_middleware {
+    if let Some(m) = onchain_middleware.clone() {
         m.borrow_mut().add_abi(artifacts.address_to_abi.clone());
     }
 
@@ -609,6 +609,21 @@ pub fn evm_fuzzer(
         }
     }
 
+    macro_rules! load_code {
+        ($txn: expr) => {
+            if let Some(onchain_mid) = onchain_middleware.clone() {
+                onchain_mid.borrow_mut().load_code(
+                    $txn.contract,
+                    &mut evm_executor_ref.clone().deref().borrow_mut().host,
+                    false,
+                    true,
+                    false,
+                    $txn.caller,
+                    state
+                );
+            } 
+        };
+    }
 
     match config.replay_file {
         None => {
@@ -616,6 +631,7 @@ pub fn evm_fuzzer(
             for testcase in testcases {
                 let mut vm_state = initial_vm_state.clone();
                 for txn in testcase {
+                    load_code!(txn);
                     let (inp, call_until) = txn.to_input(vm_state.clone());
                     unsafe {
                         CALL_UNTIL = call_until;
@@ -648,6 +664,7 @@ pub fn evm_fuzzer(
                 let mut vm_state = initial_vm_state.clone();
                 let mut idx = 0;
                 for txn in testcase {
+                    load_code!(txn);
                     idx += 1;
                     // let splitter = txn.split(" ").collect::<Vec<&str>>();
                     println!("============ Execution {} ===============", idx);
