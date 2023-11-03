@@ -704,7 +704,7 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
     )
 }
 
-pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) {
+pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: &String) {
     // key: full_path, value: file_content
     let mut file_contents = HashMap::<String, String>::new();
     // panic!("{:?}", orginal);
@@ -738,7 +738,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
             let re = Regex::new(r"^(library|contract|function)(.|\n)*\}$").unwrap();
             // println!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
             if re.is_match(&mapped_source) {
-                // update loc's skip_on_concolic to true
+                // update loc's pc_has_source_match to true
                 source_map.as_mut().unwrap().insert(
                     pc,
                     SourceMapLocation {
@@ -746,7 +746,7 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: String) 
                         length: loc.length,
                         file: loc.file,
                         file_idx: loc.file_idx,
-                        skip_on_concolic: true,
+                        pc_has_source_match: true,
                     },
                 );
                 // println!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
