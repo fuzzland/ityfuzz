@@ -465,8 +465,8 @@ impl<S> PowerABIScheduler<S> {
             }
         };
         let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect(format!(
-            "function signature {} @ {:?} @ {:?} not found in FUNCTION_SIG ({:?})", 
-            hex::encode(tc_func), input.get_contract(), input.get_input_type(), input
+            "function signature {} @ {:?} not found in FUNCTION_SIG", 
+            hex::encode(tc_func), input.get_contract()
         ).as_str()) };
         let tc_func_slug = {
             let amount_args = tc_func_name.matches(',').count() + {
