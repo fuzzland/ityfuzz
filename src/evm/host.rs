@@ -36,6 +36,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 use crate::evm::vm::{
     EVMState, PostExecutionCtx, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC,
@@ -626,7 +627,7 @@ where
             if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
-                // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 return (
                     InstructionResult::AddressUnboundedStaticCall,
                     Gas::new(0),
@@ -640,7 +641,7 @@ where
             if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
-                // println!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
@@ -664,7 +665,7 @@ where
                     input.context.address,
                     interp.program_counter(),
                 ));
-                // println!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
+                // debug!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
                 push_interp!();
                 return (
                     InstructionResult::ArbitraryExternalCallAddressBounded(
@@ -1001,8 +1002,8 @@ where
 {
     fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         unsafe {
-            // println!("pc: {}", interp.program_counter());
-            // println!("{:?}", *interp.instruction_pointer);
+            // debug!("pc: {}", interp.program_counter());
+            // debug!("{:?}", *interp.instruction_pointer);
             invoke_middlewares!(self, interp, state, on_step);
             if IS_FAST_CALL_STATIC {
                 return Continue;
@@ -1015,10 +1016,10 @@ where
             }
             match *interp.instruction_pointer {
                 // 0xfd => {
-                //     println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
+                //     debug!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
                 // }
                 // 0x31 | 0x47 => {
-                //     println!("host setp balance");
+                //     debug!("host setp balance");
                 //     std::thread::sleep(std::time::Duration::from_secs(3));
                 // }
                 0x57 => {
@@ -1155,7 +1156,7 @@ where
                     };
                     {
                         RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1)) as usize;
-                        // println!("RET_OFFSET: {}", RET_OFFSET);
+                        // debug!("RET_OFFSET: {}", RET_OFFSET);
                         RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as usize;
                     }
                     self._pc = interp.program_counter();
@@ -1215,7 +1216,7 @@ where
     }
 
     fn code(&mut self, address: EVMAddress) -> Option<(Arc<BytecodeLocked>, bool)> {
-        // println!("code");
+        // debug!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
             None => Some((Arc::new(BytecodeLocked::default()), true)),
@@ -1307,7 +1308,7 @@ where
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards");
             let timestamp = now.as_nanos();
-            println!("log@{} {:?}", timestamp, hex::encode(_data));
+            debug!("log@{} {:?}", timestamp, hex::encode(_data));
         }
     }
 
@@ -1363,7 +1364,7 @@ where
                     }
 
                     if unknown_sigs >= sigs.len() / 30 {
-                        println!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
+                        debug!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
                         let abis = fetch_abi_heimdall(contract_code_str)
                             .iter()
                             .map(|abi| {
@@ -1453,14 +1454,14 @@ where
         let value = EVMU256::from(input.transfer.value);
         if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
             let sender = input.transfer.source;
-            println!("call sender: {:?}", sender);
+            debug!("call sender: {:?}", sender);
             let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
                 *balance
             } else {
                 self.evmstate.set_balance(sender, self.next_slot);
                 self.next_slot
             };
-            // println!("call sender balance: {}", current);
+            // debug!("call sender balance: {}", current);
             if current < value {
                 return (Revert, Gas::new(0), Bytes::new());
             }

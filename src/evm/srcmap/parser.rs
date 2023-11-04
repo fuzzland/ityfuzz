@@ -328,6 +328,7 @@ pub fn decode_instructions_with_replacement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tracing::debug;
 
     #[test]
     fn test_decode_instruction() {
@@ -342,7 +343,7 @@ mod tests {
 
         for (idx, srcmap) in res {
             if srcmap.file.is_some() {
-                println!("{}: {:?}", idx, srcmap);
+                debug!("{}: {:?}", idx, srcmap);
             }
         }
     }
@@ -361,7 +362,7 @@ mod tests {
 
         for (idx, srcmap) in res.iter().sorted_by_key(|(idx, _)| *idx) {
             if srcmap.file.is_some() {
-                println!("{}: {:?}", idx, srcmap);
+                debug!("{}: {:?}", idx, srcmap);
             }
         }
     }

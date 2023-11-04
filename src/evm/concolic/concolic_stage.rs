@@ -24,7 +24,7 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
-
+use tracing::debug;
 pub struct ConcolicStage<OT> {
     pub enabled: bool,
     pub allow_symbolic_addresses: bool,
@@ -101,7 +101,7 @@ where
             .clone();
 
         for idx in &meta.interesting_idx {
-            println!("Running concolic execution on testcase #{}", idx);
+            debug!("Running concolic execution on testcase #{}", idx);
 
             let testcase = state
                 .corpus()
@@ -160,7 +160,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                // println!("We have a solution from concolic execution: {}", solution.to_string());
+                // debug!("We have a solution from concolic execution: {}", solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 
@@ -184,7 +184,7 @@ where
                         }
                     }
                 }
-                // println!("new testcase: {:?}", new_testcase);
+                // debug!("new testcase: {:?}", new_testcase);
                 testcases.push(new_testcase);
             }
 

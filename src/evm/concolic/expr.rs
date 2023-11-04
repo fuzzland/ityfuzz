@@ -1,5 +1,6 @@
 use crate::evm::types::EVMU256;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ConcolicOp {
@@ -81,7 +82,7 @@ impl Expr {
     }
 
     pub fn pretty_print(&self) {
-        println!("{}", self.pretty_print_helper(0));
+        debug!("{}", self.pretty_print_helper(0));
     }
 
     pub fn pretty_print_str(&self) -> String {

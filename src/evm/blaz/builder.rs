@@ -24,6 +24,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct BuildJob {
@@ -54,13 +55,13 @@ impl BuildJob {
             "{}onchain/{}/{:?}?needs={}",
             self.build_server, chain, addr, NEEDS
         );
-        println!("Submitting artifact build job to {}", url);
+        debug!("Submitting artifact build job to {}", url);
         let resp = client.get(&url).send().expect("submit onchain job failed");
 
         let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
             .expect("parse json failed");
         if json["code"].as_u64().expect("get status failed") != 200 {
-            println!("submit onchain job failed for {:?}", addr);
+            error!("submit onchain job failed for {:?}", addr);
             return None;
         }
         Some(JobContext::new(
@@ -117,7 +118,7 @@ impl JobContext {
         let client = get_client();
         let url = format!("{}task/{}/", unsafe { BUILD_SERVER }, self.id);
         loop {
-            println!("Retrieving artifact build job from {}", url);
+            debug!("Retrieving artifact build job from {}", url);
             let resp = client
                 .get(&url)
                 .send()
@@ -125,12 +126,12 @@ impl JobContext {
             let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
                 .expect("parse json failed");
             if json["code"].as_u64().expect("get status failed") != 200 {
-                println!("retrieve onchain job failed for {:?}", self.id);
+                error!("retrieve onchain job failed for {:?}", self.id);
                 return None;
             }
             let status = json["status"].as_str().expect("get status failed");
             if status == "error" {
-                println!("retrieve onchain job failed for {:?} due to error", self.id);
+                error!("retrieve onchain job failed for {:?} due to error", self.id);
                 return None;
             }
 
@@ -191,7 +192,7 @@ impl BuildJobResult {
         let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed"))
             .expect("parse json failed");
         if json["success"].as_bool().expect("get status failed") != true {
-            println!("retrieve onchain job failed for {:?}", url);
+            error!("retrieve onchain job failed for {:?}", url);
             return None;
         }
         Self::from_json(&json)
@@ -221,7 +222,7 @@ impl BuildJobResult {
                 Value::Number(v) => v.as_u64().unwrap() as usize,
                 Value::String(v) => v.parse::<usize>().unwrap(),
                 _ => {
-                    println!("{:?} is not a valid source id", v["id"]);
+                    error!("{:?} is not a valid source id", v["id"]);
                     return None;
                 }
             };
@@ -350,7 +351,7 @@ mod tests {
     // fn test_from_json_url() {
     //     let url = "https://storage.googleapis.com/faas_bucket_1/client_builds/fc0fc148-0e8e-4352-9f5f-d49f9fd421c1-results.json?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=client-project-rw%40adept-vigil-394020.iam.gserviceaccount.com%2F20230821%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230821T040509Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=09b8e8e4b92400e58d15e7f20f97c44ce5c7903e3bf251c6a3ce92a645cc0b9080bc6a58e39fbb10d3ac9835b53c98d51b1fdf9ea6c795bb4dfcb303ea2a41fd851f984ad67b9590d6f4a98300431a009b47c4797c8731de50a8525613d8d7f8b01cd4e5af05e8278207cdfb563149bdbb1d8f632bb7737a2bacba1c28a4116f6164519c13d9c49fe6fee43b40bd6db844bc9ac601e9b55259b7405bdcfbdee6fbe3f9e0f64e69a2656935a8b86997634a0df1fcd2c1c7a4914a24899b6db2e63c4bede49d6cd49a1cc07359357abc33d8acd76ba8ee8061281f1d566f3cd480eacff374c188090a2d336f02a199907ef7b81f00eb11ed1fe33f7c807903656c";
     //     let result = BuildJobResult::from_json_url(url.to_string()).expect("get result failed");
-    //     println!("{:?}", result);
+    //     debug!("{:?}", result);
     // }
     //
     // #[test]
@@ -359,13 +360,13 @@ mod tests {
     //     let chain = Chain::ETH;
     //
     //     let job = BuildJob::submit_onchain_job(chain, addr.unwrap()).expect("submit onchain job failed");
-    //     println!("{:?}", job.id);
+    //     debug!("{:?}", job.id);
     // }
     //
     // #[test]
     // fn test_wait_build_job() {
     //     let job = JobContext::new("fc0fc148-0e8e-4352-9f5f-d49f9fd421c1".to_string());
     //     let result = job.wait_build_job().expect("wait build job failed");
-    //     println!("{:?}", result.abi);
+    //     debug!("{:?}", result.abi);
     // }
 }

@@ -19,6 +19,7 @@ use crypto::digest::Digest;
 use crypto::sha3::Sha3;
 use libafl::corpus::Corpus;
 use libafl::prelude::{HasCorpus, HasMetadata, Input, UsesInput};
+use tracing::debug;
 
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasRand, State};
@@ -243,7 +244,7 @@ where
             // BALANCE
             0x31 => {
                 let address = convert_u256_to_h160(interp.stack.peek(0).unwrap());
-                println!("onchain balance for {:?}", address);
+                debug!("onchain balance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
@@ -251,7 +252,7 @@ where
             // 	SELFBALANCE
             0x47 => {
                 let address = interp.contract.address;
-                println!("onchain selfbalance for {:?}", address);
+                debug!("onchain selfbalance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
@@ -336,7 +337,7 @@ where
 
 
 impl<VS, I, S> OnChain<VS, I, S>
-where 
+where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     S: State
         + HasRand
@@ -359,7 +360,7 @@ where
         is_proxy_call: bool,
         caller: EVMAddress,
         state: &mut S,
-    ) where 
+    ) where
         SC: Scheduler<State = S> + Clone,
     {
 
@@ -378,53 +379,53 @@ where
         if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) || !should_setup_abi {
             return;
         }
-    
+
         // setup abi
         self.loaded_abi.insert(address_h160);
-    
+
         let mut parsed_abi = vec![];
         if let Some(abis) = self.address_to_abi.get(&address_h160) {
             parsed_abi = abis.clone();
         } else {
             let mut abi = None;
             if let Some(builder) = &self.builder {
-                println!("onchain job {:?}", address_h160);
+                debug!("onchain job {:?}", address_h160);
                 let build_job =
                     builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
-    
+
             if let Some(mut job) = build_job {
                 abi = Some(job.abi.clone());
                 // replace the code with the one from builder
-                // println!("replace code for {:?} with builder's", address_h160);
+                // debug!("replace code for {:?} with builder's", address_h160);
                 // host.set_codedata(address_h160, contract_code.clone());
                 state
                     .metadata_map_mut()
                     .get_mut::<ArtifactInfoMetadata>()
                     .expect("artifact info metadata")
                     .add(address_h160, job.clone());
-    
+
                 let srcmap = job.get_sourcemap(
                     contract_code.bytecode.to_vec()
                 );
-    
+
                 save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
                 let mut global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
                 modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
             }
         }
-    
+
             if abi.is_none() {
-                println!("fetching abi {:?}", address_h160);
+                debug!("fetching abi {:?}", address_h160);
                 abi = self.endpoint.fetch_abi(address_h160);
             }
-    
+
             match abi {
                 Some(ref abi_ins) => parsed_abi = ContractLoader::parse_abi_str(abi_ins),
                 None => {
                     // 1. Extract abi from bytecode, and see do we have any function sig available in state
                     // 2. Use Heimdall to extract abi
                     // 3. Reconfirm on failures of heimdall
-                    println!("Contract {:?} has no abi", address_h160);
+                    debug!("Contract {:?} has no abi", address_h160);
                     let contract_code_str = hex::encode(contract_code.bytes());
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
@@ -437,9 +438,9 @@ where
                             unknown_sigs += 1;
                         }
                     }
-    
+
                     if unknown_sigs >= sigs.len() / 30 {
-                        println!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
+                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
                         let abis = fetch_abi_heimdall(contract_code_str)
                             .iter()
                             .map(|abi| {
@@ -480,7 +481,7 @@ where
                     host.add_one_hashes(caller, hash);
                 }
             }
-            println!(
+            debug!(
                 "Propagating hashes {:?} for proxy {:?}",
                 abi_hashes_to_add
                     .iter()
@@ -500,7 +501,7 @@ where
         }
         let target = if is_proxy_call { caller } else { address_h160 };
         state.add_address(&target);
-    
+
         // notify flashloan and blacklisting flashloan addresses
         #[cfg(feature = "flashloan_v2")]
         {
@@ -521,7 +522,7 @@ where
                 return;
             }
         }
-    
+
         parsed_abi
             .iter()
             .filter(|v| !v.is_constructor)
@@ -531,7 +532,7 @@ where
                 if abi.is_static {
                     return;
                 }
-    
+
                 let mut abi_instance = get_abi_type_boxed(&abi.abi);
                 abi_instance.set_func_with_signature(
                     abi.function,
@@ -539,7 +540,7 @@ where
                     &abi.abi,
                 );
                 register_abi_instance(target, abi_instance.clone(), state);
-    
+
                 let input = EVMInput {
                     caller: state.get_rand_caller(),
                     contract: target,
@@ -552,7 +553,7 @@ where
                         None
                     },
                     step: false,
-    
+
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                     #[cfg(feature = "flashloan_v2")]

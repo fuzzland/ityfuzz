@@ -32,6 +32,7 @@ use std::io::Write;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CallType {
@@ -203,7 +204,7 @@ where
             let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
             let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
             let arg = if interp.memory.len() < offset {
-                println!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
+                debug!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
                 "unknown".to_string()
             } else if interp.memory.len() < offset + len {
                 hex::encode(interp.memory.data[offset..].to_vec())
@@ -240,7 +241,7 @@ where
                     return;
                 }
             };
-    
+
             let call_type = match unsafe { *interp.instruction_pointer } {
                 0xf1 => CallType::Call,
                 0xf2 => CallType::CallCode,
@@ -250,18 +251,18 @@ where
                     return;
                 }
             };
-    
+
             self.current_layer += 1;
-    
+
             let arg_offset = as_u64(arg_offset) as usize;
             let arg_len = as_u64(arg_len) as usize;
-    
+
             let arg = if interp.memory.len() < arg_offset + arg_len {
                 hex::encode(interp.memory.data[arg_len..].to_vec())
             } else {
                 hex::encode(interp.memory.get_slice(arg_offset, arg_len))
             };
-    
+
             let caller = interp.contract.address;
             let address = match *interp.instruction_pointer {
                 0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
@@ -270,21 +271,21 @@ where
                     unreachable!()
                 }
             };
-    
+
             let value = match *interp.instruction_pointer {
                 0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
                 _ => EVMU256::ZERO,
             };
-    
+
             let target = convert_u256_to_h160(address);
-    
+
             let caller_code_address = interp.contract.code_address;
             let caller_code = host
                 .code
                 .get(&interp.contract.code_address)
                 .map(|code| Vec::from(code.bytecode()))
                 .unwrap_or(vec![]);
-    
+
             self.offsets = 0;
             self.results.data.push((self.current_layer, SingleCall {
                 call_type,
@@ -307,7 +308,7 @@ where
                 results: "".to_string(),
             }));
         }
-        
+
     }
 
     unsafe fn on_return(

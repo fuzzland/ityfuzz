@@ -23,6 +23,7 @@ use libafl::inputs::Input;
 use libafl::prelude::{HasCorpus, State, UsesInput};
 use libafl::state::{HasMetadata, HasRand};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -253,14 +254,14 @@ where
                     is_erc20 = true;
                 }
             } else {
-                println!("Ignoring token {:?}", addr);
+                debug!("Ignoring token {:?}", addr);
             }
         }
 
         // if the contract is pair
         if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
             self.pair_address.insert(addr.clone());
-            println!("pair detected @ address {:?}", addr);
+            debug!("pair detected @ address {:?}", addr);
             is_pair = true;
         }
 
@@ -279,7 +280,7 @@ where
         );
         if slots.len() == 3 {
             let slot = slots[0];
-            // println!("pairslots: {:?} {:?}", pair, slot);
+            // debug!("pairslots: {:?} {:?}", pair, slot);
             self.flashloan_oracle
                 .deref()
                 .borrow_mut()
@@ -377,7 +378,7 @@ where
             return;
         }
         let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-        // println!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
+        // debug!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
 
         macro_rules! make_transfer_call_success {
             () => {
@@ -425,7 +426,7 @@ where
             [0xa9, 0x05, 0x9c, 0xbb] => {
                 let dst = EVMAddress::from_slice(&data[16..36]);
                 let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
-                // println!(
+                // debug!(
                 //     "transfer from {:?} to {:?} amount {:?}",
                 //     interp.contract.address, dst, amount
                 // );

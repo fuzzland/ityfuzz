@@ -121,3 +121,7 @@ foundry-abi = { git = "https://github.com/foundry-rs/foundry.git", rev = "dee418
 alloy-sol-types = "0.4.1"
 alloy-dyn-abi = "0.4.1"
 alloy-primitives = "0.4.1"
+
+# logging
+tracing = "0.1"
+tracing-subscriber = "0.3"

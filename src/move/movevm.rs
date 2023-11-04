@@ -209,7 +209,7 @@ impl<I, S> MoveVM<I, S> {
         for value in return_values {
             interp.operand_stack.push(value);
         }
-        // println!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
+        // debug!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
         true
     }
 }
@@ -427,7 +427,7 @@ where
         _deployed_address: AccountAddress,
         state: &mut S,
     ) -> Option<AccountAddress> {
-        // println!("deploying module dep: {:?}", module.self_id());
+        // debug!("deploying module dep: {:?}", module.self_id());
 
         if !state.metadata_map_mut().contains::<TypeTagInfoMeta>() {
             state.metadata_map_mut().insert(TypeTagInfoMeta::new());
@@ -443,7 +443,7 @@ where
                                                 deployed_module_idx.clone(),
                                                 &module).expect("internal deploy error");
         for f in &self.loader.module_cache.read().functions[func_off..] {
-            // println!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
+            // debug!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx, f.name.as_str(), f.parameter_types, f.return_types());
             self.functions
                 .entry(deployed_module_idx.clone())
                 .or_insert_with(HashMap::new)
@@ -506,9 +506,9 @@ where
             .get(input.function_name())
             .unwrap();
 
-        // println!("running input: {:?}", input.function_name());
+        // debug!("running input: {:?}", input.function_name());
 
-        // println!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
+        // debug!("running {:?} {:?}", initial_function.name.as_str(), initial_function.scope);
 
 
         // setup interpreter
@@ -544,17 +544,17 @@ where
         let mut native_called = false;
         let mut gas_meter = UnmeteredGasMeter {};
 
-        // println!("running {:?} with args {:?}", initial_function.name.as_str(), input.args());
+        // debug!("running {:?} with args {:?}", initial_function.name.as_str(), input.args());
 
 
         loop {
             let resolver = current_frame.resolver(vm_state.link_context(), &self.loader);
             let ret =
                 current_frame.execute_code(&resolver, &mut interp, &mut vm_state, &mut gas_meter, &mut MoveVMTracer{});
-            // println!("{:?}", ret);
+            // debug!("{:?}", ret);
 
             if ret.is_err() {
-                // println!("reverted {:?}", ret);
+                // debug!("reverted {:?}", ret);
                 reverted = true;
                 break;
             }
@@ -576,7 +576,7 @@ where
                     let func = resolver.function_from_handle(fh_idx);
 
                     if func.is_native() {
-                        // println!("calling native function: {:?}", func.name.as_str());
+                        // debug!("calling native function: {:?}", func.name.as_str());
                         native_called = true;
                         if !Self::call_native(
                             func,
@@ -596,11 +596,11 @@ where
                     }
                     let argc = func.parameters.len();
                     let mut locals = Locals::new(func.local_count());
-                    // println!("function: {:?} with {} args ({})", func.name, func.local_count(), func.parameters.len());
+                    // debug!("function: {:?} with {} args ({})", func.name, func.local_count(), func.parameters.len());
                     for i in 0..argc {
                         locals.store_loc(argc - i - 1, interp.operand_stack.pop().unwrap(), false).unwrap();
                     }
-                    // println!("locals: {:?}", locals);
+                    // debug!("locals: {:?}", locals);
                     call_stack.push(current_frame);
                     current_frame = Frame {
                         pc: 0,
@@ -657,7 +657,7 @@ where
 
         let mut out: MoveOutput = MoveOutput { vars: vec![] };
 
-        // println!("{:?}", interp.operand_stack.value);
+        // debug!("{:?}", interp.operand_stack.value);
 
         macro_rules! add_value {
             ($v: expr, $t: expr, $gate: expr) => {
@@ -679,9 +679,9 @@ where
                 .iter()
         ) {
             add_value!(v, t, Gate::Own);
-            // println!("adding as own: {:?}", v);
+            // debug!("adding as own: {:?}", v);
             out.vars.push((t.clone(), v.clone()));
-            // println!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
+            // debug!("val: {:?} {:?}", v, resolver.loader.type_to_type_tag(t));
         }
 
         if native_called {
@@ -705,14 +705,14 @@ where
                     }
                 };
 
-                // println!("adding as {:?}: {:?}", gate, value);
+                // debug!("adding as {:?}: {:?}", gate, value);
 
                 add_value!(value, ty, gate);
-                // println!("transfer: {:?}", t);
+                // debug!("transfer: {:?}", t);
             }
 
             for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
-                // println!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
+                // debug!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
                 if st.name.as_str() == "AAAA__fuzzland_move_bug" {
                     if let Value(ValueImpl::Container(Container::Struct(data))) = v {
                         let data = (**data).borrow();
@@ -807,6 +807,7 @@ mod tests {
     use super::*;
     use crate::r#move::input::{CloneableValue, ConciseMoveInput};
     use crate::state::FuzzState;
+    use tracing::debug;
 
     use move_vm_types::values::{ContainerRef, Reference, ReferenceImpl, Value, ValueImpl};
 
@@ -904,19 +905,19 @@ mod tests {
              "test2",
         );
 
-        println!("{:?}", res);
+        debug!("{:?}", res);
         let (ty, struct_obj) = res.output.vars[0].clone();
         assert_eq!(ty, Struct(CachedStructIndex {
             0: 0,
         }));
 
         if let ValueImpl::Container(borrowed) = struct_obj.0.borrow() {
-            println!("borrowed: {:?} from {:?}", borrowed, struct_obj);
+            debug!("borrowed: {:?} from {:?}", borrowed, struct_obj);
             let reference = Value(ValueImpl::ContainerRef(ContainerRef::Local(
                 borrowed.copy_by_ref(),
             )));
 
-            println!("reference: {:?} from {:?}", reference, struct_obj);
+            debug!("reference: {:?} from {:?}", reference, struct_obj);
 
 
             let res2 = _run(module_hex,
@@ -924,7 +925,7 @@ mod tests {
                             "test1",
             );
 
-            println!("{:?}", res2);
+            debug!("{:?}", res2);
         } else {
             unreachable!()
         }

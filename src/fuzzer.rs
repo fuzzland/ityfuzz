@@ -50,6 +50,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
+use tracing::info;
 
 pub static mut RUN_FOREVER: bool = false;
 pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
@@ -311,9 +312,9 @@ macro_rules! dump_file {
                 txn_text
             );
             if $print {
-                println!("============= New Corpus Item =============");
-                println!("{}", data);
-                println!("==========================================");
+                info!("============= New Corpus Item =============");
+                info!("{}", data);
+                info!("==========================================");
             }
 
             // write to file
@@ -585,13 +586,13 @@ where
                     .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
                     .join("\n");
 
-                println!("\n\n\n😊😊 Found violations! \n\n");
+                info!("\n\n\n😊😊 Found violations! \n\n");
                 let cur_report = format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     txn_text
                 );
-                println!("{}", cur_report);
+                info!("{}", cur_report);
 
                 solution::generate_test(cur_report.clone(), minimized);
 

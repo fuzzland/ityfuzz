@@ -88,6 +88,7 @@ use crate::input::{ConciseSerde, VMInputT};
 use crate::oracle::BugMetadata;
 use primitive_types::{H160, U256};
 use revm_primitives::Bytecode;
+use tracing::{debug, error, info};
 
 pub fn evm_fuzzer(
     config: Config<
@@ -104,7 +105,7 @@ pub fn evm_fuzzer(
     >,
     state: &mut EVMFuzzState,
 ) {
-    println!("\n\n ================ EVM Fuzzer Start ===================\n\n");
+    info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
@@ -112,7 +113,7 @@ pub fn evm_fuzzer(
         std::fs::create_dir(path).unwrap();
     }
 
-    let monitor = SimpleMonitor::new(|s| println!("{}", s));
+    let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
     let scheduler = PowerABIScheduler::new();
@@ -147,7 +148,7 @@ pub fn evm_fuzzer(
                     mid.borrow_mut().add_builder(builder);
                 }
 
-                println!("onchain middleware enabled");
+                debug!("onchain middleware enabled");
                 fuzz_host.add_middlewares(mid.clone());
                 mid
             })
@@ -217,12 +218,12 @@ pub fn evm_fuzzer(
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
 
     if config.sha3_bypass {
-        println!("sha3 bypass enabled");
+        debug!("sha3 bypass enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Sha3Bypass::new(sha3_taint.clone()))));
     }
 
     if config.reentrancy_oracle {
-        println!("reentrancy oracle enabled");
+        debug!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
     }
 
@@ -279,7 +280,7 @@ pub fn evm_fuzzer(
                     for abi in abis {
                         for (idx, function_sig) in function_sigs.iter().enumerate() {
                             if abi.function == function_sig.value {
-                                println!("matched: {:?} @ {:?}", abi.function, addr);
+                                debug!("matched: {:?} @ {:?}", abi.function, addr);
                                 sig_to_addr_abi_map
                                     .insert(function_sig.value, (addr.clone(), abi.clone()));
                                 function_sigs.remove(idx);
@@ -302,7 +303,7 @@ pub fn evm_fuzzer(
         } else {
             (false, vec![], HashMap::new())
         };
-        println!(
+        debug!(
             "has_preset_match: {} {}",
             has_preset_match,
             matched_templates.len()
@@ -605,7 +606,7 @@ pub fn evm_fuzzer(
                 }
                 let deserialized_tx = serde_json::from_slice::<ConciseEVMInput>(txn.as_bytes());
                 if deserialized_tx.is_err() {
-                    println!("Failed to deserialize file: {:?}", file);
+                    error!("Failed to deserialize file: {:?}", file);
                     continue 'process_file;
                 }
                 deserialized_transactions.push(deserialized_tx.unwrap());
@@ -626,7 +627,7 @@ pub fn evm_fuzzer(
                     $txn.caller,
                     state
                 );
-            } 
+            }
         };
     }
 
@@ -672,7 +673,7 @@ pub fn evm_fuzzer(
                     load_code!(txn);
                     idx += 1;
                     // let splitter = txn.split(" ").collect::<Vec<&str>>();
-                    println!("============ Execution {} ===============", idx);
+                    info!("============ Execution {} ===============", idx);
                     let (inp, call_until) = txn.to_input(vm_state.clone());
                     printer.borrow_mut().cleanup();
 
@@ -684,24 +685,24 @@ pub fn evm_fuzzer(
                         .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                         .unwrap();
 
-                    println!("============ Execution result {} =============", idx);
-                    println!(
+                    info!("============ Execution result {} =============", idx);
+                    info!(
                         "reverted: {:?}",
                         state.get_execution_result().clone().reverted
                     );
-                    println!("call trace:\n{}", printer.deref().borrow().get_trace());
-                    println!(
+                    info!("call trace:\n{}", printer.deref().borrow().get_trace());
+                    info!(
                         "output: {:?}",
                         hex::encode(state.get_execution_result().clone().output)
                     );
 
-                    // println!(
+                    // debug!(
                     //     "new_state: {:?}",
                     //     state.get_execution_result().clone().new_state.state
                     // );
 
                     vm_state = state.get_execution_result().new_state.clone();
-                    println!("================================================");
+                    info!("================================================");
                 }
             }
 

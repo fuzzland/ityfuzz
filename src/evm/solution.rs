@@ -8,6 +8,7 @@ use std::{
 
 use handlebars::Handlebars;
 use serde::Serialize;
+use tracing::{debug, error};
 
 use super::{
     types::{EVMAddress, EVMU256},
@@ -50,17 +51,17 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
 pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     let trace: Vec<Tx> = inputs.iter().map(Tx::from).collect();
     if trace.is_empty() {
-        println!("generate_test error: no trace found.");
+        error!("generate_test error: no trace found.");
         return;
     }
     let args = TemplateArgs::new(solution, trace);
     if args.is_err() {
-        println!("skip generating test: not evm solution.");
+        debug!("skip generating test: not evm solution.");
         return;
     }
     let args = args.unwrap();
     if fs::create_dir_all(&args.output_dir).is_err() {
-        println!(
+        error!(
             "generate_test error: failed to create output dir {:?}.",
             args.output_dir
         );
@@ -71,14 +72,14 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         .register_template_file("foundry_test", TEMPLATE_PATH)
         .is_err()
     {
-        println!("generate_test error: failed to register template file.");
+        error!("generate_test error: failed to register template file.");
         return;
     }
 
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
     let mut output = File::create(&path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
-        println!("generate_test error: failed to render template: {:?}", e);
+        error!("generate_test error: failed to render template: {:?}", e);
     }
 }
 

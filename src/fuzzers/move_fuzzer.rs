@@ -27,6 +27,7 @@ use itertools::Itertools;
 use crate::feedback::{CmpFeedback, DataflowFeedback, OracleFeedback};
 use crate::generic_vm::vm_executor::GenericVM;
 use crate::oracle::Oracle;
+use tracing::info;
 
 #[cfg(feature = "sui_support")]
 use crate::r#move::corpus_initializer::MoveCorpusInitializer;
@@ -62,7 +63,7 @@ pub fn move_fuzzer(
 ) {
     let mut state: MoveFuzzState = FuzzState::new(config.seed);
     let mut vm: MoveVM<MoveFunctionInput, MoveFuzzState> = MoveVM::new();
-    let monitor = SimpleMonitor::new(|s| println!("{}", s));
+    let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
 
     let infant_scheduler = MoveVMStateScheduler {
