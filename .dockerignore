@@ -3,3 +3,4 @@
 /.git
 /.idea
 *.log
+Cargo.lock

@@ -277,6 +277,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     offchain_config_file: String,
 
+    /// Load corpus from directory. If not specified, will use empty corpus.
+    #[arg(long, default_value = "")]
+    load_corpus: String,
+
     /// Preset file. If specified, will load the preset file and match past exploit template.
     #[cfg(feature = "use_presets")]
     #[arg(long, default_value = "")]
@@ -627,6 +631,7 @@ pub fn evm_main(args: EvmArgs) {
         },
         #[cfg(feature = "use_presets")]
         preset_file_path: args.preset_file_path,
+        load_corpus: args.load_corpus,
     };
 
     if let FuzzerTypes::CMP = config.fuzzer_type {
