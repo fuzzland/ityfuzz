@@ -1,12 +1,12 @@
-/// Analysis passes for EVM bytecode
-
-use crate::mutation_utils::ConstantPoolMetadata;
-use libafl::state::{HasMetadata, State};
-
-use revm_primitives::Bytecode;
 use std::collections::HashSet;
+
+use libafl::state::{HasMetadata, State};
 use revm_interpreter::opcode::JUMPI;
+use revm_primitives::Bytecode;
+
 use crate::evm::bytecode_iterator::all_bytecode;
+/// Analysis passes for EVM bytecode
+use crate::mutation_utils::ConstantPoolMetadata;
 
 /// Find all constants in the bytecode by observing PUSH instructions.
 ///
@@ -40,8 +40,8 @@ pub fn find_constants(bytecode: &Bytecode) -> HashSet<Vec<u8>> {
     constants
 }
 
-/// Add constants in smart contract to the global state's [`ConstantPoolMetadata`]
-/// this can be costly, ensure sampling to be cheap
+/// Add constants in smart contract to the global state's
+/// [`ConstantPoolMetadata`] this can be costly, ensure sampling to be cheap
 pub fn add_analysis_result_to_state<S>(bytecode: &Bytecode, state: &mut S)
 where
     S: HasMetadata + State,
@@ -65,10 +65,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bytes::Bytes;
     use revm_primitives::Bytecode;
     use tracing::debug;
+
+    use super::*;
 
     #[test]
     fn test_find_constants() {
@@ -78,10 +79,7 @@ mod tests {
         let constants = find_constants(&bytecode);
         debug!(
             "{:?}",
-            constants
-                .iter()
-                .map(|x| hex::encode(x))
-                .collect::<Vec<String>>()
+            constants.iter().map(|x| hex::encode(x)).collect::<Vec<String>>()
         );
     }
 }

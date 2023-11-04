@@ -1,10 +1,16 @@
-use crate::evm::blaz::builder::BuildJobResult;
-use crate::evm::blaz::{get_client, is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
+use std::error::Error;
+
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::HashMap;
 use serde_json::Value;
-use std::error::Error;
+
+use crate::evm::blaz::{
+    builder::BuildJobResult,
+    get_client,
+    is_bytecode_similar_lax,
+    is_bytecode_similar_strict_ranking,
+};
 
 #[derive(Clone, Debug)]
 pub struct ContractArtifact {
@@ -46,8 +52,7 @@ impl OffChainArtifact {
                 let contract_obj = contract.as_object().expect("get contract failed");
                 for (contract_name, bytecode) in contract_obj {
                     let bytecode = bytecode.as_str().expect("get bytecode failed");
-                    let bytecode =
-                        Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                    let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
                     all_bytecode.insert((filename.clone(), contract_name.clone()), bytecode);
                 }
             }
@@ -68,10 +73,7 @@ impl OffChainArtifact {
                 let contract_obj = contract.as_object().expect("get contract failed");
                 for (contract_name, source_map) in contract_obj {
                     let source_map = source_map.as_str().expect("get source_map failed");
-                    all_source_map.insert(
-                        (filename.clone(), contract_name.clone()),
-                        source_map.to_string(),
-                    );
+                    all_source_map.insert((filename.clone(), contract_name.clone()), source_map.to_string());
                 }
             }
 
@@ -88,12 +90,9 @@ impl OffChainArtifact {
                             source_map_replacements
                                 .iter()
                                 .map(|replacements| {
-                                    let replacements =
-                                        replacements.as_array().expect("get replacements failed");
-                                    let source =
-                                        replacements[0].as_str().expect("get source failed");
-                                    let target =
-                                        replacements[1].as_str().expect("get target failed");
+                                    let replacements = replacements.as_array().expect("get replacements failed");
+                                    let source = replacements[0].as_str().expect("get source failed");
+                                    let target = replacements[1].as_str().expect("get target failed");
                                     (source.to_string(), target.to_string())
                                 })
                                 .collect_vec(),
@@ -114,14 +113,8 @@ impl OffChainArtifact {
             for (loc, _) in &all_bytecode {
                 let bytecode = all_bytecode.get(loc).expect("get bytecode failed").clone();
                 let abi = all_abi.get(loc).expect("get abi failed").clone();
-                let source_map = all_source_map
-                    .get(loc)
-                    .expect("get source_map failed")
-                    .clone();
-                let source_map_replacements = all_source_maps_replacement
-                    .get(loc)
-                    .cloned()
-                    .unwrap_or(vec![]);
+                let source_map = all_source_map.get(loc).expect("get source_map failed").clone();
+                let source_map_replacements = all_source_maps_replacement.get(loc).cloned().unwrap_or(vec![]);
                 contracts.insert(
                     loc.clone(),
                     ContractArtifact {
@@ -146,9 +139,9 @@ impl OffChainArtifact {
         // let mut all_candidates = vec![];
         // for (idx, artifact) in existing_artifacts.iter().enumerate() {
         //     for (loc, contract) in &artifact.contracts {
-        //         if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) {
-        //             candidates.push((idx, loc.clone()));
-        //         }
+        //         if is_bytecode_similar_lax(to_find.clone(),
+        // contract.deploy_bytecode.to_vec()) {             
+        // candidates.push((idx, loc.clone()));         }
         //         all_candidates.push((idx, loc.clone()));
         //     }
         // }
@@ -158,8 +151,8 @@ impl OffChainArtifact {
         //
         // let diffs = candidates.iter().map(|(idx, loc)| {
         //     let artifact = &existing_artifacts[*idx].contracts[loc];
-        //     is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
-        // }).collect::<Vec<_>>();
+        //     is_bytecode_similar_strict_ranking(to_find.clone(),
+        // artifact.deploy_bytecode.to_vec()) }).collect::<Vec<_>>();
         //
         // let mut min_diff = usize::MAX;
         // let mut selected_idx = 0;
@@ -171,8 +164,10 @@ impl OffChainArtifact {
         //     }
         // }
         //
-        // let contract_artifact = &existing_artifacts[candidates[selected_idx].0].contracts[&candidates[selected_idx].1];
-        // let sources = existing_artifacts[candidates[selected_idx].0].sources.clone();
+        // let contract_artifact =
+        // &existing_artifacts[candidates[selected_idx].0].contracts[&
+        // candidates[selected_idx].1]; let sources =
+        // existing_artifacts[candidates[selected_idx].0].sources.clone();
         //
         // Some(BuildJobResult::new(
         //     sources,
@@ -190,7 +185,8 @@ mod tests {
     // #[test]
     // fn test_from_url() {
     //     let url = "https://storage.googleapis.com/faas_bucket_1/client_builds/36b4bea2-2f2d-41d0-835e-db10e0a72ddf-results.json?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=client-project-rw%40adept-vigil-394020.iam.gserviceaccount.com%2F20230821%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230821T163007Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=89f3af8074712c7d5720844617064c1f62544c9b4667dbf7b910d988ef81c10c282ffcdd6160acff8a513e581b2516a6de8cda08f92788d210da110d87c00dff65c9a4f19fdb8e004b90578dd2978fbbf1c7bef7b9415579da7127651c46a2ae6115b1d425eba7c7950dc6df52925e7f4f204605c5c470fccebb922db95fa0d3ebeabfa33454ab1174e8ae8efa5b2cd7269c2edfd446cfee696d8b5172171eb3ae71db9da2f3554f52dc522ba01d60de71ba4fc5eb8040ff85a16fdf5685ba983f53728da90a672ada45e92eda1e4c88ee397027eacd36972f5f8551afbdf1ed747ce12e19a0c4b446e66b4cca6c8a177c2ee8e503d09930fa04ba464c1d6db6";
-    //     let artifact = OffChainArtifact::from_json_url(url.to_string()).expect("get artifact failed");
-    //     debug!("{:?}", artifact);
+    //     let artifact =
+    // OffChainArtifact::from_json_url(url.to_string()).expect("get artifact
+    // failed");     debug!("{:?}", artifact);
     // }
 }

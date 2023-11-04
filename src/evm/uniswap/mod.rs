@@ -1,11 +1,10 @@
-use crate::evm::abi::{AArray, AEmpty, BoxedABI, A256, A256InnerType};
-use crate::evm::onchain::endpoints::Chain;
-use crate::evm::types::{EVMAddress, EVMU256};
-use std::cell::RefCell;
-use std::ops::Deref;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{cell::RefCell, ops::Deref, rc::Rc, str::FromStr, sync::Arc};
+
+use crate::evm::{
+    abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
+    onchain::endpoints::Chain,
+    types::{EVMAddress, EVMU256},
+};
 
 #[derive(Clone, Debug)]
 pub enum UniswapProvider {
@@ -146,14 +145,7 @@ pub fn generate_uniswap_router_buy(
             None => Some((
                 abi,
                 amount_in,
-                path_ctx
-                    .route
-                    .last()
-                    .unwrap()
-                    .deref()
-                    .borrow()
-                    .uniswap_info
-                    .router,
+                path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router,
             )),
             Some(info) => Some((abi, amount_in, info.uniswap_info.router)),
         }
@@ -245,16 +237,7 @@ pub fn generate_uniswap_router_sell(
         sell_abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
 
         let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
-            None => {
-                path_ctx
-                    .route
-                    .last()
-                    .unwrap()
-                    .deref()
-                    .borrow()
-                    .uniswap_info
-                    .router
-            }
+            None => path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router,
             Some(info) => info.uniswap_info.router,
         };
 
@@ -291,42 +274,32 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             pool_fee: 25,
             router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-            init_code_hash: hex::decode(
-                "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
-            )
-            .unwrap(),
+            init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
         },
         (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
             pool_fee: 25,
             router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-            init_code_hash: hex::decode(
-                "00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5",
-            )
-            .unwrap(),
+            init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
         },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
             pool_fee: 3,
             router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
             factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
-            init_code_hash: hex::decode(
-                "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
-            )
-            .unwrap(),
+            init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
         },
-        _ => panic!(
-            "Uniswap provider {:?} @ chain {:?} not supported",
-            provider, chain
-        ),
+        _ => panic!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use tracing::debug;
+
     use super::*;
     use crate::evm::onchain::endpoints::Chain;
-    use std::str::FromStr;
-    use tracing::debug;
 
     macro_rules! wrap {
         ($x: expr) => {
@@ -339,25 +312,17 @@ mod tests {
         let t1 = TokenContext {
             swaps: vec![PathContext {
                 route: vec![wrap!(PairContext {
-                    pair_address: EVMAddress::from_str(
-                        "0x0000000000000000000000000000000000000000"
-                    )
-                    .unwrap(),
+                    pair_address: EVMAddress::from_str("0x0000000000000000000000000000000000000000").unwrap(),
                     side: 0,
-                    uniswap_info: Arc::new(get_uniswap_info(
-                        &UniswapProvider::PancakeSwap,
-                        &Chain::BSC
-                    )),
+                    uniswap_info: Arc::new(get_uniswap_info(&UniswapProvider::PancakeSwap, &Chain::BSC)),
                     initial_reserves: (Default::default(), Default::default()),
-                    next_hop: EVMAddress::from_str("0x1100000000000000000000000000000000000000")
-                        .unwrap(),
+                    next_hop: EVMAddress::from_str("0x1100000000000000000000000000000000000000").unwrap(),
                 })],
                 final_pegged_ratio: EVMU256::from(1),
                 final_pegged_pair: Rc::new(RefCell::new(None)),
             }],
             is_weth: false,
-            weth_address: EVMAddress::from_str("0xee00000000000000000000000000000000000000")
-                .unwrap(),
+            weth_address: EVMAddress::from_str("0xee00000000000000000000000000000000000000").unwrap(),
             address: EVMAddress::from_str("0xff00000000000000000000000000000000000000").unwrap(),
         };
 

@@ -1,15 +1,22 @@
-use crate::evm::abi::{BoxedABI, A256, A256InnerType};
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
-use crate::evm::presets::presets::Preset;
-use crate::evm::vm::EVMExecutor;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::HasCaller;
-use libafl::schedulers::Scheduler;
-use libafl::state::{State, HasCorpus};
-use std::fmt::Debug;
-use std::ops::Deref;
-use crate::evm::types::EVMAddress;
+use std::{fmt::Debug, ops::Deref};
+
+use libafl::{
+    schedulers::Scheduler,
+    state::{HasCorpus, State},
+};
+
+use crate::{
+    evm::{
+        abi::{A256InnerType, BoxedABI, A256},
+        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        presets::presets::Preset,
+        types::EVMAddress,
+        vm::EVMExecutor,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::HasCaller,
+};
 
 pub struct PairPreset;
 

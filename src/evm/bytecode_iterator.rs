@@ -9,8 +9,11 @@ pub fn walk_bytecode<Fn: FnOnce(usize, u8) + Copy>(bytes: Vec<u8>, it: Fn) {
     let mut i = 0;
     let last_op = *bytes.last().unwrap();
     let has_cbor = last_op != JUMP ||
-        last_op != JUMPI || last_op != STOP ||
-        last_op != INVALID || last_op != REVERT || last_op != RETURN;
+        last_op != JUMPI ||
+        last_op != STOP ||
+        last_op != INVALID ||
+        last_op != REVERT ||
+        last_op != RETURN;
 
     let cbor_len = if has_cbor && !unsafe { SKIP_CBOR } {
         // load last 2 bytes as big endian
@@ -39,8 +42,11 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
     let mut i = 0;
     let last_op = *bytes.last().unwrap();
     let has_cbor = last_op != JUMP &&
-        last_op != JUMPI && last_op != STOP &&
-        last_op != INVALID && last_op != REVERT && last_op != RETURN;
+        last_op != JUMPI &&
+        last_op != STOP &&
+        last_op != INVALID &&
+        last_op != REVERT &&
+        last_op != RETURN;
 
     let cbor_len = if has_cbor && !unsafe { SKIP_CBOR } {
         // load last 2 bytes as big endian
@@ -67,25 +73,24 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
 
 #[macro_export]
 macro_rules! skip_cbor {
-    ($e: expr) => {
-        {
-            #[cfg(not(test))]
-            unsafe {
-                SKIP_CBOR = true;
-            }
-            let res = $e;
-            #[cfg(not(test))]
-            unsafe {
-                SKIP_CBOR = false;
-            }
-            res
+    ($e: expr) => {{
+        #[cfg(not(test))]
+        unsafe {
+            SKIP_CBOR = true;
         }
-    };
+        let res = $e;
+        #[cfg(not(test))]
+        unsafe {
+            SKIP_CBOR = false;
+        }
+        res
+    }};
 }
 
 #[cfg(test)]
 mod test {
     use tracing::debug;
+
     use crate::evm::bytecode_iterator::walk_bytecode;
 
     #[test]

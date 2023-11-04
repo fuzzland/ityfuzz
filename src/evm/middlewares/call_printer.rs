@@ -1,38 +1,51 @@
-use crate::evm::blaz::builder::ArtifactInfoMetadata;
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::srcmap::parser::SourceMapAvailability::Available;
-use crate::evm::srcmap::parser::{
-    decode_instructions, pretty_print_source_map, SourceMapAvailability, SourceMapLocation,
-    SourceMapWithCode,
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    fs,
+    fs::OpenOptions,
+    io::Write,
+    ops::AddAssign,
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
 };
-use crate::evm::types::{
-    as_u64, convert_u256_to_h160, is_zero, EVMAddress, ProjectSourceMapTy, EVMU256,
-};
-use crate::evm::vm::IN_DEPLOY;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use libafl::schedulers::Scheduler;
-use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
-use revm_interpreter::Interpreter;
+use libafl::{
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, State},
+    schedulers::Scheduler,
+};
+use revm_interpreter::{
+    opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP},
+    Interpreter,
+};
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::fs;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::ops::AddAssign;
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::debug;
+
+use crate::{
+    evm::{
+        blaz::builder::ArtifactInfoMetadata,
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        middlewares::middleware::{Middleware, MiddlewareType},
+        srcmap::parser::{
+            decode_instructions,
+            pretty_print_source_map,
+            SourceMapAvailability,
+            SourceMapAvailability::Available,
+            SourceMapLocation,
+            SourceMapWithCode,
+        },
+        types::{as_u64, convert_u256_to_h160, is_zero, EVMAddress, ProjectSourceMapTy, EVMU256},
+        vm::IN_DEPLOY,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CallType {
@@ -78,10 +91,7 @@ pub struct CallPrinter {
 }
 
 impl CallPrinter {
-    pub fn new(
-        address_to_name: HashMap<EVMAddress, String>,
-        sourcemaps: ProjectSourceMapTy,
-    ) -> Self {
+    pub fn new(address_to_name: HashMap<EVMAddress, String>, sourcemaps: ProjectSourceMapTy) -> Self {
         Self {
             address_to_name,
             sourcemaps,
@@ -142,10 +152,7 @@ impl CallPrinter {
     }
 
     fn translate_address(&self, a: EVMAddress) -> String {
-        self.address_to_name
-            .get(&a)
-            .unwrap_or(&format!("{:?}", a))
-            .to_string()
+        self.address_to_name.get(&a).unwrap_or(&format!("{:?}", a)).to_string()
     }
 }
 
@@ -163,12 +170,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
         if self.entry {
             self.entry = false;
             let code_address = interp.contract.address;
@@ -204,7 +206,11 @@ where
             let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
             let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
             let arg = if interp.memory.len() < offset {
-                debug!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
+                debug!(
+                    "encountered unknown event at PC {} of contract {:?}",
+                    interp.program_counter(),
+                    interp.contract.address
+                );
                 "unknown".to_string()
             } else if interp.memory.len() < offset + len {
                 hex::encode(interp.memory.data[offset..].to_vec())
@@ -221,16 +227,18 @@ where
 
             let arg = format!("{}({})", arg, topics.join(","));
 
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type: CallType::Event,
-                caller: self.translate_address(interp.contract.caller),
-                contract: self.translate_address(interp.contract.address),
-                input: arg.clone(),
-                value: "".to_string(),
-                source: None,
-                results: "".to_string(),
-            }));
-
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type: CallType::Event,
+                    caller: self.translate_address(interp.contract.caller),
+                    contract: self.translate_address(interp.contract.address),
+                    input: arg.clone(),
+                    value: "".to_string(),
+                    source: None,
+                    results: "".to_string(),
+                },
+            ));
         }
         // external calls
         else if *interp.instruction_pointer <= 0xfa && *interp.instruction_pointer >= 0xf1 {
@@ -308,7 +316,6 @@ where
                 results: "".to_string(),
             }));
         }
-
     }
 
     unsafe fn on_return(

@@ -1,36 +1,46 @@
-use crate::evm::abi::BoxedABI;
-/// Implements LibAFL's State trait supporting our fuzzing logic.
-use crate::indexed_corpus::IndexedInMemoryCorpus;
-use crate::input::{ConciseSerde, VMInputT};
-
-use crate::state_input::StagedVMState;
-use libafl::corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase};
-use libafl::inputs::Input;
-use libafl::monitors::ClientPerfMonitor;
-use libafl::prelude::{HasMetadata, Scheduler, UsesInput, HasTestcase, CorpusId};
-use libafl_bolts::{current_nanos, bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand}};
-use std::borrow::BorrowMut;
-use std::cell::{Ref, RefMut};
-use std::collections::{HashSet, HashMap};
-use std::fmt::Debug;
-use std::time::Duration;
-
-use libafl::state::{
-    HasClientPerfMonitor, HasCorpus, HasExecutions, HasMaxSize, HasNamedMetadata, HasRand,
-    HasSolutions, State, HasLastReportTime,
+use std::{
+    borrow::BorrowMut,
+    cell::{Ref, RefMut},
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    path::Path,
+    time::Duration,
 };
 
+use libafl::{
+    corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase},
+    inputs::Input,
+    monitors::ClientPerfMonitor,
+    prelude::{CorpusId, HasMetadata, HasTestcase, Scheduler, UsesInput},
+    state::{
+        HasClientPerfMonitor,
+        HasCorpus,
+        HasExecutions,
+        HasLastReportTime,
+        HasMaxSize,
+        HasNamedMetadata,
+        HasRand,
+        HasSolutions,
+        State,
+    },
+    Error,
+};
+use libafl_bolts::{
+    bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand},
+    current_nanos,
+};
 use primitive_types::H160;
-use serde::{Deserialize, Serialize};
-
-use crate::generic_vm::vm_executor::ExecutionResult;
-use crate::generic_vm::vm_state::VMStateT;
-use libafl::Error;
-use serde::de::DeserializeOwned;
-use std::path::Path;
-use crate::evm::types::EVMAddress;
-use crate::evm::presets::presets::ExploitTemplate;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
+
+/// Implements LibAFL's State trait supporting our fuzzing logic.
+use crate::indexed_corpus::IndexedInMemoryCorpus;
+use crate::{
+    evm::{abi::BoxedABI, presets::presets::ExploitTemplate, types::EVMAddress},
+    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
+    input::{ConciseSerde, VMInputT},
+    state_input::StagedVMState,
+};
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -47,16 +57,19 @@ where
 {
     /// Get a random VMState from the infant state corpus selected by scheduler
     /// If the corpus is empty, return None
-    /// If the corpus is not empty, return Some((index of VMState in corpus, VMState))
-    fn get_infant_state<SC>(
-        &mut self,
-        scheduler: &mut SC,
-    ) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
+    /// If the corpus is not empty, return Some((index of VMState in corpus,
+    /// VMState))
+    fn get_infant_state<SC>(&mut self, scheduler: &mut SC) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
     where
         SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>;
 
     /// Add a VMState to the infant state corpus
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &mut SC, parent_idx: usize) -> usize
+    fn add_infant_state<SC>(
+        &mut self,
+        state: &StagedVMState<Loc, Addr, VS, CI>,
+        scheduler: &mut SC,
+        parent_idx: usize,
+    ) -> usize
     where
         SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>;
 }
@@ -67,7 +80,8 @@ where
 pub trait HasCaller<Addr> {
     /// Get a random address from the address set, used for ABI mutation
     fn get_rand_address(&mut self) -> Addr;
-    /// Get a random caller from the caller set, used for transaction sender mutation
+    /// Get a random caller from the caller set, used for transaction sender
+    /// mutation
     fn get_rand_caller(&mut self) -> Addr;
     /// Does the address exist in the caller set
     fn has_caller(&self, addr: &Addr) -> bool;
@@ -77,7 +91,8 @@ pub trait HasCaller<Addr> {
     fn add_address(&mut self, caller: &Addr);
 }
 
-/// [Deprecated] Trait providing functions for getting current input index in the input corpus
+/// [Deprecated] Trait providing functions for getting current input index in
+/// the input corpus
 pub trait HasCurrentInputIdx {
     /// Get the current input index in the input corpus
     fn get_current_input_idx(&self) -> usize;
@@ -97,8 +112,8 @@ where
     fn get_infant_state_state(&mut self) -> &mut InfantStateState<Loc, Addr, VS, CI>;
 }
 
-/// [Deprecated] Trait providing functions for mapping between function hash with the
-/// contract addresses that have the function
+/// [Deprecated] Trait providing functions for mapping between function hash
+/// with the contract addresses that have the function
 pub trait HasHashToAddress {
     /// Get the mapping between function hash with the address
     fn get_hash_to_address(&self) -> &std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>;
@@ -124,13 +139,19 @@ where
 }
 
 pub trait HasPresets {
-    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>);
+    fn init_presets(
+        &mut self,
+        has_matched: bool,
+        templates: Vec<ExploitTemplate>,
+        sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
+    );
     fn has_preset(&self) -> bool;
     fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)>;
 }
 
-/// The global state of ItyFuzz, containing all the information needed for fuzzing
-/// Implements LibAFL's [`State`] trait and passed to all the fuzzing components as a reference
+/// The global state of ItyFuzz, containing all the information needed for
+/// fuzzing Implements LibAFL's [`State`] trait and passed to all the fuzzing
+/// components as a reference
 ///
 /// VI: The type of input
 /// VS: The type of VMState
@@ -148,7 +169,8 @@ where
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    /// InfantStateState wraps the infant state corpus with [`State`] trait so that it is easier to use
+    /// InfantStateState wraps the infant state corpus with [`State`] trait so
+    /// that it is easier to use
     #[serde(deserialize_with = "InfantStateState::deserialize")]
     pub infant_states_state: InfantStateState<Loc, Addr, VS, CI>,
 
@@ -167,7 +189,8 @@ where
     /// Amount of total executions
     executions: usize,
 
-    /// Metadata of the state, required for implementing [HasMetadata] and [HasNamedMetadata] trait
+    /// Metadata of the state, required for implementing [HasMetadata] and
+    /// [HasNamedMetadata] trait
     metadata: SerdeAnyMap,
     named_metadata: NamedSerdeAnyMap,
 
@@ -185,14 +208,17 @@ where
     /// Random number generator, required for implementing [`HasRand`] trait
     pub rand_generator: RomuDuoJrRand,
 
-    /// Maximum size for input, required for implementing [`HasMaxSize`] trait, used mainly for limiting the size of the arrays for ETH ABI
+    /// Maximum size for input, required for implementing [`HasMaxSize`] trait,
+    /// used mainly for limiting the size of the arrays for ETH ABI
     pub max_size: usize,
 
-    /// Mapping between function hash with the contract addresses that have the function, required for implementing [`HasHashToAddress`] trait
+    /// Mapping between function hash with the contract addresses that have the
+    /// function, required for implementing [`HasHashToAddress`] trait
     pub hash_to_address: std::collections::HashMap<[u8; 4], HashSet<EVMAddress>>,
 
     /// The last time we reported progress (if available/used).
-    /// This information is used by fuzzer `maybe_report_progress` and updated by event_manager.
+    /// This information is used by fuzzer `maybe_report_progress` and updated
+    /// by event_manager.
     last_report_time: Option<Duration>,
 
     pub interesting_signatures: Vec<[u8; 4]>,
@@ -223,14 +249,16 @@ where
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.corpus().get(id)?.borrow())
     }
 
-    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.corpus().get(id)?.borrow_mut())
     }
@@ -340,7 +368,8 @@ where
 }
 
 /// InfantStateState wraps the infant state corpus
-/// shou: To use power schedule, we need to make it as a funny state lol, i'll submit a pr to libafl
+/// shou: To use power schedule, we need to make it as a funny state lol, i'll
+/// submit a pr to libafl
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InfantStateState<Loc, Addr, VS, CI>
 where
@@ -373,14 +402,16 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.corpus().get(id)?.borrow())
     }
 
-    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.corpus().get(id)?.borrow_mut())
     }
@@ -392,11 +423,11 @@ pub trait HasParent {
 }
 
 impl<Loc, Addr, VS, CI> HasParent for InfantStateState<Loc, Addr, VS, CI>
-    where
-        VS: Default + VMStateT,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+where
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     fn get_parent_idx(&self) -> usize {
         self.current_parent_idx
@@ -511,29 +542,26 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Get a infant state from the infant state corpus using the scheduler
-    fn get_infant_state<SC>(
-        &mut self,
-        scheduler: &mut SC,
-    ) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
+    fn get_infant_state<SC>(&mut self, scheduler: &mut SC) -> Option<(usize, StagedVMState<Loc, Addr, VS, CI>)>
     where
         SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     {
         let idx = scheduler
             .next(&mut self.infant_states_state)
             .expect("no more infant state");
-        let state = self
-            .infant_states_state
-            .corpus()
-            .get(idx)
-            .unwrap()
-            .borrow_mut();
+        let state = self.infant_states_state.corpus().get(idx).unwrap().borrow_mut();
 
         Some((idx.into(), state.input().clone().unwrap()))
     }
 
     /// Add a new infant state to the infant state corpus
     /// and setup the scheduler
-    fn add_infant_state<SC>(&mut self, state: &StagedVMState<Loc, Addr, VS, CI>, scheduler: &mut SC, parent_idx: usize) -> usize
+    fn add_infant_state<SC>(
+        &mut self,
+        state: &StagedVMState<Loc, Addr, VS, CI>,
+        scheduler: &mut SC,
+        parent_idx: usize,
+    ) -> usize
     where
         SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>,
     {
@@ -570,8 +598,7 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr, Out, CI> HasInfantStateState<Loc, Addr, VS, CI>
-    for FuzzState<VI, VS, Loc, Addr, Out, CI>
+impl<VI, VS, Loc, Addr, Out, CI> HasInfantStateState<Loc, Addr, VS, CI> for FuzzState<VI, VS, Loc, Addr, Out, CI>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
@@ -735,8 +762,7 @@ where
     }
 }
 
-impl<VI, VS, Loc, Addr, Out, CI> HasExecutionResult<Loc, Addr, VS, Out, CI>
-    for FuzzState<VI, VS, Loc, Addr, Out, CI>
+impl<VI, VS, Loc, Addr, Out, CI> HasExecutionResult<Loc, Addr, VS, Out, CI> for FuzzState<VI, VS, Loc, Addr, Out, CI>
 where
     VS: Default + VMStateT,
     VI: VMInputT<VS, Loc, Addr, CI> + Input,
@@ -827,7 +853,12 @@ where
     Out: Serialize + DeserializeOwned + Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    fn init_presets(&mut self, has_matched: bool, templates: Vec<ExploitTemplate>, sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>) {
+    fn init_presets(
+        &mut self,
+        has_matched: bool,
+        templates: Vec<ExploitTemplate>,
+        sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
+    ) {
         for template in templates {
             for sig in template.calls {
                 self.interesting_signatures.push(sig.value);
@@ -845,13 +876,12 @@ where
             return None;
         }
 
-        let sig = self.interesting_signatures[self.rand_generator.below(self.interesting_signatures.len() as u64) as usize];
+        let sig =
+            self.interesting_signatures[self.rand_generator.below(self.interesting_signatures.len() as u64) as usize];
 
         // find the abi
         match self.sig_to_addr_abi_map.get(&sig) {
-            Some((addr, abi)) => {
-                return Some((addr.clone(), abi.clone()))
-            },
+            Some((addr, abi)) => return Some((addr.clone(), abi.clone())),
             None => {
                 debug!("No abi found for sig: {:?}", sig);
                 return None;

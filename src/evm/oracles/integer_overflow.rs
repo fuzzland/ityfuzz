@@ -1,18 +1,25 @@
-use crate::evm::blaz::builder::{ArtifactInfoMetadata, BuildJobResult};
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::INTEGER_OVERFLOW_BUG_IDX;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::state::HasExecutionResult;
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+};
+
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::HasMetadata;
 use revm_primitives::Bytecode;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+
+use crate::{
+    evm::{
+        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
+        input::{ConciseEVMInput, EVMInput},
+        oracle::EVMBugResult,
+        oracles::INTEGER_OVERFLOW_BUG_IDX,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{Oracle, OracleCtx},
+    state::HasExecutionResult,
+};
 
 pub struct IntegerOverflowOracle {
     pub sourcemap: ProjectSourceMapTy,
@@ -20,10 +27,7 @@ pub struct IntegerOverflowOracle {
 }
 
 impl IntegerOverflowOracle {
-    pub fn new(
-        sourcemap: ProjectSourceMapTy,
-        address_to_name: HashMap<EVMAddress, String>,
-    ) -> Self {
+    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>) -> Self {
         Self {
             sourcemap,
             address_to_name,
@@ -32,18 +36,8 @@ impl IntegerOverflowOracle {
 }
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for IntegerOverflowOracle
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for IntegerOverflowOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -74,11 +68,7 @@ impl
                 pc.hash(&mut hasher);
                 let real_bug_idx = hasher.finish() << (8 + INTEGER_OVERFLOW_BUG_IDX);
 
-                let name = self
-                    .address_to_name
-                    .get(addr)
-                    .unwrap_or(&format!("{:?}", addr))
-                    .clone();
+                let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
                 let srcmap = BuildJobResult::get_sourcemap_executor(
                     ctx.fuzz_state

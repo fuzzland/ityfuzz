@@ -1,18 +1,22 @@
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    fmt::{self, Debug},
+    fs::File,
+    rc::Rc,
+};
+
 /// Configuration for the EVM fuzzer
 use crate::evm::contract_utils::{ContractInfo, ContractLoader};
-use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
-
-use crate::evm::blaz::builder::BuildJob;
-use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
-use crate::evm::blaz::offchain_config::OffchainConfig;
-use crate::evm::oracles::erc20::IERC20OracleFlashloan;
-use crate::evm::types::EVMAddress;
-use crate::oracle::{Oracle, Producer};
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::fmt::{self, Debug};
-use std::fs::File;
-use std::rc::Rc;
+use crate::{
+    evm::{
+        blaz::{builder::BuildJob, offchain_artifacts::OffChainArtifact, offchain_config::OffchainConfig},
+        onchain::endpoints::{OnChainConfig, PriceOracle},
+        oracles::erc20::IERC20OracleFlashloan,
+        types::EVMAddress,
+    },
+    oracle::{Oracle, Producer},
+};
 
 pub enum FuzzerTypes {
     CMP,
@@ -87,9 +91,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub preset_file_path: String,
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
-    for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
-{
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
             .field("onchain", &self.onchain)

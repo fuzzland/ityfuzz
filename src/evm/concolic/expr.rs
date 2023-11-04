@@ -1,6 +1,7 @@
-use crate::evm::types::EVMU256;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+
+use crate::evm::types::EVMU256;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ConcolicOp {
@@ -374,10 +375,13 @@ pub fn simplify(expr: Box<Expr>) -> Box<Expr> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm::concolic::expr::ConcolicOp::{
-        AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT,
+    use crate::evm::concolic::expr::{
+        simplify,
+        simplify_concat_select,
+        ConcolicOp,
+        ConcolicOp::{AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT},
+        Expr,
     };
-    use crate::evm::concolic::expr::{simplify, simplify_concat_select, ConcolicOp, Expr};
 
     #[test]
     fn test_simplify_concat_select_single() {

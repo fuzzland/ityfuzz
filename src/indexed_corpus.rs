@@ -1,15 +1,14 @@
 /// A corpus in memory with self-incementing indexes for items.
-
 use core::cell::RefCell;
 use std::cell::{Ref, RefMut};
-
-use serde::{Deserialize, Serialize};
 
 use libafl::{
     corpus::{Corpus, Testcase},
     inputs::{Input, UsesInput},
-    Error, prelude::{HasTestcase, CorpusId},
+    prelude::{CorpusId, HasTestcase},
+    Error,
 };
+use serde::{Deserialize, Serialize};
 
 pub trait HasIndexed {}
 impl<I> HasIndexed for IndexedInMemoryCorpus<I> where I: Input {}
@@ -107,7 +106,7 @@ where
     #[inline]
     fn prev(&self, idx: CorpusId) -> Option<CorpusId> {
         let idx = usize::from(idx);
-        if idx > 0 && idx < self.count(){
+        if idx > 0 && idx < self.count() {
             Some(CorpusId::from(idx - 1))
         } else {
             None
@@ -152,14 +151,16 @@ impl<I> HasTestcase for IndexedInMemoryCorpus<I>
 where
     I: Input,
 {
-    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`Ref`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase(&self, id: CorpusId) -> Result<Ref<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.get(id)?.borrow())
     }
 
-    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by [`CorpusId`].
-    /// For a normal state, this should return a [`Testcase`] in the corpus, not the objectives.
+    /// Shorthand to receive a [`RefMut`] to a stored [`Testcase`], by
+    /// [`CorpusId`]. For a normal state, this should return a [`Testcase`]
+    /// in the corpus, not the objectives.
     fn testcase_mut(&self, id: CorpusId) -> Result<RefMut<Testcase<<Self as UsesInput>::Input>>, Error> {
         Ok(self.get(id)?.borrow_mut())
     }

@@ -1,10 +1,15 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::dummy_precondition;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
 use revm_primitives::Bytecode;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        oracle::dummy_precondition,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{Oracle, OracleCtx},
+};
 
 pub struct FunctionHarnessOracle {
     pub address: EVMAddress,
@@ -34,7 +39,8 @@ impl FunctionHarnessOracle {
     }
 }
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+impl
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for FunctionHarnessOracle
 {
     fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
@@ -53,23 +59,23 @@ impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>,
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
         stage: u64,
     ) -> Vec<u64> {
-            let _harness_txn = Bytes::from(self.harness_func.clone());
-            // let res = ctx
-            //     .call_post(
-            //         if self.address.is_zero() {
-            //             ctx.input.contract
-            //         } else {
-            //             self.address
-            //         },
-            //         ctx.input.caller,
-            //         harness_txn,
-            //     )
-            //     .output;
-            // !res.iter().map(|x| *x == 0).all(|x| x)
-            unimplemented!()
+        let _harness_txn = Bytes::from(self.harness_func.clone());
+        // let res = ctx
+        //     .call_post(
+        //         if self.address.is_zero() {
+        //             ctx.input.contract
+        //         } else {
+        //             self.address
+        //         },
+        //         ctx.input.caller,
+        //         harness_txn,
+        //     )
+        //     .output;
+        // !res.iter().map(|x| *x == 0).all(|x| x)
+        unimplemented!()
     }
 }

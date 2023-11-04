@@ -1,14 +1,20 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::ECHIDNA_BUG_IDX;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::state::HasExecutionResult;
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::Bytecode;
-use std::collections::HashMap;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        oracle::EVMBugResult,
+        oracles::ECHIDNA_BUG_IDX,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{Oracle, OracleCtx},
+    state::HasExecutionResult,
+};
 
 pub struct EchidnaOracle {
     pub batch_call_txs: Vec<(EVMAddress, Bytes)>,
@@ -31,18 +37,8 @@ impl EchidnaOracle {
 }
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for EchidnaOracle
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for EchidnaOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -70,19 +66,13 @@ impl
             .enumerate()
             .map(|(idx, x)| {
                 if x {
-                    let name = self
-                        .names
-                        .get(&self.batch_call_txs[idx].1.to_vec())
-                        .unwrap();
+                    let name = self.names.get(&self.batch_call_txs[idx].1.to_vec()).unwrap();
                     let bug_idx = (idx << 8) as u64 + ECHIDNA_BUG_IDX;
                     EVMBugResult::new(
                         "echidna".to_string(),
                         bug_idx,
                         format!("{:?} violated", name),
-                        ConciseEVMInput::from_input(
-                            ctx.input,
-                            ctx.fuzz_state.get_execution_result(),
-                        ),
+                        ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         None,
                         Some(name.clone()),
                     )

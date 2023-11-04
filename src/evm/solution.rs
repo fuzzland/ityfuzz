@@ -13,7 +13,8 @@ use tracing::{debug, error};
 use super::{
     types::{EVMAddress, EVMU256},
     uniswap::{self, UniswapProvider},
-    Chain, OnChainConfig,
+    Chain,
+    OnChainConfig,
 };
 use crate::{evm::types::checksum, input::SolutionTx};
 
@@ -152,10 +153,7 @@ impl TemplateArgs {
 
         // Stepping with return
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
-        let mut trace: Vec<Tx> = trace
-            .into_iter()
-            .filter(|tx| tx.fn_selector != "0x00000000")
-            .collect();
+        let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
         setup_trace(&mut trace, &cli_args);
         let router = get_router(&cli_args.chain);
@@ -220,10 +218,7 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 
     let code = match tx.fn_signature.as_str() {
-        "" => format!(
-            "IERC20({}).transfer({}, {});",
-            tx.caller, tx.contract, tx.value
-        ),
+        "" => format!("IERC20({}).transfer({}, {});", tx.caller, tx.contract, tx.value),
         "balanceOf(address)" => format!("IERC20({}).balanceOf({});", tx.contract, tx.fn_args),
         "approve(address,uint256)" => format!("IERC20({}).approve({});", tx.contract, tx.fn_args),
         "transfer(address,uint256)" => format!("IERC20({}).transfer({});", tx.contract, tx.fn_args),
@@ -273,10 +268,7 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
     match path.parent() {
         Some(parent) => {
             let dirname = parent.file_name().unwrap().to_str().unwrap();
-            let name: String = dirname
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
+            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
             if name.is_empty() {
                 default_name
             } else {

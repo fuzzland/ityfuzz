@@ -1,21 +1,26 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::ERC20_BUG_IDX;
-use crate::evm::producers::erc20::ERC20Producer;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512};
-#[cfg(feature = "flashloan_v2")]
-use crate::evm::uniswap::TokenContext;
-use crate::evm::vm::EVMState;
-use crate::oracle::Oracle;
-use crate::state::HasExecutionResult;
-use bytes::Bytes;
-use revm_primitives::Bytecode;
-use std::cell::RefCell;
 #[cfg(feature = "flashloan_v2")]
 use std::collections::HashMap;
 #[cfg(feature = "flashloan_v2")]
 use std::ops::Deref;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
+
+use bytes::Bytes;
+use revm_primitives::Bytecode;
+
+#[cfg(feature = "flashloan_v2")]
+use crate::evm::uniswap::TokenContext;
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        oracle::EVMBugResult,
+        oracles::ERC20_BUG_IDX,
+        producers::erc20::ERC20Producer,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
+        vm::EVMState,
+    },
+    oracle::Oracle,
+    state::HasExecutionResult,
+};
 
 #[cfg(not(feature = "flashloan_v2"))]
 pub struct IERC20OracleFlashloan {
@@ -42,9 +47,7 @@ impl IERC20OracleFlashloan {
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn new(
-        erc20_producer: Rc<RefCell<ERC20Producer>>,
-    ) -> Self {
+    pub fn new(erc20_producer: Rc<RefCell<ERC20Producer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
             known_tokens: HashMap::new(),
@@ -65,18 +68,8 @@ impl IERC20OracleFlashloan {
 }
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for IERC20OracleFlashloan
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -112,9 +105,7 @@ impl
             let liquidation_percent = EVMU256::from(liquidation_percent);
             let mut liquidations_earned = Vec::new();
 
-            for ((caller, token), new_balance) in
-                self.erc20_producer.deref().borrow().balances.iter()
-            {
+            for ((caller, token), new_balance) in self.erc20_producer.deref().borrow().balances.iter() {
                 let token_info = self.known_tokens.get(token).expect("Token not found");
 
                 // prev_balance is nonexistent
@@ -136,12 +127,7 @@ impl
 
             // debug!("Liquidations earned: {:?}", liquidations_earned);
             for (caller, token_info, amount) in liquidations_earned {
-                let txs = generate_uniswap_router_sell(
-                    token_info,
-                    path_idx,
-                    amount,
-                    ctx.fuzz_state.callers_pool[0],
-                );
+                let txs = generate_uniswap_router_sell(token_info, path_idx, amount, ctx.fuzz_state.callers_pool[0]);
                 if txs.is_none() {
                     continue;
                 }
@@ -157,7 +143,8 @@ impl
             //     liquidation_txs
             // );
 
-            // debug!("Earned before liquidation: {:?}", ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
+            // debug!("Earned before liquidation: {:?}",
+            // ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
             let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
             // debug!("results: {:?}", out);
             // debug!("result state: {:?}", state.flashloan_data);
@@ -165,28 +152,15 @@ impl
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
-        exec_res
-            .new_state
-            .state
-            .flashloan_data
-            .oracle_recheck_balance
-            .clear();
-        exec_res
-            .new_state
-            .state
-            .flashloan_data
-            .oracle_recheck_reserve
-            .clear();
+        exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();
+        exec_res.new_state.state.flashloan_data.oracle_recheck_reserve.clear();
 
-        if exec_res.new_state.state.flashloan_data.earned
-            > exec_res.new_state.state.flashloan_data.owed
-            && exec_res.new_state.state.flashloan_data.earned
-                - exec_res.new_state.state.flashloan_data.owed
-                > EVMU512::from(100_000_000_000_000_000_000_000_u128)
+        if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed &&
+            exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed >
+                EVMU512::from(100_000_000_000_000_000_000_000_u128)
         // > 0.1ETH
         {
-            let net = exec_res.new_state.state.flashloan_data.earned
-                - exec_res.new_state.state.flashloan_data.owed;
+            let net = exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed;
             // we scaled by 1e24, so divide by 1e24 to get ETH
             let net_eth = net / EVMU512::from(1_000_000_000_000_000_000_000_000_u128);
             EVMBugResult::new_simple(

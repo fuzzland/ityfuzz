@@ -1,38 +1,45 @@
-use crate::fuzzer::ORACLE_OUTPUT;
+use std::{
+    borrow::BorrowMut,
+    cell::RefCell,
+    collections::HashSet,
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+    ops::Deref,
+    rc::Rc,
+};
+
+use libafl::{
+    corpus::Testcase,
+    events::EventFirer,
+    executors::ExitKind,
+    inputs::Input,
+    observers::ObserversTuple,
+    prelude::{Feedback, HasMetadata, UsesInput},
+    schedulers::Scheduler,
+    state::{HasClientPerfMonitor, HasCorpus, State},
+    Error,
+};
+use libafl_bolts::Named;
+use serde::{de::DeserializeOwned, Serialize};
+use tracing::debug;
+
 /// Implements the feedback mechanism needed by ItyFuzz.
 /// Implements Oracle, Comparison, Dataflow feedbacks.
 use crate::generic_vm::vm_executor::{GenericVM, MAP_SIZE};
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::{ConciseSerde, VMInputT};
-use crate::oracle::{BugMetadata, Oracle, OracleCtx, Producer};
-use crate::scheduler::HasVote;
-use crate::state::{HasExecutionResult, HasInfantStateState, InfantStateState};
-use crate::state_input::StagedVMState;
-use libafl::corpus::Testcase;
-use libafl::events::EventFirer;
-use libafl::executors::ExitKind;
-use libafl::inputs::Input;
-use libafl::observers::ObserversTuple;
-use libafl::prelude::{Feedback, HasMetadata, UsesInput};
-use libafl_bolts::Named;
-
-use libafl::schedulers::Scheduler;
-use libafl::state::{HasClientPerfMonitor, HasCorpus, State};
-use libafl::Error;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::fmt::{Debug, Formatter};
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::rc::Rc;
-use tracing::debug;
+use crate::{
+    fuzzer::ORACLE_OUTPUT,
+    generic_vm::vm_state::VMStateT,
+    input::{ConciseSerde, VMInputT},
+    oracle::{BugMetadata, Oracle, OracleCtx, Producer},
+    scheduler::HasVote,
+    state::{HasExecutionResult, HasInfantStateState, InfantStateState},
+    state_input::StagedVMState,
+};
 
 /// OracleFeedback is a wrapper around a set of oracles and producers.
-/// It executes the producers and then oracles after each successful execution. If any of the oracle
-/// returns true, then it returns true and report a vulnerability found.
+/// It executes the producers and then oracles after each successful execution.
+/// If any of the oracle returns true, then it returns true and report a
+/// vulnerability found.
 
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
 where
@@ -43,8 +50,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// A set of producers that produce data needed by oracles
-    producers:
-        &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// A set of oracles that check for vulnerabilities
     oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
     /// VM executor
@@ -92,21 +98,17 @@ where
         + HasMetadata
         + UsesInput<Input = I>
         + 'static,
-        I: VMInputT<VS, Loc, Addr, CI> + 'static,
-        VS: Default + VMStateT,
-        Addr: Serialize + DeserializeOwned + Debug + Clone,
-        Loc: Serialize + DeserializeOwned + Debug + Clone,
-        Out: Default + Into<Vec<u8>> + Clone,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    I: VMInputT<VS, Loc, Addr, CI> + 'static,
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    Out: Default + Into<Vec<u8>> + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`OracleFeedback`]
     pub fn new(
-        oracle: &'a mut Vec<
-            Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>,
-        >,
-        producers: &'a mut Vec<
-            Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>,
-        >,
+        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+        producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
         executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     ) -> Self {
         Self {
@@ -119,13 +121,7 @@ where
 
     /// Determines whether the current execution reproduces the bug
     /// specified in the bug_idx.
-    pub fn reproduces(
-        &mut self,
-        state: &mut S,
-        input: &S::Input,
-        bug_idx: &Vec<u64>,
-    ) -> bool {
-
+    pub fn reproduces(&mut self, state: &mut S, input: &S::Input, bug_idx: &Vec<u64>) -> bool {
         let initial_oracle_output = unsafe { ORACLE_OUTPUT.clone() };
         if state.get_execution_result().reverted {
             return false;
@@ -137,7 +133,9 @@ where
         // cleanup producers by calling `notify_end` hooks
         macro_rules! before_exit {
             () => {
-                unsafe { ORACLE_OUTPUT = initial_oracle_output; }
+                unsafe {
+                    ORACLE_OUTPUT = initial_oracle_output;
+                }
                 self.producers.iter().for_each(|producer| {
                     producer.deref().borrow_mut().notify_end(&mut oracle_ctx);
                 });
@@ -209,8 +207,8 @@ where
     }
 
     /// Called after every execution.
-    /// It executes the producers and then oracles after each successful execution.
-    /// Returns true if any of the oracle returns true.
+    /// It executes the producers and then oracles after each successful
+    /// execution. Returns true if any of the oracle returns true.
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S,
@@ -305,13 +303,15 @@ where
 
 /// DataflowFeedback is a feedback that uses dataflow analysis to determine
 /// whether a state is interesting or not.
-/// Logic: Maintains read and write map, if a write map idx is true in the read map,
-/// and that item is greater than what we have, then the state is interesting.
+/// Logic: Maintains read and write map, if a write map idx is true in the read
+/// map, and that item is greater than what we have, then the state is
+/// interesting.
 #[cfg(feature = "dataflow")]
 pub struct DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
     /// global write map that OR all the write maps from each execution
-    /// `[bool;4]` means 4 categories of write map, representing which bucket the written value fails into
-    /// 0 - 2^2, 2^2 - 2^4, 2^4 - 2^6, 2^6 - inf are 4 buckets
+    /// `[bool;4]` means 4 categories of write map, representing which bucket
+    /// the written value fails into 0 - 2^2, 2^2 - 2^4, 2^4 - 2^6, 2^6 -
+    /// inf are 4 buckets
     global_write_map: [[bool; 4]; MAP_SIZE],
     /// global read map recording whether a slot is read or not
     read_map: &'a mut [bool],
@@ -353,10 +353,7 @@ impl<'a, VS, Loc, Addr, Out, CI> DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
 impl<'a, VS, Loc, Addr, S, Out, CI, I> Feedback<S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
-    S: State
-        + HasClientPerfMonitor
-        + HasExecutionResult<Loc, Addr, VS, Out, CI>
-        + UsesInput<Input = I>,
+    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI> + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -367,7 +364,8 @@ where
         Ok(())
     }
 
-    /// Returns true if the dataflow analysis determines that the execution is interesting.
+    /// Returns true if the dataflow analysis determines that the execution is
+    /// interesting.
     fn is_interesting<EMI, OT>(
         &mut self,
         _state: &mut S,
@@ -394,7 +392,8 @@ where
                 } else {
                     3
                 };
-                // update the global write map, if the current write map is not set, then it is interesting
+                // update the global write map, if the current write map is not set, then it is
+                // interesting
                 if !self.global_write_map[i % MAP_SIZE][category] {
                     // debug!("Interesting seq: {}!!!!!!!!!!!!!!!!!", seq);
                     interesting = true;
@@ -414,31 +413,35 @@ where
 /// CmpFeedback is a feedback that uses cmp analysis to determine
 /// whether a state is interesting or not.
 ///
-/// Logic: For each comparison encountered in execution, we calculate the absolute
-/// difference (distance) between the two operands.
+/// Logic: For each comparison encountered in execution, we calculate the
+/// absolute difference (distance) between the two operands.
 /// Smaller distance means the operands are closer to each other,
-/// and thus more likely the comparison will be true, opening up more paths. Our goal is to
-/// minimize the distance between the two operands of any comparisons.
+/// and thus more likely the comparison will be true, opening up more paths. Our
+/// goal is to minimize the distance between the two operands of any
+/// comparisons.
 ///
-/// We use this distance to update the min_map, which records the minimum distance
-/// for each comparison. If the current distance is smaller than the min_map, then we update the
-/// min_map and mark the it as interesting.
+/// We use this distance to update the min_map, which records the minimum
+/// distance for each comparison. If the current distance is smaller than the
+/// min_map, then we update the min_map and mark the it as interesting.
 ///
-/// We also use a set of hashes of already encountered VMStates so that we don't re-analyze them.
+/// We also use a set of hashes of already encountered VMStates so that we don't
+/// re-analyze them.
 ///
-/// When we consider an execution interesting, we use a votable scheduler to vote on whether
-/// the VMState is interesting or not. With more votes, the VMState is more likely to be selected
-/// for fuzzing.
-///
+/// When we consider an execution interesting, we use a votable scheduler to
+/// vote on whether the VMState is interesting or not. With more votes, the
+/// VMState is more likely to be selected for fuzzing.
 #[cfg(feature = "cmp")]
 pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
     /// global min map recording the minimum distance for each comparison
     min_map: [SlotTy; MAP_SIZE],
-    /// min map recording the minimum distance for each comparison in the current execution
+    /// min map recording the minimum distance for each comparison in the
+    /// current execution
     current_map: &'a mut [SlotTy],
-    /// a set of hashes of already encountered VMStates so that we don't re-analyze them
+    /// a set of hashes of already encountered VMStates so that we don't
+    /// re-analyze them
     known_states: HashSet<u64>,
-    /// votable scheduler that can vote on whether a VMState is interesting or not
+    /// votable scheduler that can vote on whether a VMState is interesting or
+    /// not
     scheduler: SC,
     /// the VM providing information about the current execution
     vm: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
@@ -449,8 +452,7 @@ pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
     CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI>
 where
-    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
-        + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT,
     SlotTy: PartialOrd + Copy + TryFrom<u128>,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -503,8 +505,7 @@ where
         + HasInfantStateState<Loc, Addr, VS, CI>
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + UsesInput<Input = I0>,
-    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>>
-        + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
+    SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + 'static,
     SlotTy: PartialOrd + Copy,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -516,8 +517,9 @@ where
         Ok(())
     }
 
-    /// It uses scheduler voting to determine whether a VM State is interesting or not.
-    /// If it returns true, the VM State is added to corpus but not necessarily it is interesting.
+    /// It uses scheduler voting to determine whether a VM State is interesting
+    /// or not. If it returns true, the VM State is added to corpus but not
+    /// necessarily it is interesting.
     fn is_interesting<EMI, OT>(
         &mut self,
         state: &mut S0,
@@ -557,12 +559,8 @@ where
         }
 
         unsafe {
-            if self.vm.deref().borrow_mut().state_changed()
-                || state
-                    .get_execution_result()
-                    .new_state
-                    .state
-                    .has_post_execution()
+            if self.vm.deref().borrow_mut().state_changed() ||
+                state.get_execution_result().new_state.state.has_post_execution()
             {
                 let hash = state.get_execution_result().new_state.state.get_hash();
                 if self.known_states.contains(&hash) {

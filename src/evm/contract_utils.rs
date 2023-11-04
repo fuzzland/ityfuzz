@@ -1,36 +1,41 @@
-use crate::evm::types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState};
 use core::panic;
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::Read,
+    path::Path,
+};
+
 /// Load contract from file system or remote
 use glob::glob;
-use serde_json::Value;
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
-
 use itertools::Itertools;
-use std::io::Read;
-use std::path::Path;
+use serde_json::Value;
+
+use crate::evm::types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState};
 
 extern crate crypto;
 
-use crate::evm::abi::get_abi_type_boxed_with_address;
-use crate::evm::onchain::endpoints::OnChainConfig;
-use crate::evm::srcmap::parser::{
-    decode_instructions, decode_instructions_with_replacement, SourceMapLocation,
-};
-
-use self::crypto::digest::Digest;
-use self::crypto::sha3::Sha3;
-use crate::evm::blaz::builder::{BuildJob, BuildJobResult};
-use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
-use crate::evm::blaz::offchain_config::OffchainConfig;
-use crate::evm::bytecode_iterator::all_bytecode;
 use regex::Regex;
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
-use super::blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking};
-use super::types::ProjectSourceMapTy;
+use self::crypto::{digest::Digest, sha3::Sha3};
+use super::{
+    blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
+    types::ProjectSourceMapTy,
+};
+use crate::evm::{
+    abi::get_abi_type_boxed_with_address,
+    blaz::{
+        builder::{BuildJob, BuildJobResult},
+        offchain_artifacts::OffChainArtifact,
+        offchain_config::OffchainConfig,
+    },
+    bytecode_iterator::all_bytecode,
+    onchain::endpoints::OnChainConfig,
+    srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation},
+};
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
@@ -81,8 +86,7 @@ impl ContractLoader {
     fn parse_abi(path: &Path) -> Vec<ABIConfig> {
         let mut file = File::open(path).unwrap();
         let mut data = String::new();
-        file.read_to_string(&mut data)
-            .expect("failed to read abis file");
+        file.read_to_string(&mut data).expect("failed to read abis file");
         Self::parse_abi_str(&data)
     }
 
@@ -98,10 +102,7 @@ impl ContractLoader {
                     .join(",");
                 return format!("({})", v);
             } else if ty.ends_with("[]") {
-                return format!(
-                    "{}[]",
-                    Self::process_input(ty[..ty.len() - 2].to_string(), input)
-                );
+                return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
             }
             panic!("unknown type: {}", ty);
         } else {
@@ -125,10 +126,7 @@ impl ContractLoader {
                         .expect("failed to parse abis inputs")
                         .iter()
                         .for_each(|input| {
-                            abi_name.push(Self::process_input(
-                                input["type"].as_str().unwrap().to_string(),
-                                input,
-                            ));
+                            abi_name.push(Self::process_input(input["type"].as_str().unwrap().to_string(), input));
                         });
                     let mut abi_config = ABIConfig {
                         abi: format!("({})", abi_name.join(",")),
@@ -137,7 +135,7 @@ impl ContractLoader {
                         is_static: abi["stateMutability"] == "view",
                         is_payable: abi["stateMutability"] == "payable",
                         is_constructor: abi["type"] == "constructor",
-                        should_add_corpus: true,  // delaying determination of this to later
+                        should_add_corpus: true, // delaying determination of this to later
                     };
                     let function_to_hash = format!("{}({})", name, abi_name.join(","));
                     // print name and abi_name
@@ -234,12 +232,7 @@ impl ContractLoader {
             deployed_address: generate_random_address(state),
             source_map: source_map_info.map(|info| {
                 info.get(contract_name.as_str())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "combined.json provided but contract ({:?}) not found",
-                            contract_name
-                        )
-                    })
+                    .unwrap_or_else(|| panic!("combined.json provided but contract ({:?}) not found", contract_name))
                     .clone()
             }),
             build_artifact: None,
@@ -278,23 +271,20 @@ impl ContractLoader {
         }
 
         if let Some(abi) = abi_result.abi.iter().find(|abi| abi.is_constructor) {
-            let mut abi_instance =
-                get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
+            let mut abi_instance = get_abi_type_boxed_with_address(&abi.abi, fixed_address(FIX_DEPLOYER).0.to_vec());
             abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
             if contract_result.constructor_args.is_empty() {
                 debug!("No constructor args found, using default constructor args");
                 contract_result.constructor_args = abi_instance.get().get_bytes();
             }
             // debug!("Constructor args: {:?}", result.constructor_args);
-            contract_result
-                .code
-                .extend(contract_result.constructor_args.clone());
+            contract_result.code.extend(contract_result.constructor_args.clone());
         } else {
             debug!("No constructor in ABI found, skipping");
         }
 
-        // now check if contract is deployed through proxy by checking function signatures
-        // if it is, then we use the new bytecode from proxy
+        // now check if contract is deployed through proxy by checking function
+        // signatures if it is, then we use the new bytecode from proxy
         // todo: find a better way to do this
         let current_code = hex::encode(&contract_result.code);
         for deployed_code in proxy_deploy_codes {
@@ -305,7 +295,8 @@ impl ContractLoader {
                 deployed_code
             };
 
-            // match all function signatures, compare sigs between our code and deployed code from proxy
+            // match all function signatures, compare sigs between our code and deployed
+            // code from proxy
             let deployed_code_sig: Vec<[u8; 4]> = extract_sig_from_contract(deployed_code);
             let current_code_sig: Vec<[u8; 4]> = extract_sig_from_contract(&current_code);
 
@@ -319,8 +310,7 @@ impl ContractLoader {
                     }
                 }
                 if is_match {
-                    contract_result.code =
-                        hex::decode(deployed_code).expect("Failed to parse deploy code");
+                    contract_result.code = hex::decode(deployed_code).expect("Failed to parse deploy code");
                 }
             }
         }
@@ -391,10 +381,7 @@ impl ContractLoader {
 
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
-        for (prefix, count) in prefix_file_count
-            .iter()
-            .sorted_by_key(|(k, _)| <&String>::clone(k))
-        {
+        for (prefix, count) in prefix_file_count.iter().sorted_by_key(|(k, _)| <&String>::clone(k)) {
             let p = prefix.to_string();
             if *count > 0 {
                 let mut constructor_args: Vec<String> = vec![];
@@ -413,10 +400,7 @@ impl ContractLoader {
                     proxy_deploy_codes,
                     &constructor_args,
                 );
-                prefix_loader
-                    .contracts
-                    .iter()
-                    .for_each(|c| contracts.push(c.clone()));
+                prefix_loader.contracts.iter().for_each(|c| contracts.push(c.clone()));
                 prefix_loader.abis.iter().for_each(|a| abis.push(a.clone()));
             }
         }
@@ -424,11 +408,7 @@ impl ContractLoader {
         ContractLoader { contracts, abis }
     }
 
-    pub fn from_address(
-        onchain: &mut OnChainConfig,
-        address: HashSet<EVMAddress>,
-        builder: Option<BuildJob>,
-    ) -> Self {
+    pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>, builder: Option<BuildJob>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
         for addr in address {
@@ -476,10 +456,7 @@ impl ContractLoader {
         Self { contracts, abis }
     }
 
-    pub fn from_config(
-        offchain_artifacts: &Vec<OffChainArtifact>,
-        offchain_config: &OffchainConfig,
-    ) -> Self {
+    pub fn from_config(offchain_artifacts: &Vec<OffChainArtifact>, offchain_config: &OffchainConfig) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
         for (slug, contract_info) in &offchain_config.configs {
@@ -503,8 +480,7 @@ impl ContractLoader {
                 abi: abi.clone(),
             });
 
-            let constructor_args =
-                hex::decode(contract_info.constructor.clone()).expect("failed to decode hex");
+            let constructor_args = hex::decode(contract_info.constructor.clone()).expect("failed to decode hex");
             contracts.push(ContractInfo {
                 name: format!("{}:{}", slug.0, slug.1),
                 code: [more_info.deploy_bytecode.to_vec(), constructor_args.clone()].concat(),
@@ -520,7 +496,7 @@ impl ContractLoader {
                     more_info.abi.clone(),
                     more_info.source_map_replacements.clone(),
                     // TODO: offchain ast
-                    Vec::new()
+                    Vec::new(),
                 )),
             });
         }
@@ -528,9 +504,13 @@ impl ContractLoader {
         Self { contracts, abis }
     }
 
-    /// This function is used to find the contract artifact from offchain artifacts by comparing the bytecode
-    /// It will return the index of the artifact and the location of the contract
-    fn find_contract_artifact(to_find: Vec<u8>, offchain_artifacts: &Vec<OffChainArtifact>) -> (usize, (String, String)) {
+    /// This function is used to find the contract artifact from offchain
+    /// artifacts by comparing the bytecode It will return the index of the
+    /// artifact and the location of the contract
+    fn find_contract_artifact(
+        to_find: Vec<u8>,
+        offchain_artifacts: &Vec<OffChainArtifact>,
+    ) -> (usize, (String, String)) {
         let mut candidates = vec![];
         let mut all_candidates = vec![];
         for (idx, artifact) in offchain_artifacts.iter().enumerate() {
@@ -545,10 +525,13 @@ impl ContractLoader {
             candidates = all_candidates;
         }
 
-        let diffs = candidates.iter().map(|(idx, loc)| {
-            let artifact = &offchain_artifacts[*idx].contracts[loc];
-            is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
-        }).collect::<Vec<_>>();
+        let diffs = candidates
+            .iter()
+            .map(|(idx, loc)| {
+                let artifact = &offchain_artifacts[*idx].contracts[loc];
+                is_bytecode_similar_strict_ranking(to_find.clone(), artifact.deploy_bytecode.to_vec())
+            })
+            .collect::<Vec<_>>();
 
         let mut min_diff = usize::MAX;
         let mut selected_idx = 0;
@@ -563,7 +546,6 @@ impl ContractLoader {
         let (idx, loc) = candidates[selected_idx].clone();
         return (idx, loc);
     }
-
 
     pub fn from_fork(
         offchain_artifacts: &Vec<OffChainArtifact>,
@@ -587,13 +569,15 @@ impl ContractLoader {
             let contract_code = onchain.get_contract_code(addr, false);
             let (artifact_idx, slug) = Self::find_contract_artifact(contract_code.bytes().to_vec(), offchain_artifacts);
 
-            debug!("Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub", addr, slug);
+            debug!(
+                "Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub",
+                addr, slug
+            );
 
             let artifact = &offchain_artifacts[artifact_idx];
             let more_info = &artifact.contracts[&slug];
 
             let abi: Vec<ABIConfig> = Self::parse_abi_str(&more_info.abi);
-
 
             contracts.push(ContractInfo {
                 name: format!("{:?}", addr),
@@ -610,14 +594,12 @@ impl ContractLoader {
                     more_info.abi.clone(),
                     more_info.source_map_replacements.clone(),
                     // TODO: offchain ast
-                    Vec::new()
+                    Vec::new(),
                 )),
             });
         }
         Self { contracts, abis }
     }
-
-
 }
 
 type ContractSourceMap = HashMap<usize, SourceMapLocation>;
@@ -626,9 +608,7 @@ type ContractsSourceMapInfo = HashMap<String, ContractSourceMap>;
 pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
     let map_json = serde_json::from_str::<serde_json::Value>(&json).unwrap();
 
-    let contracts = map_json["contracts"]
-        .as_object()
-        .expect("contracts not found");
+    let contracts = map_json["contracts"].as_object().expect("contracts not found");
     let file_list = map_json["sourceList"]
         .as_array()
         .expect("sourceList not found")
@@ -643,9 +623,7 @@ pub fn parse_combined_json(json: String) -> ContractsSourceMapInfo {
         let _file_name = splitter.iter().take(splitter.len() - 1).join(":");
         let contract_name = splitter.last().unwrap().to_string();
 
-        let bin_runtime = contract_info["bin-runtime"]
-            .as_str()
-            .expect("bin-runtime not found");
+        let bin_runtime = contract_info["bin-runtime"].as_str().expect("bin-runtime not found");
         let bin_runtime_bytes = hex::decode(bin_runtime).expect("bin-runtime is not hex");
 
         let srcmap_runtime = contract_info["srcmap-runtime"]
@@ -675,11 +653,7 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
 
             // Solidity: check whether next ops is EQ
             // Vyper: check whether next 2 ops contain XOR
-            if bytes[pc + 5] == 0x14
-                || bytes[pc + 5] == 0x18
-                || bytes[pc + 6] == 0x18
-                || bytes[pc + 6] == 0x14
-            {
+            if bytes[pc + 5] == 0x14 || bytes[pc + 5] == 0x18 || bytes[pc + 6] == 0x18 || bytes[pc + 6] == 0x14 {
                 let mut sig_bytes = vec![];
                 for j in 0..4 {
                     sig_bytes.push(*bytes.get(pc + j + 1).unwrap());
@@ -696,11 +670,7 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
         build_job_result.bytecodes.to_vec(),
         &build_job_result.source_maps_replacements,
         build_job_result.source_maps.clone(),
-        &build_job_result
-            .sources
-            .iter()
-            .map(|(k, _)| k.clone())
-            .collect_vec(),
+        &build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec(),
     )
 }
 
@@ -749,16 +719,14 @@ pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: &String)
                         pc_has_source_match: true,
                     },
                 );
-                // debug!("skipped source code: \n\x1b[31m{}\x1b[0m", mapped_source);
+                // debug!("skipped source code: \n\x1b[31m{}\x1b[0m",
+                // mapped_source);
             }
         }
     }
 }
 
-pub fn save_builder_source_code(
-    build_artifact: &HashMap<EVMAddress, BuildJobResult>,
-    work_dir: &String,
-) {
+pub fn save_builder_source_code(build_artifact: &HashMap<EVMAddress, BuildJobResult>, work_dir: &String) {
     for (addr, build_job_result) in build_artifact {
         save_builder_addr_source_code(
             build_job_result,
@@ -848,12 +816,7 @@ pub fn copy_local_source_code(
                         true => file.to_string(),
                         false => {
                             if !base_path.is_empty() {
-                                format!(
-                                    "{}{}/{}",
-                                    source_dir_pattern.replace('*', ""),
-                                    base_path,
-                                    file
-                                )
+                                format!("{}{}/{}", source_dir_pattern.replace('*', ""), base_path, file)
                             } else {
                                 format!("{}/{}", source_dir_pattern.replace('*', ""), file)
                             }
@@ -893,10 +856,10 @@ pub fn copy_local_source_code(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::skip_cbor;
-    use crate::state::FuzzState;
     use std::str::FromStr;
+
+    use super::*;
+    use crate::{skip_cbor, state::FuzzState};
 
     #[test]
     fn test_load() {
@@ -905,11 +868,7 @@ mod tests {
         let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0), &codes, &args);
         debug!(
             "{:?}",
-            loader
-                .contracts
-                .iter()
-                .map(|x| x.name.clone())
-                .collect::<Vec<String>>()
+            loader.contracts.iter().map(|x| x.name.clone()).collect::<Vec<String>>()
         );
     }
 
@@ -958,8 +917,8 @@ mod tests {
     //
     //     let loader = ContractLoader::from_address(
     //         &onchain,
-    //         vec![EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],
-    //     );
+    //         vec![EVMAddress::from_str("
+    // 0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap()],     );
     //     debug!(
     //         "{:?}",
     //         loader

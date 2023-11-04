@@ -1,9 +1,12 @@
+use std::{
+    collections::HashMap,
+    error::Error,
+    fs::{self, File, OpenOptions},
+    io::prelude::*,
+    path::Path,
+};
+
 use serde_json::json;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fs::{self, File, OpenOptions};
-use std::io::prelude::*;
-use std::path::Path;
 
 pub trait Cache {
     fn save(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>>;
@@ -35,7 +38,7 @@ impl Cache for FileSystemCache {
         } else {
             format!("{}/{}/{}/{}", self.file_path, &key[0..2], &key[2..4], &key[4..])
         };
-        
+
         let path_obj = Path::new(&path);
         if let Some(parent) = path_obj.parent() {
             fs::create_dir_all(parent)?;
@@ -51,7 +54,7 @@ impl Cache for FileSystemCache {
         } else {
             format!("{}/{}/{}/{}", self.file_path, &key[0..2], &key[2..4], &key[4..])
         };
-        
+
         if !Path::new(&path).exists() {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::NotFound,

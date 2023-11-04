@@ -1,39 +1,36 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::V2_PAIR_BUG_IDX;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::state::HasExecutionResult;
+use std::{
+    cell::RefCell,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    rc::Rc,
+};
+
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::rc::Rc;
 
-pub struct PairBalanceOracle {
-}
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        oracle::EVMBugResult,
+        oracles::V2_PAIR_BUG_IDX,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{Oracle, OracleCtx},
+    state::HasExecutionResult,
+};
+
+pub struct PairBalanceOracle {}
 
 impl PairBalanceOracle {
     pub fn new() -> Self {
-        Self {  }
+        Self {}
     }
 }
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for PairBalanceOracle
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for PairBalanceOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -102,10 +99,7 @@ impl
                             (r0, r1),
                             (pre_r0, pre_r1)
                         ),
-                        ConciseEVMInput::from_input(
-                            ctx.input,
-                            ctx.fuzz_state.get_execution_result(),
-                        ),
+                        ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                     )
                     .push_to_output();
 

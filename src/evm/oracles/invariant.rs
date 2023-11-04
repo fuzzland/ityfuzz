@@ -1,16 +1,21 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::EVMBugResult;
-use crate::evm::oracles::INVARIANT_BUG_IDX;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::fuzzer::ORACLE_OUTPUT;
-use crate::oracle::{Oracle, OracleCtx};
-use crate::state::HasExecutionResult;
+use std::{collections::HashMap, str::FromStr};
+
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::Bytecode;
-use std::collections::HashMap;
-use std::str::FromStr;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        oracle::EVMBugResult,
+        oracles::INVARIANT_BUG_IDX,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    fuzzer::ORACLE_OUTPUT,
+    oracle::{Oracle, OracleCtx},
+    state::HasExecutionResult,
+};
 
 pub struct InvariantOracle {
     pub batch_call_txs: Vec<(EVMAddress, EVMAddress, Bytes)>,
@@ -18,10 +23,7 @@ pub struct InvariantOracle {
 }
 
 impl InvariantOracle {
-    pub fn new(
-        invariant_funcs: Vec<(EVMAddress, Vec<u8>)>,
-        names: HashMap<Vec<u8>, String>,
-    ) -> Self {
+    pub fn new(invariant_funcs: Vec<(EVMAddress, Vec<u8>)>, names: HashMap<Vec<u8>, String>) -> Self {
         Self {
             batch_call_txs: invariant_funcs
                 .iter()
@@ -40,18 +42,8 @@ impl InvariantOracle {
 }
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for InvariantOracle
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for InvariantOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -78,10 +70,7 @@ impl
             .iter()
             .enumerate()
             .map(|(idx, (_, succ))| {
-                let name = self
-                    .names
-                    .get(&self.batch_call_txs[idx].2.to_vec())
-                    .unwrap();
+                let name = self.names.get(&self.batch_call_txs[idx].2.to_vec()).unwrap();
                 if *succ {
                     0
                 } else {
@@ -90,10 +79,7 @@ impl
                         "invariant".to_string(),
                         bug_idx,
                         format!("{:?} violated", name),
-                        ConciseEVMInput::from_input(
-                            ctx.input,
-                            ctx.fuzz_state.get_execution_result(),
-                        ),
+                        ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         None,
                         Some(name.clone()),
                     )

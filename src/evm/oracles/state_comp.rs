@@ -1,22 +1,29 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::oracle::{dummy_precondition, EVMBugResult};
-use crate::evm::types::{bytes_to_u64, EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{Oracle, OracleCtx, Producer};
-use crate::state::HasExecutionResult;
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    ops::Deref,
+    rc::Rc,
+};
+
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
-use std::rc::Rc;
-use crate::evm::host::STATE_CHANGE;
-use crate::evm::oracles::{STATE_COMP_BUG_IDX};
-use crate::fuzzer::ORACLE_OUTPUT;
-use crate::generic_vm::vm_state::VMStateT;
+
+use crate::{
+    evm::{
+        host::STATE_CHANGE,
+        input::{ConciseEVMInput, EVMInput},
+        oracle::{dummy_precondition, EVMBugResult},
+        oracles::STATE_COMP_BUG_IDX,
+        types::{bytes_to_u64, EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    fuzzer::ORACLE_OUTPUT,
+    generic_vm::vm_state::VMStateT,
+    oracle::{Oracle, OracleCtx, Producer},
+    state::HasExecutionResult,
+};
 
 pub enum StateCompMatching {
     Exact,
@@ -44,13 +51,15 @@ impl StateCompOracle {
     pub fn new(desired_state: EVMState, matching_style: String) -> Self {
         Self {
             desired_state,
-            matching_style: StateCompMatching::from_str(matching_style.as_str()).expect("invalid state comp matching style"),
+            matching_style: StateCompMatching::from_str(matching_style.as_str())
+                .expect("invalid state comp matching style"),
         }
     }
 }
 
-impl Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-for StateCompOracle
+impl
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for StateCompOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -68,11 +77,10 @@ for StateCompOracle
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
         stage: u64,
     ) -> Vec<u64> {
-
         let comp = |state1: &EVMState, state2: &EVMState| -> bool {
             match self.matching_style {
                 StateCompMatching::Exact => state1.eq(state2),
@@ -88,12 +96,12 @@ for StateCompOracle
                     STATE_COMP_BUG_IDX,
                     "Found equivalent state".to_string(),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-                ).push_to_output();
+                )
+                .push_to_output();
                 vec![STATE_COMP_BUG_IDX]
             } else {
                 vec![]
             }
         }
-
     }
 }

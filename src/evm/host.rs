@@ -1,68 +1,102 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middlewares::middleware::{
-    add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType,
+use core::panic;
+use std::{
+    cell::RefCell,
+    collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
+    fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
+    io::Write,
+    mem,
+    ops::Deref,
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
 };
-use crate::evm::mutator::AccessPattern;
-use crate::invoke_middlewares;
 
-use crate::evm::onchain::flashloan::register_borrow_txn;
-use crate::evm::onchain::flashloan::Flashloan;
+use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput};
-use libafl::state::State;
-use revm_interpreter::InstructionResult::{Continue, ControlLeak, Revert};
-
-use crate::evm::types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256};
-use revm::precompile::{Precompile, Precompiles};
-use revm_interpreter::analysis::to_analysed;
-use revm_interpreter::{
-    BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host,
-    InstructionResult, Interpreter, SelfDestructResult, return_ok,
+use libafl::{
+    prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput},
+    state::State,
 };
-use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
-use core::panic;
-use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::{Debug, Formatter};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::io::Write;
-use std::mem;
-use std::ops::Deref;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use revm::precompile::{Precompile, Precompiles};
+use revm_interpreter::{
+    analysis::to_analysed,
+    return_ok,
+    BytecodeLocked,
+    CallContext,
+    CallInputs,
+    CallScheme,
+    Contract,
+    CreateInputs,
+    Gas,
+    Host,
+    InstructionResult,
+    InstructionResult::{Continue, ControlLeak, Revert},
+    Interpreter,
+    SelfDestructResult,
+};
+use revm_primitives::{
+    BerlinSpec,
+    Bytecode,
+    ByzantiumSpec,
+    Env,
+    FrontierSpec,
+    HomesteadSpec,
+    IstanbulSpec,
+    LatestSpec,
+    LondonSpec,
+    MergeSpec,
+    PetersburgSpec,
+    ShanghaiSpec,
+    Spec,
+    SpecId,
+    SpuriousDragonSpec,
+    TangerineSpec,
+    B256,
+};
 use tracing::debug;
 
-use crate::evm::vm::{
-    EVMState, PostExecutionCtx, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC,
+use super::{
+    middlewares::cheatcode::{
+        ExpectedCallData,
+        ExpectedCallTracker,
+        ExpectedCallType,
+        ExpectedEmit,
+        ExpectedRevert,
+        Prank,
+        ERROR_PREFIX,
+        REVERT_PREFIX,
+    },
+    vm::{IS_FAST_CALL, MEM_LIMIT},
 };
-use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM, MAP_SIZE};
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-
-use crate::evm::abi::{get_abi_type_boxed, register_abi_instance};
-use crate::evm::contract_utils::extract_sig_from_contract;
-use crate::evm::corpus_initializer::ABIMap;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
-use crate::handle_contract_insertion;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState};
-use crate::state_input::StagedVMState;
-use revm_primitives::{
-    BerlinSpec, ByzantiumSpec, FrontierSpec, HomesteadSpec, IstanbulSpec, LondonSpec, MergeSpec,
-    PetersburgSpec, ShanghaiSpec, SpecId, SpuriousDragonSpec, TangerineSpec,
+use crate::{
+    evm::{
+        abi::{get_abi_type_boxed, register_abi_instance},
+        contract_utils::extract_sig_from_contract,
+        corpus_initializer::ABIMap,
+        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType},
+        mutator::AccessPattern,
+        onchain::{
+            abi_decompiler::fetch_abi_heimdall,
+            flashloan::{register_borrow_txn, Flashloan},
+        },
+        types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
+        vm::{EVMState, PostExecutionCtx, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
+    },
+    generic_vm::{
+        vm_executor::{ExecutionResult, GenericVM, MAP_SIZE},
+        vm_state::VMStateT,
+    },
+    handle_contract_insertion,
+    input::VMInputT,
+    invoke_middlewares,
+    state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState},
+    state_input::StagedVMState,
 };
-
-use super::vm::{IS_FAST_CALL, MEM_LIMIT};
-use super::middlewares::cheatcode::{
-    Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker,
-    ERROR_PREFIX, REVERT_PREFIX, ExpectedCallData, ExpectedCallType
-};
-use alloy_dyn_abi::DynSolType;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -85,15 +119,16 @@ pub static mut RET_SIZE: usize = 0;
 pub static mut RET_OFFSET: usize = 0;
 
 pub static mut PANIC_ON_BUG: bool = false;
-// for debugging purpose, return ControlLeak when the calls amount exceeds this value
+// for debugging purpose, return ControlLeak when the calls amount exceeds this
+// value
 pub static mut CALL_UNTIL: u32 = u32::MAX;
 
 /// Shall we dump the contract calls
 pub static mut WRITE_RELATIONSHIPS: bool = false;
 
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [
-    0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c,
-    0x1b, 0x48, 0x26, 0x46, 0x5e, 0x8b, 0xc5, 0x04, 0xb3, 0xeb, 0x3e, 0x88, 0xb3, 0xe6, 0xa4, 0xa0,
+    0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c, 0x1b, 0x48, 0x26,
+    0x46, 0x5e, 0x8b, 0xc5, 0x04, 0xb3, 0xeb, 0x3e, 0x88, 0xb3, 0xe6, 0xa4, 0xa0,
 ];
 
 /// Check if address is precompile by having assumption
@@ -167,7 +202,8 @@ where
     /// Precompiles
     pub precompiles: Precompiles,
 
-    /// All SSTORE PCs that are for mapping (i.e., writing to multiple storage slots)
+    /// All SSTORE PCs that are for mapping (i.e., writing to multiple storage
+    /// slots)
     pub mapping_sstore_pcs: HashSet<(EVMAddress, usize)>,
     pub mapping_sstore_pcs_to_slot: HashMap<(EVMAddress, usize), HashSet<EVMU256>>,
 
@@ -206,10 +242,7 @@ where
             .field("pc_to_call_hash", &self.pc_to_call_hash)
             .field("middlewares_enabled", &self.middlewares_enabled)
             .field("middlewares", &self.middlewares)
-            .field(
-                "middlewares_latent_call_actions",
-                &self.middlewares_latent_call_actions,
-            )
+            .field("middlewares_latent_call_actions", &self.middlewares_latent_call_actions)
             .finish()
     }
 }
@@ -275,7 +308,8 @@ pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
 const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
 
-// if a PC transfers control to >10 addresses, we consider call at this PC to be unbounded
+// if a PC transfers control to >10 addresses, we consider call at this PC to be
+// unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 10;
 
 impl<VS, I, S, SC> FuzzHost<VS, I, S, SC>
@@ -347,42 +381,22 @@ where
     /// custom spec id run_inspect
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
         match self.spec_id {
-            SpecId::LATEST => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state)
-            }
-            SpecId::FRONTIER => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, FrontierSpec>(self, state)
-            }
-            SpecId::HOMESTEAD => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, HomesteadSpec>(self, state)
-            }
-            SpecId::TANGERINE => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, TangerineSpec>(self, state)
-            }
-            SpecId::SPURIOUS_DRAGON => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, SpuriousDragonSpec>(self, state)
-            }
-            SpecId::BYZANTIUM => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ByzantiumSpec>(self, state)
-            }
+            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
+            SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, FrontierSpec>(self, state),
+            SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, HomesteadSpec>(self, state),
+            SpecId::TANGERINE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, TangerineSpec>(self, state),
+            SpecId::SPURIOUS_DRAGON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, SpuriousDragonSpec>(self, state),
+            SpecId::BYZANTIUM => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ByzantiumSpec>(self, state),
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
                 interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, PetersburgSpec>(self, state)
             }
-            SpecId::ISTANBUL => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, IstanbulSpec>(self, state)
-            }
+            SpecId::ISTANBUL => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, IstanbulSpec>(self, state),
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
                 interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, BerlinSpec>(self, state)
             }
-            SpecId::LONDON => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state)
-            }
-            SpecId::MERGE => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state)
-            }
-            SpecId::SHANGHAI => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ShanghaiSpec>(self, state)
-            }
+            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state),
+            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state),
+            SpecId::SHANGHAI => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ShanghaiSpec>(self, state),
             _ => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
         }
     }
@@ -485,18 +499,11 @@ where
         unsafe {
             invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
-        self.code.insert(
-            address,
-            Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap()),
-        );
+        self.code
+            .insert(address, Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap()));
     }
 
-    pub fn find_static_call_read_slot(
-        &self,
-        _address: EVMAddress,
-        _data: Bytes,
-        _state: &mut S,
-    ) -> Vec<EVMU256> {
+    pub fn find_static_call_read_slot(&self, _address: EVMAddress, _data: Bytes, _state: &mut S) -> Vec<EVMU256> {
         vec![]
         // let call = Contract::new_with_context_not_cloned::<LatestSpec>(
         //     data,
@@ -511,8 +518,8 @@ where
         // );
         // let mut interp = Interpreter::new::<LatestSpec>(call, 1e10 as u64);
         // let (ret, slots) =
-        //     interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut self.clone(), state);
-        // if ret != Return::Revert {
+        //     interp.locate_slot::<FuzzHost<VS, I, S>, LatestSpec, S>(&mut
+        // self.clone(), state); if ret != Return::Revert {
         //     slots
         // } else {
         //     vec![]
@@ -536,15 +543,11 @@ where
         }
         if self.relations_hash.is_empty() {
             let write_head = "[ityfuzz relations] caller, traget, function hash\n".to_string();
-            self.relations_file
-                .write_all(write_head.as_bytes())
-                .unwrap();
+            self.relations_file.write_all(write_head.as_bytes()).unwrap();
         }
 
         self.relations_hash.insert(cur_wirte_hash);
-        self.relations_file
-            .write_all(cur_write_str.as_bytes())
-            .unwrap();
+        self.relations_file.write_all(cur_write_str.as_bytes()).unwrap();
     }
 
     fn call_allow_control_leak(
@@ -556,10 +559,7 @@ where
     ) -> (InstructionResult, Gas, Bytes) {
         macro_rules! push_interp {
             () => {{
-                self.leak_ctx = vec![SinglePostExecution::from_interp(
-                    interp,
-                    (out_offset, out_len),
-                )];
+                self.leak_ctx = vec![SinglePostExecution::from_interp(interp, (out_offset, out_len))];
             }};
         }
         self.call_count += 1;
@@ -615,10 +615,7 @@ where
             self.pc_to_addresses
                 .entry((input.context.caller, self._pc))
                 .or_insert_with(HashSet::new);
-            let addresses_at_pc = self
-                .pc_to_addresses
-                .get_mut(&(input.context.caller, self._pc))
-                .unwrap();
+            let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.context.caller, self._pc)).unwrap();
             addresses_at_pc.insert(input.contract);
             addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD
         };
@@ -627,12 +624,9 @@ where
             if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
-                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
-                return (
-                    InstructionResult::AddressUnboundedStaticCall,
-                    Gas::new(0),
-                    Bytes::new(),
-                );
+                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
+                // input.contract, hex::encode(input.input.clone()));
+                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
             }
         }
 
@@ -641,7 +635,8 @@ where
             if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
-                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller, input.contract, hex::encode(input.input.clone()));
+                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
+                // input.contract, hex::encode(input.input.clone()));
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
@@ -656,16 +651,17 @@ where
                 .pc_to_call_hash
                 .get(&(input.context.caller, self._pc, self.jumpi_trace))
                 .unwrap()
-                .len()
-                > UNBOUND_CALL_THRESHOLD
-                && input_seq.len() >= 4
+                .len() >
+                UNBOUND_CALL_THRESHOLD &&
+                input_seq.len() >= 4
             {
                 self.current_arbitrary_calls.push((
                     input.context.caller,
                     input.context.address,
                     interp.program_counter(),
                 ));
-                // debug!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller, input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
+                // debug!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller,
+                // input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
                 push_interp!();
                 return (
                     InstructionResult::ArbitraryExternalCallAddressBounded(
@@ -711,34 +707,24 @@ where
         // if there is code, then call the code
         let res = self.call_forbid_control_leak(input, state);
         match res.0 {
-            ControlLeak
-            | InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _)
-            | InstructionResult::AddressUnboundedStaticCall => {
-                self.leak_ctx.push(SinglePostExecution::from_interp(
-                    interp,
-                    (out_offset, out_len),
-                ));
+            ControlLeak |
+            InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) |
+            InstructionResult::AddressUnboundedStaticCall => {
+                self.leak_ctx
+                    .push(SinglePostExecution::from_interp(interp, (out_offset, out_len)));
             }
             _ => {}
         }
         res
     }
 
-    fn call_forbid_control_leak(
-        &mut self,
-        input: &mut CallInputs,
-        state: &mut S,
-    ) -> (InstructionResult, Gas, Bytes) {
+    fn call_forbid_control_leak(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
         // if there is code, then call the code
         if let Some(code) = self.code.get(&input.context.code_address) {
             let mut interp = Interpreter::new_with_memory_limit(
-                Contract::new_with_context_analyzed(
-                    Bytes::from(input.input.to_vec()),
-                    code.clone(),
-                    &input.context,
-                ),
+                Contract::new_with_context_analyzed(Bytes::from(input.input.to_vec()), code.clone(), &input.context),
                 1e10 as u64,
                 false,
                 MEM_LIMIT,
@@ -755,11 +741,7 @@ where
         (Revert, Gas::new(0), Bytes::new())
     }
 
-    fn call_precompile(
-        &mut self,
-        input: &mut CallInputs,
-        _state: &mut S,
-    ) -> (InstructionResult, Gas, Bytes) {
+    fn call_precompile(&mut self, input: &mut CallInputs, _state: &mut S) -> (InstructionResult, Gas, Bytes) {
         let precompile = self
             .precompiles
             .get(&input.contract)
@@ -770,11 +752,7 @@ where
         };
         match out {
             Ok((_, data)) => (InstructionResult::Return, Gas::new(0), Bytes::from(data)),
-            Err(_) => (
-                InstructionResult::PrecompileError,
-                Gas::new(0),
-                Bytes::new(),
-            ),
+            Err(_) => (InstructionResult::PrecompileError, Gas::new(0), Bytes::new()),
         }
     }
 
@@ -859,9 +837,7 @@ where
         }
         let expected_reason = expected_revert.reason.take().unwrap();
         let mut actual_reason = retdata.clone();
-        if actual_reason.len() >= 4 &&
-            matches!(actual_reason[..4].try_into(), Ok(ERROR_PREFIX | REVERT_PREFIX))
-        {
+        if actual_reason.len() >= 4 && matches!(actual_reason[..4].try_into(), Ok(ERROR_PREFIX | REVERT_PREFIX)) {
             if let Ok(parsed_bytes) = DynSolType::Bytes.abi_decode(&actual_reason[4..]) {
                 if let Some(bytes) = parsed_bytes.as_bytes().map(|b| b.to_vec()) {
                     actual_reason = bytes.into();
@@ -902,7 +878,7 @@ where
                 InstructionResult::Revert,
                 gas,
                 "log != expected log".abi_encode().into(),
-            )
+            );
         }
 
         self.expected_emits.clear();
@@ -919,7 +895,8 @@ where
         let (result, gas, retdata) = res;
         let expected_calls = mem::replace(&mut self.expected_calls, ExpectedCallTracker::new());
         for (_, calldatas) in expected_calls {
-            // Loop over each address, and for each address, loop over each calldata it expects.
+            // Loop over each address, and for each address, loop over each calldata it
+            // expects.
             for (_, (expected, actual_count)) in calldatas {
                 // Grab the values we expect to see
                 let ExpectedCallData { count, call_type, .. } = expected;
@@ -1025,11 +1002,7 @@ where
                 0x57 => {
                     // JUMPI counter cond
                     let br = fast_peek!(1);
-                    let jump_dest = if is_zero(br) {
-                        1
-                    } else {
-                        as_u64(fast_peek!(0))
-                    };
+                    let jump_dest = if is_zero(br) { 1 } else { as_u64(fast_peek!(0)) };
                     let _pc = interp.program_counter();
 
                     let (shash, _) = self.jumpi_trace.overflowing_mul(54059);
@@ -1051,10 +1024,7 @@ where
                 0x55 => {
                     // SSTORE
                     let pc = interp.program_counter();
-                    if !self
-                        .mapping_sstore_pcs
-                        .contains(&(interp.contract.address, pc))
-                    {
+                    if !self.mapping_sstore_pcs.contains(&(interp.contract.address, pc)) {
                         let mut key = fast_peek!(0);
                         let slots = self
                             .mapping_sstore_pcs_to_slot
@@ -1062,19 +1032,15 @@ where
                             .or_default();
                         slots.insert(key);
                         if slots.len() > 10 {
-                            self.mapping_sstore_pcs
-                                .insert((interp.contract.address, pc));
+                            self.mapping_sstore_pcs.insert((interp.contract.address, pc));
                         }
 
                         let value = fast_peek!(1);
                         let compressed_value = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
-                        let res = <FuzzHost<VS, I, S, SC> as Host<S>>::sload(
-                            self,
-                            interp.contract.address,
-                            fast_peek!(0),
-                        );
+                        let res =
+                            <FuzzHost<VS, I, S, SC> as Host<S>>::sload(self, interp.contract.address, fast_peek!(0));
                         let value_changed = res.expect("sload failed").0 != value;
 
                         let idx = interp.program_counter() % MAP_SIZE;
@@ -1168,20 +1134,12 @@ where
                 _ => {}
             }
 
-            self.access_pattern
-                .deref()
-                .borrow_mut()
-                .decode_instruction(interp);
+            self.access_pattern.deref().borrow_mut().decode_instruction(interp);
         }
         Continue
     }
 
-    fn step_end(
-        &mut self,
-        _interp: &mut Interpreter,
-        _ret: InstructionResult,
-        _: &mut S,
-    ) -> InstructionResult {
+    fn step_end(&mut self, _interp: &mut Interpreter, _ret: InstructionResult, _: &mut S) -> InstructionResult {
         Continue
     }
 
@@ -1191,8 +1149,7 @@ where
 
     fn load_account(&mut self, _address: EVMAddress) -> Option<(bool, bool)> {
         Some((
-            true,
-            true, // self.data.contains_key(&address) || self.code.contains_key(&address),
+            true, true, // self.data.contains_key(&address) || self.code.contains_key(&address),
         ))
     }
 
@@ -1225,8 +1182,7 @@ where
 
     fn code_hash(&mut self, _address: EVMAddress) -> Option<(B256, bool)> {
         Some((
-            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
+            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
             true,
         ))
     }
@@ -1272,26 +1228,24 @@ where
         if _topics.len() == 1 {
             let current_flag = _topics.last().unwrap().0;
             // hex is "fuzzland"
-            if current_flag[0] == 0x66
-                && current_flag[1] == 0x75
-                && current_flag[2] == 0x7a
-                && current_flag[3] == 0x7a
-                && current_flag[4] == 0x6c
-                && current_flag[5] == 0x61
-                && current_flag[6] == 0x6e
-                && current_flag[7] == 0x64
-                && current_flag[8] == 0x00
-                && current_flag[9] == 0x00
-                || current_flag == SCRIBBLE_EVENT_HEX
+            if current_flag[0] == 0x66 &&
+                current_flag[1] == 0x75 &&
+                current_flag[2] == 0x7a &&
+                current_flag[3] == 0x7a &&
+                current_flag[4] == 0x6c &&
+                current_flag[5] == 0x61 &&
+                current_flag[6] == 0x6e &&
+                current_flag[7] == 0x64 &&
+                current_flag[8] == 0x00 &&
+                current_flag[9] == 0x00 ||
+                current_flag == SCRIBBLE_EVENT_HEX
             {
                 let data_string = String::from_utf8(_data[64..].to_vec()).unwrap();
                 if unsafe { PANIC_ON_BUG } {
                     panic!("target bug found: {}", data_string);
                 }
-                self.current_typed_bug.push((
-                    data_string.trim_end_matches('\u{0}').to_string(),
-                    (_address, self._pc),
-                ));
+                self.current_typed_bug
+                    .push((data_string.trim_end_matches('\u{0}').to_string(), (_address, self._pc)));
             }
         }
 
@@ -1312,11 +1266,7 @@ where
         }
     }
 
-    fn selfdestruct(
-        &mut self,
-        _address: EVMAddress,
-        _target: EVMAddress,
-    ) -> Option<SelfDestructResult> {
+    fn selfdestruct(&mut self, _address: EVMAddress, _target: EVMAddress) -> Option<SelfDestructResult> {
         self.current_self_destructs.push((_address, self._pc));
         Some(SelfDestructResult::default())
     }
@@ -1368,11 +1318,8 @@ where
                         let abis = fetch_abi_heimdall(contract_code_str)
                             .iter()
                             .map(|abi| {
-                                if let Some(known_abi) = state
-                                    .metadata_map()
-                                    .get::<ABIMap>()
-                                    .unwrap()
-                                    .get(&abi.function)
+                                if let Some(known_abi) =
+                                    state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
                                 {
                                     known_abi
                                 } else {
@@ -1389,48 +1336,37 @@ where
                         handle_contract_insertion!(state, self, r_addr, parsed_abi);
                     }
 
-                    parsed_abi
-                        .iter()
-                        .filter(|v| !v.is_constructor)
-                        .for_each(|abi| {
-                            #[cfg(not(feature = "fuzz_static"))]
-                            if abi.is_static {
-                                return;
-                            }
+                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
+                        #[cfg(not(feature = "fuzz_static"))]
+                        if abi.is_static {
+                            return;
+                        }
 
-                            let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                            abi_instance.set_func_with_signature(
-                                abi.function,
-                                &abi.function_name,
-                                &abi.abi,
-                            );
-                            register_abi_instance(r_addr, abi_instance.clone(), state);
+                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                        abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                        register_abi_instance(r_addr, abi_instance.clone(), state);
 
-                            let input = EVMInput {
-                                caller: state.get_rand_caller(),
-                                contract: r_addr,
-                                data: Some(abi_instance),
-                                sstate: StagedVMState::new_uninitialized(),
-                                sstate_idx: 0,
-                                txn_value: if abi.is_payable {
-                                    Some(EVMU256::ZERO)
-                                } else {
-                                    None
-                                },
-                                step: false,
+                        let input = EVMInput {
+                            caller: state.get_rand_caller(),
+                            contract: r_addr,
+                            data: Some(abi_instance),
+                            sstate: StagedVMState::new_uninitialized(),
+                            sstate_idx: 0,
+                            txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
+                            step: false,
 
-                                env: Default::default(),
-                                access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                                #[cfg(feature = "flashloan_v2")]
-                                liquidation_percent: 0,
-                                #[cfg(feature = "flashloan_v2")]
-                                input_type: EVMInputTy::ABI,
-                                direct_data: Default::default(),
-                                randomness: vec![0],
-                                repeat: 1,
-                            };
-                            add_corpus(self, state, &input);
-                        });
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            #[cfg(feature = "flashloan_v2")]
+                            liquidation_percent: 0,
+                            #[cfg(feature = "flashloan_v2")]
+                            input_type: EVMInputTy::ABI,
+                            direct_data: Default::default(),
+                            randomness: vec![0],
+                            repeat: 1,
+                        };
+                        add_corpus(self, state, &input);
+                    });
                 }
                 (Continue, Some(r_addr), Gas::new(0), runtime_code)
             } else {
@@ -1492,12 +1428,11 @@ where
         unsafe {
             if self.middlewares_enabled {
                 for middleware in &mut self.middlewares.clone().deref().borrow_mut().iter_mut() {
-                    middleware.deref().deref().borrow_mut().on_return(
-                        interp,
-                        self,
-                        state,
-                        &ret_buffer,
-                    );
+                    middleware
+                        .deref()
+                        .deref()
+                        .borrow_mut()
+                        .on_return(interp, self, state, &ret_buffer);
                 }
             }
         }

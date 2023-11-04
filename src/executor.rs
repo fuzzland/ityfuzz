@@ -1,24 +1,27 @@
 /// Wrapper of smart contract VM, which implements LibAFL [`Executor`]
 use std::cell::RefCell;
-use std::fmt::Formatter;
-use std::marker::PhantomData;
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+    ops::Deref,
+    rc::Rc,
+};
 
-use crate::evm::input::EVMInput;
-use libafl::executors::{Executor, ExitKind};
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, HasObservers, ObserversTuple, UsesInput, UsesObservers};
-use libafl::state::{State, UsesState};
-use libafl::Error;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::fmt::Debug;
-use std::ops::Deref;
-use std::rc::Rc;
+use libafl::{
+    executors::{Executor, ExitKind},
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, HasObservers, ObserversTuple, UsesInput, UsesObservers},
+    state::{State, UsesState},
+    Error,
+};
+use serde::{de::DeserializeOwned, Serialize};
 
-use crate::generic_vm::vm_executor::GenericVM;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::{ConciseSerde, VMInputT};
-use crate::state::HasExecutionResult;
+use crate::{
+    evm::input::EVMInput,
+    generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
+    input::{ConciseSerde, VMInputT},
+    state::HasExecutionResult,
+};
 
 /// Wrapper of smart contract VM, which implements LibAFL [`Executor`]
 /// TODO: in the future, we may need to add handlers?
@@ -49,7 +52,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     type State = S;
 }
@@ -63,7 +66,7 @@ where
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     type Observers = OT;
 }

@@ -1,21 +1,26 @@
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    marker::PhantomData,
+    ops::Deref,
+    rc::Rc,
+};
+
+use libafl::{
+    prelude::{HasCorpus, HasMetadata},
+    state::State,
+};
+use libafl_bolts::{bolts_prelude::SerdeAnyMap, impl_serdeany};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
 /// Implementation of the oracle (i.e., invariant checker)
 use crate::generic_vm::vm_executor::GenericVM;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::{ConciseSerde, VMInputT};
-use crate::state::HasExecutionResult;
-
-use libafl::prelude::{HasCorpus, HasMetadata};
-use libafl::state::State;
-use libafl_bolts::bolts_prelude::SerdeAnyMap;
-use libafl_bolts::impl_serdeany;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::rc::Rc;
+use crate::{
+    generic_vm::vm_state::VMStateT,
+    input::{ConciseSerde, VMInputT},
+    state::HasExecutionResult,
+};
 
 /// The context passed to the oracle
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
@@ -36,15 +41,13 @@ where
     /// The metadata of the oracle
     pub metadata: SerdeAnyMap,
     /// The executor
-    pub executor:
-        &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+    pub executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
     /// The input executed by the VM
     pub input: &'a I,
     pub phantom: PhantomData<Addr>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
-    OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
     S: State + HasCorpus + HasMetadata + HasExecutionResult<Loc, Addr, VS, Out, CI>,
@@ -58,9 +61,7 @@ where
     pub fn new(
         fuzz_state: &'a mut S,
         pre_state: &'a VS,
-        executor: &'a mut Rc<
-            RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>,
-        >,
+        executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
         input: &'a I,
     ) -> Self {
         Self {
@@ -91,10 +92,7 @@ where
     }
 
     /// Conduct a batch of dynamic calls on the state before the execution
-    pub(crate) fn call_pre_batch_dyn(
-        &mut self,
-        data: &Vec<(Addr, Addr, By)>,
-    ) -> (Vec<(Out, bool)>, VS) {
+    pub(crate) fn call_pre_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<(Out, bool)>, VS) {
         self.executor
             .deref()
             .borrow_mut()
@@ -102,10 +100,7 @@ where
     }
 
     /// Conduct a batch of dynamic calls on the state after the execution
-    pub(crate) fn call_post_batch_dyn(
-        &mut self,
-        data: &Vec<(Addr, Addr, By)>,
-    ) -> (Vec<(Out, bool)>, VS) {
+    pub(crate) fn call_post_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<(Out, bool)>, VS) {
         self.executor
             .deref()
             .borrow_mut()
@@ -123,7 +118,8 @@ where
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
-    /// Produce data for the oracle, called everytime before any oracle is called
+    /// Produce data for the oracle, called everytime before any oracle is
+    /// called
     fn produce(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>);
     /// Cleanup. Called everytime after the oracle is called
     fn notify_end(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>);
@@ -140,19 +136,11 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Transition function, called everytime after non-reverted execution
-    fn transition(
-        &self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>,
-        stage: u64,
-    ) -> u64;
+    fn transition(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>, stage: u64) -> u64;
 
     /// Oracle function, called everytime after non-reverted execution
     /// Returns Some(bug_idx) if the oracle is violated
-    fn oracle(
-        &self,
-        ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>,
-        stage: u64,
-    ) -> Vec<u64>;
+    fn oracle(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>, stage: u64) -> Vec<u64>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -168,8 +156,7 @@ impl BugMetadata {
     }
 
     pub fn register_corpus_idx(&mut self, corpus_idx: usize) {
-        self.corpus_idx_to_bug
-            .insert(corpus_idx, self.current_bugs.clone());
+        self.corpus_idx_to_bug.insert(corpus_idx, self.current_bugs.clone());
     }
 }
 
