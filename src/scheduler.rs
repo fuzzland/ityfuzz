@@ -25,6 +25,7 @@ use crate::evm::blaz::builder::ArtifactInfoMetadata;
 use crate::evm::blaz::builder::BuildJobResult;
 use crate::evm::corpus_initializer::EVMInitializationArtifacts;
 use crate::evm::input::EVMInput;
+use crate::evm::input::EVMInputT;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::input::ConciseSerde;
 use crate::input::VMInputT;
@@ -463,7 +464,10 @@ impl<S> PowerABIScheduler<S> {
                 return Ok(()); // Some EVMInput don't have abi, like borrow
             }
         };
-        let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect("function sig not found") };
+        let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect(format!(
+            "function signature {} @ {:?} not found in FUNCTION_SIG", 
+            hex::encode(tc_func), input.get_contract()
+        ).as_str()) };
         let tc_func_slug = {
             let amount_args = tc_func_name.matches(',').count() + {
                 if tc_func_name.contains("()") {
@@ -527,7 +531,9 @@ where
             } // some contracts are not in ArtifactInfo, like borrow
         };
         let current_idx = *state.corpus().current();
-        self.add_abi_metadata(&mut testcase, artifact)?;
+        if !input.is_step() {
+            self.add_abi_metadata(&mut testcase, artifact)?;
+        }
         testcase.set_parent_id_optional(current_idx);
         Ok(())
     }
