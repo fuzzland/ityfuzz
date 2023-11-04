@@ -411,11 +411,11 @@ impl OnChainConfig {
     }
 
     pub fn fetch_blk_hash(&mut self) -> &String {
-        if self.block_hash == None {
+        if self.block_hash.is_none() {
             self.block_hash = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -447,8 +447,8 @@ impl OnChainConfig {
             params.push_str("0,");
             params.push_str(&format!("\"0x{:x}\",", address));
             params.push_str("\"\",");
-            params.push_str(&format!("1000000000000000"));
-            params.push_str("]");
+            params.push_str(&"1000000000000000".to_string());
+            params.push(']');
             self._request("debug_storageRangeAt".to_string(), params)
         };
 
@@ -604,11 +604,11 @@ impl OnChainConfig {
     }
 
     pub fn fetch_blk_timestamp(&mut self) -> EVMU256 {
-        if self.timestamp == None {
+        if self.timestamp.is_none() {
             self.timestamp = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -622,16 +622,16 @@ impl OnChainConfig {
                 }
             }
         }
-        let timestamp = EVMU256::from_str(&self.timestamp.as_ref().unwrap()).unwrap();
+        let timestamp = EVMU256::from_str(self.timestamp.as_ref().unwrap()).unwrap();
         timestamp
     }
 
     pub fn fetch_blk_coinbase(&mut self) -> EVMAddress {
-        if self.coinbase == None {
+        if self.coinbase.is_none() {
             self.coinbase = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -642,16 +642,16 @@ impl OnChainConfig {
                 }
             }
         }
-        let coinbase = EVMAddress::from_str(&self.coinbase.as_ref().unwrap()).unwrap();
+        let coinbase = EVMAddress::from_str(self.coinbase.as_ref().unwrap()).unwrap();
         coinbase
     }
 
     pub fn fetch_blk_gaslimit(&mut self) -> EVMU256 {
-        if self.gaslimit == None {
+        if self.gaslimit.is_none() {
             self.gaslimit = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -665,7 +665,7 @@ impl OnChainConfig {
                 }
             }
         }
-        let gaslimit = EVMU256::from_str(&self.gaslimit.as_ref().unwrap()).unwrap();
+        let gaslimit = EVMU256::from_str(self.gaslimit.as_ref().unwrap()).unwrap();
         gaslimit
     }
 
@@ -1006,7 +1006,7 @@ impl OnChainConfig {
         }
         let mut peg_info = self
             .get_pair(token, network, true)
-            .get(0)
+            .first()
             .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
             .clone();
 
@@ -1111,7 +1111,7 @@ impl OnChainConfig {
 }
 
 impl OnChainConfig {
-    fn fetch_token_price_uncached(&self, token_address: EVMAddress) -> Option<(u32, u32)> {
+    fn fetch_token_price_uncached(&self, _token_address: EVMAddress) -> Option<(u32, u32)> {
         panic!("not implemented");
     }
 }
@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn test_onchain_config() {
-        let mut config = OnChainConfig::new(BSC, 0);
+        let config = OnChainConfig::new(BSC, 0);
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
@@ -1212,14 +1212,14 @@ mod tests {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let mut known: HashSet<String> = HashSet::new();
         let v = config.get_all_hops("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", 0, &mut known);
-        assert!(v.len() > 0);
+        assert!(!v.is_empty());
     }
 
     #[test]
     fn test_get_pair_pegged() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", true);
-        assert!(v.len() > 0 && v.len() < 10);
+        assert!(!v.is_empty() && v.len() < 10);
     }
 
     #[test]
@@ -1238,7 +1238,7 @@ mod tests {
             "bsc",
             EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
         );
-        assert!(v.swaps.len() > 0);
+        assert!(!v.swaps.is_empty());
         assert!(!v.weth_address.is_zero());
         assert!(!v.address.is_zero());
     }
@@ -1277,7 +1277,7 @@ mod tests {
     //     let mut config = OnChainConfig::new(ETH, 0);
     //     let v = config
     //         .fetch_storage_dump(
-    //             
+    //
     // EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").
     // unwrap(),         )
     //         .unwrap();

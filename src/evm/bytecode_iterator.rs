@@ -1,4 +1,4 @@
-use revm_interpreter::opcode::{INVALID, JUMP, JUMPDEST, JUMPI, RETURN, REVERT, STOP};
+use revm_interpreter::opcode::{INVALID, JUMP, JUMPI, RETURN, REVERT, STOP};
 
 #[cfg(not(test))]
 pub static mut SKIP_CBOR: bool = false;
@@ -29,14 +29,14 @@ pub fn walk_bytecode<Fn: FnOnce(usize, u8) + Copy>(bytes: Vec<u8>, it: Fn) {
         let op = *bytes.get(i).unwrap();
         it(i, op);
         i += 1;
-        if op >= 0x60 && op <= 0x7f {
+        if (0x60..=0x7f).contains(&op) {
             i += op as usize - 0x5f;
         }
     }
 }
 
 pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
-    if bytes.len() == 0 {
+    if bytes.is_empty() {
         return vec![];
     }
     let mut i = 0;
@@ -64,7 +64,7 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
         let op = *bytes.get(i).unwrap();
         res.push((i, op));
         i += 1;
-        if op >= 0x60 && op <= 0x7f {
+        if (0x60..=0x7f).contains(&op) {
             i += op as usize - 0x5f;
         }
     }

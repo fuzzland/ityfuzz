@@ -1,10 +1,6 @@
 use std::{
-    borrow::Borrow,
-    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
-    ops::Deref,
-    rc::Rc,
 };
 
 use bytes::Bytes;
@@ -16,13 +12,12 @@ use crate::{
     evm::{
         blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         input::{ConciseEVMInput, EVMInput},
-        oracle::{dummy_precondition, EVMBugResult},
+        oracle::EVMBugResult,
         oracles::SELFDESTRUCT_BUG_IDX,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
         vm::EVMState,
     },
-    fuzzer::ORACLE_OUTPUT,
-    oracle::{Oracle, OracleCtx, Producer},
+    oracle::{Oracle, OracleCtx},
     state::HasExecutionResult,
 };
 
@@ -62,9 +57,9 @@ impl
             EVMFuzzState,
             ConciseEVMInput,
         >,
-        stage: u64,
+        _stage: u64,
     ) -> Vec<u64> {
-        if ctx.post_state.self_destruct.len() > 0 {
+        if !ctx.post_state.self_destruct.is_empty() {
             ctx.post_state
                 .self_destruct
                 .iter()
@@ -72,9 +67,9 @@ impl
                     let mut hasher = DefaultHasher::new();
                     addr.hash(&mut hasher);
                     pc.hash(&mut hasher);
-                    let real_bug_idx = (hasher.finish() as u64) << 8 + SELFDESTRUCT_BUG_IDX;
+                    let real_bug_idx = hasher.finish() << (8 + SELFDESTRUCT_BUG_IDX);
 
-                    let mut name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
+                    let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
                     let srcmap = BuildJobResult::get_sourcemap_executor(
                         ctx.fuzz_state
@@ -90,7 +85,7 @@ impl
                     EVMBugResult::new(
                         "selfdestruct".to_string(),
                         real_bug_idx,
-                        format!("Destructed",),
+                        "Destructed".to_string(),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         srcmap,
                         Some(name.clone()),

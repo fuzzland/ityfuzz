@@ -10,7 +10,7 @@ use libafl::{
     executors::ExitKind,
     feedbacks::Feedback,
     observers::ObserversTuple,
-    prelude::{HasCorpus, HasMetadata, HasRand, Input, State, Testcase, UsesInput},
+    prelude::{HasCorpus, HasMetadata, HasRand, State, Testcase, UsesInput},
     schedulers::Scheduler,
     state::HasClientPerfMonitor,
     Error,
@@ -164,7 +164,7 @@ where
     F: Feedback<S>,
     SC: Scheduler<State = S> + Clone,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         todo!()
     }
 }

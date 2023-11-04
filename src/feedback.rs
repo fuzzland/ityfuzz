@@ -9,7 +9,6 @@ use std::{
 };
 
 use libafl::{
-    corpus::Testcase,
     events::EventFirer,
     executors::ExitKind,
     inputs::Input,
@@ -33,7 +32,6 @@ use crate::{
     oracle::{BugMetadata, Oracle, OracleCtx, Producer},
     scheduler::HasVote,
     state::{HasExecutionResult, HasInfantStateState, InfantStateState},
-    state_input::StagedVMState,
 };
 
 /// OracleFeedback is a wrapper around a set of oracles and producers.
@@ -406,7 +404,7 @@ where
         for i in 0..MAP_SIZE {
             self.write_map[i] = 0;
         }
-        return Ok(interesting);
+        Ok(interesting)
     }
 }
 
@@ -533,7 +531,7 @@ where
         OT: ObserversTuple<S0>,
     {
         let mut cmp_interesting = false;
-        let mut cov_interesting = false;
+        let cov_interesting = false;
 
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {

@@ -5,7 +5,6 @@ use std::{
     fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
     io::Write,
-    mem,
     ops::Deref,
     rc::Rc,
     str::FromStr,
@@ -85,16 +84,13 @@ use crate::{
             flashloan::{register_borrow_txn, Flashloan},
         },
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
-        vm::{EVMState, PostExecutionCtx, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
+        vm::{EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
-    generic_vm::{
-        vm_executor::{ExecutionResult, GenericVM, MAP_SIZE},
-        vm_state::VMStateT,
-    },
+    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     handle_contract_insertion,
     input::VMInputT,
     invoke_middlewares,
-    state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState},
+    state::{HasCaller, HasHashToAddress, HasItyState},
     state_input::StagedVMState,
 };
 
@@ -614,20 +610,20 @@ where
             assert_ne!(self._pc, 0);
             self.pc_to_addresses
                 .entry((input.context.caller, self._pc))
-                .or_insert_with(HashSet::new);
+                .or_default();
             let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.context.caller, self._pc)).unwrap();
             addresses_at_pc.insert(input.contract);
             addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD
         };
 
-        if input.context.scheme == CallScheme::StaticCall {
-            if state.has_caller(&input.contract) || is_target_address_unbounded {
-                record_func_hash!();
-                push_interp!();
-                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
-                // input.contract, hex::encode(input.input.clone()));
-                return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
-            }
+        if input.context.scheme == CallScheme::StaticCall &&
+            (state.has_caller(&input.contract) || is_target_address_unbounded)
+        {
+            record_func_hash!();
+            push_interp!();
+            // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
+            // input.contract, hex::encode(input.input.clone()));
+            return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
         }
 
         if input.context.scheme == CallScheme::Call {
@@ -642,7 +638,7 @@ where
             // check whether the whole CALLDATAVALUE can be arbitrary
             self.pc_to_call_hash
                 .entry((input.context.caller, self._pc, self.jumpi_trace))
-                .or_insert_with(HashSet::new);
+                .or_default();
             self.pc_to_call_hash
                 .get_mut(&(input.context.caller, self._pc, self.jumpi_trace))
                 .unwrap()
@@ -882,7 +878,7 @@ where
         }
 
         self.expected_emits.clear();
-        return (result, gas, retdata);
+        (result, gas, retdata)
     }
 
     /// Check expected calls
@@ -893,7 +889,7 @@ where
         }
 
         let (result, gas, retdata) = res;
-        let expected_calls = mem::replace(&mut self.expected_calls, ExpectedCallTracker::new());
+        let expected_calls = std::mem::take(&mut self.expected_calls);
         for (_, calldatas) in expected_calls {
             // Loop over each address, and for each address, loop over each calldata it
             // expects.

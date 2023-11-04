@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, HashMap},
     env,
     fmt::Debug,
     fs::{File, OpenOptions},
@@ -38,26 +38,23 @@ use libafl::{
     ExecuteInputResult,
 };
 use libafl_bolts::current_time;
-use primitive_types::H256;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::Value;
+use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
+use crate::{
+    evm::host::JMP_MAP,
+    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
+    input::{ConciseSerde, SolutionTx},
+    minimizer::SequentialMinimizer,
+    oracle::BugMetadata,
+    scheduler::HasReportCorpus,
+    state::HasExecutionResult,
+};
 /// Implements fuzzing logic for ItyFuzz
 use crate::{
     evm::solution,
     input::VMInputT,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
-    state_input::StagedVMState,
-};
-use crate::{
-    evm::{host::JMP_MAP, input::ConciseEVMInput, vm::EVMState},
-    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
-    input::{ConciseSerde, SolutionTx},
-    minimizer::SequentialMinimizer,
-    oracle::BugMetadata,
-    scheduler::{HasReportCorpus, HasVote},
-    state::HasExecutionResult,
 };
 
 pub static mut RUN_FOREVER: bool = false;
@@ -157,7 +154,7 @@ where
 
     /// Called every time a new testcase is added to the corpus
     /// Setup the minimizer map
-    pub fn on_add_corpus(&mut self, input: &I, coverage: &[u8; MAP_SIZE], testcase_idx: usize) -> () {
+    pub fn on_add_corpus(&mut self, input: &I, coverage: &[u8; MAP_SIZE], testcase_idx: usize) {
         let mut hasher = DefaultHasher::new();
         coverage.hash(&mut hasher);
         let hash = hasher.finish();
@@ -166,7 +163,7 @@ where
 
     /// Called every time a testcase is replaced for the corpus
     /// Update the minimizer map
-    pub fn on_replace_corpus(&mut self, (hash, new_fav_factor, _): (u64, f64, usize), new_testcase_idx: usize) -> () {
+    pub fn on_replace_corpus(&mut self, (hash, new_fav_factor, _): (u64, f64, usize), new_testcase_idx: usize) {
         let res = self.minimizer_map.get_mut(&hash).unwrap();
         res.0 = new_testcase_idx;
         res.1 = new_fav_factor;
@@ -186,7 +183,7 @@ where
             let new_fav_factor = input.fav_factor();
             // if the new testcase has a higher fav factor, replace the old one
             if new_fav_factor > *fav_factor {
-                return Some((hash, new_fav_factor, testcase_idx.clone()));
+                return Some((hash, new_fav_factor, *testcase_idx));
             }
         }
         None
@@ -493,12 +490,12 @@ where
                     self.objective.discard_metadata(state, &input)?;
                     match self.should_replace(&input, unsafe { &JMP_MAP }) {
                         Some((hash, new_fav_factor, old_testcase_idx)) => {
-                            let mut testcase = Testcase::new(input.clone());
+                            let testcase = Testcase::new(input.clone());
                             let prev = state.corpus_mut().replace(old_testcase_idx.into(), testcase)?;
                             self.infant_scheduler
                                 .report_corpus(state.get_infant_state_state(), state_idx);
                             self.scheduler.on_replace(state, old_testcase_idx.into(), &prev)?;
-                            self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), old_testcase_idx.into());
+                            self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), old_testcase_idx);
 
                             Ok((res, Some(old_testcase_idx.into())))
                         }

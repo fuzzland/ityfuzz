@@ -4,7 +4,6 @@ use std::{
     fs,
     fs::OpenOptions,
     io::Write,
-    ops::AddAssign,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -16,7 +15,7 @@ use libafl::{
     schedulers::Scheduler,
 };
 use revm_interpreter::{
-    opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP},
+    opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
 };
 use revm_primitives::Bytecode;
@@ -27,17 +26,14 @@ use tracing::info;
 use crate::{
     evm::{
         blaz::builder::ArtifactInfoMetadata,
-        bytecode_iterator::{all_bytecode, walk_bytecode},
+        bytecode_iterator::all_bytecode,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         srcmap::parser::{
-            decode_instructions,
             pretty_print_source_map,
             pretty_print_source_map_single,
             SourceMapAvailability,
-            SourceMapAvailability::Available,
-            SourceMapLocation,
             SourceMapWithCode,
         },
         types::{is_zero, EVMAddress, ProjectSourceMapTy},
@@ -95,6 +91,12 @@ pub struct CoverageResult {
     pub address: EVMAddress,
 }
 
+impl Default for CoverageResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoverageResult {
     pub fn new() -> Self {
         Self {
@@ -123,6 +125,12 @@ pub struct CoverageReport {
     pub coverage: HashMap<String, CoverageResult>,
     #[serde(skip)]
     pub files: HashMap<String, Vec<(String, String)>>,
+}
+
+impl Default for CoverageReport {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CoverageReport {
@@ -167,15 +175,15 @@ impl CoverageReport {
                 (cov.branch_coverage * 100) as f64 / cov.total_branches as f64
             ));
 
-            if cov.uncovered.len() > 0 {
-                s.push_str(&format!("Uncovered Code:\n"));
+            if !cov.uncovered.is_empty() {
+                s.push_str(&"Uncovered Code:\n".to_string());
                 for uncovered in &cov.uncovered {
                     s.push_str(&format!("{}\n\n", uncovered.to_string()));
                 }
             }
 
             s.push_str(&format!("Uncovered PCs: {:?}\n", cov.uncovered_pc));
-            s.push_str(&format!("--------------------------------\n"));
+            s.push_str(&"--------------------------------\n".to_string());
         }
         s
     }
@@ -273,7 +281,7 @@ impl Coverage {
         let default_skipper = HashSet::new();
 
         for (addr, all_pcs) in &self.total_instr_set {
-            let mut name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
+            let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
             report
                 .files
                 .insert(name.clone(), self.sources.get(addr).unwrap_or(&vec![]).clone());
@@ -282,7 +290,7 @@ impl Coverage {
                 Some(covered) => {
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
                     // Handle Instruction Coverage
-                    let mut real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
+                    let real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
                     let uncovered_pc = all_pcs.difference(&real_covered).cloned().collect_vec();
                     report.coverage.insert(
                         name.clone(),
@@ -293,13 +301,13 @@ impl Coverage {
                             total_branches: 0,
                             uncovered: HashSet::new(),
                             uncovered_pc: uncovered_pc.clone(),
-                            address: addr.clone(),
+                            address: *addr,
                         },
                     );
 
-                    let mut result_ref = report.coverage.get_mut(&name).unwrap();
+                    let result_ref = report.coverage.get_mut(&name).unwrap();
                     for pc in uncovered_pc {
-                        if let Some(source_map) = self.pc_info.get(&(*addr, pc)).map(|x| x.clone()) {
+                        if let Some(source_map) = self.pc_info.get(&(*addr, pc)).cloned() {
                             result_ref.uncovered.insert(source_map.clone());
                         }
                     }
@@ -341,7 +349,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
@@ -358,7 +366,7 @@ where
     unsafe fn on_insert(
         &mut self,
         _: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
+        _host: &mut FuzzHost<VS, I, S, SC>,
         state: &mut S,
         bytecode: &mut Bytecode,
         address: EVMAddress,

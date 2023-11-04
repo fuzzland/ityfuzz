@@ -2,15 +2,11 @@ use std::{
     any::Any,
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
-    ops::Index,
 };
 
 use libafl::{prelude::HasMetadata, state::HasRand};
 use libafl_bolts::prelude::Rand;
-use move_binary_format::{
-    errors::{PartialVMResult, VMResult},
-    file_format::AbilitySet,
-};
+use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress,
     effects::Op,
@@ -23,20 +19,18 @@ use move_vm_runtime::loader::Resolver;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::Type,
-    values::{Container, ContainerRef, GlobalValue, IndexedRef, Value, ValueImpl},
+    values::{Container, ContainerRef, GlobalValue, Value, ValueImpl},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::ser::State;
 use tracing::debug;
 
 use crate::{
-    evm::onchain::endpoints::Chain::POLYGON,
     generic_vm::vm_state::VMStateT,
     r#move::{input::StructAbilities, movevm::TypeTagInfoMeta},
 };
 
 pub trait MoveVMStateT {
-    fn values(&self) -> (&HashMap<Type, Vec<(GatedValue, usize)>>);
+    fn values(&self) -> &HashMap<Type, Vec<(GatedValue, usize)>>;
 
     /// Called after each time the function is called, we should return all
     /// values that are borrowed as reference / mutable reference from the
@@ -79,7 +73,7 @@ impl GatedValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MoveVMState {
     pub resources: HashMap<AccountAddress, HashMap<Type, Value>>,
     pub _gv_slot: HashMap<(AccountAddress, Type), GlobalValue>,
@@ -93,7 +87,7 @@ pub struct MoveVMState {
 }
 
 impl MoveVMStateT for MoveVMState {
-    fn values(&self) -> (&HashMap<Type, Vec<(GatedValue, usize)>>) {
+    fn values(&self) -> &HashMap<Type, Vec<(GatedValue, usize)>> {
         &self.values
     }
 
@@ -146,7 +140,7 @@ impl MoveVMState {
                                 v: Value(v.clone()),
                                 gate: gate.clone(),
                             },
-                            &**inner_ty,
+                            inner_ty,
                             resolver,
                             state,
                         )
@@ -160,7 +154,7 @@ impl MoveVMState {
                                 v: Value(v.clone()),
                                 gate: gate.clone(),
                             },
-                            &**inner_ty,
+                            inner_ty,
                             resolver,
                             state,
                         )
@@ -185,7 +179,7 @@ impl MoveVMState {
             }
         };
         let mut exists = false;
-        let mut allow_clone = abilities.has_copy();
+        let allow_clone = abilities.has_copy();
         for (v, amt) in it {
             if (*v).equals(&value).unwrap() {
                 exists = true;
@@ -231,16 +225,16 @@ impl MoveVMState {
         match self.values.get_mut(ty) {
             None => None,
             Some(it) => {
-                if it.len() == 0 {
+                if it.is_empty() {
                     None
                 } else {
-                    let mut offset = (state.rand_mut().next() as usize % it.len()) as usize;
+                    let mut offset = state.rand_mut().next() as usize % it.len();
 
                     loop {
                         if minimum_gate.satisfied_by(&it[offset].0.gate) {
                             break;
                         } else {
-                            offset = (state.rand_mut().next() as usize % it.len()) as usize;
+                            offset = state.rand_mut().next() as usize % it.len();
                         }
                     }
 
@@ -294,7 +288,7 @@ impl MoveVMState {
             let offset = self
                 .ref_in_use
                 .iter()
-                .position(|(t, v)| v.equals(&value).unwrap())
+                .position(|(_t, v)| v.equals(&value).unwrap())
                 .expect("Cannot find value in ref_in_use, is this struct not a reference?");
             self.ref_in_use.remove(offset);
         }
@@ -310,7 +304,7 @@ impl MoveVMState {
         }
 
         let it = self.values.get_mut(ty).unwrap();
-        match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
+        match it.iter().position(|(val, _val_count)| val.equals(&value).unwrap()) {
             Some(offset) => {
                 it[offset].1 += 1;
             }
@@ -337,7 +331,7 @@ impl MoveVMState {
             let offset = self
                 .ref_in_use
                 .iter()
-                .position(|(t, v)| v.equals(&value).unwrap())
+                .position(|(_t, v)| v.equals(&value).unwrap())
                 .expect("Cannot find value in ref_in_use, is this struct not a reference?");
             self.ref_in_use.remove(offset);
         }
@@ -357,7 +351,7 @@ impl MoveVMState {
         }
 
         let it = self.values.get_mut(ty).unwrap();
-        match it.iter().position(|(val, val_count)| val.equals(&value).unwrap()) {
+        match it.iter().position(|(val, _val_count)| val.equals(&value).unwrap()) {
             Some(offset) => {
                 it[offset].1 += 1;
             }
@@ -408,19 +402,13 @@ impl MoveVMState {
                 None => {}
                 Some(op) => match op {
                     Op::New(val) => {
-                        self.resources
-                            .entry(addr.clone())
-                            .or_insert(HashMap::new())
-                            .insert(ty.clone(), val.clone());
+                        self.resources.entry(*addr).or_default().insert(ty.clone(), val.clone());
                     }
                     Op::Modify(val) => {
-                        self.resources
-                            .entry(addr.clone())
-                            .or_insert(HashMap::new())
-                            .insert(ty.clone(), val.clone());
+                        self.resources.entry(*addr).or_default().insert(ty.clone(), val.clone());
                     }
                     Op::Delete => {
-                        self.resources.entry(addr.clone()).or_insert(HashMap::new()).remove(&ty);
+                        self.resources.entry(*addr).or_default().remove(ty);
                     }
                 },
             }
@@ -433,16 +421,10 @@ impl MoveVMState {
 impl DataStore for MoveVMState {
     fn load_resource(
         &mut self,
-        addr: AccountAddress,
-        ty: &Type,
+        _addr: AccountAddress,
+        _ty: &Type,
     ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
         unreachable!("Sui doesn't support load_resource");
-        let data = self.resources.get(&addr).unwrap().get(ty).unwrap();
-
-        self._gv_slot
-            .insert((addr, ty.clone()), GlobalValue::cached(data.clone()).unwrap());
-
-        return Ok((self._gv_slot.get_mut(&(addr, ty.clone())).unwrap(), None));
     }
 
     fn load_module(&self, _module_id: &ModuleId) -> VMResult<Vec<u8>> {
@@ -465,11 +447,11 @@ impl DataStore for MoveVMState {
         Ok(module_id.clone())
     }
 
-    fn defining_module(&self, module_id: &ModuleId, struct_: &IdentStr) -> PartialVMResult<ModuleId> {
+    fn defining_module(&self, module_id: &ModuleId, _struct_: &IdentStr) -> PartialVMResult<ModuleId> {
         Ok(module_id.clone())
     }
 
-    fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
+    fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
         unreachable!("ItyFuzz does not support publishing modules")
     }
 }
@@ -607,24 +589,11 @@ impl VMStateT for MoveVMState {
         self
     }
 
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         todo!()
     }
 
-    fn is_subset_of(&self, other: &Self) -> bool {
+    fn is_subset_of(&self, _other: &Self) -> bool {
         todo!()
-    }
-}
-
-impl Default for MoveVMState {
-    fn default() -> Self {
-        Self {
-            resources: HashMap::new(),
-            _gv_slot: HashMap::new(),
-            _hot_potato: 0,
-            values: HashMap::new(),
-            typed_bug: vec![],
-            ref_in_use: vec![],
-        }
     }
 }

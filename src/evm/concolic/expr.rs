@@ -325,12 +325,12 @@ impl ConcatOptCtx {
 }
 
 fn simplify_concat_select_helper(expr: Box<Expr>) -> (ConcatOptCtx, Box<Expr>) {
-    let mut lhs_info = expr.lhs.map(|e| simplify_concat_select_helper(e));
-    let mut rhs_info = expr.rhs.map(|e| simplify_concat_select_helper(e));
-    let mut op = expr.op;
+    let lhs_info = expr.lhs.map(simplify_concat_select_helper);
+    let rhs_info = expr.rhs.map(simplify_concat_select_helper);
+    let op = expr.op;
     let mut new_expr = Box::new(Expr {
-        lhs: lhs_info.clone().map(|(ctx, e)| e),
-        rhs: rhs_info.clone().map(|(ctx, e)| e),
+        lhs: lhs_info.clone().map(|(_ctx, e)| e),
+        rhs: rhs_info.clone().map(|(_ctx, e)| e),
         op: op.clone(),
     });
 
@@ -376,10 +376,9 @@ pub fn simplify(expr: Box<Expr>) -> Box<Expr> {
 #[cfg(test)]
 mod test {
     use crate::evm::concolic::expr::{
-        simplify,
         simplify_concat_select,
         ConcolicOp,
-        ConcolicOp::{AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT},
+        ConcolicOp::{CONSTBYTE, SELECT},
         Expr,
     };
 
@@ -438,7 +437,7 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_multi() {
-        let mut starting_expr = Expr {
+        let starting_expr = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
@@ -449,7 +448,7 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_internal() {
-        let mut starting_expr1 = Expr {
+        let starting_expr1 = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
@@ -461,7 +460,7 @@ mod test {
             op: ConcolicOp::ADD,
         };
 
-        let mut starting_expr2 = Expr {
+        let starting_expr2 = Expr {
             lhs: Some(Box::new(intermediate.clone())),
             rhs: Some(expression_builder(intermediate)),
             op: ConcolicOp::DIV,
@@ -478,13 +477,13 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_internal_with_concat() {
-        let mut starting_expr1 = Expr {
+        let starting_expr1 = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
         };
 
-        let mut starting_expr2 = Expr {
+        let starting_expr2 = Expr {
             lhs: Some(Box::new(starting_expr1.clone())),
             rhs: None,
             op: SELECT(88, 88),

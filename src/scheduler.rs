@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 use libafl::corpus::Corpus;
 use libafl::{
     corpus::Testcase,
-    prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, Input, UsesInput},
+    prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, UsesInput},
     schedulers::{RemovableScheduler, Scheduler, TestcaseScore},
     stages::PowerMutationalStage,
     state::{HasCorpus, UsesState},
@@ -13,8 +13,7 @@ use libafl::{
 };
 use libafl_bolts::{impl_serdeany, prelude::Rand};
 use rand::random;
-use revm_primitives::HashSet;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use crate::{
@@ -22,10 +21,9 @@ use crate::{
         abi::FUNCTION_SIG,
         blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         corpus_initializer::EVMInitializationArtifacts,
-        input::{EVMInput, EVMInputT},
+        input::EVMInput,
     },
-    generic_vm::vm_state::VMStateT,
-    input::{ConciseSerde, VMInputT},
+    input::VMInputT,
     state::HasParent,
 };
 
@@ -50,6 +48,12 @@ pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 #[derive(Debug, Clone)]
 pub struct SortedDroppingScheduler<S> {
     phantom: std::marker::PhantomData<S>,
+}
+
+impl<S> Default for SortedDroppingScheduler<S> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> SortedDroppingScheduler<S> {
@@ -81,6 +85,12 @@ pub struct DependencyTree {
     nodes: HashMap<usize, Node>,
 }
 
+impl Default for DependencyTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DependencyTree {
     pub fn add_node(&mut self, idx: usize, parent: usize) {
         self.nodes.insert(
@@ -101,7 +111,7 @@ impl DependencyTree {
     }
 
     pub fn remove_node(&mut self, idx: usize) {
-        let mut node = self.nodes.get_mut(&idx).unwrap();
+        let node = self.nodes.get_mut(&idx).unwrap();
         node.ref_count -= 1;
         node.pending_delete = true;
         let mut parent = node.parent;
@@ -113,7 +123,7 @@ impl DependencyTree {
     }
 
     pub fn mark_never_delete(&mut self, idx: usize) {
-        let mut node = self.nodes.get_mut(&idx).unwrap();
+        let node = self.nodes.get_mut(&idx).unwrap();
         node.never_delete = true;
         let mut parent = node.parent;
         while parent != 0 {
@@ -173,7 +183,7 @@ where
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
         self.vote(state, state_idx, 3);
-        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
 
         #[cfg(feature = "full_trace")]
         data.deps.mark_never_delete(state_idx);
@@ -214,7 +224,7 @@ where
         // Setup metadata for the input (or VMState)
         {
             let parent_idx = state.get_parent_idx();
-            let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+            let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
             data.votes_and_visits.insert(idx, (3, 1));
             data.visits_total += 1;
             data.votes_total += 3;
@@ -308,7 +318,7 @@ where
                     corpus_size
                 );
                 for idx in &data.sorted_votes {
-                    let (votes, visits) = data.votes_and_visits.get(&idx).unwrap();
+                    let (votes, visits) = data.votes_and_visits.get(idx).unwrap();
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
                     match inp.into_inner().input() {
                         Some(x) => {
@@ -324,13 +334,13 @@ where
         // Conduct a probabilistic sampling from votes and visits (weighted by votes)
         let threshold = (state.rand_mut().below(1000) as f64 / 1000.0) *
             state.metadata_map().get::<VoteData>().unwrap().votes_total as f64;
-        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
         let mut idx = usize::MAX;
 
         let mut s: f64 = 0.0; // sum of votes so far
 
         for i in &data.sorted_votes {
-            s += data.votes_and_visits.get(&i).unwrap().0 as f64;
+            s += data.votes_and_visits.get(i).unwrap().0 as f64;
             if s > threshold {
                 idx = *i;
                 break;
@@ -454,6 +464,12 @@ pub struct PowerABIScheduler<S> {
     phantom: PhantomData<S>,
 }
 
+impl<S> Default for PowerABIScheduler<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S> PowerABIScheduler<S> {
     pub fn new() -> Self {
         Self { phantom: PhantomData }
@@ -469,14 +485,13 @@ impl<S> PowerABIScheduler<S> {
             }
         };
         let tc_func_name = unsafe {
-            FUNCTION_SIG.get(&tc_func).expect(
-                format!(
+            FUNCTION_SIG.get(&tc_func).unwrap_or_else(|| {
+                panic!(
                     "function signature {} @ {:?} not found in FUNCTION_SIG",
                     hex::encode(tc_func),
                     input.get_contract()
                 )
-                .as_str(),
-            )
+            })
         };
         let tc_func_slug = {
             let amount_args = tc_func_name.matches(',').count() + {
@@ -637,10 +652,10 @@ impl<S> TestcaseScore<S> for CorpusPowerABITestcaseScore<S>
 where
     S: HasCorpus + HasMetadata,
 {
-    fn compute(state: &S, entry: &mut Testcase<S::Input>) -> Result<f64, Error> {
+    fn compute(_state: &S, entry: &mut Testcase<S::Input>) -> Result<f64, Error> {
         let num_lines = match entry.metadata::<PowerABITestcaseMetadata>() {
             Ok(meta) => meta.lines,
-            Err(e) => 1, // FIXME: should not happen
+            Err(_e) => 1, // FIXME: should not happen
         };
         // TODO: more sophisticated power score
         Ok(num_lines as f64 * 100.0)

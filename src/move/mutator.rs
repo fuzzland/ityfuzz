@@ -14,7 +14,6 @@ use crate::{
     input::{ConciseSerde, VMInputT},
     r#move::{input::MoveFunctionInputT, vm_state::MoveVMStateT},
     state::{HasCaller, HasItyState, InfantStateState},
-    state_input::StagedVMState,
 };
 
 pub struct MoveFuzzMutator<VS, Loc, Addr, SC, CI>

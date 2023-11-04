@@ -7,7 +7,6 @@ use libafl::{
     prelude::{HasMaxSize, HasRand, MutationResult, State},
     state::HasMetadata,
 };
-use primitive_types::U256;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{

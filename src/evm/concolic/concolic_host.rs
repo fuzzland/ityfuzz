@@ -1,15 +1,13 @@
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    fmt::{Debug, Formatter},
+    fmt::Debug,
     marker::PhantomData,
     ops::{Add, Mul, Not, Sub},
     sync::{Arc, Mutex, RwLock},
-    time::{Duration, Instant},
 };
 
 use bytes::Bytes;
-use either::Either;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use libafl::{
@@ -18,7 +16,6 @@ use libafl::{
     state::{HasCorpus, State},
 };
 use revm_interpreter::{Host, Interpreter};
-use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use z3::{
@@ -33,19 +30,15 @@ use crate::{
     bv_from_u256,
     evm::{
         abi::BoxedABI,
-        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
-        concolic::{
-            concolic_stage::ConcolicPrioritizationMetadata,
-            expr::{simplify, simplify_concat_select, ConcolicOp, Expr},
-        },
+        concolic::expr::{simplify, ConcolicOp, Expr},
         corpus_initializer::SourceMapMap,
-        host::{FuzzHost, JMP_MAP},
+        host::FuzzHost,
         input::{ConciseEVMInput, EVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
         srcmap::parser::SourceMapLocation,
-        types::{as_u64, is_zero, EVMAddress, ProjectSourceMapTy, EVMU256},
+        types::{as_u64, is_zero, EVMAddress, EVMU256},
     },
-    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
+    generic_vm::vm_state::VMStateT,
     input::VMInputT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
@@ -90,7 +83,7 @@ impl<'a> Solving<'a> {
             input: (*input)
                 .iter()
                 .enumerate()
-                .map(|(idx, x)| {
+                .map(|(_idx, x)| {
                     let bv = match &x.op {
                         ConcolicOp::SYMBYTE(name) => BV::new_const(context, name.clone(), 8),
                         ConcolicOp::CONSTBYTE(val) => BV::from_u64(context, *val as u64, 8),
@@ -506,21 +499,21 @@ impl SymbolicMemory {
             })
         };
         for i in 1..32 {
-            all_bytes = Box::new(
-                Expr {
-                    lhs: Some(all_bytes),
-                    rhs: if self.memory.len() > idx + i && let Some(by) = self.memory[idx + i].clone() {
-                        Some(by)
-                    } else {
-                        Some(Box::new(Expr {
-                            lhs: None,
-                            rhs: None,
-                            op: ConcolicOp::CONSTBYTE(0),
-                        }))
-                    },
-                    op: ConcolicOp::CONCAT,
-                }
-            );
+            all_bytes = Box::new(Expr {
+                lhs: Some(all_bytes),
+                rhs: if self.memory.len() > idx + i &&
+                    let Some(by) = self.memory[idx + i].clone()
+                {
+                    Some(by)
+                } else {
+                    Some(Box::new(Expr {
+                        lhs: None,
+                        rhs: None,
+                        op: ConcolicOp::CONSTBYTE(0),
+                    }))
+                },
+                op: ConcolicOp::CONCAT,
+            });
         }
 
         Some(simplify(all_bytes))
@@ -647,9 +640,8 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 
     fn construct_input_from_abi(vm_input: BoxedABI) -> Vec<Box<Expr>> {
-        let res = vm_input.get_concolic();
         // debug!("[concolic] construct_input_from_abi: {:?}", res);
-        res
+        vm_input.get_concolic()
     }
 
     fn string_to_bytes(s: &str) -> Vec<u8> {
@@ -741,7 +733,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.data()[interp.stack.len() - 1 - $idx]
@@ -837,7 +829,7 @@ where
             debug!("[concolic] stack: {:?}", interp.stack);
             debug!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
             for idx in 0..interp.stack.len() {
-                let real = interp.stack.data[idx].clone();
+                let real = interp.stack.data[idx];
                 let sym = self.symbolic_stack[idx].clone();
                 if sym.is_some() {
                     match sym.unwrap().op {
@@ -1417,10 +1409,10 @@ where
 
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        by: &Bytes,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _by: &Bytes,
     ) {
         self.pop_ctx();
         self.call_depth -= 1;

@@ -166,6 +166,15 @@ where
     }
 }
 
+impl<I> Default for IndexedInMemoryCorpus<I>
+where
+    I: Input,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<I> IndexedInMemoryCorpus<I>
 where
     I: Input,

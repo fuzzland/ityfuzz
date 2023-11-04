@@ -10,7 +10,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use crypto::sha3::Sha3Mode::Keccak256;
 use hex;
 use itertools::Itertools;
 use libafl::{
@@ -467,7 +466,7 @@ where
         {
             let presets = self.presets.clone();
             for p in presets {
-                let mut presets = p.presets(abi.function, &input, self.executor);
+                let presets = p.presets(abi.function, &input, self.executor);
                 presets.iter().for_each(|preset| {
                     add_input_to_corpus!(self.state, &mut self.scheduler, preset.clone());
                 });

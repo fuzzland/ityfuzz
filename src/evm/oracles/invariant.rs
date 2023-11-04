@@ -12,7 +12,6 @@ use crate::{
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
-    fuzzer::ORACLE_OUTPUT,
     oracle::{Oracle, OracleCtx},
     state::HasExecutionResult,
 };

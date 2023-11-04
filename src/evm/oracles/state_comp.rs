@@ -1,12 +1,3 @@
-use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::{Hash, Hasher},
-    ops::Deref,
-    rc::Rc,
-};
-
 use bytes::Bytes;
 use revm_primitives::Bytecode;
 
@@ -14,14 +5,13 @@ use crate::{
     evm::{
         host::STATE_CHANGE,
         input::{ConciseEVMInput, EVMInput},
-        oracle::{dummy_precondition, EVMBugResult},
+        oracle::EVMBugResult,
         oracles::STATE_COMP_BUG_IDX,
-        types::{bytes_to_u64, EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
-    fuzzer::ORACLE_OUTPUT,
     generic_vm::vm_state::VMStateT,
-    oracle::{Oracle, OracleCtx, Producer},
+    oracle::{Oracle, OracleCtx},
     state::HasExecutionResult,
 };
 
@@ -79,7 +69,7 @@ impl
             EVMFuzzState,
             ConciseEVMInput,
         >,
-        stage: u64,
+        _stage: u64,
     ) -> Vec<u64> {
         let comp = |state1: &EVMState, state2: &EVMState| -> bool {
             match self.matching_style {

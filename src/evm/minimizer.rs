@@ -3,7 +3,7 @@ use std::{cell::RefCell, ops::Deref, rc::Rc};
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::{
-    prelude::{Corpus, Executor, ExitKind, Feedback, ObserversTuple, SimpleEventManager, SimpleMonitor, StdScheduler},
+    prelude::Corpus,
     state::{HasCorpus, HasMetadata},
 };
 use revm_primitives::Bytecode;
@@ -13,14 +13,11 @@ use crate::{
     evm::{
         host::CALL_UNTIL,
         input::{ConciseEVMInput, EVMInput},
-        types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor},
-        vm::{EVMExecutor, EVMState},
+        types::{EVMAddress, EVMFuzzState, EVMQueueExecutor},
+        vm::EVMState,
     },
     feedback::OracleFeedback,
-    generic_vm::{
-        vm_executor::{ExecutionResult, GenericVM},
-        vm_state::VMStateT,
-    },
+    generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
     input::VMInputT,
     minimizer::SequentialMinimizer,
     oracle::BugMetadata,
@@ -53,7 +50,7 @@ impl EVMMinimizer {
             let prev_state = testcase_input.clone().unwrap();
             let prev = Self::get_call_seq(testcase_input.as_ref().unwrap(), state);
 
-            return vec![
+            return [
                 prev,
                 vm_state
                     .trace
@@ -96,7 +93,7 @@ impl<E: libafl::executors::HasObservers>
     fn minimize(
         &mut self,
         state: &mut EVMFuzzState,
-        exec: &mut E,
+        _exec: &mut E,
         input: &TxnTrace<EVMAddress, EVMAddress, ConciseEVMInput>,
         objective: &mut EVMOracleFeedback<'_>,
         corpus_id: usize,
@@ -117,9 +114,9 @@ impl<E: libafl::executors::HasObservers>
             .borrow()
             .clone();
         let last_sstate = testcase.input().as_ref().expect("Input should be present");
-        let mut txs = Self::get_call_seq(&last_sstate, state);
+        let mut txs = Self::get_call_seq(last_sstate, state);
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
-        assert!(txs.len() >= 1);
+        assert!(!txs.is_empty());
         let mut minimized = false;
         while !minimized {
             minimized = true;

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Deref};
+use std::fmt::Debug;
 
 use libafl::{
     schedulers::Scheduler,
@@ -31,7 +31,7 @@ where
         &self,
         function_sig: [u8; 4],
         input: &EVMInput,
-        evm_executor: &EVMExecutor<I, S, VS, ConciseEVMInput, SC>,
+        _evm_executor: &EVMExecutor<I, S, VS, ConciseEVMInput, SC>,
     ) -> Vec<EVMInput> {
         let mut res = vec![];
         match function_sig {

@@ -29,7 +29,6 @@ use libafl_bolts::{
     bolts_prelude::{NamedSerdeAnyMap, Rand, RomuDuoJrRand, SerdeAnyMap, StdRand},
     current_nanos,
 };
-use primitive_types::H160;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
 
@@ -435,6 +434,18 @@ where
 
     fn set_parent_idx(&mut self, idx: usize) {
         self.current_parent_idx = idx;
+    }
+}
+
+impl<Loc, Addr, VS, CI> Default for InfantStateState<Loc, Addr, VS, CI>
+where
+    VS: Default + VMStateT,
+    Addr: Serialize + DeserializeOwned + Debug + Clone,
+    Loc: Serialize + DeserializeOwned + Debug + Clone,
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -855,7 +866,7 @@ where
 {
     fn init_presets(
         &mut self,
-        has_matched: bool,
+        _has_matched: bool,
         templates: Vec<ExploitTemplate>,
         sig_to_addr_abi_map: HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
     ) {
@@ -868,11 +879,11 @@ where
     }
 
     fn has_preset(&self) -> bool {
-        self.interesting_signatures.len() > 0
+        !self.interesting_signatures.is_empty()
     }
 
     fn get_next_call(&mut self) -> Option<(EVMAddress, BoxedABI)> {
-        if self.interesting_signatures.len() == 0 {
+        if self.interesting_signatures.is_empty() {
             return None;
         }
 
@@ -881,11 +892,11 @@ where
 
         // find the abi
         match self.sig_to_addr_abi_map.get(&sig) {
-            Some((addr, abi)) => return Some((addr.clone(), abi.clone())),
+            Some((addr, abi)) => return Some((*addr, abi.clone())),
             None => {
                 debug!("No abi found for sig: {:?}", sig);
-                return None;
+                None
             }
-        };
+        }
     }
 }

@@ -1,24 +1,20 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
-use glob::glob;
 use itertools::Itertools;
 use libafl::{
     corpus::{Corpus, Testcase},
     schedulers::Scheduler,
-    state::{HasCorpus, HasMetadata, HasRand, State},
+    state::{HasCorpus, HasMetadata},
 };
-use libafl_bolts::prelude::Rand;
 use move_binary_format::{access::ModuleAccess, file_format::Bytecode, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
     language_storage::{ModuleId, StructTag},
     u256::U256,
 };
 use move_vm_runtime::loader::Function;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    values,
     values::{Container, ContainerRef, IndexedRef, Value, ValueImpl},
 };
 use revm_primitives::HashSet;
@@ -26,7 +22,6 @@ use sui_types::base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME};
 
 use crate::{
     generic_vm::vm_executor::GenericVM,
-    input::VMInputT,
     mutation_utils::ConstantPoolMetadata,
     r#move::{
         input::{CloneableValue, FunctionDefaultable, MoveFunctionInput, StructAbilities},
@@ -204,8 +199,7 @@ where
 
             let deps = module.immediate_dependencies();
             self.deployer(deps, deployed, module_id_to_module);
-            self.executor
-                .deploy(module, None, AccountAddress::random(), &mut self.state);
+            self.executor.deploy(module, None, AccountAddress::random(), self.state);
             deployed.insert(mod_id);
         }
     }
@@ -228,7 +222,7 @@ where
             &module_id_to_module,
         );
 
-        let mut module_id_to_fuzz = modules.iter().map(|m| m.self_id()).collect::<HashSet<_>>();
+        let module_id_to_fuzz = modules.iter().map(|m| m.self_id()).collect::<HashSet<_>>();
 
         for (module_id, funcs) in self.executor.functions.clone() {
             if !module_id_to_fuzz.contains(&module_id) {
@@ -365,7 +359,7 @@ where
 
     fn gen_tx_context(&mut self, ty: Type) -> Value {
         if let Type::MutableReference(ty) = ty {
-            if let Type::Struct(struct_tag) = *ty {
+            if let Type::Struct(_struct_tag) = *ty {
                 // struct TxContext has drop {
                 //     /// The address of the user that signed the current transaction
                 //     sender: address,
@@ -405,7 +399,9 @@ where
             .clone();
         for parameter_type in &function.parameter_types {
             let tag = type_tag_info.get_type_tag(parameter_type);
-            let default_val = if let Some(tag) = tag && is_tx_context(&tag) {
+            let default_val = if let Some(tag) = tag &&
+                is_tx_context(tag)
+            {
                 MoveInputStatus::Complete(self.gen_tx_context(parameter_type.clone()))
             } else {
                 Self::gen_default_value(self.state, Box::new(parameter_type.clone()))
@@ -441,6 +437,6 @@ where
         };
 
         // debug!("input: {:?}", input);
-        return Some(input);
+        Some(input)
     }
 }

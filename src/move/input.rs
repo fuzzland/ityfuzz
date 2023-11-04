@@ -1,13 +1,4 @@
-use std::{
-    any,
-    borrow::BorrowMut,
-    cell::RefCell,
-    collections::HashMap,
-    fmt::Debug,
-    ops::{Deref, DerefMut},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{any, borrow::BorrowMut, cell::RefCell, collections::HashMap, fmt::Debug, ops::Deref, rc::Rc, sync::Arc};
 
 use itertools::Itertools;
 use libafl::{
@@ -17,18 +8,13 @@ use libafl::{
 };
 use libafl_bolts::{impl_serdeany, prelude::Rand};
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::{ModuleId, TypeTag},
-};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
 use move_vm_runtime::loader::Function;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{Container, ContainerRef, IndexedRef, Value, ValueImpl},
 };
-use primitive_types::U256;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     evm::{abi::BoxedABI, types::EVMU256},
@@ -36,7 +22,7 @@ use crate::{
     input::{ConciseSerde, SolutionTx, VMInputT},
     mutation_utils::byte_mutator,
     r#move::{
-        movevm::{MoveVM, TypeTagInfoMeta},
+        movevm::TypeTagInfoMeta,
         types::MoveStagedVMState,
         vm_state::{Gate, MoveVMState, MoveVMStateT},
     },
@@ -75,14 +61,9 @@ pub trait MoveFunctionInputT {
     fn get_resolved(&self) -> bool;
 }
 
+#[derive(Default)]
 pub struct FunctionDefaultable {
     pub function: Option<Arc<Function>>,
-}
-
-impl Default for FunctionDefaultable {
-    fn default() -> Self {
-        FunctionDefaultable { function: None }
-    }
 }
 
 impl FunctionDefaultable {
@@ -100,6 +81,12 @@ impl FunctionDefaultable {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StructAbilities {
     pub abilities: HashMap<Type, AbilitySet>,
+}
+
+impl Default for StructAbilities {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StructAbilities {
@@ -188,7 +175,7 @@ impl ConciseSerde for MoveFunctionInput {
         todo!()
     }
 
-    fn deserialize_concise(data: &[u8]) -> Self {
+    fn deserialize_concise(_data: &[u8]) -> Self {
         todo!()
     }
 
@@ -299,7 +286,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
                 .metadata_map()
                 .get::<TypeTagInfoMeta>()
                 .expect("type tag info")
-                .is_tx_context(&ty)
+                .is_tx_context(ty)
             {
                 continue;
             }
@@ -309,7 +296,7 @@ impl MoveFunctionInputT for MoveFunctionInput {
                 // If the final vector inner type is a struct, we need to slash it (clear all)
                 Type::Vector(inner_ty) => {
                     let mut final_ty = (*inner_ty).clone();
-                    while let Type::Vector(inner_ty) = (*final_ty) {
+                    while let Type::Vector(inner_ty) = *final_ty {
                         final_ty = inner_ty;
                     }
                     match *final_ty {
@@ -399,13 +386,13 @@ impl CloneableValue {
                 match v {
                     Container::VecU8(v) => {
                         // debug!("{:?}", v.borrow().deref());
-                        return leb_tns!(vec, v);
+                        leb_tns!(vec, v)
                     }
-                    Container::VecU64(v) => return leb_tns!(vec, v),
-                    Container::VecU128(v) => return leb_tns!(vec, v),
-                    Container::VecU16(v) => return leb_tns!(vec, v),
-                    Container::VecU32(v) => return leb_tns!(vec, v),
-                    Container::VecU256(v) => return leb_tns!(vec, v),
+                    Container::VecU64(v) => leb_tns!(vec, v),
+                    Container::VecU128(v) => leb_tns!(vec, v),
+                    Container::VecU16(v) => leb_tns!(vec, v),
+                    Container::VecU32(v) => leb_tns!(vec, v),
+                    Container::VecU256(v) => leb_tns!(vec, v),
                     // cant be mutated
                     _ => unreachable!(),
                 }
@@ -499,7 +486,7 @@ pub const MOVE_MAX_VEC_SIZE: u64 = 10;
 impl MoveFunctionInput {
     fn _cache_deps(&mut self, ty: &Type) {
         match ty {
-            Type::Struct(t) => match self._deps.get_mut(ty) {
+            Type::Struct(_t) => match self._deps.get_mut(ty) {
                 Some(v) => {
                     *v += 1;
                 }
@@ -539,7 +526,7 @@ impl MoveFunctionInput {
             Container::Locals(_) => {
                 unreachable!("locals cant be mutated")
             }
-            Container::Vec(v) => {
+            Container::Vec(_v) => {
                 unreachable!("wtf is this")
             }
             Container::Struct(ref mut v) => {
@@ -554,7 +541,7 @@ impl MoveFunctionInput {
                     vm_state.sample_value(_state, ty, ref_ty)
                 {
                     *v.borrow_mut() = new_struct.clone();
-                    return MutationResult::Mutated;
+                    MutationResult::Mutated
                 } else {
                     panic!("wtf")
                 }
@@ -749,17 +736,16 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
         }
 
         // debug!("mutating arg!!!! {:?} {:?}", self.args[nth], ty.clone());
-        let res = Self::mutate_value_impl(
+
+        // debug!("after mutating arg!!!! {:?}", self.args[nth]);
+        Self::mutate_value_impl(
             _state,
             &mut self.args[nth],
             ty,
             &mut self.vm_state.state,
             &Gate::Own,
             self._resolved,
-        );
-
-        // debug!("after mutating arg!!!! {:?}", self.args[nth]);
-        res
+        )
     }
 
     fn get_caller_mut(&mut self) -> &mut AccountAddress {
@@ -775,7 +761,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
     }
 
     fn get_contract(&self) -> AccountAddress {
-        self.module.address().clone()
+        *self.module.address()
     }
     fn get_state(&self) -> &MoveVMState {
         &self.vm_state.state
@@ -845,21 +831,20 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
             function: self.function.clone(),
             args: self.args.clone(),
             ty_args: self.ty_args.clone(),
-            caller: self.caller.clone(),
+            caller: self.caller,
         }
     }
 }
 
 mod tests {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+    use std::{cell::RefCell, rc::Rc, sync::Arc};
 
     use libafl::{mutators::MutationResult, prelude::HasMetadata};
-    use move_binary_format::file_format::{Ability, AbilitySet};
     use move_core_types::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId, u256};
-    use move_vm_runtime::loader::{Function, Loader, Scope};
+    use move_vm_runtime::loader::Function;
     use move_vm_types::{
         loaded_data::runtime_types::{CachedStructIndex, Type},
-        values::{values_impl, Container, ContainerRef, Value, ValueImpl},
+        values::{values_impl, Container, Value, ValueImpl},
     };
     use tracing::debug;
 
@@ -871,7 +856,6 @@ mod tests {
             types::{MoveFuzzState, MoveStagedVMState},
             vm_state::{Gate, GatedValue, MoveVMState},
         },
-        state::FuzzState,
         state_input::StagedVMState,
     };
 
@@ -1054,7 +1038,7 @@ mod tests {
         debug!("initial value {:?}", init_v);
         debug!("mutated value {:?}", mutated_v);
         debug!("ref in use {:?}", vm_state.state.ref_in_use);
-        assert!(vm_state.state.ref_in_use.len() > 0);
+        assert!(!vm_state.state.ref_in_use.is_empty());
         assert_eq!(mutation_result, MutationResult::Mutated);
     }
 

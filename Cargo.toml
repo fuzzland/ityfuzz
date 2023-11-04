@@ -46,6 +46,7 @@ sui_support = [
 debug = []
 flashloan_debug = []
 
+
 [dependencies]
 bytes = { version = "1.2.1", features = ["serde"] }
 retry = "2.0.0"

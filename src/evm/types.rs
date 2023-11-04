@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
-use libafl::{prelude::HasRand, schedulers::QueueScheduler};
+use libafl::prelude::HasRand;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
-use primitive_types::{H160, H256};
+use primitive_types::H160;
 use revm_primitives::{ruint::aliases::U512, Bytecode, B160, U256};
 
 /// Common generic types for EVM fuzzing
@@ -91,7 +91,7 @@ pub fn float_scale_to_u512(v: f64, decimals: u32) -> U512 {
     for _ in 0..decimals {
         temp *= 10.0;
     }
-    return U512::from(temp as u64);
+    U512::from(temp as u64)
 }
 
 /// Generate a random H160 address.

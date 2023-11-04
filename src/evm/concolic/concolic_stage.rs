@@ -10,7 +10,6 @@ use libafl::{
     state::{HasCorpus, UsesState},
     Error,
     Evaluator,
-    Fuzzer,
 };
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
@@ -20,10 +19,9 @@ use tracing::debug;
 use crate::{
     evm::{
         concolic::concolic_host::{ConcolicHost, Field, Solution, ALL_SOLUTIONS, ALL_WORKER_THREADS},
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::{EVMInput, EVMInputT},
         middlewares::middleware::MiddlewareType,
-        types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy},
-        vm::{EVMExecutor, EVMState},
+        types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor},
     },
     generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
     input::VMInputT,
@@ -79,7 +77,7 @@ where
         executor: &mut EVMFuzzExecutor<OT>,
         state: &mut Self::State,
         manager: &mut EM,
-        corpus_idx: CorpusId,
+        _corpus_idx: CorpusId,
     ) -> Result<(), Error> {
         if !self.enabled {
             return Ok(());
@@ -166,7 +164,7 @@ where
                 if data_abi.set_bytes(solution.input) {
                     // This can fail if e.g. solving for an array
                     new_testcase.data = Some(data_abi);
-                } else if solution.fields.len() == 0 {
+                } else if solution.fields.is_empty() {
                     continue;
                 }
 
@@ -254,7 +252,7 @@ where
         }
 
         let idx = state.corpus().count();
-        let mut meta = state
+        let meta = state
             .metadata_map_mut()
             .get_mut::<ConcolicPrioritizationMetadata>()
             .unwrap();

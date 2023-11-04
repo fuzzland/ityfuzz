@@ -1,8 +1,5 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, path::Path, rc::Rc, str::FromStr, sync::Arc};
+use std::{cell::RefCell, rc::Rc};
 
-use bytes::Bytes;
-use glob::glob;
-use itertools::Itertools;
 use libafl::{
     feedbacks::Feedback,
     prelude::{
@@ -14,8 +11,7 @@ use libafl::{
         SimpleMonitor,
         StdMapObserver,
     },
-    stages::{CalibrationStage, StdMutationalStage},
-    Evaluator,
+    stages::StdMutationalStage,
     Fuzzer,
 };
 use libafl_bolts::{bolts_prelude::ShMemProvider, tuples::tuple_list};
@@ -40,7 +36,6 @@ use crate::r#move::types::MoveFuzzState;
 #[cfg(feature = "sui_support")]
 use crate::scheduler::SortedDroppingScheduler;
 use crate::{
-    evm::{contract_utils::FIX_DEPLOYER, host::FuzzHost, vm::EVMExecutor},
     executor::FuzzExecutor,
     feedback::{CmpFeedback, DataflowFeedback, OracleFeedback},
     fuzzer::ItyFuzzer,
@@ -67,7 +62,7 @@ pub fn move_fuzzer(config: &MoveFuzzConfig) {
     let infant_scheduler = MoveVMStateScheduler {
         inner: SortedDroppingScheduler::new(),
     };
-    let mut scheduler = MoveTestcaseScheduler {
+    let scheduler = MoveTestcaseScheduler {
         inner: QueueScheduler::new(),
     };
 

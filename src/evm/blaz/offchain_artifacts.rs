@@ -5,12 +5,7 @@ use itertools::Itertools;
 use revm_primitives::HashMap;
 use serde_json::Value;
 
-use crate::evm::blaz::{
-    builder::BuildJobResult,
-    get_client,
-    is_bytecode_similar_lax,
-    is_bytecode_similar_strict_ranking,
-};
+use crate::evm::blaz::{builder::BuildJobResult, get_client};
 
 #[derive(Clone, Debug)]
 pub struct ContractArtifact {
@@ -29,7 +24,7 @@ pub struct OffChainArtifact {
 impl OffChainArtifact {
     pub fn from_json_url(url: String) -> Result<Vec<Self>, Box<dyn Error>> {
         let client = get_client();
-        let resp = client.get(&url).send()?;
+        let resp = client.get(url).send()?;
         Self::from_json(resp.text().expect("parse json failed"))
     }
 
@@ -43,7 +38,7 @@ impl OffChainArtifact {
         let mut artifacts = vec![];
         for json in arr.as_array().expect("failed to parse array") {
             let mut all_bytecode = HashMap::new();
-            if json["success"].as_bool().expect("get status failed") != true {
+            if !json["success"].as_bool().expect("get status failed") {
                 return Err("retrieve onchain job failed".into());
             }
             // debug!("json: {:?}", json);
@@ -133,14 +128,14 @@ impl OffChainArtifact {
         Ok(artifacts)
     }
 
-    pub fn locate(existing_artifacts: &Vec<Self>, to_find: Vec<u8>) -> Option<BuildJobResult> {
+    pub fn locate(_existing_artifacts: &Vec<Self>, _to_find: Vec<u8>) -> Option<BuildJobResult> {
         todo!("locate artifact")
         // let mut candidates = vec![];
         // let mut all_candidates = vec![];
         // for (idx, artifact) in existing_artifacts.iter().enumerate() {
         //     for (loc, contract) in &artifact.contracts {
         //         if is_bytecode_similar_lax(to_find.clone(),
-        // contract.deploy_bytecode.to_vec()) {             
+        // contract.deploy_bytecode.to_vec()) {
         // candidates.push((idx, loc.clone()));         }
         //         all_candidates.push((idx, loc.clone()));
         //     }
@@ -180,7 +175,6 @@ impl OffChainArtifact {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     // #[test]
     // fn test_from_url() {

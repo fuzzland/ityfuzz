@@ -55,6 +55,12 @@ pub struct Sha3TaintAnalysis {
     pub ctxs: Vec<Sha3TaintAnalysisCtx>,
 }
 
+impl Default for Sha3TaintAnalysis {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Sha3TaintAnalysis {
     pub fn new() -> Self {
         Self {
@@ -125,7 +131,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         //
         // debug!("on_step: {:?} with {:x}", interp.program_counter(),
         // *interp.instruction_pointer); debug!("stack: {:?}",
@@ -217,7 +223,7 @@ where
             // CALLDATALOAD
             0x35 => {
                 self.dirty_stack.pop();
-                if self.ctxs.len() > 0 {
+                if !self.ctxs.is_empty() {
                     let ctx = self.ctxs.last().unwrap();
                     let offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                     if offset == 0 {
@@ -315,7 +321,7 @@ where
                 }
             }
             // PC
-            0x58 | 0x59 | 0x5a => {
+            0x58..=0x5a => {
                 push_false!();
             }
             // JUMPDEST
@@ -334,9 +340,7 @@ where
             0x90..=0x9f => {
                 let _n = (*interp.instruction_pointer) - 0x90 + 2;
                 let _l = self.dirty_stack.len();
-                let tmp = self.dirty_stack[_l - _n as usize];
-                self.dirty_stack[_l - _n as usize] = self.dirty_stack[_l - 1];
-                self.dirty_stack[_l - 1] = tmp;
+                self.dirty_stack.swap(_l - _n as usize, _l - 1);
             }
             // LOG
             0xa0..=0xa4 => {
@@ -389,10 +393,10 @@ where
 
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        by: &Bytes,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _by: &Bytes,
     ) {
         self.pop_ctx();
     }
@@ -427,7 +431,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
             if self
@@ -490,7 +494,7 @@ mod tests {
 
         let target_addr = generate_random_address(&mut state);
         evm_executor.host.code.insert(
-            target_addr.clone(),
+            target_addr,
             Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
         );
 
@@ -522,7 +526,7 @@ mod tests {
             .borrow()
             .tainted_jumpi
             .iter()
-            .map(|(addr, pc)| pc)
+            .map(|(_addr, pc)| pc)
             .cloned()
             .collect_vec();
     }

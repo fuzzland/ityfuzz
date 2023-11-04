@@ -19,9 +19,9 @@ where
 {
     #[serde(deserialize_with = "VS::deserialize")]
     pub state: VS, // VM state
-    pub stage: Vec<u64>,   // Stages of each oracle execution
+    pub stage: Vec<u64>, // Stages of each oracle execution
     pub initialized: bool, /* Whether the VMState is initialized, uninitialized VMState will be initialized during
-                            * mutation */
+                          * mutation */
     #[serde(deserialize_with = "TxnTrace::deserialize")]
     pub trace: TxnTrace<Loc, Addr, CI>, // Trace building up such a VMState
 }

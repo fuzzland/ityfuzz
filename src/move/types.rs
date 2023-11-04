@@ -4,7 +4,7 @@ use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    oracle::{Oracle, OracleCtx},
+    oracle::OracleCtx,
     r#move::{
         input::{ConciseMoveInput, MoveFunctionInput},
         vm_state::MoveVMState,

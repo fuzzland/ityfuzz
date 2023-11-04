@@ -1,36 +1,24 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fs::File,
-    io::Read,
-    ops::Deref,
-    path::Path,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, rc::Rc};
 
 use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
 use libafl::{
     feedbacks::Feedback,
-    prelude::{HasMetadata, MaxMapFeedback, QueueScheduler, SimpleEventManager, SimpleMonitor, StdMapObserver},
-    stages::{CalibrationStage, StdPowerMutationalStage},
+    prelude::{HasMetadata, MaxMapFeedback, SimpleEventManager, SimpleMonitor, StdMapObserver},
     Evaluator,
     Fuzzer,
 };
 use libafl_bolts::{bolts_prelude::ShMemProvider, tuples::tuple_list};
-use primitive_types::{H160, U256};
 use revm_primitives::Bytecode;
 use tracing::{debug, error, info};
 
 use crate::{
     evm::{
         abi::{ABIAddressToInstanceMap, BoxedABI},
-        blaz::builder::{ArtifactInfoMetadata, BuildJob},
+        blaz::builder::ArtifactInfoMetadata,
         concolic::{
-            concolic_host::{ConcolicHost, CONCOLIC_TIMEOUT},
+            concolic_host::CONCOLIC_TIMEOUT,
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
         },
         config::Config,
@@ -55,10 +43,9 @@ use crate::{
             WRITE_MAP,
             WRITE_RELATIONSHIPS,
         },
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        input::{ConciseEVMInput, EVMInput},
         middlewares::{
             call_printer::CallPrinter,
-            cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
             integer_overflow::IntegerOverflowMiddleware,
             middleware::Middleware,
@@ -67,12 +54,10 @@ use crate::{
         },
         minimizer::EVMMinimizer,
         mutator::FuzzMutator,
-        onchain,
         onchain::{
             flashloan::Flashloan,
             onchain::{OnChain, WHITELIST_ADDR},
         },
-        oracle,
         oracles::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
@@ -83,8 +68,8 @@ use crate::{
             state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
-        presets::{pair::PairPreset, presets::ExploitTemplate},
-        srcmap::parser::{SourceMapLocation, BASE_PATH},
+        presets::presets::ExploitTemplate,
+        srcmap::parser::BASE_PATH,
         types::{
             fixed_address,
             EVMAddress,
@@ -99,11 +84,9 @@ use crate::{
     executor::FuzzExecutor,
     feedback::{CmpFeedback, DataflowFeedback, OracleFeedback},
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
-    input::{ConciseSerde, VMInputT},
     oracle::BugMetadata,
     scheduler::{PowerABIMutationalStage, PowerABIScheduler, SortedDroppingScheduler},
     state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
-    state_input::StagedVMState,
 };
 
 pub fn evm_fuzzer(
@@ -274,7 +257,7 @@ pub fn evm_fuzzer(
             bool,
             Vec<ExploitTemplate>,
             HashMap<[u8; 4], (EVMAddress, BoxedABI)>,
-        ) = if config.preset_file_path.len() > 0 {
+        ) = if !config.preset_file_path.is_empty() {
             let mut sig_to_addr_abi_map = HashMap::new();
             let exploit_templates = ExploitTemplate::from_filename(config.preset_file_path.clone());
             let mut matched_templates = vec![];
@@ -287,20 +270,20 @@ pub fn evm_fuzzer(
                         for (idx, function_sig) in function_sigs.iter().enumerate() {
                             if abi.function == function_sig.value {
                                 debug!("matched: {:?} @ {:?}", abi.function, addr);
-                                sig_to_addr_abi_map.insert(function_sig.value, (addr.clone(), abi.clone()));
+                                sig_to_addr_abi_map.insert(function_sig.value, (*addr, abi.clone()));
                                 function_sigs.remove(idx);
                                 break;
                             }
                         }
                     }
-                    if function_sigs.len() == 0 {
+                    if function_sigs.is_empty() {
                         matched_templates.push(template);
                         break;
                     }
                 }
             }
 
-            if matched_templates.len() > 0 {
+            if !matched_templates.is_empty() {
                 (true, matched_templates, sig_to_addr_abi_map)
             } else {
                 (false, vec![], HashMap::new())
@@ -578,7 +561,7 @@ pub fn evm_fuzzer(
             let mut transactions = String::new();
             let mut deserialized_transactions = vec![];
             f.read_to_string(&mut transactions).expect("Failed to read file");
-            for txn in transactions.split("\n") {
+            for txn in transactions.split('\n') {
                 if txn.len() < 4 {
                     continue;
                 }

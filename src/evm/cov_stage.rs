@@ -1,46 +1,33 @@
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
-    fmt::Debug,
     fs,
     ops::Deref,
     rc::Rc,
-    sync::Arc,
 };
 
 use itertools::Itertools;
 use libafl::{
-    corpus::{Corpus, Testcase},
-    events::{EventFirer, ProgressReporter},
-    executors::ExitKind,
-    feedbacks::Feedback,
-    inputs::Input,
-    prelude::{CorpusId, HasClientPerfMonitor, HasMetadata, ObserversTuple, Stage},
+    corpus::Corpus,
+    events::ProgressReporter,
+    prelude::{CorpusId, HasMetadata, ObserversTuple, Stage},
     state::{HasCorpus, UsesState},
     Error,
     Evaluator,
-    Fuzzer,
 };
-use libafl_bolts::{impl_serdeany, Named};
-use revm_primitives::HashSet;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     evm::{
-        concolic::concolic_host::{ConcolicHost, Field, Solution},
         host::CALL_UNTIL,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::EVMInput,
         middlewares::{
             call_printer::CallPrinter,
             coverage::{Coverage, EVAL_COVERAGE},
             middleware::MiddlewareType,
         },
         types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, EVMStagedVMState},
-        vm::{EVMExecutor, EVMState},
     },
-    executor::FuzzExecutor,
-    generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
-    input::VMInputT,
+    generic_vm::vm_executor::GenericVM,
     oracle::BugMetadata,
     state::HasInfantStateState,
 };
@@ -95,7 +82,7 @@ impl<OT> CoverageStage<OT> {
             let prev_state = testcase_input.clone().unwrap();
             let prev = Self::get_call_seq(testcase_input.as_ref().unwrap(), state);
 
-            return vec![
+            return [
                 prev,
                 vm_state
                     .trace
@@ -125,11 +112,11 @@ where
 {
     fn perform(
         &mut self,
-        fuzzer: &mut Z,
-        executor: &mut EVMFuzzExecutor<OT>,
+        _fuzzer: &mut Z,
+        _executor: &mut EVMFuzzExecutor<OT>,
         state: &mut Self::State,
-        manager: &mut EM,
-        corpus_idx: CorpusId,
+        _manager: &mut EM,
+        _corpus_idx: CorpusId,
     ) -> Result<(), Error> {
         let last_idx = state.corpus().last();
         if last_idx.is_none() {

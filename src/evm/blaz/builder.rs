@@ -3,7 +3,6 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fs,
     hash::{Hash, Hasher},
-    process::id,
     rc::Rc,
     str::FromStr,
     thread::sleep,
@@ -21,12 +20,8 @@ use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
         blaz::get_client,
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput},
-        onchain::endpoints::Chain,
-        srcmap::parser::{decode_instructions, decode_instructions_with_replacement, SourceMapLocation},
-        types::{EVMAddress, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy},
-        vm::{EVMExecutor, EVMState},
+        srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation},
+        types::{EVMAddress, EVMQueueExecutor, ProjectSourceMapTy},
     },
     generic_vm::vm_executor::GenericVM,
 };
@@ -83,20 +78,16 @@ impl BuildJob {
         }
 
         let job = self.async_submit_onchain_job(chain, addr);
-        if job.is_none() {
-            return None;
-        }
+        job.as_ref()?;
         let job = job.unwrap();
         let result = job.wait_build_job();
-        if result.is_none() {
-            return None;
-        }
+        result.as_ref()?;
         if let Some(res) = &result {
             self.cache
                 .save(hash.as_str(), &serde_json::to_string(res).unwrap())
                 .unwrap();
         }
-        return result;
+        result
     }
 }
 
@@ -179,7 +170,7 @@ impl BuildJobResult {
         let resp = client.get(&url).send().expect("retrieve onchain job failed");
 
         let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed")).expect("parse json failed");
-        if json["success"].as_bool().expect("get status failed") != true {
+        if !json["success"].as_bool().expect("get status failed") {
             error!("retrieve onchain job failed for {:?}", url);
             return None;
         }
@@ -247,7 +238,7 @@ impl BuildJobResult {
 
     pub fn get_sourcemap(&mut self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
         if self._cached {
-            return self._cache_src_map.clone();
+            self._cache_src_map.clone()
         } else {
             let result = decode_instructions_with_replacement(
                 bytecode,
@@ -257,7 +248,7 @@ impl BuildJobResult {
             );
             self._cache_src_map = result.clone();
             self._cached = true;
-            return result;
+            result
         }
     }
 
@@ -301,6 +292,12 @@ pub struct ArtifactInfoMetadata {
     pub info: HashMap<EVMAddress, BuildJobResult>,
 }
 
+impl Default for ArtifactInfoMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArtifactInfoMetadata {
     pub fn new() -> Self {
         Self { info: HashMap::new() }
@@ -323,9 +320,6 @@ impl_serdeany!(ArtifactInfoMetadata);
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use super::*;
 
     // #[test]
     // fn test_from_json_url() {

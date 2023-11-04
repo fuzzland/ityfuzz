@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{generic_vm::vm_executor::GenericVM, input::ConciseSerde, tracer::TxnTrace};
+use crate::{input::ConciseSerde, tracer::TxnTrace};
 
 pub trait SequentialMinimizer<S, E, Loc, Addr, CI, OF>
 where

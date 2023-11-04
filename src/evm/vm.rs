@@ -3,16 +3,13 @@ use std::{
     any::Any,
     borrow::Borrow,
     cell::RefCell,
-    cmp::{max, min},
+    cmp::min,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
-    fmt::{Debug, Formatter},
-    fs::OpenOptions,
+    fmt::Debug,
     hash::{Hash, Hasher},
-    io::Write,
     marker::PhantomData,
     ops::Deref,
     rc::Rc,
-    str::FromStr,
     sync::Arc,
 };
 
@@ -24,9 +21,6 @@ use libafl::{
     schedulers::Scheduler,
     state::{HasCorpus, State},
 };
-use primitive_types::{H256, U512};
-use rand::random;
-use revm::db::BenchmarkDB;
 use revm_interpreter::{
     BytecodeLocked,
     CallContext,
@@ -34,35 +28,22 @@ use revm_interpreter::{
     Contract,
     Gas,
     InstructionResult,
-    InstructionResult::{ArbitraryExternalCallAddressBounded, ControlLeak},
+    InstructionResult::ControlLeak,
     Interpreter,
     Memory,
     Stack,
 };
-use revm_primitives::{Bytecode, LatestSpec};
+use revm_primitives::Bytecode;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
-use super::{
-    middlewares::{middleware, reentrancy::ReentrancyData},
-    presets::presets::ExploitTemplate,
-};
+use super::middlewares::reentrancy::ReentrancyData;
 use crate::{
     evm::{
         bytecode_analyzer,
-        host::{
-            FuzzHost,
-            CMP_MAP,
-            COVERAGE_NOT_CHANGED,
-            JMP_MAP,
-            READ_MAP,
-            RET_OFFSET,
-            RET_SIZE,
-            STATE_CHANGE,
-            WRITE_MAP,
-        },
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
-        middlewares::middleware::{Middleware, MiddlewareType},
+        host::{FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP, STATE_CHANGE, WRITE_MAP},
+        input::{ConciseEVMInput, EVMInputT, EVMInputTy},
+        middlewares::middleware::Middleware,
         onchain::flashloan::FlashloanData,
         types::{float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
         uniswap::generate_uniswap_router_buy,
@@ -74,7 +55,6 @@ use crate::{
     },
     input::{ConciseSerde, VMInputT},
     invoke_middlewares,
-    r#const::DEBUG_PRINT_PERCENT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
     state_input::StagedVMState,
 };
@@ -196,7 +176,7 @@ impl SinglePostExecution {
 
         let mut stack = Stack::new();
         for v in &self.stack.data {
-            stack.push(v.clone());
+            stack.push(*v);
         }
 
         Interpreter {
@@ -323,7 +303,7 @@ impl VMStateT for EVMState {
     /// This can also used to check whether a state is intermediate state (i.e.,
     /// not yet finished execution)
     fn has_post_execution(&self) -> bool {
-        self.post_execution.len() > 0
+        !self.post_execution.is_empty()
     }
 
     /// Get length needed for return data length of the call that leads to
@@ -411,10 +391,7 @@ impl EVMState {
 
     /// Stores a value to an address' storage slot.
     pub fn sstore(&mut self, address: EVMAddress, slot: EVMU256, value: EVMU256) {
-        self.state
-            .entry(address)
-            .or_insert_with(HashMap::new)
-            .insert(slot, value);
+        self.state.entry(address).or_default().insert(slot, value);
     }
 }
 
@@ -543,7 +520,7 @@ where
         let mut repeats = input.get_repeat();
 
         // Get the bytecode
-        let mut bytecode = match self.host.code.get(&call_ctx.code_address) {
+        let bytecode = match self.host.code.get(&call_ctx.code_address) {
             Some(i) => i.clone(),
             None => {
                 debug!("no code @ {:?}, did you forget to deploy?", call_ctx.code_address);
@@ -585,7 +562,7 @@ where
 
         // Execute the contract for `repeats` times or until revert
         let mut r = InstructionResult::Stop;
-        for v in 0..repeats - 1 {
+        for _v in 0..repeats - 1 {
             // debug!("repeat: {:?}", v);
             r = self.host.run_inspect(&mut interp, state);
             interp.stack.data.clear();
@@ -658,7 +635,7 @@ where
             self.host
                 .code
                 .get(&address)
-                .expect(&*format!("no code {:?}", address))
+                .expect(&format!("no code {:?}", address))
                 .clone(),
             &CallContext {
                 address,
@@ -923,7 +900,7 @@ where
     ) -> Option<EVMAddress> {
         debug!("deployer = 0x{} ", hex::encode(self.deployer));
         let deployer = Contract::new(
-            constructor_args.unwrap_or(Bytes::new()),
+            constructor_args.unwrap_or_default(),
             code,
             deployed_address,
             deployed_address,
@@ -1157,7 +1134,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+    use std::{cell::RefCell, path::Path, rc::Rc};
 
     use bytes::Bytes;
     use libafl::prelude::StdScheduler;
@@ -1195,8 +1172,8 @@ mod tests {
             FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
             generate_random_address(&mut state),
         );
-        let mut observers = tuple_list!();
-        let mut vm_state = EVMState::new();
+        tuple_list!();
+        let _vm_state = EVMState::new();
 
         /*
         contract main {
@@ -1255,7 +1232,7 @@ mod tests {
             know_map[i] = unsafe { JMP_MAP[i] };
             unsafe { JMP_MAP[i] = 0 };
         }
-        assert_eq!(execution_result_0.reverted, false);
+        assert!(!execution_result_0.reverted);
 
         // process(5)
 
@@ -1296,7 +1273,7 @@ mod tests {
                 cov_changed = true;
             }
         }
-        assert_eq!(cov_changed, true);
-        assert_eq!(execution_result_5.reverted, true);
+        assert!(cov_changed);
+        assert!(execution_result_5.reverted);
     }
 }

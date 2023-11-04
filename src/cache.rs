@@ -1,12 +1,9 @@
 use std::{
-    collections::HashMap,
     error::Error,
     fs::{self, File, OpenOptions},
     io::prelude::*,
     path::Path,
 };
-
-use serde_json::json;
 
 pub trait Cache {
     fn save(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>>;

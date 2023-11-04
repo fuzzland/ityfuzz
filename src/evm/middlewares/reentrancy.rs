@@ -209,7 +209,7 @@ mod test {
     use super::*;
     #[test]
     fn test_merge() {
-        let mut vec1 = vec![1, 4, 5, 6, 7];
+        let vec1 = vec![1, 4, 5, 6, 7];
         let mut vec2 = vec![2, 3, 4, 6, 8, 10];
         merge_sorted_vec_dedup(&mut vec2, &vec1);
         assert_eq!(vec2, vec![1, 2, 3, 4, 5, 6, 7, 8, 10]);

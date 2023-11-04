@@ -1,30 +1,23 @@
 use std::{
-    borrow::Borrow,
-    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
-    ops::Deref,
-    rc::Rc,
 };
 
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::state::HasMetadata;
-use primitive_types::{H160, H256, U256};
 use revm_primitives::Bytecode;
 
 use crate::{
     evm::{
         blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         input::{ConciseEVMInput, EVMInput},
-        oracle::{dummy_precondition, EVMBugResult},
+        oracle::EVMBugResult,
         oracles::TYPED_BUG_BUG_IDX,
-        srcmap::parser::{decode_instructions, SourceMapLocation},
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMStagedVMState, ProjectSourceMapTy, EVMU256},
-        vm::{EVMExecutor, EVMState},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
+        vm::EVMState,
     },
-    fuzzer::ORACLE_OUTPUT,
-    oracle::{BugMetadata, Oracle, OracleCtx, Producer},
+    oracle::{Oracle, OracleCtx},
     state::HasExecutionResult,
 };
 
@@ -64,9 +57,9 @@ impl
             EVMFuzzState,
             ConciseEVMInput,
         >,
-        stage: u64,
+        _stage: u64,
     ) -> Vec<u64> {
-        if ctx.post_state.typed_bug.len() > 0 {
+        if !ctx.post_state.typed_bug.is_empty() {
             ctx.post_state
                 .typed_bug
                 .iter()
@@ -74,9 +67,9 @@ impl
                     let mut hasher = DefaultHasher::new();
                     bug_id.hash(&mut hasher);
                     pc.hash(&mut hasher);
-                    let mut name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
+                    let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
-                    let real_bug_idx = (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX;
+                    let real_bug_idx = hasher.finish() << (8 + TYPED_BUG_BUG_IDX);
                     let srcmap = BuildJobResult::get_sourcemap_executor(
                         ctx.fuzz_state
                             .metadata_map_mut()

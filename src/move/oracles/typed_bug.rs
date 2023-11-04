@@ -1,32 +1,31 @@
 use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    ops::Deref,
-    rc::Rc,
 };
 
-use bytes::Bytes;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
-use primitive_types::{H160, H256, U256};
 use serde_json::json;
 
 use crate::{
     fuzzer::ORACLE_OUTPUT,
-    oracle::{Oracle, OracleCtx, Producer},
+    oracle::Oracle,
     r#move::{
         input::{ConciseMoveInput, MoveFunctionInput},
         oracles::TYPED_BUG_BUG_IDX,
         types::{MoveAddress, MoveFuzzState, MoveOracleCtx, MoveOutput, MoveSlotTy},
         vm_state::MoveVMState,
     },
-    state::HasExecutionResult,
 };
 
 pub struct TypedBugOracle;
+
+impl Default for TypedBugOracle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl TypedBugOracle {
     pub fn new() -> Self {
@@ -52,8 +51,8 @@ impl
         0
     }
 
-    fn oracle(&self, ctx: &mut MoveOracleCtx<'_>, stage: u64) -> Vec<u64> {
-        if ctx.post_state.typed_bug.len() > 0 {
+    fn oracle(&self, ctx: &mut MoveOracleCtx<'_>, _stage: u64) -> Vec<u64> {
+        if !ctx.post_state.typed_bug.is_empty() {
             ctx.post_state
                 .typed_bug
                 .iter()
@@ -69,7 +68,7 @@ impl
                         ORACLE_OUTPUT.push(msg);
                     }
 
-                    (hasher.finish() as u64) << 8 + TYPED_BUG_BUG_IDX
+                    hasher.finish() << (8 + TYPED_BUG_BUG_IDX)
                 })
                 .collect_vec()
         } else {

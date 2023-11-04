@@ -370,7 +370,7 @@ pub fn evm_main(args: EvmArgs) {
     }
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let flashloan_oracle = Rc::new(RefCell::new({ IERC20OracleFlashloan::new(erc20_producer.clone()) }));
+    let flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new(erc20_producer.clone())));
 
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
@@ -470,7 +470,7 @@ pub fn evm_main(args: EvmArgs) {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
-    let onchain_replacements = if args.onchain_replacements_file.len() > 0 {
+    let onchain_replacements = if !args.onchain_replacements_file.is_empty() {
         BuildJobResult::from_multi_file(args.onchain_replacements_file)
     } else {
         HashMap::new()
@@ -482,19 +482,19 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    let offchain_artifacts = if args.builder_artifacts_url.len() > 0 {
+    let offchain_artifacts = if !args.builder_artifacts_url.is_empty() {
         target_type = EVMTargetType::AnvilFork;
         Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
-    } else if args.builder_artifacts_file.len() > 0 {
+    } else if !args.builder_artifacts_file.is_empty() {
         target_type = EVMTargetType::AnvilFork;
         Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
     } else {
         None
     };
-    let offchain_config = if args.offchain_config_url.len() > 0 {
+    let offchain_config = if !args.offchain_config_url.is_empty() {
         target_type = EVMTargetType::Config;
         Some(OffchainConfig::from_json_url(args.offchain_config_url).expect("failed to parse offchain config"))
-    } else if args.offchain_config_file.len() > 0 {
+    } else if !args.offchain_config_file.is_empty() {
         target_type = EVMTargetType::Config;
         Some(OffchainConfig::from_file(args.offchain_config_file).expect("failed to parse offchain config"))
     } else {
@@ -594,12 +594,12 @@ pub fn evm_main(args: EvmArgs) {
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
         reentrancy_oracle: args.reentrancy_oracle,
-        state_comp_matching: if args.state_comp_oracle.len() > 0 {
+        state_comp_matching: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_matching)
         } else {
             None
         },
-        state_comp_oracle: if args.state_comp_oracle.len() > 0 {
+        state_comp_oracle: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_oracle)
         } else {
             None

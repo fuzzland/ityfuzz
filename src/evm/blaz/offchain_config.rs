@@ -17,7 +17,7 @@ pub struct OffchainConfig {
 impl OffchainConfig {
     pub fn from_json_url(url: String) -> Result<Self, Box<dyn Error>> {
         let client = get_client();
-        let resp = client.get(&url).send()?;
+        let resp = client.get(url).send()?;
         Self::from_json(resp.text().expect("parse json failed"))
     }
 

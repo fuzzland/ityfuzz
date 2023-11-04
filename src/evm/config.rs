@@ -2,15 +2,14 @@ use std::{
     cell::RefCell,
     collections::HashSet,
     fmt::{self, Debug},
-    fs::File,
     rc::Rc,
 };
 
 /// Configuration for the EVM fuzzer
-use crate::evm::contract_utils::{ContractInfo, ContractLoader};
+use crate::evm::contract_utils::ContractLoader;
 use crate::{
     evm::{
-        blaz::{builder::BuildJob, offchain_artifacts::OffChainArtifact, offchain_config::OffchainConfig},
+        blaz::builder::BuildJob,
         onchain::endpoints::{OnChainConfig, PriceOracle},
         oracles::erc20::IERC20OracleFlashloan,
         types::EVMAddress,

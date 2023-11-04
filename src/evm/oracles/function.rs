@@ -61,7 +61,7 @@ impl
             EVMFuzzState,
             ConciseEVMInput,
         >,
-        stage: u64,
+        _stage: u64,
     ) -> Vec<u64> {
         let _harness_txn = Bytes::from(self.harness_func.clone());
         // let res = ctx

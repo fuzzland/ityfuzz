@@ -4,7 +4,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use itertools::Itertools;
 use libafl::prelude::HasMetadata;
 use libafl_bolts::impl_serdeany;
 use revm_primitives::{Bytecode, HashSet};
@@ -19,7 +18,6 @@ use crate::{
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
         vm::EVMState,
     },
-    fuzzer::ORACLE_OUTPUT,
     oracle::{Oracle, OracleCtx},
     state::HasExecutionResult,
 };
@@ -49,7 +47,7 @@ impl
     Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
     for ArbitraryCallOracle
 {
-    fn transition(&self, ctx: &mut EVMOracleCtx<'_>, stage: u64) -> u64 {
+    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
     }
 
@@ -67,9 +65,9 @@ impl
             EVMFuzzState,
             ConciseEVMInput,
         >,
-        stage: u64,
+        _stage: u64,
     ) -> Vec<u64> {
-        if ctx.post_state.arbitrary_calls.len() > 0 {
+        if !ctx.post_state.arbitrary_calls.is_empty() {
             let mut res = vec![];
             for (caller, target, pc) in ctx.post_state.arbitrary_calls.iter() {
                 if !ctx.fuzz_state.has_metadata::<ArbitraryCallMetadata>() {
@@ -78,12 +76,12 @@ impl
                     });
                 }
 
-                let mut metadata = ctx
+                let metadata = ctx
                     .fuzz_state
                     .metadata_map_mut()
                     .get_mut::<ArbitraryCallMetadata>()
                     .unwrap();
-                let entry = metadata.known_calls.entry((*caller, *pc)).or_insert(HashSet::new());
+                let entry = metadata.known_calls.entry((*caller, *pc)).or_default();
                 if entry.len() > 3 {
                     continue;
                 }
@@ -92,9 +90,9 @@ impl
                 caller.hash(&mut hasher);
                 target.hash(&mut hasher);
                 pc.hash(&mut hasher);
-                let real_bug_idx = (hasher.finish() as u64) << 8 + ARB_CALL_BUG_IDX;
+                let real_bug_idx = hasher.finish() << (8 + ARB_CALL_BUG_IDX);
 
-                let mut name = self
+                let name = self
                     .address_to_name
                     .get(caller)
                     .unwrap_or(&format!("{:?}", caller))

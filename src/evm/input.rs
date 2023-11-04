@@ -7,7 +7,6 @@ use libafl::{
     prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, State},
 };
 use libafl_bolts::{prelude::Rand, HasLen};
-use primitive_types::U512;
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -15,7 +14,7 @@ use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
         mutator::AccessPattern,
-        types::{checksum, EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512},
+        types::{checksum, EVMAddress, EVMStagedVMState, EVMU256, EVMU512},
         vm::EVMState,
     },
     generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
@@ -26,9 +25,10 @@ use crate::{
 };
 
 /// EVM Input Types
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default)]
 pub enum EVMInputTy {
     /// A normal transaction
+    #[default]
     ABI,
     /// A flashloan transaction
     Borrow,
@@ -36,12 +36,6 @@ pub enum EVMInputTy {
     ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
-}
-
-impl Default for EVMInputTy {
-    fn default() -> Self {
-        EVMInputTy::ABI
-    }
 }
 
 /// EVM Input Trait
@@ -532,7 +526,7 @@ macro_rules! impl_env_mutator_u256 {
             } else {
                 None
             };
-            let mut input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
+            let input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
             let mut input_vec = input_by.to_vec();
             let mut wrapper = MutatorInput::new(&mut input_vec);
             let res = byte_mutator(state_, &mut wrapper, vm_slots);
@@ -626,7 +620,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn gas_price<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
@@ -635,7 +629,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn balance<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
@@ -644,7 +638,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
@@ -653,7 +647,7 @@ impl EVMInput {
     {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
-            return MutationResult::Skipped;
+            MutationResult::Skipped
         } else {
             input.set_caller(caller);
             input.get_vm_env_mut().tx.caller = caller;
@@ -738,7 +732,7 @@ impl ConciseSerde for ConciseEVMInput {
             s.push_str("==");
         }
         if self.layer > 0 {
-            s.push_str(" ");
+            s.push(' ');
         }
 
         s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
@@ -779,7 +773,7 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
     }
 
     fn get_contract(&self) -> EVMAddress {
-        self.contract.clone()
+        self.contract
     }
 
     fn get_state(&self) -> &EVMState {

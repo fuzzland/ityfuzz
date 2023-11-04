@@ -17,7 +17,6 @@ use libafl::{
     state::{HasRand, State},
 };
 use revm_interpreter::{Host, Interpreter};
-use revm_primitives::{Bytecode, U256};
 use tracing::debug;
 
 use crate::{
@@ -33,7 +32,7 @@ use crate::{
             ABIConfig,
             ContractLoader,
         },
-        corpus_initializer::{ABIMap, EVMInitializationArtifacts, SourceMapMap},
+        corpus_initializer::{ABIMap, SourceMapMap},
         host::FuzzHost,
         input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
@@ -403,7 +402,7 @@ where
                     let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
 
                     save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
-                    let mut global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
+                    let global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
                     modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
                 }
             }

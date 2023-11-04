@@ -1,13 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    fs,
-    fs::OpenOptions,
-    io::Write,
-    ops::AddAssign,
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
 
 use bytes::Bytes;
 use itertools::Itertools;
@@ -16,11 +7,7 @@ use libafl::{
     prelude::{HasCorpus, HasMetadata, State},
     schedulers::Scheduler,
 };
-use revm_interpreter::{
-    opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP},
-    Interpreter,
-};
-use revm_primitives::Bytecode;
+use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing::debug;
@@ -29,38 +16,25 @@ use crate::{
     evm::{
         blaz::builder::ArtifactInfoMetadata,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
-        srcmap::parser::{
-            decode_instructions,
-            pretty_print_source_map,
-            SourceMapAvailability,
-            SourceMapAvailability::Available,
-            SourceMapLocation,
-            SourceMapWithCode,
-        },
-        types::{as_u64, convert_u256_to_h160, is_zero, EVMAddress, ProjectSourceMapTy, EVMU256},
-        vm::IN_DEPLOY,
+        srcmap::parser::SourceMapLocation,
+        types::{as_u64, convert_u256_to_h160, EVMAddress, ProjectSourceMapTy, EVMU256},
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum CallType {
+    #[default]
     Call,
     CallCode,
     DelegateCall,
     StaticCall,
     FirstLevelCall,
     Event,
-}
-
-impl Default for CallType {
-    fn default() -> Self {
-        CallType::Call
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
@@ -178,27 +152,32 @@ where
                 .code
                 .get(&interp.contract.code_address)
                 .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or(vec![]);
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type: CallType::FirstLevelCall,
-                caller: self.translate_address(interp.contract.caller),
-                contract: self.translate_address(interp.contract.address),
-                input: hex::encode(interp.contract.input.clone()),
-                value: format!("{}", interp.contract.value),
-                source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
-                    && let Some(source) = source.get(&interp.program_counter()) {
-                    Some(source.clone())
-                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
-                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
-                        Some(srcmap.clone())
+                .unwrap_or_default();
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type: CallType::FirstLevelCall,
+                    caller: self.translate_address(interp.contract.caller),
+                    contract: self.translate_address(interp.contract.address),
+                    input: hex::encode(interp.contract.input.clone()),
+                    value: format!("{}", interp.contract.value),
+                    source: if let Some(Some(source)) = self.sourcemaps.get(&code_address) &&
+                        let Some(source) = source.get(&interp.program_counter())
+                    {
+                        Some(source.clone())
+                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
+                        let Some(build_result) = artifact.get_mut(&code_address)
+                    {
+                        build_result
+                            .get_sourcemap(caller_code)
+                            .get(&interp.program_counter())
+                            .map(|srcmap| srcmap.clone())
                     } else {
                         None
-                    }
-                } else {
-                    None
+                    },
+                    results: "".to_string(),
                 },
-                results: "".to_string(),
-            }));
+            ));
         }
 
         // events
@@ -213,7 +192,7 @@ where
                 );
                 "unknown".to_string()
             } else if interp.memory.len() < offset + len {
-                hex::encode(interp.memory.data[offset..].to_vec())
+                hex::encode(&interp.memory.data[offset..])
             } else {
                 hex::encode(interp.memory.get_slice(offset, len))
             };
@@ -266,7 +245,7 @@ where
             let arg_len = as_u64(arg_len) as usize;
 
             let arg = if interp.memory.len() < arg_offset + arg_len {
-                hex::encode(interp.memory.data[arg_len..].to_vec())
+                hex::encode(&interp.memory.data[arg_len..])
             } else {
                 hex::encode(interp.memory.get_slice(arg_offset, arg_len))
             };
@@ -292,37 +271,42 @@ where
                 .code
                 .get(&interp.contract.code_address)
                 .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or(vec![]);
+                .unwrap_or_default();
 
             self.offsets = 0;
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type,
-                caller: self.translate_address(caller),
-                contract: self.translate_address(target),
-                input: arg,
-                value: format!("{}", value),
-                source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
-                    && let Some(source) = source.get(&interp.program_counter()) {
-                    Some(source.clone())
-                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
-                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
-                        Some(srcmap.clone())
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type,
+                    caller: self.translate_address(caller),
+                    contract: self.translate_address(target),
+                    input: arg,
+                    value: format!("{}", value),
+                    source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address) &&
+                        let Some(source) = source.get(&interp.program_counter())
+                    {
+                        Some(source.clone())
+                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
+                        let Some(build_result) = artifact.get_mut(&caller_code_address)
+                    {
+                        build_result
+                            .get_sourcemap(caller_code)
+                            .get(&interp.program_counter())
+                            .map(|srcmap| srcmap.clone())
                     } else {
                         None
-                    }
-                } else {
-                    None
+                    },
+                    results: "".to_string(),
                 },
-                results: "".to_string(),
-            }));
+            ));
         }
     }
 
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
         by: &Bytes,
     ) {
         self.offsets += 1;

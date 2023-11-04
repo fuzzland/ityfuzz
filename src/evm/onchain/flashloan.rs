@@ -25,7 +25,6 @@ use libafl::{
 };
 use libafl_bolts::impl_serdeany;
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -42,10 +41,8 @@ use crate::{
         },
         oracles::erc20::IERC20OracleFlashloan,
         types::{as_u64, convert_u256_to_h160, float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
-        vm::IS_FAST_CALL_STATIC,
     },
     generic_vm::vm_state::VMStateT,
-    get_token_ctx,
     input::VMInputT,
     oracle::Oracle,
     state::{HasCaller, HasItyState},
@@ -100,7 +97,7 @@ pub struct DummyPriceOracle;
 
 impl PriceOracle for DummyPriceOracle {
     fn fetch_token_price(&mut self, _token_address: EVMAddress) -> Option<(u32, u32)> {
-        return Some((10000, 18));
+        Some((10000, 18))
     }
 }
 
@@ -203,23 +200,22 @@ where
             EVMU512::from(amount) * EVMU512::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return amount * EVMU512::from(eth_price);
+        amount * EVMU512::from(eth_price)
     }
 
     fn calculate_usd_value_from_addr(&mut self, addr: EVMAddress, amount: EVMU256) -> Option<EVMU512> {
-        match self.oracle.fetch_token_price(addr) {
-            Some(price) => Some(Self::calculate_usd_value(price, amount)),
-            _ => None,
-        }
+        self.oracle
+            .fetch_token_price(addr)
+            .map(|price| Self::calculate_usd_value(price, amount))
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &Vec<ABIConfig>, state: &mut S) -> (bool, bool) {
+    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &Vec<ABIConfig>, _state: &mut S) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
             return (false, false);
         }
-        self.known_addresses.insert(addr.clone());
+        self.known_addresses.insert(*addr);
 
         // if the contract is erc20, query its holders
         let abi_signatures_token = vec![
@@ -236,15 +232,14 @@ where
         let mut is_pair = false;
         // check abi_signatures_token is subset of abi.name
         {
-            let mut oracle = self.flashloan_oracle.deref().try_borrow_mut();
+            let oracle = self.flashloan_oracle.deref().try_borrow_mut();
             // avoid delegate call on token -> make oracle borrow multiple times
             if oracle.is_ok() {
                 if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
-                    oracle.unwrap().register_token(
-                        addr.clone(),
-                        self.endpoint.fetch_uniswap_path_cached(addr.clone()).clone(),
-                    );
-                    self.erc20_address.insert(addr.clone());
+                    oracle
+                        .unwrap()
+                        .register_token(*addr, self.endpoint.fetch_uniswap_path_cached(*addr).clone());
+                    self.erc20_address.insert(*addr);
                     is_erc20 = true;
                 }
             } else {
@@ -254,7 +249,7 @@ where
 
         // if the contract is pair
         if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
-            self.pair_address.insert(addr.clone());
+            self.pair_address.insert(*addr);
             debug!("pair detected @ address {:?}", addr);
             is_pair = true;
         }
@@ -510,7 +505,7 @@ where
     }
 
     fn get_type(&self) -> MiddlewareType {
-        return MiddlewareType::Flashloan;
+        MiddlewareType::Flashloan
     }
 }
 

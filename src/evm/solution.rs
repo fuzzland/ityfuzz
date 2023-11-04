@@ -26,7 +26,7 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
         Some(oc) => {
-            let weth = get_weth(&oc);
+            let weth = get_weth(oc);
             let block_number = oc.block_number.clone();
             let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
                 .unwrap()
@@ -78,7 +78,7 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     }
 
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
-    let mut output = File::create(&path).unwrap();
+    let mut output = File::create(path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
         error!("generate_test error: failed to render template: {:?}", e);
     }
@@ -155,9 +155,9 @@ impl TemplateArgs {
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
         let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
-        setup_trace(&mut trace, &cli_args);
+        setup_trace(&mut trace, cli_args);
         let router = get_router(&cli_args.chain);
-        let contract_name = make_contract_name(&cli_args);
+        let contract_name = make_contract_name(cli_args);
         let include_interface = trace
             .iter()
             .any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);

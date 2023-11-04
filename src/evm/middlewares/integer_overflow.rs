@@ -1,17 +1,12 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
-use bytes::Bytes;
 use libafl::{
     inputs::Input,
     prelude::{HasCorpus, HasMetadata, State},
     schedulers::Scheduler,
 };
 use revm_interpreter::Interpreter;
-use revm_primitives::uint;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::debug;
 
 use crate::{
@@ -19,8 +14,7 @@ use crate::{
         host::FuzzHost,
         input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
-        types::{as_u64, EVMAddress, EVMU256},
-        vm::EVMState,
+        types::EVMAddress,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
@@ -102,7 +96,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
+
     #[test]
     fn test_merge() {}
 }

@@ -18,7 +18,7 @@ use crate::evm::input::EVMInputT;
 use crate::evm::input::EVMInputTy::Borrow;
 use crate::{
     evm::{
-        abi::{ABIAddressToInstanceMap, BoxedABI},
+        abi::ABIAddressToInstanceMap,
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::{Constraint, EVMStateT},
     },
@@ -187,7 +187,7 @@ where
                 }
             }
         }
-        return true;
+        true
     }
 }
 

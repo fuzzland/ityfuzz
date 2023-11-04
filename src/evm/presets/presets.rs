@@ -6,7 +6,6 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput, EVMInputT},
-        oracles::function,
         types::EVMAddress,
         vm::EVMExecutor,
     },

@@ -8,23 +8,15 @@ use std::{
 
 use libafl::state::HasMetadata;
 use libafl_bolts::impl_serdeany;
-use move_binary_format::{
-    access::ModuleAccess,
-    errors::{PartialVMResult, VMResult},
-    file_format::Bytecode,
-    CompiledModule,
-};
+use move_binary_format::{access::ModuleAccess, file_format::Bytecode, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
-    u256,
 };
-use move_stdlib::natives::all_natives;
 use move_vm_runtime::{
-    interpreter::{CallStack, DummyTracer, ExitCode, Frame, Interpreter, ItyFuzzTracer, Stack},
-    loader,
-    loader::{BinaryType::Module, Function, Loader, ModuleCache, Resolver, StructTagType},
+    interpreter::{CallStack, ExitCode, Frame, Interpreter, ItyFuzzTracer, Stack},
+    loader::{BinaryType::Module, Function, Loader, Resolver, StructTagType},
     native_extensions::NativeContextExtensions,
     native_functions::{NativeContext, NativeFunctions},
 };
@@ -57,7 +49,7 @@ use crate::{
     input::VMInputT,
     r#move::{
         corpus_initializer::is_tx_context,
-        input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT, StructAbilities},
+        input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT},
         types::{MoveAddress, MoveOutput},
         vm_state::{Gate, GatedValue, MoveVMState},
     },
@@ -87,6 +79,12 @@ pub struct TypeTagInfoMeta {
 
 impl_serdeany!(TypeTagInfoMeta);
 
+impl Default for TypeTagInfoMeta {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeTagInfoMeta {
     pub fn new() -> Self {
         Self {
@@ -97,7 +95,7 @@ impl TypeTagInfoMeta {
     pub fn register_type_tag(&mut self, ty: Type, loader: &Loader) {
         let tag = self.find_type(&ty, loader);
         if let TypeTag::Struct(struct_tag) = tag {
-            if is_tx_context(&*struct_tag) {
+            if is_tx_context(&struct_tag) {
                 self.tx_context.insert(ty.clone());
             }
             self.type_to_type_tag.insert(ty, *struct_tag);
@@ -120,7 +118,7 @@ impl TypeTagInfoMeta {
             Type::U256 => TypeTag::U256,
             Type::Address => TypeTag::Address,
             Type::Signer => TypeTag::Signer,
-            Type::Vector(ty) => TypeTag::Vector(Box::new(self.find_type(&(**ty), loader))),
+            Type::Vector(ty) => TypeTag::Vector(Box::new(self.find_type(ty, loader))),
             Type::Struct(gidx) => TypeTag::Struct(Box::new(
                 loader
                     .struct_gidx_to_type_tag(*gidx, &[], StructTagType::Defining)
@@ -132,9 +130,15 @@ impl TypeTagInfoMeta {
                     Err(_) => TypeTag::Bool,
                 }
             }
-            Type::Reference(v) | Type::MutableReference(v) => self.find_type(&(**v), loader),
+            Type::Reference(v) | Type::MutableReference(v) => self.find_type(v, loader),
             _ => TypeTag::Bool,
         }
+    }
+}
+
+impl<I, S> Default for MoveVM<I, S> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -181,14 +185,14 @@ impl<I, S> MoveVM<I, S> {
         state.total_events_size = 0;
     }
 
-    pub fn call_native<'a>(
+    pub fn call_native(
         func: Arc<Function>,
         ty_args: Vec<Type>,
         interp: &mut Interpreter,
         state: &mut dyn DataStore,
         resolver: &Resolver,
         gas_meter: &mut impl GasMeter,
-        extension: &mut NativeContextExtensions<'a>,
+        extension: &mut NativeContextExtensions<'_>,
     ) -> bool {
         let mut args = VecDeque::new();
         let expected_args = func.parameters.len();
@@ -217,7 +221,7 @@ impl<I, S> MoveVM<I, S> {
 pub struct MoveVMTracer;
 
 impl ItyFuzzTracer for MoveVMTracer {
-    fn on_step(&mut self, interpreter: &Interpreter, frame: &Frame, pc: u16, instruction: &Bytecode) {
+    fn on_step(&mut self, interpreter: &Interpreter, _frame: &Frame, pc: u16, instruction: &Bytecode) {
         macro_rules! fast_peek_back {
             ($interp: expr) => {
                 &$interp.operand_stack.value[$interp.operand_stack.value.len() - 1]
@@ -349,7 +353,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                 } else {
                     unreachable!("borrow_global with non-address value")
                 };
-                let offset = sd_idx.0 as u16;
+                let offset = sd_idx.0;
                 let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
                 if !MOVE_READ_MAP[map_offset] {
                     MOVE_READ_MAP[map_offset] = true;
@@ -368,7 +372,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                 } else {
                     unreachable!("borrow_global with non-address value")
                 };
-                let offset = sd_idx.0 as u16;
+                let offset = sd_idx.0;
                 let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
                 if !MOVE_READ_MAP[map_offset] {
                     MOVE_READ_MAP[map_offset] = true;
@@ -392,7 +396,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                         .try_into()
                         .expect("slice with incorrect length"),
                 );
-                let offset = sd_idx.0 as u16;
+                let offset = sd_idx.0;
                 let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
                 if MOVE_WRITE_MAP[map_offset] == 0 {
                     MOVE_WRITE_MAP[map_offset] = 1;
@@ -416,7 +420,7 @@ impl ItyFuzzTracer for MoveVMTracer {
                         .try_into()
                         .expect("slice with incorrect length"),
                 );
-                let offset = sd_idx.0 as u16;
+                let offset = sd_idx.0;
                 let map_offset = (addr_off.unchecked_add(offset as u128) % (MAP_SIZE as u128)) as usize;
                 if MOVE_WRITE_MAP[map_offset] == 0 {
                     MOVE_WRITE_MAP[map_offset] = 1;
@@ -464,7 +468,7 @@ where
         let meta = state.metadata_map_mut().get_mut::<TypeTagInfoMeta>().unwrap();
 
         let func_off = self.loader.module_cache.read().functions.len();
-        let module_name = module.name().to_owned();
+        let _module_name = module.name().to_owned();
         let deployed_module_idx = module.self_id();
         self.loader
             .module_cache
@@ -481,14 +485,14 @@ where
             // f.name.as_str(), f.parameter_types, f.return_types());
             self.functions
                 .entry(deployed_module_idx.clone())
-                .or_insert_with(HashMap::new)
+                .or_default()
                 .insert(f.name.to_owned(), f.clone());
 
             for ty in &f.parameter_types {
                 meta.register_type_tag(ty.clone(), &self.loader);
             }
         }
-        Some(deployed_module_idx.address().clone())
+        Some(*deployed_module_idx.address())
     }
 
     fn fast_static_call(
@@ -535,7 +539,7 @@ where
     {
         let initial_function = self
             .functions
-            .get(&input.module_id())
+            .get(input.module_id())
             .unwrap()
             .get(input.function_name())
             .unwrap();
@@ -561,7 +565,7 @@ where
         // set up initial frame
         let mut current_frame = {
             let mut locals = Locals::new(initial_function.local_count());
-            for (i, value) in input.args().into_iter().enumerate() {
+            for (i, value) in input.args().iter().enumerate() {
                 locals.store_loc(i, value.clone().value, false).unwrap();
             }
             Frame {
@@ -733,7 +737,7 @@ where
         }
 
         if native_called {
-            for (uid, (owner, ty, value)) in &self.native_context.get::<ObjectRuntime>().state.transfers {
+            for (_uid, (owner, ty, value)) in &self.native_context.get::<ObjectRuntime>().state.transfers {
                 let gate = match owner {
                     Owner::AddressOwner(addr) => {
                         if state.has_caller(&MoveAddress::new(addr.to_vec().try_into().unwrap())) {
@@ -742,7 +746,7 @@ where
                             continue;
                         }
                     }
-                    Owner::ObjectOwner(addr) => {
+                    Owner::ObjectOwner(_addr) => {
                         continue;
                     }
                     Owner::Shared { .. } => Gate::MutRef,
@@ -755,12 +759,12 @@ where
                 // debug!("transfer: {:?}", t);
             }
 
-            for (t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
+            for (_t, st, v) in &self.native_context.get::<ObjectRuntime>().state.events {
                 // debug!("st.name.as_str(): {:?}, v: {:?}", st.name.as_str(), v);
                 if st.name.as_str() == "AAAA__fuzzland_move_bug" {
                     if let Value(ValueImpl::Container(Container::Struct(data))) = v {
                         let data = (**data).borrow();
-                        let item = data.get(0).clone().expect("invalid event data");
+                        let item = data.first().clone().expect("invalid event data");
                         if let ValueImpl::U64(data) = item {
                             vm_state.typed_bug.push(format!("bug{}", *data));
                         } else {
@@ -808,9 +812,9 @@ pub struct DummyChildObjectResolver;
 impl ChildObjectResolver for DummyChildObjectResolver {
     fn read_child_object(
         &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
+        _parent: &ObjectID,
+        _child: &ObjectID,
+        _child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         todo!()
     }
@@ -864,7 +868,7 @@ mod tests {
 
     use move_vm_types::{
         loaded_data::runtime_types::{CachedStructIndex, Type::Struct},
-        values::{ContainerRef, Reference, ReferenceImpl, Value, ValueImpl},
+        values::{ContainerRef, Value, ValueImpl},
     };
     use tracing::debug;
 
@@ -881,7 +885,7 @@ mod tests {
     ) -> ExecutionResult<ModuleId, AccountAddress, MoveVMState, MoveOutput, ConciseMoveInput> {
         let module_bytecode = hex::decode(bytecode).unwrap();
         let module = CompiledModule::deserialize_no_check_bounds(&module_bytecode).unwrap();
-        let module_idx = module.self_id();
+        let _module_idx = module.self_id();
         let mut mv = MoveVM::<
             MoveFunctionInput,
             FuzzState<MoveFunctionInput, MoveVMState, ModuleId, AccountAddress, MoveOutput, ConciseMoveInput>,
@@ -929,7 +933,7 @@ mod tests {
         };
         let mut res = ExecutionResult::empty_result();
         res = mv.execute(&input.clone(), &mut FuzzState::new(0));
-        return res;
+        res
     }
 
     #[test]
@@ -966,7 +970,7 @@ mod tests {
 
         debug!("{:?}", res);
         let (ty, struct_obj) = res.output.vars[0].clone();
-        assert_eq!(ty, Struct(CachedStructIndex { 0: 0 }));
+        assert_eq!(ty, Struct(CachedStructIndex(0)));
 
         if let ValueImpl::Container(borrowed) = struct_obj.0.borrow() {
             debug!("borrowed: {:?} from {:?}", borrowed, struct_obj);
@@ -985,7 +989,7 @@ mod tests {
     #[test]
     fn test_use_stdlib() {
         let module_hex = "a11ceb0b060000000801000202020403060a0510080718290841200a61070c68240002000002000004000100000301020001070200010301020b50726f66696c65496e666f046e616d650770726f66696c650574657374310574657374320375726c00000000000000000000000000000000000000000000000000000000000000000002020103050300010000010431030b00150201010000030631020c000d001100060c000000000000000200";
-        let res = _run(
+        let _res = _run(
             module_hex,
             vec![CloneableValue::from(Value(ValueImpl::IndexedRef(values::IndexedRef {
                 idx: 0,

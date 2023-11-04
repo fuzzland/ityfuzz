@@ -19,6 +19,12 @@ pub struct ERC20Producer {
     pub balance_of: Vec<u8>,
 }
 
+impl Default for ERC20Producer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ERC20Producer {
     pub fn new() -> Self {
         Self {
@@ -71,7 +77,7 @@ impl
             let callers = ctx.fuzz_state.callers_pool.clone();
             let query_balance_batch = callers
                 .iter()
-                .map(|caller| {
+                .flat_map(|caller| {
                     let mut extended_address = vec![0; 12];
                     extended_address.extend_from_slice(caller.0.as_slice());
                     let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
@@ -80,7 +86,6 @@ impl
                         .map(|token| (*token, call_data.clone()))
                         .collect::<Vec<(EVMAddress, Bytes)>>()
                 })
-                .flatten()
                 .collect::<Vec<(EVMAddress, Bytes)>>();
             let post_balance_res = ctx.call_post_batch(&query_balance_batch);
 
@@ -100,7 +105,7 @@ impl
 
     fn notify_end(
         &mut self,
-        ctx: &mut OracleCtx<
+        _ctx: &mut OracleCtx<
             EVMState,
             EVMAddress,
             Bytecode,

@@ -18,6 +18,12 @@ pub struct PairProducer {
     pub fetch_reserve: Bytes,
 }
 
+impl Default for PairProducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PairProducer {
     pub fn new() -> Self {
         Self {
@@ -66,7 +72,7 @@ impl
                 .flashloan_data
                 .oracle_recheck_reserve
                 .clone();
-            let mut query_reserves_batch = reserves
+            let query_reserves_batch = reserves
                 .iter()
                 .map(|pair_address| (*pair_address, self.fetch_reserve.clone()))
                 .collect::<Vec<(EVMAddress, Bytes)>>();
@@ -84,7 +90,7 @@ impl
 
     fn notify_end(
         &mut self,
-        ctx: &mut OracleCtx<
+        _ctx: &mut OracleCtx<
             EVMState,
             EVMAddress,
             Bytecode,

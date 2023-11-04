@@ -4,16 +4,9 @@
 use std::fmt::Debug;
 
 use libafl::{corpus::Corpus, prelude::HasCorpus};
-use primitive_types::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{
-    evm::{abi::BoxedABI, types::EVMU256},
-    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
-    input::{ConciseSerde, VMInputT},
-    state::HasInfantStateState,
-    state_input::StagedVMState,
-};
+use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state::HasInfantStateState};
 
 /// Represent a trace of transactions with starting VMState ID (from_idx).
 /// If VMState ID is None, it means that the trace is from the initial state.

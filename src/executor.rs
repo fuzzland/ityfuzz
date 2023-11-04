@@ -17,7 +17,6 @@ use libafl::{
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    evm::input::EVMInput,
     generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
     input::{ConciseSerde, VMInputT},
     state::HasExecutionResult,

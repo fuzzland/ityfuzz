@@ -102,31 +102,31 @@ where
 
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        ret: &Bytes,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _ret: &Bytes,
     ) {
     }
 
     unsafe fn before_execute(
         &mut self,
-        interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        is_step: bool,
-        data: &mut Bytes,
-        evm_state: &mut EVMState,
+        _interp: Option<&mut Interpreter>,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _is_step: bool,
+        _data: &mut Bytes,
+        _evm_state: &mut EVMState,
     ) {
     }
 
     unsafe fn on_insert(
         &mut self,
-        interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        bytecode: &mut Bytecode,
-        address: EVMAddress,
+        _interp: Option<&mut Interpreter>,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _bytecode: &mut Bytecode,
+        _address: EVMAddress,
     ) {
     }
     fn get_type(&self) -> MiddlewareType;

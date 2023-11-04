@@ -1,8 +1,6 @@
 use std::{
-    cell::RefCell,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    rc::Rc,
 };
 
 use bytes::Bytes;
@@ -21,6 +19,12 @@ use crate::{
 };
 
 pub struct PairBalanceOracle {}
+
+impl Default for PairBalanceOracle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PairBalanceOracle {
     pub fn new() -> Self {

@@ -264,7 +264,7 @@ impl BoxedABI {
     pub fn get_func_name(&self) -> String {
         self.get_func_signature()
             .unwrap_or(hex::encode(self.function))
-            .split("(")
+            .split('(')
             .next()
             .unwrap()
             .to_string()
