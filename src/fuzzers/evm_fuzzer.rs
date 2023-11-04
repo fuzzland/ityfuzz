@@ -129,7 +129,7 @@ pub fn evm_fuzzer(
 
     // **Note**: cheatcode should be the first middleware because it consumes the step if it is
     // a call to cheatcode_address, and this step should not be visible to other middlewares.
-    fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+    // fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
 
     #[allow(unused_variables)]
     let onchain_middleware = match config.onchain.clone() {
