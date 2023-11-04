@@ -832,11 +832,8 @@ where
                 let real = interp.stack.data[idx];
                 let sym = self.symbolic_stack[idx].clone();
                 if sym.is_some() {
-                    match sym.unwrap().op {
-                        ConcolicOp::EVMU256(v) => {
-                            assert_eq!(real, v);
-                        }
-                        _ => {}
+                    if let ConcolicOp::EVMU256(v) = sym.unwrap().op {
+                        assert_eq!(real, v);
                     }
                 }
             }

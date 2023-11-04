@@ -180,7 +180,7 @@ impl TemplateArgs {
     }
 }
 
-fn setup_trace(trace: &mut Vec<Tx>, cli_args: &CliArgs) {
+fn setup_trace(trace: &mut [Tx], cli_args: &CliArgs) {
     let (mut borrow_idx, mut liq_idx) = (0, 0);
     for tx in trace.iter_mut() {
         // Liquidation

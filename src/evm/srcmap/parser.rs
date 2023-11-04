@@ -136,7 +136,7 @@ pub fn pretty_print_source_map_single(
 pub fn uncompress_srcmap_single(
     map: String,
     files: &Vec<String>,
-    replacements: &Vec<(String, String)>,
+    replacements: &[(String, String)],
 ) -> Vec<SourceMapLocation> {
     let mut results: Vec<SourceMapLocation> = vec![];
     let replacement_map = replacements
@@ -144,8 +144,7 @@ pub fn uncompress_srcmap_single(
         .map(|(a, b)| (a.clone(), b.clone()))
         .collect::<HashMap<String, String>>();
 
-    let mut counter = 0;
-    for part in map.split(';') {
+    for (counter, part) in map.split(';').enumerate() {
         let parts = part.split(':').collect::<Vec<&str>>();
         let parts_len = parts.len();
 
@@ -212,8 +211,6 @@ pub fn uncompress_srcmap_single(
 
             results.push(SourceMapLocation::new(file, file_idx, offset, length))
         }
-
-        counter += 1;
     }
 
     results
@@ -233,11 +230,8 @@ pub fn decode_instructions(bytecode: Vec<u8>, map: String, files: &Vec<String>) 
         }
         let opcode = bytecode[idx];
         let srcmap = uncompressed_map.get(srcmap_idx);
-        match srcmap {
-            Some(srcmap) => {
-                results.insert(idx, srcmap.clone());
-            }
-            None => {}
+        if let Some(srcmap) = srcmap {
+            results.insert(idx, srcmap.clone());
         }
 
         match opcode {

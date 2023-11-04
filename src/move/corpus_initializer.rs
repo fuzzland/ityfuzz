@@ -155,29 +155,30 @@ where
             constant_pool.add_constant(constant.data.clone());
         });
 
-        module.function_defs.iter().for_each(|defs| match defs.code {
-            Some(ref code) => code.code.iter().for_each(|instr| match instr {
-                Bytecode::LdU16(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                Bytecode::LdU64(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                Bytecode::LdU8(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                Bytecode::LdU32(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                Bytecode::LdU128(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                Bytecode::LdU256(x) => {
-                    constant_pool.add_constant((*x).to_le_bytes().to_vec());
-                }
-                _ => {}
-            }),
-            None => {}
+        module.function_defs.iter().for_each(|defs| {
+            if let Some(ref code) = defs.code {
+                code.code.iter().for_each(|instr| match instr {
+                    Bytecode::LdU16(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    Bytecode::LdU64(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    Bytecode::LdU8(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    Bytecode::LdU32(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    Bytecode::LdU128(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    Bytecode::LdU256(x) => {
+                        constant_pool.add_constant((*x).to_le_bytes().to_vec());
+                    }
+                    _ => {}
+                })
+            }
         });
     }
 

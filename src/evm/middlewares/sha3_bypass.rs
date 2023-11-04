@@ -38,9 +38,7 @@ pub struct Sha3TaintAnalysisCtx {
 impl Sha3TaintAnalysisCtx {
     pub fn read_input(&self, start: usize, length: usize) -> Vec<bool> {
         let mut res = vec![false; length];
-        for i in 0..length {
-            res[i] = self.input_data[start + i];
-        }
+        res[..length].copy_from_slice(&self.input_data[start..(length + start)]);
         res
     }
 }
@@ -80,9 +78,7 @@ impl Sha3TaintAnalysis {
 
     pub fn write_input(&self, start: usize, length: usize) -> Vec<bool> {
         let mut res = vec![false; length];
-        for i in 0..length {
-            res[i] = self.dirty_memory[start + i];
-        }
+        res[..length].copy_from_slice(&self.dirty_memory[start..(length + start)]);
         res
     }
 
@@ -479,7 +475,7 @@ mod tests {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let path = Path::new("work_dir");
         if !path.exists() {
-            std::fs::create_dir(path);
+            let _ = std::fs::create_dir(path);
         }
         let mut evm_executor: EVMExecutor<
             EVMInput,

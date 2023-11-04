@@ -507,10 +507,7 @@ impl ContractLoader {
     /// This function is used to find the contract artifact from offchain
     /// artifacts by comparing the bytecode It will return the index of the
     /// artifact and the location of the contract
-    fn find_contract_artifact(
-        to_find: Vec<u8>,
-        offchain_artifacts: &Vec<OffChainArtifact>,
-    ) -> (usize, (String, String)) {
+    fn find_contract_artifact(to_find: Vec<u8>, offchain_artifacts: &[OffChainArtifact]) -> (usize, (String, String)) {
         let mut candidates = vec![];
         let mut all_candidates = vec![];
         for (idx, artifact) in offchain_artifacts.iter().enumerate() {

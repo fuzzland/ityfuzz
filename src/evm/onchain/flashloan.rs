@@ -210,7 +210,7 @@ where
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &Vec<ABIConfig>, _state: &mut S) -> (bool, bool) {
+    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &[ABIConfig], _state: &mut S) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
             return (false, false);

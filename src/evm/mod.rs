@@ -456,7 +456,11 @@ pub fn evm_main(args: EvmArgs) {
 
             let data = params[0].clone();
 
-            let data = if data.starts_with("0x") { &data[2..] } else { &data };
+            let data = if let Some(stripped) = data.strip_prefix("0x") {
+                stripped
+            } else {
+                &data
+            };
 
             let bytes_data = hex::decode(data).unwrap();
 

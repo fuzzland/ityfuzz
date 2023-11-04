@@ -119,7 +119,7 @@ where
 
     /// Determines whether the current execution reproduces the bug
     /// specified in the bug_idx.
-    pub fn reproduces(&mut self, state: &mut S, input: &S::Input, bug_idx: &Vec<u64>) -> bool {
+    pub fn reproduces(&mut self, state: &mut S, input: &S::Input, bug_idx: &[u64]) -> bool {
         let initial_oracle_output = unsafe { ORACLE_OUTPUT.clone() };
         if state.get_execution_result().reverted {
             return false;
@@ -145,7 +145,7 @@ where
             producer.deref().borrow_mut().produce(&mut oracle_ctx);
         });
 
-        let mut bug_to_hit = bug_idx.clone();
+        let mut bug_to_hit = bug_idx.to_owned();
         let has_post_exec = oracle_ctx
             .fuzz_state
             .get_execution_result()

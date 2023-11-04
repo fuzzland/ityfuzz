@@ -268,7 +268,7 @@ where
 
                 // Remove inputs (or VMState) from metadata and corpus
                 to_remove.iter().for_each(|x| {
-                    self.on_remove(state, (*x).into(), &None);
+                    let _ = self.on_remove(state, (*x).into(), &None);
                     #[cfg(feature = "full_trace")]
                     {
                         state
@@ -320,11 +320,8 @@ where
                 for idx in &data.sorted_votes {
                     let (votes, visits) = data.votes_and_visits.get(idx).unwrap();
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
-                    match inp.into_inner().input() {
-                        Some(x) => {
-                            info!("idx: {}, votes: {}, visits: {}: {:?}", idx, votes, visits, x);
-                        }
-                        _ => {}
+                    if let Some(x) = inp.into_inner().input() {
+                        info!("idx: {}, votes: {}, visits: {}: {:?}", idx, votes, visits, x);
                     }
                 }
                 info!("======================= corpus  =======================");

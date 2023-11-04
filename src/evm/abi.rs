@@ -615,7 +615,7 @@ impl ABI for A256 {
                 .to_string(),
             A256InnerType::Uint => U256::try_from_be_slice(&self.data).unwrap_or_default().to_string(),
             A256InnerType::Bool => {
-                if &self.data == &[0] {
+                if self.data == [0] {
                     "false".to_string()
                 } else {
                     "true".to_string()

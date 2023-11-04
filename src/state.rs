@@ -892,7 +892,7 @@ where
 
         // find the abi
         match self.sig_to_addr_abi_map.get(&sig) {
-            Some((addr, abi)) => return Some((*addr, abi.clone())),
+            Some((addr, abi)) => Some((*addr, abi.clone())),
             None => {
                 debug!("No abi found for sig: {:?}", sig);
                 None

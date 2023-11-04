@@ -171,7 +171,7 @@ where
                         build_result
                             .get_sourcemap(caller_code)
                             .get(&interp.program_counter())
-                            .map(|srcmap| srcmap.clone())
+                            .cloned()
                     } else {
                         None
                     },
@@ -292,7 +292,7 @@ where
                         build_result
                             .get_sourcemap(caller_code)
                             .get(&interp.program_counter())
-                            .map(|srcmap| srcmap.clone())
+                            .cloned()
                     } else {
                         None
                     },

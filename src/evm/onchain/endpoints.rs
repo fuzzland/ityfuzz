@@ -59,8 +59,8 @@ pub trait PriceOracle: Debug {
 }
 
 impl Chain {
-    pub fn from_str(s: &String) -> Option<Self> {
-        match s.as_str() {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
             "ETH" | "eth" => Some(Self::ETH),
             "GOERLI" | "goerli" => Some(Self::GOERLI),
             "SEPOLIA" | "sepolia" => Some(Self::SEPOLIA),
@@ -447,7 +447,7 @@ impl OnChainConfig {
             params.push_str("0,");
             params.push_str(&format!("\"0x{:x}\",", address));
             params.push_str("\"\",");
-            params.push_str(&"1000000000000000".to_string());
+            params.push_str("1000000000000000");
             params.push(']');
             self._request("debug_storageRangeAt".to_string(), params)
         };

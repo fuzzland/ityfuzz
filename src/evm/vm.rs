@@ -176,7 +176,7 @@ impl SinglePostExecution {
 
         let mut stack = Stack::new();
         for v in &self.stack.data {
-            stack.push(*v);
+            let _ = stack.push(*v);
         }
 
         Interpreter {
@@ -598,12 +598,10 @@ where
 
         // hack to record txn value
         #[cfg(feature = "flashloan_v2")]
-        match self.host.flashloan_middleware {
-            Some(ref m) => m
-                .deref()
+        if let Some(ref m) = self.host.flashloan_middleware {
+            m.deref()
                 .borrow_mut()
-                .analyze_call(input, &mut result.new_state.flashloan_data),
-            None => (),
+                .analyze_call(input, &mut result.new_state.flashloan_data)
         }
 
         #[cfg(not(feature = "flashloan_v2"))]
@@ -635,7 +633,7 @@ where
             self.host
                 .code
                 .get(&address)
-                .expect(&format!("no code {:?}", address))
+                .unwrap_or_else(|| panic!("no code {:?}", address))
                 .clone(),
             &CallContext {
                 address,
@@ -977,12 +975,10 @@ where
                             input.get_caller(),
                         );
                         #[cfg(feature = "flashloan_v2")]
-                        match self.host.flashloan_middleware {
-                            Some(ref m) => m
-                                .deref()
+                        if let Some(ref m) = self.host.flashloan_middleware {
+                            m.deref()
                                 .borrow_mut()
-                                .analyze_call(input, &mut res.new_state.flashloan_data),
-                            None => (),
+                                .analyze_call(input, &mut res.new_state.flashloan_data)
                         }
                         unsafe {
                             ExecutionResult {
@@ -1015,7 +1011,7 @@ where
     }
 
     /// Execute a static call
-    fn fast_static_call(&mut self, data: &Vec<(EVMAddress, Bytes)>, vm_state: &VS, state: &mut S) -> Vec<Vec<u8>> {
+    fn fast_static_call(&mut self, data: &[(EVMAddress, Bytes)], vm_state: &VS, state: &mut S) -> Vec<Vec<u8>> {
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
@@ -1058,7 +1054,7 @@ where
     /// Execute a static call
     fn fast_call(
         &mut self,
-        data: &Vec<(EVMAddress, EVMAddress, Bytes)>,
+        data: &[(EVMAddress, EVMAddress, Bytes)],
         vm_state: &VS,
         state: &mut S,
     ) -> (Vec<(Vec<u8>, bool)>, VS) {

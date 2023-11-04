@@ -176,14 +176,14 @@ impl CoverageReport {
             ));
 
             if !cov.uncovered.is_empty() {
-                s.push_str(&"Uncovered Code:\n".to_string());
+                s.push_str("Uncovered Code:\n");
                 for uncovered in &cov.uncovered {
                     s.push_str(&format!("{}\n\n", uncovered.to_string()));
                 }
             }
 
             s.push_str(&format!("Uncovered PCs: {:?}\n", cov.uncovered_pc));
-            s.push_str(&"--------------------------------\n".to_string());
+            s.push_str("--------------------------------\n");
         }
         s
     }

@@ -128,7 +128,7 @@ impl OffChainArtifact {
         Ok(artifacts)
     }
 
-    pub fn locate(_existing_artifacts: &Vec<Self>, _to_find: Vec<u8>) -> Option<BuildJobResult> {
+    pub fn locate(_existing_artifacts: &[Self], _to_find: Vec<u8>) -> Option<BuildJobResult> {
         todo!("locate artifact")
         // let mut candidates = vec![];
         // let mut all_candidates = vec![];

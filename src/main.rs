@@ -53,9 +53,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    EVM(EvmArgs),
+    Evm(EvmArgs),
     #[cfg(feature = "sui_support")]
-    MOVE(MoveArgs),
+    Move(MoveArgs),
 }
 
 fn main() {
@@ -72,11 +72,11 @@ fn main() {
 
     let args = Cli::parse();
     match args.command {
-        Commands::EVM(args) => {
+        Commands::Evm(args) => {
             evm_main(args);
         }
         #[cfg(feature = "sui_support")]
-        Commands::MOVE(args) => {
+        Commands::Move(args) => {
             move_main(args);
         }
     }

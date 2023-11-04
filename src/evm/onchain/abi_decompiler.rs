@@ -18,12 +18,9 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
     let bytecode_hash = hasher.finish();
     let cache_key = format!("{}.json", bytecode_hash);
     let cache = FileSystemCache::new("cache/heimdall");
-    match cache.load(cache_key.as_str()) {
-        Ok(res) => {
-            debug!("using cached result of decompiling contract");
-            return serde_json::from_str(res.as_str()).unwrap();
-        }
-        Err(_) => {}
+    if let Ok(res) = cache.load(cache_key.as_str()) {
+        debug!("using cached result of decompiling contract");
+        return serde_json::from_str(res.as_str()).unwrap();
     }
     let heimdall_result = decompile_with_bytecode(bytecode).expect("unable to decompile contract");
     let mut result = vec![];

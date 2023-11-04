@@ -298,7 +298,7 @@ impl ConciseEVMInput {
                 "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
                 self.caller,
                 self.contract,
-                d.to_string(),
+                d,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes()),
                 liq
@@ -406,7 +406,7 @@ impl SolutionTx for ConciseEVMInput {
         if len < 2 {
             return "".to_string();
         }
-        args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
+        args_str.as_mut_str()[1..len - 1].replace('(', "[").replace(')', "]")
     }
 
     fn value(&self) -> String {

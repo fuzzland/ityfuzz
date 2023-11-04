@@ -211,7 +211,7 @@ impl<I, S> MoveVM<I, S> {
             }
         };
         for value in return_values {
-            interp.operand_stack.push(value);
+            let _ = interp.operand_stack.push(value);
         }
         // debug!("ext: {:?}", ext.get::<ObjectRuntime>().state.events);
         true
@@ -497,7 +497,7 @@ where
 
     fn fast_static_call(
         &mut self,
-        _data: &Vec<(AccountAddress, MoveFunctionInput)>,
+        _data: &[(AccountAddress, MoveFunctionInput)],
         _vm_state: &MoveVMState,
         _state: &mut S,
     ) -> Vec<MoveOutput>
@@ -512,7 +512,7 @@ where
 
     fn fast_call(
         &mut self,
-        _data: &Vec<(AccountAddress, AccountAddress, MoveFunctionInput)>,
+        _data: &[(AccountAddress, AccountAddress, MoveFunctionInput)],
         _vm_state: &MoveVMState,
         _state: &mut S,
     ) -> (Vec<(MoveOutput, bool)>, MoveVMState)
@@ -764,7 +764,7 @@ where
                 if st.name.as_str() == "AAAA__fuzzland_move_bug" {
                     if let Value(ValueImpl::Container(Container::Struct(data))) = v {
                         let data = (**data).borrow();
-                        let item = data.first().clone().expect("invalid event data");
+                        let item = data.first().expect("invalid event data");
                         if let ValueImpl::U64(data) = item {
                             vm_state.typed_bug.push(format!("bug{}", *data));
                         } else {

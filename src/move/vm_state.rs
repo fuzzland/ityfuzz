@@ -396,8 +396,7 @@ impl<'de> Deserialize<'de> for MoveVMState {
 
 impl MoveVMState {
     pub fn commit(&mut self) {
-        let mut idx: usize = 0;
-        for ((addr, ty), gv) in self._gv_slot.iter() {
+        for (idx, ((addr, ty), gv)) in self._gv_slot.iter().enumerate() {
             match gv.clone().into_effect() {
                 None => {}
                 Some(op) => match op {
@@ -412,7 +411,6 @@ impl MoveVMState {
                     }
                 },
             }
-            idx += 1;
         }
         self._gv_slot.clear();
     }
