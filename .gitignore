@@ -19,3 +19,4 @@ combined.json
 /**/build/
 Move.lock
 /w_**/
+Cargo.lock

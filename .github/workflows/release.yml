@@ -110,7 +110,7 @@ jobs:
           cache-on-failure: true
           prefix-key: "v1"
           key: ${{ matrix.job.target }}
-          cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
+          # cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
 
       - name: MacOS setup Z3
         if: ${{ matrix.job.platform == 'darwin' }}
