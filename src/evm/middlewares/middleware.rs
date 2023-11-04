@@ -35,6 +35,7 @@ pub enum MiddlewareType {
     CallPrinter,
     Reentrancy,
     IntegerOverflow,
+    Cheatcode,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

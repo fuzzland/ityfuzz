@@ -7,6 +7,7 @@ use crate::invoke_middlewares;
 
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::onchain::flashloan::Flashloan;
+use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput};
@@ -18,17 +19,18 @@ use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::analysis::to_analysed;
 use revm_interpreter::{
     BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host,
-    InstructionResult, Interpreter, SelfDestructResult,
+    InstructionResult, Interpreter, SelfDestructResult, return_ok,
 };
 use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
 use core::panic;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
+use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -55,6 +57,11 @@ use revm_primitives::{
 };
 
 use super::vm::{IS_FAST_CALL, MEM_LIMIT};
+use super::middlewares::cheatcode::{
+    Prank, ExpectedEmit, ExpectedRevert, ExpectedCallTracker,
+    ERROR_PREFIX, REVERT_PREFIX, ExpectedCallData, ExpectedCallType
+};
+use alloy_dyn_abi::DynSolType;
 
 pub static mut JMP_MAP: [u8; MAP_SIZE] = [0; MAP_SIZE];
 
@@ -167,6 +174,17 @@ where
     pub leak_ctx: Vec<SinglePostExecution>,
 
     pub jumpi_trace: usize,
+
+    /// Depth of call stack
+    pub call_depth: u64,
+    /// Prank information
+    pub prank: Option<Prank>,
+    /// Expected revert information
+    pub expected_revert: Option<ExpectedRevert>,
+    /// Expected emits
+    pub expected_emits: VecDeque<ExpectedEmit>,
+    /// Expected calls
+    pub expected_calls: ExpectedCallTracker,
 }
 
 impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
@@ -241,6 +259,11 @@ where
             mapping_sstore_pcs: self.mapping_sstore_pcs.clone(),
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
             jumpi_trace: self.jumpi_trace,
+            call_depth: self.call_depth,
+            prank: self.prank.clone(),
+            expected_emits: self.expected_emits.clone(),
+            expected_revert: self.expected_revert.clone(),
+            expected_calls: self.expected_calls.clone(),
         }
     }
 }
@@ -308,6 +331,11 @@ where
             mapping_sstore_pcs: Default::default(),
             mapping_sstore_pcs_to_slot: Default::default(),
             jumpi_trace: 37,
+            call_depth: 0,
+            prank: None,
+            expected_revert: None,
+            expected_emits: VecDeque::new(),
+            expected_calls: ExpectedCallTracker::new(),
         }
     }
 
@@ -747,6 +775,166 @@ where
                 Bytes::new(),
             ),
         }
+    }
+
+    /// Apply the prank
+    pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
+                // At the target depth we set `msg.sender`
+                if self.call_depth == prank.depth {
+                    input.context.caller = prank.new_caller;
+                    input.transfer.source = prank.new_caller;
+                }
+
+                // At the target depth, or deeper, we set `tx.origin`
+                if let Some(new_origin) = prank.new_origin {
+                    self.env.tx.caller = new_origin;
+                }
+            }
+        }
+    }
+
+    /// Clean up the prank
+    pub fn clean_prank(&mut self) {
+        if let Some(prank) = &self.prank {
+            if self.call_depth != prank.depth {
+                return;
+            }
+            if let Some(old_origin) = prank.old_origin {
+                self.env.tx.caller = old_origin;
+            }
+            if prank.single_call {
+                let _ = self.prank.take();
+            }
+        }
+    }
+
+    /// Check expected
+    pub fn check_expected(
+        &mut self,
+        call: &CallInputs,
+        res: (InstructionResult, Gas, Bytes),
+    ) -> (InstructionResult, Gas, Bytes) {
+        // Check expected reverts
+        let res = self.check_expected_revert(res);
+        if res.0 == Revert {
+            return res;
+        }
+        // Check expected emits
+        let res = self.check_expected_emits(call, res);
+        if res.0 == Revert {
+            return res;
+        }
+        // Check expected calls
+        self.check_expected_calls(res)
+    }
+
+    /// Check expected reverts
+    fn check_expected_revert(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        // Check if we should check for reverts
+        if self.expected_revert.is_none() {
+            return res;
+        }
+        let expected_revert = self.expected_revert.as_ref().unwrap();
+        if self.call_depth > expected_revert.depth {
+            return res;
+        }
+        let (result, gas, retdata) = res;
+        let mut expected_revert = self.expected_revert.take().unwrap();
+
+        // Check result
+        if !matches!(result, return_ok!()) {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "Call did not revert as expected".abi_encode().into(),
+            );
+        }
+
+        // Check revert reason
+        if expected_revert.reason.is_none() {
+            return (InstructionResult::Return, gas, retdata);
+        }
+        let expected_reason = expected_revert.reason.take().unwrap();
+        let mut actual_reason = retdata.clone();
+        if actual_reason.len() >= 4 &&
+            matches!(actual_reason[..4].try_into(), Ok(ERROR_PREFIX | REVERT_PREFIX))
+        {
+            if let Ok(parsed_bytes) = DynSolType::Bytes.abi_decode(&actual_reason[4..]) {
+                if let Some(bytes) = parsed_bytes.as_bytes().map(|b| b.to_vec()) {
+                    actual_reason = bytes.into();
+                }
+            }
+        }
+        if actual_reason != expected_reason {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "Revert reason mismatch".abi_encode().into(),
+            );
+        }
+
+        (InstructionResult::Return, gas, retdata)
+    }
+
+    /// Check expected emits
+    fn check_expected_emits(
+        &mut self,
+        call: &CallInputs,
+        res: (InstructionResult, Gas, Bytes),
+    ) -> (InstructionResult, Gas, Bytes) {
+        let should_check_emits = self
+            .expected_emits
+            .iter()
+            .any(|expected| expected.depth == self.call_depth) &&
+            // Ignore staticcalls
+            !call.is_static;
+        if !should_check_emits {
+            return res;
+        }
+
+        let (result, gas, retdata) = res;
+        // Not all emits were matched.
+        if self.expected_emits.iter().any(|expected| !expected.found) {
+            return (
+                InstructionResult::Revert,
+                gas,
+                "log != expected log".abi_encode().into(),
+            )
+        }
+
+        self.expected_emits.clear();
+        return (result, gas, retdata);
+    }
+
+    /// Check expected calls
+    fn check_expected_calls(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        // Only check expected calls at the root call
+        if self.call_depth > 0 {
+            return res;
+        }
+
+        let (result, gas, retdata) = res;
+        let expected_calls = mem::replace(&mut self.expected_calls, ExpectedCallTracker::new());
+        for (_, calldatas) in expected_calls {
+            // Loop over each address, and for each address, loop over each calldata it expects.
+            for (_, (expected, actual_count)) in calldatas {
+                // Grab the values we expect to see
+                let ExpectedCallData { count, call_type, .. } = expected;
+
+                let failed = match call_type {
+                    ExpectedCallType::Count => count != actual_count,
+                    ExpectedCallType::NonCount => count > actual_count,
+                };
+                if failed {
+                    let msg = "expected call count mismatch";
+                    return (InstructionResult::Revert, gas, msg.abi_encode().into());
+                }
+            }
+        }
+
+        (result, gas, retdata)
     }
 }
 
@@ -1259,6 +1447,9 @@ where
         output_info: (usize, usize),
         state: &mut S,
     ) -> (InstructionResult, Gas, Bytes) {
+        self.apply_prank(&interp.contract().caller, input);
+        self.call_depth += 1;
+
         let value = EVMU256::from(input.transfer.value);
         if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
             let sender = input.transfer.source;
@@ -1283,7 +1474,7 @@ where
             };
         }
 
-        let res = if is_precompile(input.contract, self.precompiles.len()) {
+        let mut res = if is_precompile(input.contract, self.precompiles.len()) {
             self.call_precompile(input, state)
         } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
             self.call_forbid_control_leak(input, state)
@@ -1292,6 +1483,10 @@ where
         };
 
         let ret_buffer = res.2.clone();
+
+        self.call_depth -= 1;
+        res = self.check_expected(input, res);
+        self.clean_prank();
 
         unsafe {
             if self.middlewares_enabled {

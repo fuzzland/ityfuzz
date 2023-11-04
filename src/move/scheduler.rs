@@ -187,6 +187,11 @@ where
     }
 }
 
+impl<SC> RemovableScheduler for MoveTestcaseScheduler<SC>
+where
+    SC: Scheduler<State = MoveFuzzState>,
+{}
+
 #[derive(Debug, Clone)]
 pub struct MoveVMStateScheduler {
     pub inner: SortedDroppingScheduler<MoveInfantStateState>

@@ -69,6 +69,7 @@ use crate::evm::middlewares::call_printer::CallPrinter;
 use crate::evm::middlewares::coverage::{Coverage, EVAL_COVERAGE};
 use crate::evm::middlewares::middleware::Middleware;
 use crate::evm::middlewares::sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis};
+use crate::evm::middlewares::cheatcode::Cheatcode;
 use crate::evm::mutator::FuzzMutator;
 use crate::evm::onchain::flashloan::Flashloan;
 use crate::evm::onchain::onchain::{OnChain, WHITELIST_ADDR};
@@ -125,6 +126,10 @@ pub fn evm_fuzzer(
     let deployer = fixed_address(FIX_DEPLOYER);
     let mut fuzz_host = FuzzHost::new(scheduler.clone(), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
+
+    // **Note**: cheatcode should be the first middleware because it consumes the step if it is
+    // a call to cheatcode_address, and this step should not be visible to other middlewares.
+    // fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
 
     #[allow(unused_variables)]
     let onchain_middleware = match config.onchain.clone() {

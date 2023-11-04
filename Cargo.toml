@@ -94,23 +94,30 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc27
     "memory_limit",
 ] }
 # external fuzzing-based abi decompiler
-heimdall_core = { git = "https://github.com/fuzzland/heimdall-rs.git", package = "heimdall-core" }
+heimdall-core = { git = "https://github.com/fuzzland/heimdall-rs.git", rev = "3d95f04146bbef2e0e88e6949a06519c938b47d7" }
 # heimdall_core relies on an async runtime
 tokio = { version = "1.0", features = ["full"] }
 
 
-move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-binary-format", optional = true }
-move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-core-types", features = [
+move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
     "address32",
 ], optional = true }
-move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-stdlib", optional = true }
-move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-runtime", features = [
+move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
     "lazy_natives",
 ], optional = true }
-move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "move-vm-types", optional = true }
-sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-move-natives-latest", optional = true }
-sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-protocol-config", optional = true }
-sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", package = "sui-types", optional = true }
+move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
 
 # template engine
 handlebars = "4.4"
+
+# for cheatcode middleware
+foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "dee41819c6e6bd1ea5419c613d226498ed7a2c59" }
+foundry-abi = { git = "https://github.com/foundry-rs/foundry.git", rev = "dee41819c6e6bd1ea5419c613d226498ed7a2c59" }
+alloy-sol-types = "0.4.1"
+alloy-dyn-abi = "0.4.1"
+alloy-primitives = "0.4.1"

@@ -26,6 +26,7 @@ use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
 use crate::evm::onchain::flashloan::register_borrow_txn;
 use crate::evm::presets::presets::Preset;
 use crate::evm::types::EVMExecutionResult;
+use crate::evm::middlewares::cheatcode::CHEATCODE_ADDRESS;
 #[cfg(feature = "print_txn_corpus")]
 use crate::fuzzer::DUMP_FILE_COUNT;
 use crate::fuzzer::REPLAY;
@@ -209,6 +210,7 @@ where
         self.state.metadata_map_mut().insert(ABIMap::new());
         self.setup_default_callers();
         self.setup_contract_callers();
+        self.init_cheatcode_contract();
         self.initialize_contract(loader);
         self.initialize_corpus(loader)
     }
@@ -427,6 +429,14 @@ where
                 .evmstate
                 .set_balance(caller, EVMU256::from(INITIAL_BALANCE));
         }
+    }
+
+    pub fn init_cheatcode_contract(&mut self) {
+        self.executor.host.set_code(
+            CHEATCODE_ADDRESS,
+            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+            self.state
+        );
     }
 
     fn add_abi(
