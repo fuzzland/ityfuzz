@@ -239,7 +239,7 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 }
 
-fn get_router(chain: &String) -> String {
+fn get_router(chain: &str) -> String {
     let chain = Chain::from_str(chain);
     if chain.is_none() {
         return EVMAddress::zero().to_string();

@@ -76,7 +76,7 @@ where
     }
 
     /// Conduct a batch of static calls on the state before the execution
-    pub(crate) fn call_pre_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
+    pub(crate) fn call_pre_batch(&mut self, data: &[(Addr, By)]) -> Vec<Out> {
         self.executor
             .deref()
             .borrow_mut()
@@ -84,7 +84,7 @@ where
     }
 
     /// Conduct a batch of static calls on the state after the execution
-    pub(crate) fn call_post_batch(&mut self, data: &Vec<(Addr, By)>) -> Vec<Out> {
+    pub(crate) fn call_post_batch(&mut self, data: &[(Addr, By)]) -> Vec<Out> {
         self.executor
             .deref()
             .borrow_mut()
@@ -92,7 +92,7 @@ where
     }
 
     /// Conduct a batch of dynamic calls on the state before the execution
-    pub(crate) fn call_pre_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<(Out, bool)>, VS) {
+    pub(crate) fn call_pre_batch_dyn(&mut self, data: &[(Addr, Addr, By)]) -> (Vec<(Out, bool)>, VS) {
         self.executor
             .deref()
             .borrow_mut()
@@ -100,7 +100,7 @@ where
     }
 
     /// Conduct a batch of dynamic calls on the state after the execution
-    pub(crate) fn call_post_batch_dyn(&mut self, data: &Vec<(Addr, Addr, By)>) -> (Vec<(Out, bool)>, VS) {
+    pub(crate) fn call_post_batch_dyn(&mut self, data: &[(Addr, Addr, By)]) -> (Vec<(Out, bool)>, VS) {
         self.executor
             .deref()
             .borrow_mut()

@@ -218,7 +218,7 @@ pub fn uncompress_srcmap_single(
 
 pub fn decode_instructions(bytecode: Vec<u8>, map: String, files: &Vec<String>) -> HashMap<usize, SourceMapLocation> {
     let mut results: HashMap<usize, SourceMapLocation> = Default::default();
-    let uncompressed_map = uncompress_srcmap_single(map, files, &vec![]);
+    let uncompressed_map = uncompress_srcmap_single(map, files, &[]);
     let bytecode_len = bytecode.len();
 
     let mut idx = 0;
@@ -250,7 +250,7 @@ pub fn decode_instructions(bytecode: Vec<u8>, map: String, files: &Vec<String>) 
 
 pub fn decode_instructions_with_replacement(
     bytecode: Vec<u8>,
-    replacements: &Vec<(String, String)>,
+    replacements: &[(String, String)],
     map: String,
     files: &Vec<String>,
 ) -> HashMap<usize, SourceMapLocation> {
