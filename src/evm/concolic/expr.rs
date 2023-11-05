@@ -1,3 +1,5 @@
+use std::ops;
+
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -54,7 +56,7 @@ pub struct Expr {
 }
 
 impl Expr {
-    fn pretty_print_helper(&self, paddings: usize) -> String {
+    fn pretty_print_helper(&self, _paddings: usize) -> String {
         let mut s = String::new();
         let noop = self.lhs.is_none() && self.rhs.is_none();
         if noop {
@@ -63,7 +65,7 @@ impl Expr {
             s.push_str(format!("{:?}(", self.op).as_str());
             s.push_str(
                 (match self.lhs {
-                    Some(ref lhs) => format!("{},", lhs.pretty_print_helper(paddings + 1)),
+                    Some(ref lhs) => format!("{},", lhs.pretty_print_helper(_paddings + 1)),
                     None => "".to_string(),
                 })
                 .to_string()
@@ -71,7 +73,7 @@ impl Expr {
             );
             s.push_str(
                 (match self.rhs {
-                    Some(ref rhs) => rhs.pretty_print_helper(paddings + 1),
+                    Some(ref rhs) => rhs.pretty_print_helper(_paddings + 1),
                     None => "".to_string(),
                 })
                 .to_string()
@@ -164,19 +166,6 @@ impl Expr {
 
     pub fn concat(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::CONCAT)
-    }
-
-    pub fn div(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::DIV)
-    }
-    pub fn mul(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::MUL)
-    }
-    pub fn add(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::ADD)
-    }
-    pub fn sub(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SUB)
     }
     pub fn bvsdiv(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SDIV)
@@ -300,6 +289,38 @@ impl Expr {
     }
 }
 
+impl ops::Div<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn div(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::DIV)
+    }
+}
+
+impl ops::Mul<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn mul(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::MUL)
+    }
+}
+
+impl ops::Add<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn add(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::ADD)
+    }
+}
+
+impl ops::Sub<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn sub(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::SUB)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ConcatOptCtx {
     low: u32,
@@ -324,6 +345,7 @@ impl ConcatOptCtx {
     }
 }
 
+#[allow(clippy::boxed_local)]
 fn simplify_concat_select_helper(expr: Box<Expr>) -> (ConcatOptCtx, Box<Expr>) {
     let lhs_info = expr.lhs.map(simplify_concat_select_helper);
     let rhs_info = expr.rhs.map(simplify_concat_select_helper);

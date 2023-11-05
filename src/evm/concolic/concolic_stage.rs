@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 use libafl::{
     corpus::{Corpus, Testcase},
@@ -14,7 +14,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::info;
 
 use crate::{
     evm::{
@@ -60,7 +60,7 @@ impl<OT> ConcolicStage<OT> {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicPrioritizationMetadata {
     pub interesting_idx: Vec<usize>,
-    pub solutions: Vec<(Solution, Arc<EVMInput>)>,
+    pub solutions: Vec<(Solution, Rc<EVMInput>)>,
 }
 
 impl_serdeany!(ConcolicPrioritizationMetadata);
@@ -97,7 +97,7 @@ where
             .clone();
 
         for idx in &meta.interesting_idx {
-            debug!("Running concolic execution on testcase #{}", idx);
+            info!("Running concolic execution on testcase #{}", idx);
 
             let testcase = state
                 .corpus()
@@ -113,7 +113,7 @@ where
                 continue;
             }
 
-            let testcase_ref = Arc::new(testcase.clone());
+            let testcase_ref = Rc::new(testcase.clone());
 
             {
                 let mut vm = self.vm_executor.deref().borrow_mut();

@@ -1,9 +1,10 @@
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{Debug, Display},
     marker::PhantomData,
-    ops::{Add, Mul, Not, Sub},
+    ops::{Add, Div, Mul, Not, Sub},
+    rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -11,11 +12,11 @@ use bytes::Bytes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use libafl::{
-    prelude::{Corpus, HasMetadata, Input},
+    prelude::{HasMetadata, Input},
     schedulers::Scheduler,
     state::{HasCorpus, State},
 };
-use revm_interpreter::{Host, Interpreter};
+use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use z3::{
@@ -59,6 +60,7 @@ pub enum Field {
     CallDataValue,
 }
 
+#[allow(clippy::vec_box)]
 pub struct Solving<'a> {
     context: &'a Context,
     input: Vec<BV<'a>>,
@@ -69,6 +71,7 @@ pub struct Solving<'a> {
     constrained_field: Vec<Field>,
 }
 
+#[allow(clippy::vec_box)]
 impl<'a> Solving<'a> {
     fn new(
         context: &'a Context,
@@ -115,13 +118,13 @@ pub struct Solution {
     pub fields: Vec<Field>,
 }
 
-impl Solution {
-    pub fn to_string(&self) -> String {
+impl Display for Solution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
         s.push_str(&format!("(input: {:?}, ", hex::encode(&self.input)));
         s.push_str(&format!("caller: {:?}, ", self.caller));
         s.push_str(&format!("value: {})", self.value));
-        s
+        write!(f, "{}", s)
     }
 }
 
@@ -569,7 +572,7 @@ pub struct ConcolicHost<I, VS> {
     pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
     pub input_bytes: Vec<Box<Expr>>,
     pub constraints: Vec<Box<Expr>>,
-    pub testcase_ref: Arc<EVMInput>,
+    pub testcase_ref: Rc<EVMInput>,
 
     pub ctxs: Vec<ConcolicCallCtx>,
     // For current PC, the number of times it has been visited
@@ -579,8 +582,9 @@ pub struct ConcolicHost<I, VS> {
     pub call_depth: usize,
 }
 
+#[allow(clippy::vec_box)]
 impl<I, VS> ConcolicHost<I, VS> {
-    pub fn new(testcase_ref: Arc<EVMInput>, num_threads: usize) -> Self {
+    pub fn new(testcase_ref: Rc<EVMInput>, num_threads: usize) -> Self {
         Self {
             symbolic_stack: Vec::new(),
             symbolic_memory: SymbolicMemory::new(),
@@ -644,11 +648,6 @@ impl<I, VS> ConcolicHost<I, VS> {
         vm_input.get_concolic()
     }
 
-    fn string_to_bytes(s: &str) -> Vec<u8> {
-        // s: #x....
-        hex::decode(&s[2..]).unwrap()
-    }
-
     pub fn solve(&self) -> Vec<Solution> {
         let context = Context::new(&Config::default());
         // let input = (0..self.bytes)
@@ -710,15 +709,6 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 }
 
-// TODO: test this
-fn str_to_bytes(s: &str) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    for c in s.chars() {
-        bytes.push(c as u8);
-    }
-    bytes
-}
-
 impl<I, VS, S, SC> Middleware<VS, I, S, SC> for ConcolicHost<I, VS>
 where
     I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
@@ -754,14 +744,6 @@ where
                         })
                     }
                 }
-            }};
-        }
-
-        macro_rules! stack_concrete {
-            ($idx:expr) => {{
-                let real_loc_conc = interp.stack.len() - 1 - $idx;
-                let u256 = interp.stack.peek(real_loc_conc).expect("stack underflow");
-                u256
             }};
         }
 
@@ -1382,7 +1364,6 @@ where
             }
             _ => {
                 panic!("Unsupported opcode: {:?}", *interp.instruction_pointer);
-                vec![]
             }
         };
         // debug!("[concolic] adding bv to stack {:?}", bv);
