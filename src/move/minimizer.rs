@@ -1,15 +1,26 @@
 use move_binary_format::CompiledModule;
 
+use super::{
+    input::{ConciseMoveInput, MoveFunctionInput},
+    types::{MoveAddress, MoveFuzzState, MoveLoc, MoveOutput, MoveSlotTy},
+    vm_state::MoveVMState,
+};
 use crate::{feedback::OracleFeedback, minimizer::SequentialMinimizer, tracer::TxnTrace};
-
-use super::{vm_state::MoveVMState, types::{MoveAddress, MoveSlotTy, MoveOutput, MoveFuzzState, MoveLoc}, input::{MoveFunctionInput, ConciseMoveInput}};
-
 
 pub struct MoveMinimizer;
 
 type MoveOracleFeedback<'a> = OracleFeedback<
-    'a, MoveVMState, MoveAddress, CompiledModule, MoveFunctionInput, MoveLoc,
-    MoveSlotTy, MoveOutput, MoveFunctionInput, MoveFuzzState, ConciseMoveInput,
+    'a,
+    MoveVMState,
+    MoveAddress,
+    CompiledModule,
+    MoveFunctionInput,
+    MoveLoc,
+    MoveSlotTy,
+    MoveOutput,
+    MoveFunctionInput,
+    MoveFuzzState,
+    ConciseMoveInput,
 >;
 
 impl<E: libafl::executors::HasObservers>

@@ -13,7 +13,8 @@ use tracing::{debug, error};
 use super::{
     types::{EVMAddress, EVMU256},
     uniswap::{self, UniswapProvider},
-    Chain, OnChainConfig,
+    Chain,
+    OnChainConfig,
 };
 use crate::{evm::types::checksum, input::SolutionTx};
 
@@ -25,7 +26,7 @@ static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
     let (chain, weth, block_number) = match onchain {
         Some(oc) => {
-            let weth = get_weth(&oc);
+            let weth = get_weth(oc);
             let block_number = oc.block_number.clone();
             let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
                 .unwrap()
@@ -77,7 +78,7 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     }
 
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
-    let mut output = File::create(&path).unwrap();
+    let mut output = File::create(path).unwrap();
     if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
         error!("generate_test error: failed to render template: {:?}", e);
     }
@@ -152,14 +153,11 @@ impl TemplateArgs {
 
         // Stepping with return
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
-        let mut trace: Vec<Tx> = trace
-            .into_iter()
-            .filter(|tx| tx.fn_selector != "0x00000000")
-            .collect();
+        let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
-        setup_trace(&mut trace, &cli_args);
+        setup_trace(&mut trace, cli_args);
         let router = get_router(&cli_args.chain);
-        let contract_name = make_contract_name(&cli_args);
+        let contract_name = make_contract_name(cli_args);
         let include_interface = trace
             .iter()
             .any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
@@ -182,7 +180,7 @@ impl TemplateArgs {
     }
 }
 
-fn setup_trace(trace: &mut Vec<Tx>, cli_args: &CliArgs) {
+fn setup_trace(trace: &mut [Tx], cli_args: &CliArgs) {
     let (mut borrow_idx, mut liq_idx) = (0, 0);
     for tx in trace.iter_mut() {
         // Liquidation
@@ -220,10 +218,7 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 
     let code = match tx.fn_signature.as_str() {
-        "" => format!(
-            "IERC20({}).transfer({}, {});",
-            tx.caller, tx.contract, tx.value
-        ),
+        "" => format!("IERC20({}).transfer({}, {});", tx.caller, tx.contract, tx.value),
         "balanceOf(address)" => format!("IERC20({}).balanceOf({});", tx.contract, tx.fn_args),
         "approve(address,uint256)" => format!("IERC20({}).approve({});", tx.contract, tx.fn_args),
         "transfer(address,uint256)" => format!("IERC20({}).transfer({});", tx.contract, tx.fn_args),
@@ -244,9 +239,9 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 }
 
-fn get_router(chain: &String) -> String {
+fn get_router(chain: &str) -> String {
     let chain = Chain::from_str(chain);
-    if chain.is_none() {
+    if chain.is_err() {
         return EVMAddress::zero().to_string();
     }
     let chain = chain.unwrap();
@@ -273,10 +268,7 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
     match path.parent() {
         Some(parent) => {
             let dirname = parent.file_name().unwrap().to_str().unwrap();
-            let name: String = dirname
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
+            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
             if name.is_empty() {
                 default_name
             } else {
@@ -289,7 +281,7 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
 
 fn get_weth(oc: &OnChainConfig) -> String {
     let chain = Chain::from_str(&oc.chain_name);
-    if chain.is_none() {
+    if chain.is_err() {
         return EVMAddress::zero().to_string();
     }
     let chain = chain.unwrap();

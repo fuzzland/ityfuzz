@@ -1,33 +1,34 @@
-use crate::evm::abi::{AEmpty, AUnknown, BoxedABI};
-use crate::evm::mutator::AccessPattern;
-use crate::evm::types::{EVMAddress, EVMExecutionResult, EVMStagedVMState, EVMU256, EVMU512, checksum};
-use crate::evm::vm::EVMState;
-use crate::input::{ConciseSerde, VMInputT, SolutionTx};
-use crate::mutation_utils::byte_mutator;
-use crate::state::{HasCaller, HasItyState};
-use crate::state_input::StagedVMState;
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
-use libafl::inputs::Input;
-use libafl::mutators::MutationResult;
-use libafl::prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, State};
+use bytes::Bytes;
+use libafl::{
+    inputs::Input,
+    mutators::MutationResult,
+    prelude::{HasBytesVec, HasMaxSize, HasMetadata, HasRand, State},
+};
 use libafl_bolts::{prelude::Rand, HasLen};
-use primitive_types::U512;
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::generic_vm::vm_executor::ExecutionResult;
-use crate::generic_vm::vm_state::VMStateT;
-use bytes::Bytes;
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::ops::Deref;
-use std::rc::Rc;
-
+use crate::{
+    evm::{
+        abi::{AEmpty, AUnknown, BoxedABI},
+        mutator::AccessPattern,
+        types::{checksum, EVMAddress, EVMStagedVMState, EVMU256, EVMU512},
+        vm::EVMState,
+    },
+    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
+    input::{ConciseSerde, SolutionTx, VMInputT},
+    mutation_utils::byte_mutator,
+    state::{HasCaller, HasItyState},
+    state_input::StagedVMState,
+};
 
 /// EVM Input Types
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default)]
 pub enum EVMInputTy {
     /// A normal transaction
+    #[default]
     ABI,
     /// A flashloan transaction
     Borrow,
@@ -35,12 +36,6 @@ pub enum EVMInputTy {
     ArbitraryCallBoundedAddr,
     /// [Depreciated] A liquidation transaction
     Liquidate,
-}
-
-impl Default for EVMInputTy {
-    fn default() -> Self {
-        EVMInputTy::ABI
-    }
 }
 
 /// EVM Input Trait
@@ -60,7 +55,8 @@ pub trait EVMInputT {
     /// Get revm environment (block, timestamp, etc.) mutably
     fn get_vm_env_mut(&mut self) -> &mut Env;
 
-    /// Get the access pattern of the input, used by the mutator to determine what to mutate
+    /// Get the access pattern of the input, used by the mutator to determine
+    /// what to mutate
     fn get_access_pattern(&self) -> &Rc<RefCell<AccessPattern>>;
 
     /// Get the transaction value in wei
@@ -79,11 +75,13 @@ pub trait EVMInputT {
     /// Set additional random bytes for mutator
     fn set_randomness(&mut self, v: Vec<u8>);
 
-    /// Get the percentage of the token amount in all callers' account to liquidate
+    /// Get the percentage of the token amount in all callers' account to
+    /// liquidate
     #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
 
-    /// Set the percentage of the token amount in all callers' account to liquidate
+    /// Set the percentage of the token amount in all callers' account to
+    /// liquidate
     #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
 
@@ -231,10 +229,7 @@ impl ConciseEVMInput {
         }
     }
 
-    pub fn from_input_with_call_leak<I>(
-        input: &I,
-        call_leak: u32,
-    ) -> Self
+    pub fn from_input_with_call_leak<I>(input: &I, call_leak: u32) -> Self
     where
         I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     {
@@ -293,6 +288,8 @@ impl ConciseEVMInput {
         )
     }
 
+    // Variable `liq` is used when `debug` feature is disabled
+    #[allow(unused_variables)]
     #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
         let liq: u8 = self.liquidation_percent;
@@ -303,7 +300,7 @@ impl ConciseEVMInput {
                 "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
                 self.caller,
                 self.contract,
-                d.to_string(),
+                d,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
                 hex::encode(d.get_bytes()),
                 liq
@@ -311,11 +308,17 @@ impl ConciseEVMInput {
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => format!(
                     "{:?} => {:?} with {} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
+                    self.caller,
+                    self.contract,
+                    self.txn_value.unwrap_or(EVMU256::ZERO),
+                    liq
                 ),
                 EVMInputTy::Borrow => format!(
                     "{:?} borrow token {:?} with {} ETH, liq percent: {}",
-                    self.caller, self.contract, self.txn_value.unwrap_or(EVMU256::ZERO), liq
+                    self.caller,
+                    self.contract,
+                    self.txn_value.unwrap_or(EVMU256::ZERO),
+                    liq
                 ),
                 EVMInputTy::Liquidate => "".to_string(),
             },
@@ -405,7 +408,7 @@ impl SolutionTx for ConciseEVMInput {
         if len < 2 {
             return "".to_string();
         }
-        args_str.as_mut_str()[1..len - 1].replace("(", "[").replace(")", "]")
+        args_str.as_mut_str()[1..len - 1].replace('(', "[").replace(')', "]")
     }
 
     fn value(&self) -> String {
@@ -525,15 +528,14 @@ macro_rules! impl_env_mutator_u256 {
             } else {
                 None
             };
-            let mut input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
+            let input_by: [u8; 32] = input.get_vm_env().$loc.$item.to_be_bytes();
             let mut input_vec = input_by.to_vec();
             let mut wrapper = MutatorInput::new(&mut input_vec);
             let res = byte_mutator(state_, &mut wrapper, vm_slots);
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item =
-                EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
+            input.get_vm_env_mut().$loc.$item = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
             res
         }
     };
@@ -580,9 +582,7 @@ impl<'a> Clone for MutatorInput<'a> {
 
 impl<'a> Debug for MutatorInput<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MutatorInput")
-            .field("val_vec", &self.val_vec)
-            .finish()
+        f.debug_struct("MutatorInput").field("val_vec", &self.val_vec).finish()
     }
 }
 
@@ -622,7 +622,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn gas_price<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
@@ -631,7 +631,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn balance<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
@@ -640,7 +640,7 @@ impl EVMInput {
     {
         // not supported yet
         // unreachable!();
-        return MutationResult::Skipped;
+        MutationResult::Skipped
     }
 
     pub fn caller<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
@@ -649,7 +649,7 @@ impl EVMInput {
     {
         let caller = state_.get_rand_caller();
         if caller == input.get_caller() {
-            return MutationResult::Skipped;
+            MutationResult::Skipped
         } else {
             input.set_caller(caller);
             input.get_vm_env_mut().tx.caller = caller;
@@ -686,23 +686,20 @@ impl EVMInput {
         macro_rules! add_mutator {
             ($item: ident) => {
                 if ap.$item {
-                    mutators
-                        .push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
                 }
             };
 
             ($item: ident, $cond: expr) => {
                 if $cond {
-                    mutators
-                        .push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+                    mutators.push(&EVMInput::$item as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
                 }
             };
         }
         add_mutator!(caller);
         add_mutator!(balance, !ap.balance.is_empty());
         if self.get_txn_value().is_some() {
-            mutators
-                .push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
+            mutators.push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
         }
         add_mutator!(gas_price);
         add_mutator!(basefee);
@@ -737,14 +734,10 @@ impl ConciseSerde for ConciseEVMInput {
             s.push_str("==");
         }
         if self.layer > 0 {
-            s.push_str(" ");
+            s.push(' ');
         }
 
-        s.push_str(
-            self.pretty_txn()
-                .expect("Failed to pretty print txn")
-                .as_str(),
-        );
+        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
         s
     }
 }
@@ -782,7 +775,7 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
     }
 
     fn get_contract(&self) -> EVMAddress {
-        self.contract.clone()
+        self.contract
     }
 
     fn get_state(&self) -> &EVMState {
@@ -830,8 +823,7 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
         if self.sstate.state.flashloan_data.earned > self.sstate.state.flashloan_data.owed {
             return f64::MAX;
         }
-        let owed_amount =
-            self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
+        let owed_amount = self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
         if owed_amount == EVMU512::ZERO {
             return f64::MAX;

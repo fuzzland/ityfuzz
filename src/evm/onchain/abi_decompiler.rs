@@ -1,10 +1,16 @@
-use crate::cache::{Cache, FileSystemCache};
-use crate::evm::contract_utils::ABIConfig;
-use heimdall_core::decompile::{decompile, DecompilerArgsBuilder, out::abi::ABIStructure};
-use std::collections::hash_map::DefaultHasher;
-use std::error::Error;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::hash_map::DefaultHasher,
+    error::Error,
+    hash::{Hash, Hasher},
+};
+
+use heimdall_core::decompile::{decompile, out::abi::ABIStructure, DecompilerArgsBuilder};
 use tracing::debug;
+
+use crate::{
+    cache::{Cache, FileSystemCache},
+    evm::contract_utils::ABIConfig,
+};
 
 pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
     let mut hasher = DefaultHasher::new();
@@ -12,12 +18,9 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
     let bytecode_hash = hasher.finish();
     let cache_key = format!("{}.json", bytecode_hash);
     let cache = FileSystemCache::new("cache/heimdall");
-    match cache.load(cache_key.as_str()) {
-        Ok(res) => {
-            debug!("using cached result of decompiling contract");
-            return serde_json::from_str(res.as_str()).unwrap();
-        }
-        Err(_) => {}
+    if let Ok(res) = cache.load(cache_key.as_str()) {
+        debug!("using cached result of decompiling contract");
+        return serde_json::from_str(res.as_str()).unwrap();
     }
     let heimdall_result = decompile_with_bytecode(bytecode).expect("unable to decompile contract");
     let mut result = vec![];
@@ -55,27 +58,21 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
         }
     }
     FileSystemCache::new("cache/heimdall")
-        .save(
-            cache_key.as_str(),
-            serde_json::to_string(&result).unwrap().as_str(),
-        )
+        .save(cache_key.as_str(), serde_json::to_string(&result).unwrap().as_str())
         .expect("unable to save cache");
     result
 }
 
-fn decompile_with_bytecode(contract_bytecode: String) -> Result<Vec<ABIStructure>, Box<dyn Error>>{
-    let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
+fn decompile_with_bytecode(contract_bytecode: String) -> Result<Vec<ABIStructure>, Box<dyn Error>> {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
 
-    let args = DecompilerArgsBuilder::new()
-        .target(contract_bytecode)
-        .build()?;
+    let args = DecompilerArgsBuilder::new().target(contract_bytecode).build()?;
 
     let res = rt.block_on(decompile(args))?;
     res.abi.ok_or("unable to decompile contract".into())
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

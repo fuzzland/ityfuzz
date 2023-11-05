@@ -1,16 +1,28 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{OracleCtx, Producer};
-use crate::state::HasExecutionResult;
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use std::collections::HashMap;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        types::{EVMAddress, EVMFuzzState, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{OracleCtx, Producer},
+    state::HasExecutionResult,
+};
 
 pub struct ERC20Producer {
     // (caller, token) -> (pre_balance, post_balance)
     pub balances: HashMap<(EVMAddress, EVMAddress), EVMU256>,
     pub balance_of: Vec<u8>,
+}
+
+impl Default for ERC20Producer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ERC20Producer {
@@ -22,8 +34,19 @@ impl ERC20Producer {
     }
 }
 
-impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for ERC20Producer
+impl
+    Producer<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+    > for ERC20Producer
 {
     fn produce(
         &mut self,
@@ -37,7 +60,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
     ) {
         #[cfg(feature = "flashloan_v2")]
@@ -52,18 +75,18 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
                 .clone();
 
             let callers = ctx.fuzz_state.callers_pool.clone();
-            let query_balance_batch = callers.iter().map(
-                |caller| {
+            let query_balance_batch = callers
+                .iter()
+                .flat_map(|caller| {
                     let mut extended_address = vec![0; 12];
                     extended_address.extend_from_slice(caller.0.as_slice());
                     let call_data = Bytes::from([self.balance_of.clone(), extended_address].concat());
-                    tokens.iter().map(
-                        |token| {
-                            (*token, call_data.clone())
-                        }
-                    ).collect::<Vec<(EVMAddress, Bytes)>>()
-                }
-            ).flatten().collect::<Vec<(EVMAddress, Bytes)>>();
+                    tokens
+                        .iter()
+                        .map(|token| (*token, call_data.clone()))
+                        .collect::<Vec<(EVMAddress, Bytes)>>()
+                })
+                .collect::<Vec<(EVMAddress, Bytes)>>();
             let post_balance_res = ctx.call_post_batch(&query_balance_batch);
 
             let mut idx = 0;
@@ -82,7 +105,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
 
     fn notify_end(
         &mut self,
-        ctx: &mut OracleCtx<
+        _ctx: &mut OracleCtx<
             EVMState,
             EVMAddress,
             Bytecode,
@@ -92,7 +115,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
     ) {
         self.balances.clear();

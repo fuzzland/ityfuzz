@@ -1,26 +1,29 @@
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
-use crate::evm::vm::EVMState;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasItyState};
+use std::{clone::Clone, fmt::Debug, time::Duration};
 
 use bytes::Bytes;
-use libafl::corpus::{Corpus, Testcase};
-use libafl::inputs::Input;
-use libafl::prelude::UsesInput;
-use libafl::schedulers::Scheduler;
-use libafl::state::{HasCorpus, HasMetadata, State};
+use libafl::{
+    corpus::{Corpus, Testcase},
+    inputs::Input,
+    prelude::UsesInput,
+    schedulers::Scheduler,
+    state::{HasCorpus, HasMetadata, State},
+};
 use primitive_types::U512;
-use serde::{Deserialize, Serialize};
-
-use std::clone::Clone;
-use std::fmt::Debug;
-
-use crate::evm::types::{EVMAddress, EVMU256};
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
-use std::time::Duration;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    evm::{
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        types::{EVMAddress, EVMU256},
+        vm::EVMState,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasItyState},
+};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub enum MiddlewareType {
@@ -95,40 +98,39 @@ where
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    );
+    #[allow(clippy::missing_safety_doc)]
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S);
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        ret: &Bytes,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _ret: &Bytes,
     ) {
     }
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn before_execute(
         &mut self,
-        interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        is_step: bool,
-        data: &mut Bytes,
-        evm_state: &mut EVMState,
+        _interp: Option<&mut Interpreter>,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _is_step: bool,
+        _data: &mut Bytes,
+        _evm_state: &mut EVMState,
     ) {
     }
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn on_insert(
         &mut self,
-        interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-        bytecode: &mut Bytecode,
-        address: EVMAddress,
+        _interp: Option<&mut Interpreter>,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _bytecode: &mut Bytecode,
+        _address: EVMAddress,
     ) {
     }
     fn get_type(&self) -> MiddlewareType;

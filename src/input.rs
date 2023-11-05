@@ -1,23 +1,20 @@
 /// Defines trait for VM inputs that are sent to any smart contract VM
-
 use std::any;
 use std::fmt::Debug;
 
-use crate::state_input::StagedVMState;
-use libafl::inputs::Input;
+use libafl::{
+    inputs::Input,
+    prelude::{HasMaxSize, HasRand, MutationResult, State},
+    state::HasMetadata,
+};
+use serde::{de::DeserializeOwned, Serialize};
 
-use libafl::prelude::{HasMaxSize, HasRand, MutationResult, State};
-use libafl::state::HasMetadata;
-
-use crate::evm::abi::BoxedABI;
-
-use crate::generic_vm::vm_state::VMStateT;
-use crate::state::{HasCaller, HasItyState};
-use primitive_types::U256;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use crate::evm::types::EVMU256;
-use crate::generic_vm::vm_executor::ExecutionResult;
+use crate::{
+    evm::{abi::BoxedABI, types::EVMU256},
+    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
+    state::{HasCaller, HasItyState},
+    state_input::StagedVMState,
+};
 
 /// A trait for VM inputs that are sent to any smart contract VM
 pub trait VMInputT<VS, Loc, Addr, CI>:
@@ -26,28 +23,26 @@ where
     VS: Default + VMStateT,
     Addr: Debug + Clone + Serialize + DeserializeOwned,
     Loc: Debug + Clone + Serialize + DeserializeOwned,
-    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde
+    CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Mutate the input
     fn mutate<S>(&mut self, state: &mut S) -> MutationResult
     where
-        S: State
-            + HasRand
-            + HasMaxSize
-            + HasItyState<Loc, Addr, VS, CI>
-            + HasCaller<Addr>
-            + HasMetadata;
-    /// Get the caller address of the input (the address that sent the transaction)
+        S: State + HasRand + HasMaxSize + HasItyState<Loc, Addr, VS, CI> + HasCaller<Addr> + HasMetadata;
+    /// Get the caller address of the input (the address that sent the
+    /// transaction)
     fn get_caller_mut(&mut self) -> &mut Addr;
     /// Get the caller address of the input
     fn get_caller(&self) -> Addr;
     /// Set the caller address of the input
     fn set_caller(&mut self, caller: Addr);
 
-    /// Get the contract address of the input (the address of the contract that is being called)
+    /// Get the contract address of the input (the address of the contract that
+    /// is being called)
     fn get_contract(&self) -> Addr;
 
-    /// Get the VM state of the input (the state of the VM before the transaction is executed)
+    /// Get the VM state of the input (the state of the VM before the
+    /// transaction is executed)
     fn get_state(&self) -> &VS;
     /// Get the VM state of the input
     fn get_state_mut(&mut self) -> &mut VS;
@@ -74,7 +69,6 @@ where
 
     /// Determine whether a input is better than another
     fn fav_factor(&self) -> f64;
-
 
     ///// EVM Specific!! ////
     // TODO: Move these to a separate trait

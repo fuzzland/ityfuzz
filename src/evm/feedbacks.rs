@@ -1,26 +1,37 @@
-use crate::evm::input::{ConciseEVMInput, EVMInputT};
-use crate::evm::middlewares::sha3_bypass::Sha3TaintAnalysis;
-use crate::evm::types::EVMAddress;
-use crate::evm::vm::EVMExecutor;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use libafl::events::EventFirer;
-use libafl::executors::ExitKind;
-use libafl::feedbacks::Feedback;
-use libafl::observers::ObserversTuple;
-use libafl::prelude::{HasCorpus, HasMetadata, HasRand, Input, State, Testcase, UsesInput};
-use libafl::schedulers::Scheduler;
-use libafl::state::HasClientPerfMonitor;
-use libafl::Error;
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Formatter},
+    ops::Deref,
+    rc::Rc,
+};
+
+use libafl::{
+    events::EventFirer,
+    executors::ExitKind,
+    feedbacks::Feedback,
+    observers::ObserversTuple,
+    prelude::{HasCorpus, HasMetadata, HasRand, State, Testcase, UsesInput},
+    schedulers::Scheduler,
+    state::HasClientPerfMonitor,
+    Error,
+};
 use libafl_bolts::Named;
-use std::cell::RefCell;
-use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
-use std::rc::Rc;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInputT},
+        middlewares::sha3_bypass::Sha3TaintAnalysis,
+        types::EVMAddress,
+        vm::EVMExecutor,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
 
 /// A wrapper around a feedback that also performs sha3 taint analysis
 /// when the feedback is interesting.
+#[allow(clippy::type_complexity)]
 pub struct Sha3WrappedFeedback<I, S, VS, F, SC>
 where
     S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
@@ -106,9 +117,7 @@ where
     where
         OT: ObserversTuple<S>,
     {
-        self.inner_feedback
-            .as_mut()
-            .append_metadata(state, observers, testcase)
+        self.inner_feedback.as_mut().append_metadata(state, observers, testcase)
     }
 }
 
@@ -120,6 +129,7 @@ where
     F: Feedback<S>,
     SC: Scheduler<State = S> + Clone,
 {
+    #[allow(clippy::type_complexity)]
     pub(crate) fn new(
         inner_feedback: F,
         sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
@@ -156,7 +166,7 @@ where
     F: Feedback<S>,
     SC: Scheduler<State = S> + Clone,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         todo!()
     }
 }

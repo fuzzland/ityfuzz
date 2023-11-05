@@ -1,11 +1,8 @@
-use crate::generic_vm::vm_state::VMStateT;
-
-use crate::state_input::StagedVMState;
-
-use crate::input::ConciseSerde;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state_input::StagedVMState};
 
 pub const MAP_SIZE: usize = 4096;
 
@@ -59,32 +56,23 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
         Out: Default + Into<Vec<u8>> + Clone,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static;
 
-    fn fast_static_call(
-        &mut self,
-        data: &Vec<(Addr, By)>,
-        vm_state: &VS,
-        state: &mut S,
-    ) -> Vec<Out>
+    fn fast_static_call(&mut self, data: &[(Addr, By)], vm_state: &VS, state: &mut S) -> Vec<Out>
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default + Into<Vec<u8>> + Clone;
 
-    fn fast_call(
-        &mut self,
-        data: &Vec<(Addr, Addr, By)>,
-        vm_state: &VS,
-        state: &mut S,
-    ) -> (Vec<(Out, bool)>, VS)
+    fn fast_call(&mut self, data: &[(Addr, Addr, By)], vm_state: &VS, state: &mut S) -> (Vec<(Out, bool)>, VS)
     where
         VS: VMStateT,
         Addr: Serialize + DeserializeOwned + Debug,
         Loc: Serialize + DeserializeOwned + Debug,
         Out: Default + Into<Vec<u8>> + Clone;
 
-    // all these method should be implemented via a global variable, instead of getting data from
-    // the `self`. `self` here is only to make the trait object work.
+    // all these method should be implemented via a global variable, instead of
+    // getting data from the `self`. `self` here is only to make the trait
+    // object work.
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE];
     fn get_read(&self) -> &'static mut [bool; MAP_SIZE];
     fn get_write(&self) -> &'static mut [u8; MAP_SIZE];

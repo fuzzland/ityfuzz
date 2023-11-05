@@ -3,47 +3,53 @@
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
 
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy};
-use crate::evm::middlewares::middleware::CallMiddlewareReturn::ReturnSuccess;
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareOp, MiddlewareType};
-use crate::evm::mutator::AccessPattern;
-use crate::evm::onchain::endpoints::{OnChainConfig, PriceOracle};
-use std::borrow::BorrowMut;
-use libafl::schedulers::Scheduler;
-use revm_interpreter::Interpreter;
-use crate::evm::host::FuzzHost;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::oracle::Oracle;
-use crate::state::{HasCaller, HasItyState};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    marker::PhantomData,
+    ops::Deref,
+    rc::Rc,
+    str::FromStr,
+    time::Duration,
+};
+
 use bytes::Bytes;
-use libafl::corpus::{Corpus, Testcase};
+use libafl::{
+    corpus::{Corpus, Testcase},
+    inputs::Input,
+    prelude::{HasCorpus, State, UsesInput},
+    schedulers::Scheduler,
+    state::{HasMetadata, HasRand},
+};
+// impl_serdeany is used when `flashloan_v2` feature is not enabled
+#[allow(unused_imports)]
 use libafl_bolts::impl_serdeany;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, State, UsesInput};
-use libafl::state::{HasMetadata, HasRand};
+use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Deref;
-
-use crate::evm::contract_utils::ABIConfig;
-use crate::evm::onchain::onchain::OnChain;
-use crate::evm::oracles::erc20::IERC20OracleFlashloan;
-use crate::get_token_ctx;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::time::Duration;
-use revm_primitives::Bytecode;
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, EVMU512};
-use crate::evm::types::convert_u256_to_h160;
-use crate::evm::types::float_scale_to_u512;
-use crate::evm::vm::IS_FAST_CALL_STATIC;
+// Some components are used when `flashloan_v2` feature is not enabled
+#[allow(unused_imports)]
+use crate::{
+    evm::{
+        contract_utils::ABIConfig,
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        middlewares::middleware::{CallMiddlewareReturn::ReturnSuccess, Middleware, MiddlewareOp, MiddlewareType},
+        mutator::AccessPattern,
+        onchain::{
+            endpoints::{OnChainConfig, PriceOracle},
+            OnChain,
+        },
+        oracles::erc20::IERC20OracleFlashloan,
+        types::{as_u64, convert_u256_to_h160, float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    oracle::Oracle,
+    state::{HasCaller, HasItyState},
+};
 
 macro_rules! scale {
     () => {
@@ -94,7 +100,7 @@ pub struct DummyPriceOracle;
 
 impl PriceOracle for DummyPriceOracle {
     fn fetch_token_price(&mut self, _token_address: EVMAddress) -> Option<(u32, u32)> {
-        return Some((10000, 18));
+        Some((10000, 18))
     }
 }
 
@@ -141,23 +147,21 @@ where
     ) as Testcase<I>;
     tc.set_exec_time(Duration::from_secs(0));
     let idx = state.corpus_mut().add(tc).expect("failed to add");
-    scheduler
-        .on_add(state, idx)
-        .expect("failed to call scheduler on_add");
+    scheduler.on_add(state, idx).expect("failed to call scheduler on_add");
 }
 
 impl<VS, I, S> Flashloan<VS, I, S>
 where
     S: State
-       + HasRand
-       + HasCaller<EVMAddress>
-       + HasCorpus
-       + Debug
-       + Clone
-       + HasMetadata
-       + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-       + UsesInput<Input = I>
-       + 'static,
+        + HasRand
+        + HasCaller<EVMAddress>
+        + HasCorpus
+        + Debug
+        + Clone
+        + HasMetadata
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + UsesInput<Input = I>
+        + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
@@ -192,6 +196,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: EVMU256) -> EVMU512 {
         let amount = if decimals > 18 {
             EVMU512::from(amount) / EVMU512::from(10u64.pow(decimals - 18))
@@ -199,28 +204,23 @@ where
             EVMU512::from(amount) * EVMU512::from(10u64.pow(18 - decimals))
         };
         // it should work for now as price of token is always less than 1e5
-        return amount * EVMU512::from(eth_price);
+        amount * EVMU512::from(eth_price)
     }
 
+    #[allow(dead_code)]
     fn calculate_usd_value_from_addr(&mut self, addr: EVMAddress, amount: EVMU256) -> Option<EVMU512> {
-        match self.oracle.fetch_token_price(addr) {
-            Some(price) => Some(Self::calculate_usd_value(price, amount)),
-            _ => None,
-        }
+        self.oracle
+            .fetch_token_price(addr)
+            .map(|price| Self::calculate_usd_value(price, amount))
     }
 
     #[cfg(feature = "flashloan_v2")]
-    pub fn on_contract_insertion(
-        &mut self,
-        addr: &EVMAddress,
-        abi: &Vec<ABIConfig>,
-        state: &mut S,
-    ) -> (bool, bool) {
+    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &[ABIConfig], _state: &mut S) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
             return (false, false);
         }
-        self.known_addresses.insert(addr.clone());
+        self.known_addresses.insert(*addr);
 
         // if the contract is erc20, query its holders
         let abi_signatures_token = vec![
@@ -231,26 +231,20 @@ where
         ];
 
         let abi_signatures_pair = vec!["skim".to_string(), "sync".to_string(), "swap".to_string()];
-        let abi_names = abi
-            .iter()
-            .map(|x| x.function_name.clone())
-            .collect::<HashSet<String>>();
+        let abi_names = abi.iter().map(|x| x.function_name.clone()).collect::<HashSet<String>>();
 
         let mut is_erc20 = false;
         let mut is_pair = false;
         // check abi_signatures_token is subset of abi.name
         {
-            let mut oracle = self.flashloan_oracle.deref().try_borrow_mut();
+            let oracle = self.flashloan_oracle.deref().try_borrow_mut();
             // avoid delegate call on token -> make oracle borrow multiple times
             if oracle.is_ok() {
                 if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
-                    oracle.unwrap().register_token(
-                        addr.clone(),
-                        self.endpoint
-                            .fetch_uniswap_path_cached(addr.clone())
-                            .clone(),
-                    );
-                    self.erc20_address.insert(addr.clone());
+                    oracle
+                        .unwrap()
+                        .register_token(*addr, self.endpoint.fetch_uniswap_path_cached(*addr).clone());
+                    self.erc20_address.insert(*addr);
                     is_erc20 = true;
                 }
             } else {
@@ -260,7 +254,7 @@ where
 
         // if the contract is pair
         if abi_signatures_pair.iter().all(|x| abi_names.contains(x)) {
-            self.pair_address.insert(addr.clone());
+            self.pair_address.insert(*addr);
             debug!("pair detected @ address {:?}", addr);
             is_pair = true;
         }
@@ -304,12 +298,14 @@ where
         let addr = input.get_contract();
         // dont care if the call target is not erc20
         if self.erc20_address.contains(&addr) {
-            // if the target is erc20 contract, then check the balance of the caller in the oracle
+            // if the target is erc20 contract, then check the balance of the caller in the
+            // oracle
             flashloan_data.oracle_recheck_balance.insert(addr);
         }
 
         if self.pair_address.contains(&addr) {
-            // if the target is pair contract, then check the balance of the caller in the oracle
+            // if the target is pair contract, then check the balance of the caller in the
+            // oracle
             flashloan_data.oracle_recheck_reserve.insert(addr);
         }
     }
@@ -318,26 +314,21 @@ where
 impl<VS, I, S, SC> Middleware<VS, I, S, SC> for Flashloan<VS, I, S>
 where
     S: State
-       + HasRand
-       + HasCaller<EVMAddress>
-       + HasMetadata
-       + HasCorpus
-       + Debug
-       + Clone
-       + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-       + UsesInput<Input = I>
-       + 'static,
+        + HasRand
+        + HasCaller<EVMAddress>
+        + HasMetadata
+        + HasCorpus
+        + Debug
+        + Clone
+        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
+        + UsesInput<Input = I>
+        + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
 {
     #[cfg(not(feature = "flashloan_v2"))]
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         macro_rules! earned {
             ($amount:expr) => {
                 host.evmstate.flashloan_data.earned += $amount;
@@ -378,14 +369,13 @@ where
             return;
         }
         let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-        // debug!("Calling address: {:?} {:?}", hex::encode(call_target), hex::encode(data));
+        // debug!("Calling address: {:?} {:?}", hex::encode(call_target),
+        // hex::encode(data));
 
         macro_rules! make_transfer_call_success {
             () => {
                 host.middlewares_latent_call_actions
-                    .push(ReturnSuccess(Bytes::from(
-                        [vec![0x0; 31], vec![0x1]].concat(),
-                    )));
+                    .push(ReturnSuccess(Bytes::from([vec![0x0; 31], vec![0x1]].concat())));
             };
         }
 
@@ -448,9 +438,8 @@ where
                 let src = EVMAddress::from_slice(&data[16..36]);
                 let dst = EVMAddress::from_slice(&data[48..68]);
                 let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
-                let _make_success = MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from(
-                    [vec![0x0; 31], vec![0x1]].concat(),
-                ));
+                let _make_success =
+                    MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from([vec![0x0; 31], vec![0x1]].concat()));
                 match self.calculate_usd_value_from_addr(call_target, amount) {
                     Some(value) => {
                         if src == interp.contract.caller {
@@ -482,10 +471,9 @@ where
         //     return;
         // }
 
-
         match *interp.instruction_pointer {
             // detect whether it mutates token balance
-            0xf1 | 0xfa => {},
+            0xf1 | 0xfa => {}
             0x55 => {
                 if self.pair_address.contains(&interp.contract.address) {
                     let key = interp.stack.peek(0).unwrap();
@@ -517,15 +505,12 @@ where
 
         let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
         if self.erc20_address.contains(&call_target) {
-            host.evmstate
-                .flashloan_data
-                .oracle_recheck_balance
-                .insert(call_target);
+            host.evmstate.flashloan_data.oracle_recheck_balance.insert(call_target);
         }
     }
 
     fn get_type(&self) -> MiddlewareType {
-        return MiddlewareType::Flashloan;
+        MiddlewareType::Flashloan
     }
 }
 

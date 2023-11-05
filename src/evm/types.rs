@@ -1,30 +1,32 @@
-/// Common generic types for EVM fuzzing
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::mutator::FuzzMutator;
-use crate::evm::vm::{EVMExecutor, EVMState};
 use std::collections::HashMap;
 
-use crate::evm::srcmap::parser::SourceMapLocation;
-use crate::executor::FuzzExecutor;
-use crate::generic_vm::vm_executor::ExecutionResult;
-use crate::oracle::OracleCtx;
-use crate::scheduler::{SortedDroppingScheduler, PowerABIScheduler};
-use crate::state::{FuzzState, InfantStateState};
-use crate::state_input::StagedVMState;
 use bytes::Bytes;
-use crypto::{sha3::Sha3, digest::Digest};
+use crypto::{digest::Digest, sha3::Sha3};
 use libafl::prelude::HasRand;
-use libafl::schedulers::QueueScheduler;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
-use primitive_types::{H160, H256};
-use revm_primitives::ruint::aliases::U512;
-use revm_primitives::{Bytecode, B160, U256};
+use primitive_types::H160;
+use revm_primitives::{ruint::aliases::U512, Bytecode, B160, U256};
+
+/// Common generic types for EVM fuzzing
+use crate::evm::input::{ConciseEVMInput, EVMInput};
+use crate::{
+    evm::{
+        mutator::FuzzMutator,
+        srcmap::parser::SourceMapLocation,
+        vm::{EVMExecutor, EVMState},
+    },
+    executor::FuzzExecutor,
+    generic_vm::vm_executor::ExecutionResult,
+    oracle::OracleCtx,
+    scheduler::{PowerABIScheduler, SortedDroppingScheduler},
+    state::{FuzzState, InfantStateState},
+    state_input::StagedVMState,
+};
 
 pub type EVMAddress = B160;
 pub type EVMU256 = U256;
 pub type EVMU512 = U512;
-pub type EVMFuzzState =
-    FuzzState<EVMInput, EVMState, EVMAddress, EVMAddress, Vec<u8>, ConciseEVMInput>;
+pub type EVMFuzzState = FuzzState<EVMInput, EVMState, EVMAddress, EVMAddress, Vec<u8>, ConciseEVMInput>;
 pub type EVMOracleCtx<'a> = OracleCtx<
     'a,
     EVMState,
@@ -50,8 +52,7 @@ pub type EVMInfantStateState = InfantStateState<EVMAddress, EVMAddress, EVMState
 
 pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>;
 
-pub type EVMExecutionResult =
-    ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
+pub type EVMExecutionResult = ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
 
 pub type ProjectSourceMapTy = HashMap<EVMAddress, Option<HashMap<usize, SourceMapLocation>>>;
 
@@ -73,7 +74,7 @@ pub type EVMQueueExecutor =
     EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>>;
 
 /// convert array of 20x u8 to H160
-pub fn convert_H160(v: [u8; 20]) -> H160 {
+pub fn convert_h160(v: [u8; 20]) -> H160 {
     v.into()
 }
 
@@ -90,7 +91,7 @@ pub fn float_scale_to_u512(v: f64, decimals: u32) -> U512 {
     for _ in 0..decimals {
         temp *= 10.0;
     }
-    return U512::from(temp as u64);
+    U512::from(temp as u64)
 }
 
 /// Generate a random H160 address.

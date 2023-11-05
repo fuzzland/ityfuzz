@@ -1,36 +1,31 @@
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
-
 use libafl::corpus::Corpus;
-use libafl::corpus::Testcase;
-use libafl::prelude::{HasMetadata, HasRand, Input, UsesInput, HasTestcase, CorpusId};
-use libafl::schedulers::TestcaseScore;
-use libafl::schedulers::{Scheduler, RemovableScheduler};
-use libafl::stages::PowerMutationalStage;
-use libafl::state::HasCorpus;
-use libafl::Error;
-use libafl::state::UsesState;
+use libafl::{
+    corpus::Testcase,
+    prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, UsesInput},
+    schedulers::{RemovableScheduler, Scheduler, TestcaseScore},
+    stages::PowerMutationalStage,
+    state::{HasCorpus, UsesState},
+    Error,
+};
 use libafl_bolts::{impl_serdeany, prelude::Rand};
-
-use serde::{Deserialize, Serialize};
-
 use rand::random;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use revm_primitives::HashSet;
-use serde::de::DeserializeOwned;
-use crate::evm::abi::FUNCTION_SIG;
-use crate::evm::blaz::builder::ArtifactInfoMetadata;
-use crate::evm::blaz::builder::BuildJobResult;
-use crate::evm::corpus_initializer::EVMInitializationArtifacts;
-use crate::evm::input::EVMInput;
-use crate::evm::input::EVMInputT;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::ConciseSerde;
-use crate::input::VMInputT;
-use crate::state::HasParent;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
+
+use crate::{
+    evm::{
+        abi::FUNCTION_SIG,
+        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
+        corpus_initializer::EVMInitializationArtifacts,
+        input::EVMInput,
+    },
+    input::VMInputT,
+    state::HasParent,
+};
 
 /// A trait providing functions necessary for voting mechanisms
 pub trait HasVote<S>
@@ -40,17 +35,25 @@ where
     fn vote(&self, state: &mut S, idx: usize, amount: usize);
 }
 
-/// The maximum number of inputs (or VMState) to keep in the corpus before pruning
+/// The maximum number of inputs (or VMState) to keep in the corpus before
+/// pruning
 pub const DROP_THRESHOLD: usize = 500;
 /// The number of inputs (or VMState) to prune each time the corpus is pruned
 pub const PRUNE_AMT: usize = 250;
-/// If inputs (or VMState) has not been visited this many times, it will be ignored during pruning
+/// If inputs (or VMState) has not been visited this many times, it will be
+/// ignored during pruning
 pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 
 /// A scheduler that drops inputs (or VMState) based on a voting mechanism
 #[derive(Debug, Clone)]
 pub struct SortedDroppingScheduler<S> {
     phantom: std::marker::PhantomData<S>,
+}
+
+impl<S> Default for SortedDroppingScheduler<S> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> SortedDroppingScheduler<S> {
@@ -82,14 +85,23 @@ pub struct DependencyTree {
     nodes: HashMap<usize, Node>,
 }
 
+impl Default for DependencyTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DependencyTree {
     pub fn add_node(&mut self, idx: usize, parent: usize) {
-        self.nodes.insert(idx, Node {
-            parent,
-            ref_count: 1,
-            pending_delete: false,
-            never_delete: false,
-        });
+        self.nodes.insert(
+            idx,
+            Node {
+                parent,
+                ref_count: 1,
+                pending_delete: false,
+                never_delete: false,
+            },
+        );
         let mut parent = parent;
         while parent != 0 {
             let node = self.nodes.get_mut(&parent).unwrap();
@@ -99,7 +111,7 @@ impl DependencyTree {
     }
 
     pub fn remove_node(&mut self, idx: usize) {
-        let mut node = self.nodes.get_mut(&idx).unwrap();
+        let node = self.nodes.get_mut(&idx).unwrap();
         node.ref_count -= 1;
         node.pending_delete = true;
         let mut parent = node.parent;
@@ -111,7 +123,7 @@ impl DependencyTree {
     }
 
     pub fn mark_never_delete(&mut self, idx: usize) {
-        let mut node = self.nodes.get_mut(&idx).unwrap();
+        let node = self.nodes.get_mut(&idx).unwrap();
         node.never_delete = true;
         let mut parent = node.parent;
         while parent != 0 {
@@ -135,9 +147,7 @@ impl DependencyTree {
     }
 
     pub fn new() -> Self {
-        Self {
-            nodes: HashMap::new(),
-        }
+        Self { nodes: HashMap::new() }
     }
 }
 
@@ -160,7 +170,9 @@ pub struct VoteData {
 }
 
 pub trait HasReportCorpus<S>
-    where S: HasMetadata {
+where
+    S: HasMetadata,
+{
     fn report_corpus(&self, state: &mut S, state_idx: usize);
     fn sponsor_state(&self, state: &mut S, state_idx: usize, amt: usize);
 }
@@ -171,7 +183,7 @@ where
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
         self.vote(state, state_idx, 3);
-        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
 
         #[cfg(feature = "full_trace")]
         data.deps.mark_never_delete(state_idx);
@@ -181,8 +193,6 @@ where
         self.vote(state, state_idx, amt);
     }
 }
-
-
 
 impl_serdeany!(VoteData);
 
@@ -214,7 +224,7 @@ where
         // Setup metadata for the input (or VMState)
         {
             let parent_idx = state.get_parent_idx();
-            let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+            let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
             data.votes_and_visits.insert(idx, (3, 1));
             data.visits_total += 1;
             data.votes_total += 3;
@@ -226,7 +236,8 @@ where
             }
         }
 
-        // this is costly, but we have to do it to keep the corpus not increasing indefinitely
+        // this is costly, but we have to do it to keep the corpus not increasing
+        // indefinitely
         let mut to_remove: Vec<usize> = vec![];
         {
             let mut corpus_size = state.corpus().count();
@@ -248,7 +259,8 @@ where
                 });
 
                 for i in sorted.iter().take(PRUNE_AMT) {
-                    // Ignore the artifacts (*i.0 < 3) and the currently executing corpus (*i.0 == idx).
+                    // Ignore the artifacts (*i.0 < 3) and the currently executing corpus (*i.0 ==
+                    // idx).
                     if *i.0 >= 3 && *i.0 != idx {
                         to_remove.push(*i.0);
                     }
@@ -256,10 +268,15 @@ where
 
                 // Remove inputs (or VMState) from metadata and corpus
                 to_remove.iter().for_each(|x| {
-                    self.on_remove(state, (*x).into(), &None);
+                    let _ = self.on_remove(state, (*x).into(), &None);
                     #[cfg(feature = "full_trace")]
                     {
-                        state.metadata_map_mut().get_mut::<VoteData>().unwrap().deps.remove_node(*x);
+                        state
+                            .metadata_map_mut()
+                            .get_mut::<VoteData>()
+                            .unwrap()
+                            .deps
+                            .remove_node(*x);
                         unsafe {
                             REMOVED_CORPUS += 1;
                         }
@@ -272,7 +289,13 @@ where
                 state.metadata_map_mut().get_mut::<VoteData>().unwrap().to_remove = to_remove;
                 #[cfg(feature = "full_trace")]
                 {
-                    for idx in state.metadata_map_mut().get_mut::<VoteData>().unwrap().deps.garbage_collection() {
+                    for idx in state
+                        .metadata_map_mut()
+                        .get_mut::<VoteData>()
+                        .unwrap()
+                        .deps
+                        .garbage_collection()
+                    {
                         state.corpus_mut().remove(idx.into()).expect("failed to remove");
                     }
                 }
@@ -295,16 +318,10 @@ where
                     corpus_size
                 );
                 for idx in &data.sorted_votes {
-                    let (votes, visits) = data.votes_and_visits.get(&idx).unwrap();
+                    let (votes, visits) = data.votes_and_visits.get(idx).unwrap();
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
-                    match inp.into_inner().input() {
-                        Some(x) => {
-                            info!(
-                                "idx: {}, votes: {}, visits: {}: {:?}",
-                                idx, votes, visits, x
-                            );
-                        }
-                        _ => {}
+                    if let Some(x) = inp.into_inner().input() {
+                        info!("idx: {}, votes: {}, visits: {}: {:?}", idx, votes, visits, x);
                     }
                 }
                 info!("======================= corpus  =======================");
@@ -312,22 +329,23 @@ where
         }
 
         // Conduct a probabilistic sampling from votes and visits (weighted by votes)
-        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0)
-            * state.metadata_map().get::<VoteData>().unwrap().votes_total as f64;
-        let mut data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
+        let threshold = (state.rand_mut().below(1000) as f64 / 1000.0) *
+            state.metadata_map().get::<VoteData>().unwrap().votes_total as f64;
+        let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
         let mut idx = usize::MAX;
 
         let mut s: f64 = 0.0; // sum of votes so far
 
         for i in &data.sorted_votes {
-            s += data.votes_and_visits.get(&i).unwrap().0 as f64;
+            s += data.votes_and_visits.get(i).unwrap().0 as f64;
             if s > threshold {
                 idx = *i;
                 break;
             }
         }
 
-        if idx == usize::MAX {  // if we didn't find an input, just use the last one
+        if idx == usize::MAX {
+            // if we didn't find an input, just use the last one
             idx = *data.sorted_votes.last().unwrap();
         }
 
@@ -395,7 +413,6 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,7 +450,7 @@ impl PowerABITestcaseMetadata {
     /// Create new [`struct@SchedulerTestcaseMetadata`]
     #[must_use]
     pub fn new(lines: usize) -> Self {
-        Self { lines: lines }
+        Self { lines }
     }
 }
 
@@ -444,18 +461,18 @@ pub struct PowerABIScheduler<S> {
     phantom: PhantomData<S>,
 }
 
+impl<S> Default for PowerABIScheduler<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S> PowerABIScheduler<S> {
     pub fn new() -> Self {
-        Self {
-            phantom: PhantomData,
-        }
+        Self { phantom: PhantomData }
     }
 
-    fn add_abi_metadata(
-        &mut self,
-        testcase: &mut Testcase<EVMInput>,
-        artifact: &BuildJobResult,
-    ) -> Result<(), Error> {
+    fn add_abi_metadata(&mut self, testcase: &mut Testcase<EVMInput>, artifact: &BuildJobResult) -> Result<(), Error> {
         let input = testcase.input().clone().unwrap();
         let tc_func = match input.get_data_abi() {
             Some(abi) => abi.function,
@@ -464,10 +481,15 @@ impl<S> PowerABIScheduler<S> {
                 return Ok(()); // Some EVMInput don't have abi, like borrow
             }
         };
-        let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect(format!(
-            "function signature {} @ {:?} not found in FUNCTION_SIG",
-            hex::encode(tc_func), input.get_contract()
-        ).as_str()) };
+        let tc_func_name = unsafe {
+            FUNCTION_SIG.get(&tc_func).unwrap_or_else(|| {
+                panic!(
+                    "function signature {} @ {:?} not found in FUNCTION_SIG",
+                    hex::encode(tc_func),
+                    input.get_contract()
+                )
+            })
+        };
         let tc_func_slug = {
             let amount_args = tc_func_name.matches(',').count() + {
                 if tc_func_name.contains("()") {
@@ -494,7 +516,8 @@ impl<S> PowerABIScheduler<S> {
                         let func_source = func["source"].as_str().unwrap();
                         let num_lines = func_source.matches('\n').count() + 1;
                         if num_lines <= 1 {
-                            break; // not true function implementation, break to find in next contract
+                            break; // not true function implementation, break to
+                                   // find in next contract
                         }
                         testcase.add_metadata(PowerABITestcaseMetadata::new(num_lines));
                         return Ok(());
@@ -626,10 +649,10 @@ impl<S> TestcaseScore<S> for CorpusPowerABITestcaseScore<S>
 where
     S: HasCorpus + HasMetadata,
 {
-    fn compute(state: &S, entry: &mut Testcase<S::Input>) -> Result<f64, Error> {
+    fn compute(_state: &S, entry: &mut Testcase<S::Input>) -> Result<f64, Error> {
         let num_lines = match entry.metadata::<PowerABITestcaseMetadata>() {
             Ok(meta) => meta.lines,
-            Err(e) => 1, // FIXME: should not happen
+            Err(_e) => 1, // FIXME: should not happen
         };
         // TODO: more sophisticated power score
         Ok(num_lines as f64 * 100.0)

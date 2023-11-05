@@ -1,29 +1,33 @@
-use crate::cache::{Cache, FileSystemCache};
-use crate::evm::types::{EVMAddress, EVMU256};
-use crate::evm::uniswap::{
-    get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider,
+use std::{
+    cell::RefCell,
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    env,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    panic,
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
+
 use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
-use retry::OperationResult;
-use retry::{delay::Fixed, retry_with_index};
+use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::Bytecode;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use std::panic;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
 use tracing::{debug, error, info};
+
+use crate::{
+    cache::{Cache, FileSystemCache},
+    evm::{
+        types::{EVMAddress, EVMU256},
+        uniswap::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider},
+    },
+};
 
 const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
@@ -54,30 +58,34 @@ pub trait PriceOracle: Debug {
     fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)>;
 }
 
-impl Chain {
-    pub fn from_str(s: &String) -> Option<Self> {
-        match s.as_str() {
-            "ETH" | "eth" => Some(Self::ETH),
-            "GOERLI" | "goerli" => Some(Self::GOERLI),
-            "SEPOLIA" | "sepolia" => Some(Self::SEPOLIA),
-            "BSC" | "bsc" => Some(Self::BSC),
-            "CHAPEL" | "chapel" => Some(Self::CHAPEL),
-            "POLYGON" | "polygon" => Some(Self::POLYGON),
-            "MUMBAI" | "mumbai" => Some(Self::MUMBAI),
-            "FANTOM" | "fantom" => Some(Self::FANTOM),
-            "AVALANCHE" | "avalanche" => Some(Self::AVALANCHE),
-            "OPTIMISM" | "optimism" => Some(Self::OPTIMISM),
-            "ARBITRUM" | "arbitrum" => Some(Self::ARBITRUM),
-            "GNOSIS" | "gnosis" => Some(Self::GNOSIS),
-            "BASE" | "base" => Some(Self::BASE),
-            "CELO" | "celo" => Some(Self::CELO),
-            "ZKEVM" | "zkevm" => Some(Self::ZKEVM),
-            "ZKEVM_TESTNET" | "zkevm_testnet" => Some(Self::ZkevmTestnet),
-            "LOCAL" | "local" => Some(Self::LOCAL),
-            _ => None,
+impl FromStr for Chain {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ETH" | "eth" => Ok(Self::ETH),
+            "GOERLI" | "goerli" => Ok(Self::GOERLI),
+            "SEPOLIA" | "sepolia" => Ok(Self::SEPOLIA),
+            "BSC" | "bsc" => Ok(Self::BSC),
+            "CHAPEL" | "chapel" => Ok(Self::CHAPEL),
+            "POLYGON" | "polygon" => Ok(Self::POLYGON),
+            "MUMBAI" | "mumbai" => Ok(Self::MUMBAI),
+            "FANTOM" | "fantom" => Ok(Self::FANTOM),
+            "AVALANCHE" | "avalanche" => Ok(Self::AVALANCHE),
+            "OPTIMISM" | "optimism" => Ok(Self::OPTIMISM),
+            "ARBITRUM" | "arbitrum" => Ok(Self::ARBITRUM),
+            "GNOSIS" | "gnosis" => Ok(Self::GNOSIS),
+            "BASE" | "base" => Ok(Self::BASE),
+            "CELO" | "celo" => Ok(Self::CELO),
+            "ZKEVM" | "zkevm" => Ok(Self::ZKEVM),
+            "ZKEVM_TESTNET" | "zkevm_testnet" => Ok(Self::ZkevmTestnet),
+            "LOCAL" | "local" => Ok(Self::LOCAL),
+            _ => Err(()),
         }
     }
+}
 
+impl Chain {
     pub fn get_chain_id(&self) -> u32 {
         match self {
             Chain::ETH => 1,
@@ -300,12 +308,7 @@ impl OnChainConfig {
             if current_try > 5 {
                 return OperationResult::Err("did not succeed within 3 tries".to_string());
             }
-            match self
-                .client
-                .get(url.to_string())
-                .headers(get_header())
-                .send()
-            {
+            match self.client.get(url.to_string()).headers(get_header()).send() {
                 Ok(resp) => {
                     let text = resp.text();
                     match text {
@@ -398,10 +401,9 @@ impl OnChainConfig {
             Some(resp) => {
                 let block_number = resp.as_str().unwrap();
                 self.block_number = block_number.to_string();
-                let block_number =
-                    EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
-                        .unwrap()
-                        .to_string();
+                let block_number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
+                    .unwrap()
+                    .to_string();
                 debug!("latest block number is {}", block_number);
             }
             None => panic!("fail to get latest block number"),
@@ -413,18 +415,15 @@ impl OnChainConfig {
     }
 
     pub fn fetch_blk_hash(&mut self) -> &String {
-        if self.block_hash == None {
+        if self.block_hash.is_none() {
             self.block_hash = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
-                        let blk_hash = res["hash"]
-                            .as_str()
-                            .expect("fail to find block hash")
-                            .to_string();
+                        let blk_hash = res["hash"].as_str().expect("fail to find block hash").to_string();
                         Some(blk_hash)
                     }
                     None => panic!("fail to get block hash"),
@@ -434,10 +433,7 @@ impl OnChainConfig {
         return self.block_hash.as_ref().unwrap();
     }
 
-    pub fn fetch_storage_dump(
-        &mut self,
-        address: EVMAddress,
-    ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
+    pub fn fetch_storage_dump(&mut self, address: EVMAddress) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         if let Some(storage) = self.storage_dump_cache.get(&address) {
             storage.clone()
         } else {
@@ -447,10 +443,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_storage_dump_uncached(
-        &mut self,
-        address: EVMAddress,
-    ) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
+    pub fn fetch_storage_dump_uncached(&mut self, address: EVMAddress) -> Option<Arc<HashMap<EVMU256, EVMU256>>> {
         let resp = {
             let blk_hash = self.fetch_blk_hash();
             let mut params = String::from("[");
@@ -458,17 +451,15 @@ impl OnChainConfig {
             params.push_str("0,");
             params.push_str(&format!("\"0x{:x}\",", address));
             params.push_str("\"\",");
-            params.push_str(&format!("1000000000000000"));
-            params.push_str("]");
+            params.push_str("1000000000000000");
+            params.push(']');
             self._request("debug_storageRangeAt".to_string(), params)
         };
 
         match resp {
             Some(resp) => {
                 let mut map = HashMap::new();
-                let kvs = resp["storage"]
-                    .as_object()
-                    .expect("failed to convert resp to array");
+                let kvs = resp["storage"].as_object().expect("failed to convert resp to array");
                 if kvs.is_empty() {
                     return None;
                 }
@@ -493,8 +484,7 @@ impl OnChainConfig {
             self.etherscan_base,
             address,
             if !self.etherscan_api_key.is_empty() {
-                self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()]
-                    .clone()
+                self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()].clone()
             } else {
                 "".to_string()
             }
@@ -612,20 +602,17 @@ impl OnChainConfig {
             }
         };
         let balance = EVMU256::from_str(&resp_string).unwrap();
-        info!(
-            "balance of {address:?} at {} is {balance}",
-            self.block_number
-        );
+        info!("balance of {address:?} at {} is {balance}", self.block_number);
         self.balance_cache.insert(address, balance);
         balance
     }
 
     pub fn fetch_blk_timestamp(&mut self) -> EVMU256 {
-        if self.timestamp == None {
+        if self.timestamp.is_none() {
             self.timestamp = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -639,39 +626,36 @@ impl OnChainConfig {
                 }
             }
         }
-        let timestamp = EVMU256::from_str(&self.timestamp.as_ref().unwrap()).unwrap();
+        let timestamp = EVMU256::from_str(self.timestamp.as_ref().unwrap()).unwrap();
         timestamp
     }
 
     pub fn fetch_blk_coinbase(&mut self) -> EVMAddress {
-        if self.coinbase == None {
+        if self.coinbase.is_none() {
             self.coinbase = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
-                        let blk_coinbase = res["miner"]
-                            .as_str()
-                            .expect("fail to find block coinbase")
-                            .to_string();
+                        let blk_coinbase = res["miner"].as_str().expect("fail to find block coinbase").to_string();
                         Some(blk_coinbase)
                     }
                     None => panic!("fail to get block coinbase"),
                 }
             }
         }
-        let coinbase = EVMAddress::from_str(&self.coinbase.as_ref().unwrap()).unwrap();
+        let coinbase = EVMAddress::from_str(self.coinbase.as_ref().unwrap()).unwrap();
         coinbase
     }
 
     pub fn fetch_blk_gaslimit(&mut self) -> EVMU256 {
-        if self.gaslimit == None {
+        if self.gaslimit.is_none() {
             self.gaslimit = {
                 let mut params = String::from("[");
                 params.push_str(&format!("\"{}\",false", self.block_number));
-                params.push_str("]");
+                params.push(']');
                 let res = self._request("eth_getBlockByNumber".to_string(), params);
                 match res {
                     Some(res) => {
@@ -685,7 +669,7 @@ impl OnChainConfig {
                 }
             }
         }
-        let gaslimit = EVMU256::from_str(&self.gaslimit.as_ref().unwrap()).unwrap();
+        let gaslimit = EVMU256::from_str(self.gaslimit.as_ref().unwrap()).unwrap();
         gaslimit
     }
 
@@ -725,12 +709,7 @@ impl OnChainConfig {
         bytes
     }
 
-    pub fn get_contract_slot(
-        &mut self,
-        address: EVMAddress,
-        slot: EVMU256,
-        force_cache: bool,
-    ) -> EVMU256 {
+    pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
         if self.slot_cache.contains_key(&(address, slot)) {
             return self.slot_cache[&(address, slot)];
         }
@@ -782,58 +761,46 @@ impl OnChainConfig {
                 pairs.iter().for_each(|pair| {
                     match pair.src.as_str() {
                         "v2" => {
-                            // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse decimals0");
-                            // let decimals1 = pair["decimals1"].as_u64().expect("failed to parse decimals1");
-                            // let next = EVMAddress::from_str(pair["next"].as_str().expect("failed to parse next")).expect("failed to parse next");
+                            // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse
+                            // decimals0"); let decimals1 =
+                            // pair["decimals1"].as_u64().expect("failed to parse decimals1");
+                            // let next = EVMAddress::from_str(pair["next"].as_str().expect("failed to parse
+                            // next")).expect("failed to parse next");
 
                             path_parsed.route.push(Rc::new(RefCell::new(PairContext {
-                                pair_address: EVMAddress::from_str(pair.pair.as_str())
-                                    .expect("failed to parse pair"),
-                                next_hop: EVMAddress::from_str(pair.next.as_str())
-                                    .expect("failed to parse pair"),
+                                pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
+                                next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
                                 side: pair.in_ as u8,
                                 uniswap_info: Arc::new(get_uniswap_info(
                                     &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
                                     &Chain::from_str(&self.chain_name).unwrap(),
                                 )),
                                 initial_reserves: (
-                                    EVMU256::try_from_be_slice(
-                                        &hex::decode(&pair.initial_reserves_0).unwrap(),
-                                    )
-                                    .unwrap(),
-                                    EVMU256::try_from_be_slice(
-                                        &hex::decode(&pair.initial_reserves_1).unwrap(),
-                                    )
-                                    .unwrap(),
+                                    EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap())
+                                        .unwrap(),
+                                    EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap())
+                                        .unwrap(),
                                 ),
                             })));
                         }
                         "pegged" => {
                             // always live at final
                             path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
-                            path_parsed.final_pegged_pair =
-                                Rc::new(RefCell::new(Some(PairContext {
-                                    pair_address: EVMAddress::from_str(pair.pair.as_str())
-                                        .expect("failed to parse pair"),
-                                    next_hop: EVMAddress::from_str(pair.next.as_str())
-                                        .expect("failed to parse pair"),
-                                    side: pair.in_ as u8,
-                                    uniswap_info: Arc::new(get_uniswap_info(
-                                        &UniswapProvider::from_str(pair.src_exact.as_str())
-                                            .unwrap(),
-                                        &Chain::from_str(&self.chain_name).unwrap(),
-                                    )),
-                                    initial_reserves: (
-                                        EVMU256::try_from_be_slice(
-                                            &hex::decode(&pair.initial_reserves_0).unwrap(),
-                                        )
+                            path_parsed.final_pegged_pair = Rc::new(RefCell::new(Some(PairContext {
+                                pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
+                                next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
+                                side: pair.in_ as u8,
+                                uniswap_info: Arc::new(get_uniswap_info(
+                                    &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
+                                    &Chain::from_str(&self.chain_name).unwrap(),
+                                )),
+                                initial_reserves: (
+                                    EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap())
                                         .unwrap(),
-                                        EVMU256::try_from_be_slice(
-                                            &hex::decode(&pair.initial_reserves_1).unwrap(),
-                                        )
+                                    EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap())
                                         .unwrap(),
-                                    ),
-                                })));
+                                ),
+                            })));
                         }
                         "pegged_weth" => {
                             path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
@@ -869,10 +836,7 @@ impl OnChainConfig {
     fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool) -> Vec<PairData> {
         let token = token.to_lowercase();
         info!("fetching pairs for {token}");
-        if self
-            .pair_cache
-            .contains_key(&EVMAddress::from_str(&token).unwrap())
-        {
+        if self.pair_cache.contains_key(&EVMAddress::from_str(&token).unwrap()) {
             return self.pair_cache[&EVMAddress::from_str(&token).unwrap()].clone();
         }
         if token == self.get_weth(network) {
@@ -1046,7 +1010,7 @@ impl OnChainConfig {
         }
         let mut peg_info = self
             .get_pair(token, network, true)
-            .get(0)
+            .first()
             .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
             .clone();
 
@@ -1112,15 +1076,7 @@ impl OnChainConfig {
                 continue;
             }
             path.push(hop.clone());
-            self.dfs(
-                &hop.next,
-                network,
-                path,
-                visited,
-                pegged_tokens,
-                hops,
-                routes,
-            );
+            self.dfs(&hop.next, network, path, visited, pegged_tokens, hops, routes);
             path.pop();
         }
     }
@@ -1159,7 +1115,7 @@ impl OnChainConfig {
 }
 
 impl OnChainConfig {
-    fn fetch_token_price_uncached(&self, token_address: EVMAddress) -> Option<(u32, u32)> {
+    fn fetch_token_price_uncached(&self, _token_address: EVMAddress) -> Option<(u32, u32)> {
         panic!("not implemented");
     }
 }
@@ -1179,10 +1135,7 @@ fn get_header() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert("authority", "etherscan.io".parse().unwrap());
     headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9".parse().unwrap());
-    headers.insert(
-        "accept-language",
-        "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap(),
-    );
+    headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap());
     headers.insert("cache-control", "max-age=0".parse().unwrap());
     headers.insert(
         "sec-ch-ua",
@@ -1204,14 +1157,17 @@ fn get_header() -> HeaderMap {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::evm::onchain::endpoints::Chain::{BSC, ETH};
-    use crate::evm::types::EVMAddress;
     use tracing::debug;
+
+    use super::*;
+    use crate::evm::{
+        onchain::endpoints::Chain::{BSC, ETH},
+        types::EVMAddress,
+    };
 
     #[test]
     fn test_onchain_config() {
-        let mut config = OnChainConfig::new(BSC, 0);
+        let config = OnChainConfig::new(BSC, 0);
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
@@ -1243,8 +1199,7 @@ mod tests {
     #[test]
     fn test_fetch_abi() {
         let mut config = OnChainConfig::new(BSC, 0);
-        let v = config
-            .fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
+        let v = config.fetch_abi(EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap());
         debug!("{:?}", v)
     }
 
@@ -1260,20 +1215,15 @@ mod tests {
     fn test_get_all_hops() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let mut known: HashSet<String> = HashSet::new();
-        let v = config.get_all_hops(
-            "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
-            "bsc",
-            0,
-            &mut known,
-        );
-        assert!(v.len() > 0);
+        let v = config.get_all_hops("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", 0, &mut known);
+        assert!(!v.is_empty());
     }
 
     #[test]
     fn test_get_pair_pegged() {
         let mut config = OnChainConfig::new(BSC, 22055611);
         let v = config.get_pair("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", true);
-        assert!(v.len() > 0 && v.len() < 10);
+        assert!(!v.is_empty() && v.len() < 10);
     }
 
     #[test]
@@ -1292,7 +1242,7 @@ mod tests {
             "bsc",
             EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
         );
-        assert!(v.swaps.len() > 0);
+        assert!(!v.swaps.is_empty());
         assert!(!v.weth_address.is_zero());
         assert!(!v.address.is_zero());
     }
@@ -1300,9 +1250,7 @@ mod tests {
     #[test]
     fn test_get_balance() {
         let mut config = OnChainConfig::new(ETH, 18168677);
-        let v = config.get_balance(
-            EVMAddress::from_str("0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326").unwrap(),
-        );
+        let v = config.get_balance(EVMAddress::from_str("0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326").unwrap());
         debug!("{:?}", v);
         assert!(v == EVMU256::from(439351222497229612i64));
     }
@@ -1314,8 +1262,8 @@ mod tests {
     //         "ocJtTEZWOJZjYOMAQjRmWcHpvUdieMLJDAtUjycFNTdSxgFGofNJhdiRX0Kk1h1O".to_string(),
     //     );
     //     let v = config.fetch_token_price(
-    //         EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4").unwrap(),
-    //     );
+    //         EVMAddress::from_str("0xa0a2ee912caf7921eaabc866c6ef6fec8f7e90a4"
+    // ).unwrap(),     );
     //     debug!("{:?}", v)
     // }
     //
@@ -1323,8 +1271,8 @@ mod tests {
     // fn test_fetch_storage_all() {
     //     let mut config = OnChainConfig::new(BSC, 0);
     //     let v = config.fetch_storage_all(
-    //         EVMAddress::from_str("0x2aB472b185787b665f334F12618254CaCA668e49").unwrap(),
-    //     );
+    //         EVMAddress::from_str("0x2aB472b185787b665f334F12618254CaCA668e49"
+    // ).unwrap(),     );
     //     debug!("{:?}", v)
     // }
 
@@ -1333,15 +1281,16 @@ mod tests {
     //     let mut config = OnChainConfig::new(ETH, 0);
     //     let v = config
     //         .fetch_storage_dump(
-    //             EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-    //         )
+    //
+    // EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").
+    // unwrap(),         )
     //         .unwrap();
 
     //     let v0 = v.get(&EVMU256::from(0)).unwrap().clone();
 
     //     let slot_v = config.get_contract_slot(
-    //         EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58").unwrap(),
-    //         EVMU256::from(0),
+    //         EVMAddress::from_str("0x3ea826a2724f3df727b64db552f3103192158c58"
+    // ).unwrap(),         EVMU256::from(0),
     //         false,
     //     );
 

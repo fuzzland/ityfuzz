@@ -1,57 +1,64 @@
-/// Utilities to initialize the corpus
-/// Add all potential calls with default args to the corpus
-use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
-use crate::evm::bytecode_analyzer;
-use crate::evm::contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader};
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputTy};
-use crate::evm::mutator::AccessPattern;
-
-use crate::evm::onchain::onchain::BLACKLIST_ADDR;
-use crate::evm::types::{
-    fixed_address, EVMAddress, EVMFuzzState, EVMInfantStateState, EVMStagedVMState,
-    ProjectSourceMapTy, EVMU256,
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::Write,
+    ops::Deref,
+    path::Path,
+    rc::Rc,
+    time::Duration,
 };
-use crate::evm::vm::{EVMExecutor, EVMState};
-use crate::generic_vm::vm_executor::GenericVM;
 
-use crate::scheduler::ABIScheduler;
-use crate::state::HasCaller;
-use crate::state_input::StagedVMState;
 use bytes::Bytes;
-use libafl::corpus::{Corpus, Testcase};
-
-use crate::dump_txn;
-use crate::evm::blaz::builder::BuildJobResult;
-use crate::evm::onchain::abi_decompiler::fetch_abi_heimdall;
-use crate::evm::onchain::flashloan::register_borrow_txn;
-use crate::evm::presets::presets::Preset;
-use crate::evm::types::EVMExecutionResult;
-use crate::evm::middlewares::cheatcode::CHEATCODE_ADDRESS;
-#[cfg(feature = "print_txn_corpus")]
-use crate::fuzzer::DUMP_FILE_COUNT;
-use crate::fuzzer::REPLAY;
-use crate::input::ConciseSerde;
 use hex;
 use itertools::Itertools;
-use tracing::{debug, error, info};
-
-use crypto::sha3::Sha3Mode::Keccak256;
-use libafl::prelude::HasMetadata;
-use libafl::schedulers::Scheduler;
-use libafl::state::HasCorpus;
+use libafl::{
+    corpus::{Corpus, Testcase},
+    prelude::HasMetadata,
+    schedulers::Scheduler,
+    state::HasCorpus,
+};
 use libafl_bolts::impl_serdeany;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::Write;
-use std::ops::Deref;
-use std::path::Path;
-use std::rc::Rc;
-use std::time::Duration;
+use tracing::{debug, error, info};
 
 use super::srcmap::parser::SourceMapLocation;
+/// Utilities to initialize the corpus
+/// Add all potential calls with default args to the corpus
+use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
+#[cfg(feature = "print_txn_corpus")]
+use crate::fuzzer::DUMP_FILE_COUNT;
+use crate::{
+    dump_txn,
+    evm::{
+        blaz::builder::BuildJobResult,
+        bytecode_analyzer,
+        contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader},
+        input::{ConciseEVMInput, EVMInput, EVMInputTy},
+        middlewares::cheatcode::CHEATCODE_ADDRESS,
+        mutator::AccessPattern,
+        onchain::{abi_decompiler::fetch_abi_heimdall, flashloan::register_borrow_txn, BLACKLIST_ADDR},
+        presets::Preset,
+        types::{
+            fixed_address,
+            EVMAddress,
+            EVMExecutionResult,
+            EVMFuzzState,
+            EVMInfantStateState,
+            EVMStagedVMState,
+            ProjectSourceMapTy,
+            EVMU256,
+        },
+        vm::{EVMExecutor, EVMState},
+    },
+    fuzzer::REPLAY,
+    generic_vm::vm_executor::GenericVM,
+    input::ConciseSerde,
+    scheduler::ABIScheduler,
+    state::HasCaller,
+    state_input::StagedVMState,
+};
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
@@ -138,12 +145,7 @@ macro_rules! handle_contract_insertion {
             register_borrow_txn(scheduler, $state, $deployed_address);
         }
         if is_pair {
-            let mut mid = $host
-                .flashloan_middleware
-                .as_ref()
-                .unwrap()
-                .deref()
-                .borrow_mut();
+            let mut mid = $host.flashloan_middleware.as_ref().unwrap().deref().borrow_mut();
             mid.on_pair_insertion(&$host, $state, $deployed_address);
         }
     };
@@ -159,17 +161,11 @@ macro_rules! wrap_input {
 
 macro_rules! add_input_to_corpus {
     ($state: expr, $scheduler: expr, $input: expr) => {
-        let idx = $state
-            .add_tx_to_corpus(wrap_input!($input))
-            .expect("failed to add");
-        $scheduler
-            .on_add($state, idx)
-            .expect("failed to call scheduler on_add");
+        let idx = $state.add_tx_to_corpus(wrap_input!($input)).expect("failed to add");
+        $scheduler.on_add($state, idx).expect("failed to call scheduler on_add");
     };
     ($state:expr, $scheduler:expr, $input:expr, $artifacts:expr) => {
-        let idx = $state
-            .add_tx_to_corpus(wrap_input!($input))
-            .expect("failed to add");
+        let idx = $state.add_tx_to_corpus(wrap_input!($input)).expect("failed to add");
         $scheduler
             .on_add_artifacts($state, idx, $artifacts)
             .expect("failed to call scheduler on_add_artifact");
@@ -200,10 +196,7 @@ where
     }
 
     #[cfg(feature = "use_presets")]
-    pub fn register_preset(
-        &mut self,
-        preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>,
-    ) {
+    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>) {
         self.presets.push(preset);
     }
 
@@ -248,10 +241,7 @@ where
                 contract.deployed_address
             };
             contract.deployed_address = deployed_address;
-            info!(
-                "Contract {} deployed to: {deployed_address:?}",
-                contract.name
-            );
+            info!("Contract {} deployed to: {deployed_address:?}", contract.name);
             self.state.add_address(&deployed_address);
         }
         info!("Deployed all contracts\n");
@@ -270,7 +260,8 @@ where
         for contract in &mut loader.contracts {
             if contract.abi.is_empty() {
                 // this contract's abi is not available, we will use 3 layers to handle this
-                // 1. Extract abi from bytecode, and see do we have any function sig available in state
+                // 1. Extract abi from bytecode, and see do we have any function sig available
+                //    in state
                 // 2. Use Heimdall to extract abi
                 // 3. Reconfirm on failures of heimdall
                 debug!("Contract {} has no abi", contract.name);
@@ -290,12 +281,8 @@ where
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()
                         .map(|abi| {
-                            if let Some(known_abi) = self
-                                .state
-                                .metadata_map()
-                                .get::<ABIMap>()
-                                .unwrap()
-                                .get(&abi.function)
+                            if let Some(known_abi) =
+                                self.state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
                             {
                                 known_abi
                             } else {
@@ -315,27 +302,18 @@ where
                 .address_to_abi
                 .insert(contract.deployed_address, contract.abi.clone());
             let mut code = vec![];
-            if let Some(c) = self
-                .executor
-                .host
-                .code
-                .clone()
-                .get(&contract.deployed_address)
-            {
+            if let Some(c) = self.executor.host.code.clone().get(&contract.deployed_address) {
                 code.extend_from_slice(c.bytecode());
             }
-            artifacts.address_to_bytecode.insert(
-                contract.deployed_address,
-                Bytecode::new_raw(Bytes::from(code)),
-            );
+            artifacts
+                .address_to_bytecode
+                .insert(contract.deployed_address, Bytecode::new_raw(Bytes::from(code)));
 
             let mut name = contract.name.clone().trim_end_matches('*').to_string();
             if name != format!("{:?}", contract.deployed_address) {
                 name = format!("{}({:?})", name, contract.deployed_address.clone());
             }
-            artifacts
-                .address_to_name
-                .insert(contract.deployed_address, name);
+            artifacts.address_to_name.insert(contract.deployed_address, name);
 
             if let Some(build_artifact) = &contract.build_artifact {
                 artifacts
@@ -354,11 +332,7 @@ where
             }
 
             if unsafe {
-                BLACKLIST_ADDR.is_some()
-                    && BLACKLIST_ADDR
-                        .as_ref()
-                        .unwrap()
-                        .contains(&contract.deployed_address)
+                BLACKLIST_ADDR.is_some() && BLACKLIST_ADDR.as_ref().unwrap().contains(&contract.deployed_address)
             } {
                 continue;
             }
@@ -366,20 +340,16 @@ where
             for abi in contract.abi.clone() {
                 let name = &abi.function_name;
 
-                if name.starts_with("invariant_") || name.starts_with("echidna_") || name == "setUp" || name == "failed" {
+                if name.starts_with("invariant_") || name.starts_with("echidna_") || name == "setUp" || name == "failed"
+                {
                     debug!("Skipping function: {}", name);
                     continue;
                 }
 
-                self.add_abi(
-                    &abi,
-                    contract.deployed_address,
-                    &mut artifacts,
-                );
+                self.add_abi(&abi, contract.deployed_address, &mut artifacts);
             }
         }
-        artifacts.initial_state =
-            StagedVMState::new_with_state(self.executor.host.evmstate.clone());
+        artifacts.initial_state = StagedVMState::new_with_state(self.executor.host.evmstate.clone());
 
         let mut tc = Testcase::new(artifacts.initial_state.clone());
         tc.set_exec_time(Duration::from_secs(0));
@@ -419,11 +389,9 @@ where
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
-            self.executor.host.set_code(
-                caller,
-                Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
-                self.state,
-            );
+            self.executor
+                .host
+                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
             self.executor
                 .host
                 .evmstate
@@ -435,25 +403,16 @@ where
         self.executor.host.set_code(
             CHEATCODE_ADDRESS,
             Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
-            self.state
+            self.state,
         );
     }
 
-    fn add_abi(
-        &mut self,
-        abi: &ABIConfig,
-        deployed_address: EVMAddress,
-        artifacts: &mut EVMInitializationArtifacts,
-    ) {
+    fn add_abi(&mut self, abi: &ABIConfig, deployed_address: EVMAddress, artifacts: &mut EVMInitializationArtifacts) {
         if abi.is_constructor {
             return;
         }
 
-        match self
-            .state
-            .hash_to_address
-            .get_mut(abi.function.clone().as_slice())
-        {
+        match self.state.hash_to_address.get_mut(abi.function.clone().as_slice()) {
             Some(addrs) => {
                 addrs.insert(deployed_address);
             }
@@ -485,11 +444,7 @@ where
             },
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
-            txn_value: if abi.is_payable {
-                Some(EVMU256::ZERO)
-            } else {
-                None
-            },
+            txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
@@ -511,7 +466,7 @@ where
         {
             let presets = self.presets.clone();
             for p in presets {
-                let mut presets = p.presets(abi.function, &input, self.executor);
+                let presets = p.presets(abi.function, &input, self.executor);
                 presets.iter().for_each(|preset| {
                     add_input_to_corpus!(self.state, &mut self.scheduler, preset.clone());
                 });

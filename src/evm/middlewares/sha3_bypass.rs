@@ -1,23 +1,30 @@
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256};
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    rc::Rc,
+};
+
 use bytes::Bytes;
-use itertools::Itertools;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use libafl::schedulers::Scheduler;
-use revm_interpreter::opcode::JUMPI;
-use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::rc::Rc;
+use libafl::{
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, State},
+    schedulers::Scheduler,
+};
+use revm_interpreter::{opcode::JUMPI, Interpreter};
 use tracing::debug;
+
+use crate::{
+    evm::{
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInputT},
+        middlewares::middleware::{Middleware, MiddlewareType},
+        types::{as_u64, EVMAddress, EVMU256},
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
 #[derive(Clone, Debug)]
 pub struct Sha3TaintAnalysisCtx {
     pub dirty_memory: Vec<bool>,
@@ -29,9 +36,7 @@ pub struct Sha3TaintAnalysisCtx {
 impl Sha3TaintAnalysisCtx {
     pub fn read_input(&self, start: usize, length: usize) -> Vec<bool> {
         let mut res = vec![false; length];
-        for i in 0..length {
-            res[i] = self.input_data[start + i];
-        }
+        res[..length].copy_from_slice(&self.input_data[start..(length + start)]);
         res
     }
 }
@@ -44,6 +49,12 @@ pub struct Sha3TaintAnalysis {
     pub tainted_jumpi: HashSet<(EVMAddress, usize)>,
 
     pub ctxs: Vec<Sha3TaintAnalysisCtx>,
+}
+
+impl Default for Sha3TaintAnalysis {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Sha3TaintAnalysis {
@@ -65,9 +76,7 @@ impl Sha3TaintAnalysis {
 
     pub fn write_input(&self, start: usize, length: usize) -> Vec<bool> {
         let mut res = vec![false; length];
-        for i in 0..length {
-            res[i] = self.dirty_memory[start + i];
-        }
+        res[..length].copy_from_slice(&self.dirty_memory[start..(length + start)]);
         res
     }
 
@@ -116,16 +125,11 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         //
-        // debug!("on_step: {:?} with {:x}", interp.program_counter(), *interp.instruction_pointer);
-        // debug!("stack: {:?}", self.dirty_stack);
-        // debug!("origin: {:?}", interp.stack);
+        // debug!("on_step: {:?} with {:x}", interp.program_counter(),
+        // *interp.instruction_pointer); debug!("stack: {:?}",
+        // self.dirty_stack); debug!("origin: {:?}", interp.stack);
 
         macro_rules! pop_push {
             ($pop_cnt: expr,$push_cnt: expr) => {{
@@ -149,7 +153,7 @@ where
 
         macro_rules! push_false {
             () => {
-                self.dirty_stack.push(false);
+                self.dirty_stack.push(false)
             };
         }
 
@@ -167,8 +171,7 @@ where
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                 let len = as_u64(interp.stack.peek(2).expect("stack is empty")) as usize;
                 ensure_size!(self.dirty_memory, mem_offset + len);
-                self.dirty_memory[mem_offset..mem_offset + len]
-                    .copy_from_slice(vec![false; len as usize].as_slice());
+                self.dirty_memory[mem_offset..mem_offset + len].copy_from_slice(vec![false; len as usize].as_slice());
             }};
         }
 
@@ -214,18 +217,18 @@ where
             // CALLDATALOAD
             0x35 => {
                 self.dirty_stack.pop();
-                if self.ctxs.len() > 0 {
+                if !self.ctxs.is_empty() {
                     let ctx = self.ctxs.last().unwrap();
                     let offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                     if offset == 0 {
-                        push_false!()
+                        push_false!();
                     } else {
                         let input = ctx.read_input(offset, 32).contains(&true);
                         // debug!("CALLDATALOAD: {:x} -> {}", offset, input);
-                        self.dirty_stack.push(input)
+                        self.dirty_stack.push(input);
                     }
                 } else {
-                    push_false!()
+                    push_false!();
                 }
             }
             // CALLDATASIZE
@@ -260,9 +263,7 @@ where
                 self.dirty_stack.pop();
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                 ensure_size!(self.dirty_memory, mem_offset + 32);
-                let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32]
-                    .iter()
-                    .any(|x| *x);
+                let is_dirty = self.dirty_memory[mem_offset..mem_offset + 32].iter().any(|x| *x);
                 self.dirty_stack.push(is_dirty);
             }
             // MSTORE
@@ -271,8 +272,7 @@ where
                 let mem_offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                 let is_dirty = self.dirty_stack.pop().expect("stack is empty");
                 ensure_size!(self.dirty_memory, mem_offset + 32);
-                self.dirty_memory[mem_offset..mem_offset + 32]
-                    .copy_from_slice(vec![is_dirty; 32].as_slice());
+                self.dirty_memory[mem_offset..mem_offset + 32].copy_from_slice(vec![is_dirty; 32].as_slice());
             }
             // MSTORE8
             0x53 => {
@@ -315,7 +315,7 @@ where
                 }
             }
             // PC
-            0x58 | 0x59 | 0x5a => {
+            0x58..=0x5a => {
                 push_false!();
             }
             // JUMPDEST
@@ -334,9 +334,7 @@ where
             0x90..=0x9f => {
                 let _n = (*interp.instruction_pointer) - 0x90 + 2;
                 let _l = self.dirty_stack.len();
-                let tmp = self.dirty_stack[_l - _n as usize];
-                self.dirty_stack[_l - _n as usize] = self.dirty_stack[_l - 1];
-                self.dirty_stack[_l - 1] = tmp;
+                self.dirty_stack.swap(_l - _n as usize, _l - 1);
             }
             // LOG
             0xa0..=0xa4 => {
@@ -388,8 +386,11 @@ where
     }
 
     unsafe fn on_return(
-        &mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S,
-        by: &Bytes
+        &mut self,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
+        _by: &Bytes,
     ) {
         self.pop_ctx();
     }
@@ -424,12 +425,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
             if self
@@ -439,8 +435,7 @@ where
                 .contains(&(interp.contract.address, jumpi))
             {
                 let stack_len = interp.stack.len();
-                interp.stack.data[stack_len - 2] =
-                    EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
     }
@@ -448,43 +443,55 @@ where
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3Bypass
     }
-
 }
 
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::evm::input::{EVMInput, EVMInputTy};
-    use crate::evm::mutator::AccessPattern;
-    use crate::evm::types::{generate_random_address, EVMFuzzState};
-    use crate::evm::vm::{EVMExecutor, EVMState};
-    use crate::generic_vm::vm_executor::GenericVM;
-    use crate::state::FuzzState;
-    use crate::state_input::StagedVMState;
+    use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+
     use bytes::Bytes;
+    use itertools::Itertools;
     use libafl::schedulers::StdScheduler;
-    use revm_interpreter::analysis::to_analysed;
-    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP};
-    use revm_interpreter::BytecodeLocked;
-    use std::cell::RefCell;
-    use std::path::Path;
-    use std::rc::Rc;
-    use std::sync::Arc;
+    use revm_interpreter::{
+        analysis::to_analysed,
+        opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP},
+        BytecodeLocked,
+    };
+    use revm_primitives::Bytecode;
+
+    use super::*;
+    use crate::{
+        evm::{
+            input::{EVMInput, EVMInputTy},
+            mutator::AccessPattern,
+            types::{generate_random_address, EVMFuzzState},
+            vm::{EVMExecutor, EVMState},
+        },
+        generic_vm::vm_executor::GenericVM,
+        state::FuzzState,
+        state_input::StagedVMState,
+    };
 
     fn execute(bys: Bytes, code: Bytes) -> Vec<usize> {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let path = Path::new("work_dir");
         if !path.exists() {
-            std::fs::create_dir(path);
+            let _ = std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
-            EVMExecutor::new(
-                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
-                generate_random_address(&mut state),
-            );
+        let mut evm_executor: EVMExecutor<
+            EVMInput,
+            EVMFuzzState,
+            EVMState,
+            ConciseEVMInput,
+            StdScheduler<EVMFuzzState>,
+        > = EVMExecutor::new(
+            FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
+            generate_random_address(&mut state),
+        );
 
         let target_addr = generate_random_address(&mut state);
         evm_executor.host.code.insert(
-            target_addr.clone(),
+            target_addr,
             Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
         );
 
@@ -516,7 +523,7 @@ mod tests {
             .borrow()
             .tainted_jumpi
             .iter()
-            .map(|(addr, pc)| pc)
+            .map(|(_addr, pc)| pc)
             .cloned()
             .collect_vec();
     }
@@ -535,8 +542,7 @@ mod tests {
     #[test]
     fn test_hash_simple() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI,
-            JUMPDEST, STOP,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI, JUMPDEST, STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 1);
@@ -546,8 +552,8 @@ mod tests {
     #[test]
     fn test_hash_simple_none() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf,
-            JUMPI, JUMPDEST, STOP,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf, JUMPI, JUMPDEST,
+            STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 0);

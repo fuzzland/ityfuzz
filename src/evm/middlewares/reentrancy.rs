@@ -1,19 +1,29 @@
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::types::{EVMAddress, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
+
 use bytes::Bytes;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use libafl::schedulers::Scheduler;
+use libafl::{
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, State},
+    schedulers::Scheduler,
+};
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+
+use crate::{
+    evm::{
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInputT},
+        middlewares::middleware::{Middleware, MiddlewareType},
+        types::{EVMAddress, EVMU256},
+        vm::EVMState,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct ReentrancyTracer;
@@ -45,7 +55,8 @@ fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &Vec<u32>) {
 
     // Loop until both iterators are exhausted.
     while next_from_dst.is_some() || next_from_another.is_some() {
-        // Determine the next value to push to the merged vector based on the current items from the iterators.
+        // Determine the next value to push to the merged vector based on the current
+        // items from the iterators.
         match (next_from_dst, next_from_another) {
             (Some(&val_dst), Some(&val_another)) if val_dst < val_another => {
                 merged.push(val_dst);
@@ -92,12 +103,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         match *interp.instruction_pointer {
             0x54 => {
                 let depth = host.evmstate.post_execution.len() as u32;
@@ -185,7 +191,8 @@ where
         if !is_step {
             return;
         }
-        // otherwise, we clean up the writes and reads with depth larger than current depth
+        // otherwise, we clean up the writes and reads with depth larger than current
+        // depth
         let depth = evm_state.post_execution.len() as u32 - 1;
         evm_state
             .reentrancy_metadata
@@ -202,7 +209,7 @@ mod test {
     use super::*;
     #[test]
     fn test_merge() {
-        let mut vec1 = vec![1, 4, 5, 6, 7];
+        let vec1 = vec![1, 4, 5, 6, 7];
         let mut vec2 = vec![2, 3, 4, 6, 8, 10];
         merge_sorted_vec_dedup(&mut vec2, &vec1);
         assert_eq!(vec2, vec![1, 2, 3, 4, 5, 6, 7, 8, 10]);

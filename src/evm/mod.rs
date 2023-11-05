@@ -24,31 +24,39 @@ pub mod types;
 pub mod uniswap;
 pub mod vm;
 
-use crate::fuzzers::evm_fuzzer::evm_fuzzer;
-use crate::oracle::{Oracle, Producer};
-use crate::state::FuzzState;
-use blaz::builder::{BuildJob, BuildJobResult};
-use blaz::offchain_artifacts::OffChainArtifact;
-use blaz::offchain_config::OffchainConfig;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    str::FromStr,
+};
+
+use blaz::{
+    builder::{BuildJob, BuildJobResult},
+    offchain_artifacts::OffChainArtifact,
+    offchain_config::OffchainConfig,
+};
 use clap::Parser;
 use config::{Config, FuzzerTypes, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
-use onchain::endpoints::{Chain, OnChainConfig};
-use onchain::flashloan::DummyPriceOracle;
-use oracles::erc20::IERC20OracleFlashloan;
-use oracles::v2_pair::PairBalanceOracle;
+use num_cpus;
+use onchain::{
+    endpoints::{Chain, OnChainConfig},
+    flashloan::DummyPriceOracle,
+};
+use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
 use serde::Deserialize;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::rc::Rc;
-use std::str::FromStr;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
-use num_cpus;
+
+use crate::{
+    fuzzers::evm_fuzzer::evm_fuzzer,
+    oracle::{Oracle, Producer},
+    state::FuzzState,
+};
 
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -125,11 +133,13 @@ pub struct EvmArgs {
     #[arg(long)]
     onchain_chain_id: Option<u32>,
 
-    /// Onchain Customize - Block explorer URL (Default: inferred from chain-type)
+    /// Onchain Customize - Block explorer URL (Default: inferred from
+    /// chain-type)
     #[arg(long)]
     onchain_explorer_url: Option<String>,
 
-    /// Onchain Customize - Chain name (used as Moralis handle of chain) (Default: inferred from chain-type)
+    /// Onchain Customize - Chain name (used as Moralis handle of chain)
+    /// (Default: inferred from chain-type)
     #[arg(long)]
     onchain_chain_name: Option<String>,
 
@@ -141,7 +151,8 @@ pub struct EvmArgs {
     #[arg(long)]
     onchain_local_proxy_addr: Option<String>,
 
-    /// Onchain which fetching method to use (All, Dump, OneByOne) (Default: OneByOne)
+    /// Onchain which fetching method to use (All, Dump, OneByOne) (Default:
+    /// OneByOne)
     #[arg(long, default_value = "onebyone")]
     onchain_storage_fetching: String,
 
@@ -206,11 +217,13 @@ pub struct EvmArgs {
     typed_bug_oracle: bool,
 
     /// Setting any string here will enable state comparison oracle.
-    /// This arg holds file path pointing to state comparison oracle's desired state
+    /// This arg holds file path pointing to state comparison oracle's desired
+    /// state
     #[arg(long, default_value = "")]
     state_comp_oracle: String,
 
-    /// Matching style for state comparison oracle (Select from "Exact", "DesiredContain", "StateContain")
+    /// Matching style for state comparison oracle (Select from "Exact",
+    /// "DesiredContain", "StateContain")
     #[arg(long, default_value = "Exact")]
     state_comp_matching: String,
 
@@ -234,7 +247,8 @@ pub struct EvmArgs {
     #[arg(long, default_value = "1667840158231589000")]
     seed: u64,
 
-    /// Whether bypass all SHA3 comparisons, this may break original logic of contracts  (Experimental)
+    /// Whether bypass all SHA3 comparisons, this may break original logic of
+    /// contracts  (Experimental)
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
 
@@ -243,8 +257,8 @@ pub struct EvmArgs {
     only_fuzz: String,
 
     /// Only needed when using combined.json (source map info).
-    /// This is the base path when running solc compile (--base-path passed to solc).
-    /// Also, please convert it to absolute path if you are not sure.
+    /// This is the base path when running solc compile (--base-path passed to
+    /// solc). Also, please convert it to absolute path if you are not sure.
     #[arg(long, default_value = "")]
     base_path: String,
 
@@ -252,8 +266,8 @@ pub struct EvmArgs {
     #[arg(long, default_value = "Latest")]
     spec_id: String,
 
-    /// Builder URL. If specified, will use this builder to build contracts instead of using
-    /// bins and abis.
+    /// Builder URL. If specified, will use this builder to build contracts
+    /// instead of using bins and abis.
     #[arg(long, default_value = "")]
     onchain_builder: String,
 
@@ -261,19 +275,23 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     onchain_replacements_file: String,
 
-    /// Builder Artifacts url. If specified, will use this artifact to derive code coverage.
+    /// Builder Artifacts url. If specified, will use this artifact to derive
+    /// code coverage.
     #[arg(long, default_value = "")]
     builder_artifacts_url: String,
 
-    /// Builder Artifacts file. If specified, will use this artifact to derive code coverage.
+    /// Builder Artifacts file. If specified, will use this artifact to derive
+    /// code coverage.
     #[arg(long, default_value = "")]
     builder_artifacts_file: String,
 
-    /// Offchain Config Url. If specified, will deploy based on offchain config file.
+    /// Offchain Config Url. If specified, will deploy based on offchain config
+    /// file.
     #[arg(long, default_value = "")]
     offchain_config_url: String,
 
-    /// Offchain Config File. If specified, will deploy based on offchain config file.
+    /// Offchain Config File. If specified, will deploy based on offchain config
+    /// file.
     #[arg(long, default_value = "")]
     offchain_config_file: String,
 
@@ -281,7 +299,8 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     load_corpus: String,
 
-    /// Preset file. If specified, will load the preset file and match past exploit template.
+    /// Preset file. If specified, will load the preset file and match past
+    /// exploit template.
     #[cfg(feature = "use_presets")]
     #[arg(long, default_value = "")]
     preset_file_path: String,
@@ -294,6 +313,7 @@ enum EVMTargetType {
     Config,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();
@@ -347,22 +367,18 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     if onchain.is_some() && !etherscan_api_key.is_empty() {
-        onchain.as_mut().unwrap().etherscan_api_key = etherscan_api_key
-            .split(',')
-            .map(|s| s.to_string())
-            .collect();
+        onchain.as_mut().unwrap().etherscan_api_key = etherscan_api_key.split(',').map(|s| s.to_string()).collect();
     }
     let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
 
-    let flashloan_oracle = Rc::new(RefCell::new({
-        IERC20OracleFlashloan::new(erc20_producer.clone())
-    }));
+    let flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new(erc20_producer.clone())));
 
     // let harness_code = "oracle_harness()";
     // let mut harness_hash: [u8; 4] = [0; 4];
     // set_hash(harness_code, &mut harness_hash);
     // let mut function_oracle =
-    //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(), Vec::from(harness_hash));
+    //     FunctionHarnessOracle::new_no_condition(EVMAddress::zero(),
+    // Vec::from(harness_hash));
 
     let mut oracles: Vec<
         Rc<
@@ -427,10 +443,7 @@ pub fn evm_main(args: EvmArgs) {
     let mut proxy_deploy_codes: Vec<String> = vec![];
 
     if args.fetch_tx_data {
-        let response = reqwest::blocking::get(args.proxy_address)
-            .unwrap()
-            .text()
-            .unwrap();
+        let response = reqwest::blocking::get(args.proxy_address).unwrap().text().unwrap();
         let data: Vec<Data> = serde_json::from_str(&response).unwrap();
 
         for d in data {
@@ -444,8 +457,8 @@ pub fn evm_main(args: EvmArgs) {
 
             let data = params[0].clone();
 
-            let data = if data.starts_with("0x") {
-                &data[2..]
+            let data = if let Some(stripped) = data.strip_prefix("0x") {
+                stripped
             } else {
                 &data
             };
@@ -462,7 +475,7 @@ pub fn evm_main(args: EvmArgs) {
 
     let constructor_args_map = parse_constructor_args_string(args.constructor_args);
 
-    let onchain_replacements = if args.onchain_replacements_file.len() > 0 {
+    let onchain_replacements = if !args.onchain_replacements_file.is_empty() {
         BuildJobResult::from_multi_file(args.onchain_replacements_file)
     } else {
         HashMap::new()
@@ -474,33 +487,21 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    let offchain_artifacts = if args.builder_artifacts_url.len() > 0 {
+    let offchain_artifacts = if !args.builder_artifacts_url.is_empty() {
         target_type = EVMTargetType::AnvilFork;
-        Some(
-            OffChainArtifact::from_json_url(args.builder_artifacts_url)
-                .expect("failed to parse builder artifacts"),
-        )
-    } else if args.builder_artifacts_file.len() > 0 {
+        Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
+    } else if !args.builder_artifacts_file.is_empty() {
         target_type = EVMTargetType::AnvilFork;
-        Some(
-            OffChainArtifact::from_file(args.builder_artifacts_file)
-                .expect("failed to parse builder artifacts"),
-        )
+        Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
     } else {
         None
     };
-    let offchain_config = if args.offchain_config_url.len() > 0 {
+    let offchain_config = if !args.offchain_config_url.is_empty() {
         target_type = EVMTargetType::Config;
-        Some(
-            OffchainConfig::from_json_url(args.offchain_config_url)
-                .expect("failed to parse offchain config"),
-        )
-    } else if args.offchain_config_file.len() > 0 {
+        Some(OffchainConfig::from_json_url(args.offchain_config_url).expect("failed to parse offchain config"))
+    } else if !args.offchain_config_file.is_empty() {
         target_type = EVMTargetType::Config;
-        Some(
-            OffchainConfig::from_file(args.offchain_config_file)
-                .expect("failed to parse offchain config"),
-        )
+        Some(OffchainConfig::from_file(args.offchain_config_file).expect("failed to parse offchain config"))
     } else {
         None
     };
@@ -519,7 +520,8 @@ pub fn evm_main(args: EvmArgs) {
                 &offchain_config.expect("offchain config is required for config target type"),
             ),
             EVMTargetType::AnvilFork => {
-                let addresses: Vec<EVMAddress> = args.target
+                let addresses: Vec<EVMAddress> = args
+                    .target
                     .split(',')
                     .map(|s| EVMAddress::from_str(s).unwrap())
                     .collect();
@@ -528,7 +530,7 @@ pub fn evm_main(args: EvmArgs) {
                     onchain.as_mut().expect("onchain is required to fork anvil"),
                     HashSet::from_iter(addresses),
                 )
-            },
+            }
             EVMTargetType::Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");
@@ -543,9 +545,7 @@ pub fn evm_main(args: EvmArgs) {
                             args_target.push(',');
                             args_target.push_str(BSC_ADDRESS);
                         }
-                    } else if "eth" == onchain.as_ref().unwrap().chain_name
-                        && !args_target.contains(ETH_ADDRESS)
-                    {
+                    } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
                         args_target.push(',');
                         args_target.push_str(ETH_ADDRESS);
                     }
@@ -584,9 +584,7 @@ pub fn evm_main(args: EvmArgs) {
         producers,
         flashloan: args.flashloan,
         price_oracle: match args.flashloan_price_oracle.as_str() {
-            "onchain" => {
-                Box::new(onchain_clone.expect("onchain unavailable but used for flashloan"))
-            }
+            "onchain" => Box::new(onchain_clone.expect("onchain unavailable but used for flashloan")),
             _ => Box::new(DummyPriceOracle {}),
         },
         onchain_storage_fetching: if is_onchain {
@@ -601,12 +599,12 @@ pub fn evm_main(args: EvmArgs) {
         flashloan_oracle,
         selfdestruct_oracle: args.selfdestruct_oracle,
         reentrancy_oracle: args.reentrancy_oracle,
-        state_comp_matching: if args.state_comp_oracle.len() > 0 {
+        state_comp_matching: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_matching)
         } else {
             None
         },
-        state_comp_oracle: if args.state_comp_oracle.len() > 0 {
+        state_comp_oracle: if !args.state_comp_oracle.is_empty() {
             Some(args.state_comp_oracle)
         } else {
             None

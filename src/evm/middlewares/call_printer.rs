@@ -1,53 +1,40 @@
-use crate::evm::blaz::builder::ArtifactInfoMetadata;
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::srcmap::parser::SourceMapAvailability::Available;
-use crate::evm::srcmap::parser::{
-    decode_instructions, pretty_print_source_map, SourceMapAvailability, SourceMapLocation,
-    SourceMapWithCode,
-};
-use crate::evm::types::{
-    as_u64, convert_u256_to_h160, is_zero, EVMAddress, ProjectSourceMapTy, EVMU256,
-};
-use crate::evm::vm::IN_DEPLOY;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
+use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
+
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use libafl::schedulers::Scheduler;
-use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
+use libafl::{
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, State},
+    schedulers::Scheduler,
+};
 use revm_interpreter::Interpreter;
-use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::fs;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::ops::AddAssign;
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::debug;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+use crate::{
+    evm::{
+        blaz::builder::ArtifactInfoMetadata,
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInputT},
+        middlewares::middleware::{Middleware, MiddlewareType},
+        srcmap::parser::SourceMapLocation,
+        types::{as_u64, convert_u256_to_h160, EVMAddress, ProjectSourceMapTy, EVMU256},
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum CallType {
+    #[default]
     Call,
     CallCode,
     DelegateCall,
     StaticCall,
     FirstLevelCall,
     Event,
-}
-
-impl Default for CallType {
-    fn default() -> Self {
-        CallType::Call
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize)]
@@ -78,10 +65,7 @@ pub struct CallPrinter {
 }
 
 impl CallPrinter {
-    pub fn new(
-        address_to_name: HashMap<EVMAddress, String>,
-        sourcemaps: ProjectSourceMapTy,
-    ) -> Self {
+    pub fn new(address_to_name: HashMap<EVMAddress, String>, sourcemaps: ProjectSourceMapTy) -> Self {
         Self {
             address_to_name,
             sourcemaps,
@@ -142,10 +126,7 @@ impl CallPrinter {
     }
 
     fn translate_address(&self, a: EVMAddress) -> String {
-        self.address_to_name
-            .get(&a)
-            .unwrap_or(&format!("{:?}", a))
-            .to_string()
+        self.address_to_name.get(&a).unwrap_or(&format!("{:?}", a)).to_string()
     }
 }
 
@@ -163,12 +144,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
         if self.entry {
             self.entry = false;
             let code_address = interp.contract.address;
@@ -176,27 +152,32 @@ where
                 .code
                 .get(&interp.contract.code_address)
                 .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or(vec![]);
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type: CallType::FirstLevelCall,
-                caller: self.translate_address(interp.contract.caller),
-                contract: self.translate_address(interp.contract.address),
-                input: hex::encode(interp.contract.input.clone()),
-                value: format!("{}", interp.contract.value),
-                source: if let Some(Some(source)) = self.sourcemaps.get(&code_address)
-                    && let Some(source) = source.get(&interp.program_counter()) {
-                    Some(source.clone())
-                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&code_address) {
-                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
-                        Some(srcmap.clone())
+                .unwrap_or_default();
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type: CallType::FirstLevelCall,
+                    caller: self.translate_address(interp.contract.caller),
+                    contract: self.translate_address(interp.contract.address),
+                    input: hex::encode(interp.contract.input.clone()),
+                    value: format!("{}", interp.contract.value),
+                    source: if let Some(Some(source)) = self.sourcemaps.get(&code_address) &&
+                        let Some(source) = source.get(&interp.program_counter())
+                    {
+                        Some(source.clone())
+                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
+                        let Some(build_result) = artifact.get_mut(&code_address)
+                    {
+                        build_result
+                            .get_sourcemap(caller_code)
+                            .get(&interp.program_counter())
+                            .cloned()
                     } else {
                         None
-                    }
-                } else {
-                    None
+                    },
+                    results: "".to_string(),
                 },
-                results: "".to_string(),
-            }));
+            ));
         }
 
         // events
@@ -204,10 +185,14 @@ where
             let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
             let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
             let arg = if interp.memory.len() < offset {
-                debug!("encountered unknown event at PC {} of contract {:?}", interp.program_counter(), interp.contract.address);
+                debug!(
+                    "encountered unknown event at PC {} of contract {:?}",
+                    interp.program_counter(),
+                    interp.contract.address
+                );
                 "unknown".to_string()
             } else if interp.memory.len() < offset + len {
-                hex::encode(interp.memory.data[offset..].to_vec())
+                hex::encode(&interp.memory.data[offset..])
             } else {
                 hex::encode(interp.memory.get_slice(offset, len))
             };
@@ -221,16 +206,18 @@ where
 
             let arg = format!("{}({})", arg, topics.join(","));
 
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type: CallType::Event,
-                caller: self.translate_address(interp.contract.caller),
-                contract: self.translate_address(interp.contract.address),
-                input: arg.clone(),
-                value: "".to_string(),
-                source: None,
-                results: "".to_string(),
-            }));
-
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type: CallType::Event,
+                    caller: self.translate_address(interp.contract.caller),
+                    contract: self.translate_address(interp.contract.address),
+                    input: arg.clone(),
+                    value: "".to_string(),
+                    source: None,
+                    results: "".to_string(),
+                },
+            ));
         }
         // external calls
         else if *interp.instruction_pointer <= 0xfa && *interp.instruction_pointer >= 0xf1 {
@@ -258,7 +245,7 @@ where
             let arg_len = as_u64(arg_len) as usize;
 
             let arg = if interp.memory.len() < arg_offset + arg_len {
-                hex::encode(interp.memory.data[arg_len..].to_vec())
+                hex::encode(&interp.memory.data[arg_len..])
             } else {
                 hex::encode(interp.memory.get_slice(arg_offset, arg_len))
             };
@@ -284,38 +271,42 @@ where
                 .code
                 .get(&interp.contract.code_address)
                 .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or(vec![]);
+                .unwrap_or_default();
 
             self.offsets = 0;
-            self.results.data.push((self.current_layer, SingleCall {
-                call_type,
-                caller: self.translate_address(caller),
-                contract: self.translate_address(target),
-                input: arg,
-                value: format!("{}", value),
-                source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address)
-                    && let Some(source) = source.get(&interp.program_counter()) {
-                    Some(source.clone())
-                } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() && let Some(build_result) = artifact.get_mut(&caller_code_address) {
-                    if let Some(srcmap) = build_result.get_sourcemap(caller_code).get(&interp.program_counter()) {
-                        Some(srcmap.clone())
+            self.results.data.push((
+                self.current_layer,
+                SingleCall {
+                    call_type,
+                    caller: self.translate_address(caller),
+                    contract: self.translate_address(target),
+                    input: arg,
+                    value: format!("{}", value),
+                    source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address) &&
+                        let Some(source) = source.get(&interp.program_counter())
+                    {
+                        Some(source.clone())
+                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
+                        let Some(build_result) = artifact.get_mut(&caller_code_address)
+                    {
+                        build_result
+                            .get_sourcemap(caller_code)
+                            .get(&interp.program_counter())
+                            .cloned()
                     } else {
                         None
-                    }
-                } else {
-                    None
+                    },
+                    results: "".to_string(),
                 },
-                results: "".to_string(),
-            }));
+            ));
         }
-
     }
 
     unsafe fn on_return(
         &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
+        _interp: &mut Interpreter,
+        _host: &mut FuzzHost<VS, I, S, SC>,
+        _state: &mut S,
         by: &Bytes,
     ) {
         self.offsets += 1;

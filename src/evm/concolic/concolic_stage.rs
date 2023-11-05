@@ -1,30 +1,31 @@
-use crate::evm::concolic::concolic_host::{ConcolicHost, Field, Solution, ALL_WORKER_THREADS, ALL_SOLUTIONS};
-use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::MiddlewareType;
-use crate::evm::types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor, ProjectSourceMapTy};
-use crate::evm::vm::{EVMExecutor, EVMState};
-use crate::generic_vm::vm_executor::GenericVM;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use libafl::corpus::{Corpus, Testcase};
-use libafl::events::{EventFirer, ProgressReporter};
-use libafl::executors::ExitKind;
-use libafl::feedbacks::Feedback;
-use libafl::inputs::Input;
-use libafl::prelude::{
-    CorpusId, HasClientPerfMonitor, HasMetadata, ObserversTuple, Stage, UsesInput,
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+
+use libafl::{
+    corpus::{Corpus, Testcase},
+    events::{EventFirer, ProgressReporter},
+    executors::ExitKind,
+    feedbacks::Feedback,
+    inputs::Input,
+    prelude::{CorpusId, HasClientPerfMonitor, HasMetadata, ObserversTuple, Stage, UsesInput},
+    state::{HasCorpus, UsesState},
+    Error,
+    Evaluator,
 };
-use libafl::state::{HasCorpus, UsesState};
-use libafl::{Error, Evaluator, Fuzzer};
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::ops::Deref;
-use std::rc::Rc;
-use std::sync::Arc;
-use tracing::debug;
+use tracing::info;
+
+use crate::{
+    evm::{
+        concolic::concolic_host::{ConcolicHost, Field, Solution, ALL_SOLUTIONS, ALL_WORKER_THREADS},
+        input::{EVMInput, EVMInputT},
+        middlewares::middleware::MiddlewareType,
+        types::{EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor},
+    },
+    generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
+    input::VMInputT,
+};
 pub struct ConcolicStage<OT> {
     pub enabled: bool,
     pub allow_symbolic_addresses: bool,
@@ -59,7 +60,7 @@ impl<OT> ConcolicStage<OT> {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ConcolicPrioritizationMetadata {
     pub interesting_idx: Vec<usize>,
-    pub solutions: Vec<(Solution, Arc<EVMInput>)>,
+    pub solutions: Vec<(Solution, Rc<EVMInput>)>,
 }
 
 impl_serdeany!(ConcolicPrioritizationMetadata);
@@ -76,22 +77,17 @@ where
         executor: &mut EVMFuzzExecutor<OT>,
         state: &mut Self::State,
         manager: &mut EM,
-        corpus_idx: CorpusId,
+        _corpus_idx: CorpusId,
     ) -> Result<(), Error> {
         if !self.enabled {
             return Ok(());
         }
 
-        if !state
-            .metadata_map()
-            .contains::<ConcolicPrioritizationMetadata>()
-        {
-            state
-                .metadata_map_mut()
-                .insert(ConcolicPrioritizationMetadata {
-                    interesting_idx: Default::default(),
-                    solutions: vec![],
-                });
+        if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
+                interesting_idx: Default::default(),
+                solutions: vec![],
+            });
         }
 
         let meta = state
@@ -101,7 +97,7 @@ where
             .clone();
 
         for idx in &meta.interesting_idx {
-            debug!("Running concolic execution on testcase #{}", idx);
+            info!("Running concolic execution on testcase #{}", idx);
 
             let testcase = state
                 .corpus()
@@ -117,15 +113,14 @@ where
                 continue;
             }
 
-            let testcase_ref = Arc::new(testcase.clone());
+            let testcase_ref = Rc::new(testcase.clone());
 
             {
                 let mut vm = self.vm_executor.deref().borrow_mut();
-                vm.host
-                    .add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
-                        testcase_ref.clone(),
-                        self.num_threads,
-                    ))));
+                vm.host.add_middlewares(Rc::new(RefCell::new(ConcolicHost::new(
+                    testcase_ref.clone(),
+                    self.num_threads,
+                ))));
                 vm.execute(&testcase_ref, state);
 
                 let mut worker_threads = ALL_WORKER_THREADS.lock().unwrap();
@@ -160,15 +155,16 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                // debug!("We have a solution from concolic execution: {}", solution.to_string());
+                // debug!("We have a solution from concolic execution: {}",
+                // solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 
                 // if cannot set_bytes AND no fields to modify, skip
-                if data_abi.set_bytes(solution.input) { // This can fail if e.g. solving for an array
+                if data_abi.set_bytes(solution.input) {
+                    // This can fail if e.g. solving for an array
                     new_testcase.data = Some(data_abi);
-                }
-                else if solution.fields.len() == 0 {
+                } else if solution.fields.is_empty() {
                     continue;
                 }
 
@@ -234,8 +230,7 @@ where
         EM: EventFirer<State = S>,
         OT: ObserversTuple<S>,
     {
-        self.inner
-            .is_interesting(state, manager, input, observers, exit_kind)
+        self.inner.is_interesting(state, manager, input, observers, exit_kind)
     }
 
     #[inline]
@@ -249,20 +244,15 @@ where
     where
         OT: ObserversTuple<S>,
     {
-        if !state
-            .metadata_map()
-            .contains::<ConcolicPrioritizationMetadata>()
-        {
-            state
-                .metadata_map_mut()
-                .insert(ConcolicPrioritizationMetadata {
-                    interesting_idx: Default::default(),
-                    solutions: vec![],
-                });
+        if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
+                interesting_idx: Default::default(),
+                solutions: vec![],
+            });
         }
 
         let idx = state.corpus().count();
-        let mut meta = state
+        let meta = state
             .metadata_map_mut()
             .get_mut::<ConcolicPrioritizationMetadata>()
             .unwrap();

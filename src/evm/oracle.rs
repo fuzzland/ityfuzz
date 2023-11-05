@@ -1,28 +1,23 @@
-/// Dummy oracle for testing
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::srcmap::parser::SourceMapLocation;
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::fuzzer::ORACLE_OUTPUT;
-use crate::oracle::Oracle;
 use bytes::Bytes;
 use revm_primitives::Bytecode;
+
+/// Dummy oracle for testing
+use crate::evm::input::{ConciseEVMInput, EVMInput};
+use crate::{
+    evm::{
+        srcmap::parser::SourceMapLocation,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        vm::EVMState,
+    },
+    fuzzer::ORACLE_OUTPUT,
+    oracle::Oracle,
+};
 
 pub struct NoOracle {}
 
 impl
-    Oracle<
-        EVMState,
-        EVMAddress,
-        Bytecode,
-        Bytes,
-        EVMAddress,
-        EVMU256,
-        Vec<u8>,
-        EVMInput,
-        EVMFuzzState,
-        ConciseEVMInput,
-    > for NoOracle
+    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
+    for NoOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -76,12 +71,7 @@ impl EVMBugResult {
         }
     }
 
-    pub fn new_simple(
-        bug_type: String,
-        bug_idx: u64,
-        bug_info: String,
-        input: ConciseEVMInput,
-    ) -> Self {
+    pub fn new_simple(bug_type: String, bug_idx: u64, bug_info: String, input: ConciseEVMInput) -> Self {
         Self {
             bug_type,
             bug_info,

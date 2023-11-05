@@ -1,6 +1,9 @@
-use crate::evm::types::EVMU256;
+use std::ops;
+
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+
+use crate::evm::types::EVMU256;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ConcolicOp {
@@ -53,7 +56,7 @@ pub struct Expr {
 }
 
 impl Expr {
-    fn pretty_print_helper(&self, paddings: usize) -> String {
+    fn pretty_print_helper(&self, _paddings: usize) -> String {
         let mut s = String::new();
         let noop = self.lhs.is_none() && self.rhs.is_none();
         if noop {
@@ -62,7 +65,7 @@ impl Expr {
             s.push_str(format!("{:?}(", self.op).as_str());
             s.push_str(
                 (match self.lhs {
-                    Some(ref lhs) => format!("{},", lhs.pretty_print_helper(paddings + 1)),
+                    Some(ref lhs) => format!("{},", lhs.pretty_print_helper(_paddings + 1)),
                     None => "".to_string(),
                 })
                 .to_string()
@@ -70,7 +73,7 @@ impl Expr {
             );
             s.push_str(
                 (match self.rhs {
-                    Some(ref rhs) => rhs.pretty_print_helper(paddings + 1),
+                    Some(ref rhs) => rhs.pretty_print_helper(_paddings + 1),
                     None => "".to_string(),
                 })
                 .to_string()
@@ -163,19 +166,6 @@ impl Expr {
 
     pub fn concat(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::CONCAT)
-    }
-
-    pub fn div(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::DIV)
-    }
-    pub fn mul(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::MUL)
-    }
-    pub fn add(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::ADD)
-    }
-    pub fn sub(self, rhs: Box<Expr>) -> Box<Expr> {
-        box_bv!(self, rhs, ConcolicOp::SUB)
     }
     pub fn bvsdiv(self, rhs: Box<Expr>) -> Box<Expr> {
         box_bv!(self, rhs, ConcolicOp::SDIV)
@@ -299,6 +289,38 @@ impl Expr {
     }
 }
 
+impl ops::Div<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn div(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::DIV)
+    }
+}
+
+impl ops::Mul<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn mul(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::MUL)
+    }
+}
+
+impl ops::Add<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn add(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::ADD)
+    }
+}
+
+impl ops::Sub<Box<Self>> for Expr {
+    type Output = Box<Self>;
+
+    fn sub(self, rhs: Box<Self>) -> Self::Output {
+        box_bv!(self, rhs, ConcolicOp::SUB)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ConcatOptCtx {
     low: u32,
@@ -323,13 +345,14 @@ impl ConcatOptCtx {
     }
 }
 
+#[allow(clippy::boxed_local)]
 fn simplify_concat_select_helper(expr: Box<Expr>) -> (ConcatOptCtx, Box<Expr>) {
-    let mut lhs_info = expr.lhs.map(|e| simplify_concat_select_helper(e));
-    let mut rhs_info = expr.rhs.map(|e| simplify_concat_select_helper(e));
-    let mut op = expr.op;
+    let lhs_info = expr.lhs.map(simplify_concat_select_helper);
+    let rhs_info = expr.rhs.map(simplify_concat_select_helper);
+    let op = expr.op;
     let mut new_expr = Box::new(Expr {
-        lhs: lhs_info.clone().map(|(ctx, e)| e),
-        rhs: rhs_info.clone().map(|(ctx, e)| e),
+        lhs: lhs_info.clone().map(|(_ctx, e)| e),
+        rhs: rhs_info.clone().map(|(_ctx, e)| e),
         op: op.clone(),
     });
 
@@ -374,10 +397,12 @@ pub fn simplify(expr: Box<Expr>) -> Box<Expr> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm::concolic::expr::ConcolicOp::{
-        AND, CONCAT, CONSTBYTE, EVMU256, MUL, SELECT, SHL, SLICEDINPUT,
+    use crate::evm::concolic::expr::{
+        simplify_concat_select,
+        ConcolicOp,
+        ConcolicOp::{CONSTBYTE, SELECT},
+        Expr,
     };
-    use crate::evm::concolic::expr::{simplify, simplify_concat_select, ConcolicOp, Expr};
 
     #[test]
     fn test_simplify_concat_select_single() {
@@ -434,7 +459,7 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_multi() {
-        let mut starting_expr = Expr {
+        let starting_expr = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
@@ -445,7 +470,7 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_internal() {
-        let mut starting_expr1 = Expr {
+        let starting_expr1 = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
@@ -457,7 +482,7 @@ mod test {
             op: ConcolicOp::ADD,
         };
 
-        let mut starting_expr2 = Expr {
+        let starting_expr2 = Expr {
             lhs: Some(Box::new(intermediate.clone())),
             rhs: Some(expression_builder(intermediate)),
             op: ConcolicOp::DIV,
@@ -474,13 +499,13 @@ mod test {
 
     #[test]
     fn test_simplify_concat_select_internal_with_concat() {
-        let mut starting_expr1 = Expr {
+        let starting_expr1 = Expr {
             lhs: None,
             rhs: None,
             op: CONSTBYTE(0x12),
         };
 
-        let mut starting_expr2 = Expr {
+        let starting_expr2 = Expr {
             lhs: Some(Box::new(starting_expr1.clone())),
             rhs: None,
             op: SELECT(88, 88),

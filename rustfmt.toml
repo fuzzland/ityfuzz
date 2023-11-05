@@ -1,0 +1,13 @@
+max_width = 120
+fn_params_layout = "Tall"
+
+group_imports = "StdExternalCrate"
+format_code_in_doc_comments = true
+imports_layout = "HorizontalVertical"
+wrap_comments = true
+
+reorder_imports = true
+imports_granularity = "Crate"
+binop_separator = "Back"
+trailing_comma = "Vertical"
+use_field_init_shorthand = true

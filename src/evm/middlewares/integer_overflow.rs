@@ -1,21 +1,25 @@
-use crate::evm::host::FuzzHost;
-use crate::evm::input::{ConciseEVMInput, EVMInputT};
-use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::state::{HasCaller, HasCurrentInputIdx, HasItyState};
-use bytes::Bytes;
-use libafl::inputs::Input;
-use libafl::prelude::{HasCorpus, HasMetadata, State};
-use libafl::schedulers::Scheduler;
-use revm_interpreter::Interpreter;
-use revm_primitives::uint;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+
+use libafl::{
+    inputs::Input,
+    prelude::{HasCorpus, HasMetadata, State},
+    schedulers::Scheduler,
+};
+use revm_interpreter::Interpreter;
+use serde::Serialize;
 use tracing::debug;
+
+use crate::{
+    evm::{
+        host::FuzzHost,
+        input::{ConciseEVMInput, EVMInputT},
+        middlewares::middleware::{Middleware, MiddlewareType},
+        types::EVMAddress,
+    },
+    generic_vm::vm_state::VMStateT,
+    input::VMInputT,
+    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+};
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct IntegerOverflowMiddleware;
@@ -40,12 +44,7 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
         macro_rules! l_r {
             () => {
                 (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap())
@@ -97,7 +96,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
+
     #[test]
     fn test_merge() {}
 }

@@ -1,20 +1,41 @@
+use std::collections::HashMap;
+
 /// Mutation utilities for the EVM
 use libafl::inputs::{HasBytesVec, Input};
-use libafl::mutators::MutationResult;
-use libafl::prelude::{
-    BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
-    ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator, BytesExpandMutator,
-    BytesInsertMutator, BytesRandInsertMutator, BytesRandSetMutator, BytesSetMutator,
-    BytesSwapMutator, DwordAddMutator, DwordInterestingMutator, HasMetadata, Mutator,
-    QwordAddMutator, StdScheduledMutator, WordAddMutator, WordInterestingMutator,
+use libafl::{
+    mutators::MutationResult,
+    prelude::{
+        BitFlipMutator,
+        ByteAddMutator,
+        ByteDecMutator,
+        ByteFlipMutator,
+        ByteIncMutator,
+        ByteInterestingMutator,
+        ByteNegMutator,
+        ByteRandMutator,
+        BytesCopyMutator,
+        BytesExpandMutator,
+        BytesInsertMutator,
+        BytesRandInsertMutator,
+        BytesRandSetMutator,
+        BytesSetMutator,
+        BytesSwapMutator,
+        DwordAddMutator,
+        DwordInterestingMutator,
+        HasMetadata,
+        Mutator,
+        QwordAddMutator,
+        StdScheduledMutator,
+        WordAddMutator,
+        WordInterestingMutator,
+    },
+    state::{HasMaxSize, HasRand, State},
+    Error,
 };
-use libafl::state::{HasMaxSize, HasRand, State};
-use libafl::Error;
 use libafl_bolts::{impl_serdeany, prelude::Rand, tuples::tuple_list, Named};
 use serde::{Deserialize, Serialize};
 
 use crate::evm::types::EVMU256;
-use std::collections::HashMap;
 
 /// Constants in the contracts
 ///
@@ -39,10 +60,11 @@ impl ConstantPoolMetadata {
 
 impl_serdeany!(ConstantPoolMetadata);
 
-/// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant in the contract
+/// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant
+/// in the contract
 ///
-/// We discover that sometimes directly setting the bytes to the constants allow us to increase
-/// test coverage.
+/// We discover that sometimes directly setting the bytes to the constants allow
+/// us to increase test coverage.
 #[derive(Default)]
 pub struct ConstantHintedMutator;
 
@@ -64,12 +86,7 @@ where
     I: Input + HasBytesVec,
 {
     /// Mutate the input to a constant in the contract
-    fn mutate(
-        &mut self,
-        state: &mut S,
-        input: &mut I,
-        _stage_idx: i32,
-    ) -> Result<MutationResult, Error> {
+    fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
         let idx = state.rand_mut().next() as usize;
 
         let constant = match state.metadata_map().get::<ConstantPoolMetadata>() {
@@ -86,17 +103,18 @@ where
         if input_len < constant_len {
             input_bytes.copy_from_slice(&constant[0..input_len]);
         } else {
-            input_bytes
-                .copy_from_slice(&[vec![0; input_len - constant_len], constant.clone()].concat());
+            input_bytes.copy_from_slice(&[vec![0; input_len - constant_len], constant.clone()].concat());
         }
         Ok(MutationResult::Mutated)
     }
 }
 
-/// [`VMStateHintedMutator`] is a mutator that mutates the input to a value in the VM state
+/// [`VMStateHintedMutator`] is a mutator that mutates the input to a value in
+/// the VM state
 ///
-/// Similar to [`ConstantHintedMutator`], we discover that sometimes directly setting the bytes to
-/// the values in the VM state allow us to increase test coverage.
+/// Similar to [`ConstantHintedMutator`], we discover that sometimes directly
+/// setting the bytes to the values in the VM state allow us to increase test
+/// coverage.
 pub struct VMStateHintedMutator<'a> {
     pub vm_slots: &'a HashMap<EVMU256, EVMU256>,
 }
@@ -114,10 +132,7 @@ impl<'a> VMStateHintedMutator<'a> {
 }
 
 /// Mutate the input to a value in the VM state
-pub fn mutate_with_vm_slot<S: State + HasRand>(
-    vm_slots: &HashMap<EVMU256, EVMU256>,
-    state: &mut S,
-) -> EVMU256 {
+pub fn mutate_with_vm_slot<S: State + HasRand>(vm_slots: &HashMap<EVMU256, EVMU256>, state: &mut S) -> EVMU256 {
     // sample a key from the vm_state.state
     let idx = state.rand_mut().below(vm_slots.len() as u64) as usize;
     let key = vm_slots.keys().nth(idx).unwrap();
@@ -135,12 +150,7 @@ where
     I: Input + HasBytesVec,
 {
     /// Mutate the input to a value in the VM state
-    fn mutate(
-        &mut self,
-        state: &mut S,
-        input: &mut I,
-        _stage_idx: i32,
-    ) -> Result<MutationResult, Error> {
+    fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
         let input_len = input.bytes().len();
         if input_len < 8 {
             return Ok(MutationResult::Skipped);
@@ -154,13 +164,10 @@ where
     }
 }
 
-/// Mutator that mutates the `CONSTANT SIZE` input bytes (e.g., uint256) in various ways provided by
-/// [`libafl::mutators`]. It also uses the [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
-pub fn byte_mutator<I, S>(
-    state: &mut S,
-    input: &mut I,
-    vm_slots: Option<HashMap<EVMU256, EVMU256>>,
-) -> MutationResult
+/// Mutator that mutates the `CONSTANT SIZE` input bytes (e.g., uint256) in
+/// various ways provided by [`libafl::mutators`]. It also uses the
+/// [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
+pub fn byte_mutator<I, S>(state: &mut S, input: &mut I, vm_slots: Option<HashMap<EVMU256, EVMU256>>) -> MutationResult
 where
     S: State + HasRand + HasMetadata,
     I: HasBytesVec + Input,
@@ -186,8 +193,7 @@ where
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator =
-            StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
         mutator.mutate(state, input, 0).unwrap()
     } else {
         let mut mutator = StdScheduledMutator::new(mutations);
@@ -195,8 +201,9 @@ where
     }
 }
 
-/// Mutator that mutates the `VARIABLE SIZE` input bytes (e.g., string) in various ways provided by
-/// [`libafl::mutators`]. It also uses the [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
+/// Mutator that mutates the `VARIABLE SIZE` input bytes (e.g., string) in
+/// various ways provided by [`libafl::mutators`]. It also uses the
+/// [`ConstantHintedMutator`] and [`VMStateHintedMutator`]
 pub fn byte_mutator_with_expansion<I, S>(
     state: &mut S,
     input: &mut I,
@@ -230,8 +237,7 @@ where
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator =
-            StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
         mutator.mutate(state, input, 0).unwrap()
     } else {
         let mut mutator = StdScheduledMutator::new(mutations);

@@ -1,43 +1,44 @@
-use crate::evm::host::CALL_UNTIL;
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMQueueExecutor};
-use crate::evm::vm::{EVMExecutor, EVMState};
-use crate::feedback::OracleFeedback;
-use crate::generic_vm::vm_executor::{ExecutionResult, GenericVM};
-use crate::generic_vm::vm_state::VMStateT;
-use crate::input::VMInputT;
-use crate::minimizer::SequentialMinimizer;
-use crate::oracle::BugMetadata;
-use crate::state::{FuzzState, HasExecutionResult, HasInfantStateState};
-use crate::tracer::TxnTrace;
+use std::{cell::RefCell, ops::Deref, rc::Rc};
+
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{Corpus, Executor, Feedback, ObserversTuple, StdScheduler, ExitKind, SimpleEventManager, SimpleMonitor};
-use libafl::state::{HasCorpus, HasMetadata};
+use libafl::{
+    prelude::Corpus,
+    state::{HasCorpus, HasMetadata},
+};
 use revm_primitives::Bytecode;
-use std::cell::RefCell;
-use std::ops::Deref;
-use std::rc::Rc;
 
 use super::types::EVMStagedVMState;
+use crate::{
+    evm::{
+        host::CALL_UNTIL,
+        input::{ConciseEVMInput, EVMInput},
+        types::{EVMAddress, EVMFuzzState, EVMQueueExecutor},
+        vm::EVMState,
+    },
+    feedback::OracleFeedback,
+    generic_vm::{vm_executor::GenericVM, vm_state::VMStateT},
+    input::VMInputT,
+    minimizer::SequentialMinimizer,
+    oracle::BugMetadata,
+    state::{FuzzState, HasExecutionResult, HasInfantStateState},
+    tracer::TxnTrace,
+};
 
 pub struct EVMMinimizer {
     evm_executor_ref: Rc<RefCell<EVMQueueExecutor>>,
 }
 
 impl EVMMinimizer {
-    pub fn new(
-        evm_executor_ref: Rc<RefCell<EVMQueueExecutor>>,
-    ) -> Self {
-        Self {
-            evm_executor_ref,
-        }
+    pub fn new(evm_executor_ref: Rc<RefCell<EVMQueueExecutor>>) -> Self {
+        Self { evm_executor_ref }
     }
 
     fn get_call_seq(vm_state: &EVMStagedVMState, state: &mut EVMFuzzState) -> Vec<(EVMInput, u32)> {
         if let Some(from_idx) = vm_state.trace.from_idx {
             let corpus_item = state.get_infant_state_state().corpus().get(from_idx.into());
-            // This happens when full_trace feature is not enabled, the corpus item may be discarded
+            // This happens when full_trace feature is not enabled, the corpus item may be
+            // discarded
             if corpus_item.is_err() {
                 return vec![];
             }
@@ -49,7 +50,7 @@ impl EVMMinimizer {
             let prev_state = testcase_input.clone().unwrap();
             let prev = Self::get_call_seq(testcase_input.as_ref().unwrap(), state);
 
-            return vec![
+            return [
                 prev,
                 vm_state
                     .trace
@@ -71,7 +72,6 @@ impl EVMMinimizer {
     }
 }
 
-
 type EVMOracleFeedback<'a> = OracleFeedback<
     'a,
     EVMState,
@@ -82,14 +82,7 @@ type EVMOracleFeedback<'a> = OracleFeedback<
     revm_primitives::ruint::Uint<256, 4>,
     Vec<u8>,
     EVMInput,
-    FuzzState<
-        EVMInput,
-        EVMState,
-        revm_primitives::B160,
-        revm_primitives::B160,
-        Vec<u8>,
-        ConciseEVMInput,
-    >,
+    FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
     ConciseEVMInput,
 >;
 
@@ -100,26 +93,30 @@ impl<E: libafl::executors::HasObservers>
     fn minimize(
         &mut self,
         state: &mut EVMFuzzState,
-        exec: &mut E,
+        _exec: &mut E,
         input: &TxnTrace<EVMAddress, EVMAddress, ConciseEVMInput>,
         objective: &mut EVMOracleFeedback<'_>,
         corpus_id: usize,
     ) -> Vec<ConciseEVMInput> {
-
         let bug_meta = state.metadata::<BugMetadata>().unwrap();
-        let bug_idx_needed = bug_meta.corpus_idx_to_bug.get(&corpus_id).expect("Bug idx needed").clone();
+        let bug_idx_needed = bug_meta
+            .corpus_idx_to_bug
+            .get(&corpus_id)
+            .expect("Bug idx needed")
+            .clone();
 
         let current_idx = input.from_idx.unwrap();
-        let testcase = state.infant_states_state
+        let testcase = state
+            .infant_states_state
             .corpus()
             .get(current_idx.into())
             .unwrap()
             .borrow()
             .clone();
         let last_sstate = testcase.input().as_ref().expect("Input should be present");
-        let mut txs = Self::get_call_seq(&last_sstate, state);
+        let mut txs = Self::get_call_seq(last_sstate, state);
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
-        assert!(txs.len() >= 1);
+        assert!(!txs.is_empty());
         let mut minimized = false;
         while !minimized {
             minimized = true;
@@ -148,11 +145,7 @@ impl<E: libafl::executors::HasObservers>
                     };
 
                     state.set_execution_result(res.clone());
-                    let trial_is_solution = objective.reproduces(
-                        state,
-                        &tx,
-                        &bug_idx_needed
-                    );
+                    let trial_is_solution = objective.reproduces(state, &tx, &bug_idx_needed);
                     is_solution |= trial_is_solution;
                     current_state = state.get_execution_result().new_state.clone();
                     let reverted = state.get_execution_result().reverted;
@@ -170,10 +163,9 @@ impl<E: libafl::executors::HasObservers>
                         .collect();
                     minimized = false;
                     break;
-                } 
+                }
             }
         }
-
 
         txs.into_iter()
             .map(|(tx, call_leak)| ConciseEVMInput::from_input_with_call_leak(&tx, call_leak))

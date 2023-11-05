@@ -1,15 +1,27 @@
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMU256};
-use crate::evm::vm::EVMState;
-use crate::oracle::{OracleCtx, Producer};
-use crate::state::HasExecutionResult;
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use std::collections::HashMap;
+
+use crate::{
+    evm::{
+        input::{ConciseEVMInput, EVMInput},
+        types::{EVMAddress, EVMFuzzState, EVMU256},
+        vm::EVMState,
+    },
+    oracle::{OracleCtx, Producer},
+    state::HasExecutionResult,
+};
 
 pub struct PairProducer {
     pub reserves: HashMap<EVMAddress, (EVMU256, EVMU256)>,
     pub fetch_reserve: Bytes,
+}
+
+impl Default for PairProducer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PairProducer {
@@ -21,8 +33,19 @@ impl PairProducer {
     }
 }
 
-impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for PairProducer
+impl
+    Producer<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+    > for PairProducer
 {
     fn produce(
         &mut self,
@@ -36,7 +59,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
     ) {
         #[cfg(feature = "flashloan_v2")]
@@ -49,27 +72,25 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
                 .flashloan_data
                 .oracle_recheck_reserve
                 .clone();
-            let mut query_reserves_batch = reserves.iter().map(
-                |pair_address| {
-                    (*pair_address, self.fetch_reserve.clone())
-                }
-            ).collect::<Vec<(EVMAddress, Bytes)>>();
+            let query_reserves_batch = reserves
+                .iter()
+                .map(|pair_address| (*pair_address, self.fetch_reserve.clone()))
+                .collect::<Vec<(EVMAddress, Bytes)>>();
 
-            ctx.call_post_batch(&query_reserves_batch).iter().zip(
-                reserves.iter()
-            ).for_each(
-                |(output, pair_address)| {
+            ctx.call_post_batch(&query_reserves_batch)
+                .iter()
+                .zip(reserves.iter())
+                .for_each(|(output, pair_address)| {
                     let reserve0 = EVMU256::try_from_be_slice(&output[0..32]).unwrap();
                     let reserve1 = EVMU256::try_from_be_slice(&output[32..64]).unwrap();
                     self.reserves.insert(*pair_address, (reserve0, reserve1));
-                }
-            );
+                });
         }
     }
 
     fn notify_end(
         &mut self,
-        ctx: &mut OracleCtx<
+        _ctx: &mut OracleCtx<
             EVMState,
             EVMAddress,
             Bytecode,
@@ -79,7 +100,7 @@ impl Producer<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8
             Vec<u8>,
             EVMInput,
             EVMFuzzState,
-            ConciseEVMInput
+            ConciseEVMInput,
         >,
     ) {
         self.reserves.clear();
