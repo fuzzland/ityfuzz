@@ -72,6 +72,7 @@ fn decompile_with_bytecode(contract_bytecode: String) -> Result<Vec<ABIStructure
     res.abi.ok_or("unable to decompile contract".into())
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

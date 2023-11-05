@@ -1,6 +1,5 @@
 use std::{
     any::Any,
-    borrow::Borrow,
     collections::{BTreeMap, HashMap, VecDeque},
     fmt::Debug,
     sync::Arc,
@@ -106,6 +105,7 @@ impl TypeTagInfoMeta {
     pub fn get_type_tag(&self, ty: &Type) -> Option<&StructTag> {
         self.type_to_type_tag.get(ty)
     }
+    #[allow(clippy::only_used_in_recursion)]
     pub fn find_type(&mut self, ty: &Type, loader: &Loader) -> TypeTag {
         match ty {
             Type::Bool => TypeTag::Bool,
@@ -862,6 +862,7 @@ pub fn dummy_resolver(loader: &Loader) -> Resolver {
     Resolver { loader, binary }
 }
 
+#[cfg(test)]
 mod tests {
     use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
@@ -930,9 +931,7 @@ mod tests {
             _deps: Default::default(),
             _resolved: true,
         };
-        let mut res = ExecutionResult::empty_result();
-        res = mv.execute(&input.clone(), &mut FuzzState::new(0));
-        res
+        mv.execute(&input.clone(), &mut FuzzState::new(0))
     }
 
     #[test]

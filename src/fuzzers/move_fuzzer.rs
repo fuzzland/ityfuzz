@@ -2,19 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use libafl::{
     feedbacks::Feedback,
-    prelude::{
-        HasMetadata,
-        MapFeedback,
-        MaxMapFeedback,
-        QueueScheduler,
-        SimpleEventManager,
-        SimpleMonitor,
-        StdMapObserver,
-    },
+    prelude::{MapFeedback, MaxMapFeedback, QueueScheduler, SimpleEventManager, SimpleMonitor, StdMapObserver},
     stages::StdMutationalStage,
     Fuzzer,
 };
-use libafl_bolts::{bolts_prelude::ShMemProvider, tuples::tuple_list};
+use libafl_bolts::tuples::tuple_list;
 use tracing::info;
 
 #[cfg(feature = "sui_support")]

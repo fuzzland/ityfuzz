@@ -6,14 +6,12 @@ use std::{
 };
 
 use bytes::Bytes;
-use itertools::Itertools;
 use libafl::{
     inputs::Input,
     prelude::{HasCorpus, HasMetadata, State},
     schedulers::Scheduler,
 };
 use revm_interpreter::{opcode::JUMPI, Interpreter};
-use revm_primitives::Bytecode;
 use tracing::debug;
 
 use crate::{
@@ -447,16 +445,19 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
     use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 
     use bytes::Bytes;
+    use itertools::Itertools;
     use libafl::schedulers::StdScheduler;
     use revm_interpreter::{
         analysis::to_analysed,
         opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP},
         BytecodeLocked,
     };
+    use revm_primitives::Bytecode;
 
     use super::*;
     use crate::{

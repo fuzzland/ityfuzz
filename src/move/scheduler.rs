@@ -274,14 +274,11 @@ impl Scheduler for MoveVMStateScheduler {
     }
 
     fn next(&mut self, state: &mut Self::State) -> Result<CorpusId, Error> {
-        let mut sample_idx = HashSet::new();
-        {
-            let meta = state
-                .metadata_map_mut()
-                .get_mut::<MoveSchedulerMeta>()
-                .expect("Missing metadata");
-            sample_idx = meta.current_working_states.clone();
-        }
+        let meta = state
+            .metadata_map_mut()
+            .get_mut::<MoveSchedulerMeta>()
+            .expect("Missing metadata");
+        let sample_idx = meta.current_working_states.clone();
 
         let mut total_votes = 0;
         let mut sample_list = vec![];

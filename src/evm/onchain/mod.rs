@@ -15,12 +15,11 @@ use std::{
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
 use libafl::{
-    corpus::Corpus,
     prelude::{HasCorpus, HasMetadata, Input, UsesInput},
     schedulers::Scheduler,
     state::{HasRand, State},
 };
-use revm_interpreter::{Host, Interpreter};
+use revm_interpreter::Interpreter;
 use tracing::debug;
 
 use crate::{
@@ -354,6 +353,7 @@ where
         + 'static,
     VS: VMStateT + Default + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn load_code<SC>(
         &mut self,
         address_h160: EVMAddress,

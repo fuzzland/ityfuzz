@@ -72,6 +72,7 @@ pub static mut ORACLE_OUTPUT: Vec<serde_json::Value> = vec![];
 /// VS: The VM state type
 /// Addr: The address type (e.g., H160)
 /// Loc: The call target location type (e.g., H160)
+#[allow(clippy::type_complexity)]
 #[derive(Debug)]
 pub struct ItyFuzzer<VS, Loc, Addr, Out, CS, IS, F, IF, IFR, I, OF, S, OT, CI, SM>
 where
@@ -128,6 +129,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Creates a new ItyFuzzer
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         scheduler: CS,
         infant_scheduler: IS,
@@ -616,24 +618,6 @@ where
                     }
 
                     return Ok((res, None));
-                    // Not interesting
-                    self.feedback.discard_metadata(state, &input)?;
-
-                    // The input is a solution, add it to the respective corpus
-                    let mut testcase = Testcase::new(input.clone());
-                    self.objective.append_metadata(state, observers, &mut testcase)?;
-                    state.solutions_mut().add(testcase)?;
-
-                    if send_events {
-                        manager.fire(
-                            state,
-                            Event::Objective {
-                                objective_size: state.solutions().count(),
-                            },
-                        )?;
-                    }
-
-                    Ok((res, None))
                 }
             };
         unsafe {

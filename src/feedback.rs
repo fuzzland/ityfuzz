@@ -1,5 +1,4 @@
 use std::{
-    borrow::BorrowMut,
     cell::RefCell,
     collections::HashSet,
     fmt::{Debug, Formatter},
@@ -38,7 +37,7 @@ use crate::{
 /// It executes the producers and then oracles after each successful execution.
 /// If any of the oracle returns true, then it returns true and report a
 /// vulnerability found.
-
+#[allow(clippy::type_complexity)]
 pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -104,6 +103,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`OracleFeedback`]
+    #[allow(clippy::type_complexity)]
     pub fn new(
         oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
         producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
@@ -428,6 +428,7 @@ where
 /// When we consider an execution interesting, we use a votable scheduler to
 /// vote on whether the VMState is interesting or not. With more votes, the
 /// VMState is more likely to be selected for fuzzing.
+#[allow(clippy::type_complexity)]
 #[cfg(feature = "cmp")]
 pub struct CmpFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, SC, CI> {
     /// global min map recording the minimum distance for each comparison
@@ -459,6 +460,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new CmpFeedback.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn new(
         current_map: &'a mut [SlotTy],
         scheduler: SC,
@@ -556,16 +558,14 @@ where
                 .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
         }
 
-        unsafe {
-            if self.vm.deref().borrow_mut().state_changed() ||
-                state.get_execution_result().new_state.state.has_post_execution()
-            {
-                let hash = state.get_execution_result().new_state.state.get_hash();
-                if self.known_states.contains(&hash) {
-                    return Ok(false);
-                }
-                return Ok(true);
+        if self.vm.deref().borrow_mut().state_changed() ||
+            state.get_execution_result().new_state.state.has_post_execution()
+        {
+            let hash = state.get_execution_result().new_state.state.get_hash();
+            if self.known_states.contains(&hash) {
+                return Ok(false);
             }
+            return Ok(true);
         }
         Ok(false)
     }

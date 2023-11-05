@@ -433,42 +433,36 @@ impl CloneableValue {
                 (*(*$v)).borrow_mut().copy_from_slice(vc.as_slice());
             }};
         }
-        let r = match &mut self.value.0 {
-            ValueImpl::Container(v) => {
-                match v {
-                    Container::VecU8(v) => {
-                        from_le!(u8, v);
-                    }
-                    Container::VecU64(v) => {
-                        from_le!(u64, v)
-                    }
-                    Container::VecU128(v) => {
-                        from_le!(u128, v)
-                    }
-                    Container::VecU16(v) => {
-                        from_le!(u16, v)
-                    }
-                    Container::VecU32(v) => {
-                        from_le!(u32, v)
-                    }
-                    Container::VecU256(v) => {
-                        from_le!(u256, move_core_types::u256::U256, v)
-                    }
-                    // cant be mutated
-                    _ => unreachable!(),
+        match &mut self.value.0 {
+            ValueImpl::Container(v) => match v {
+                Container::VecU8(v) => {
+                    from_le!(u8, v);
                 }
-            }
+                Container::VecU64(v) => {
+                    from_le!(u64, v)
+                }
+                Container::VecU128(v) => {
+                    from_le!(u128, v)
+                }
+                Container::VecU16(v) => {
+                    from_le!(u16, v)
+                }
+                Container::VecU32(v) => {
+                    from_le!(u32, v)
+                }
+                Container::VecU256(v) => {
+                    from_le!(u256, move_core_types::u256::U256, v)
+                }
+                _ => unreachable!(),
+            },
             ValueImpl::U128(v) => *v = u128::from_le_bytes(self.bytes.as_slice().try_into().unwrap()),
             ValueImpl::U256(v) => {
                 *v = move_core_types::u256::U256::from_le_bytes(self.bytes.as_slice().try_into().unwrap())
             }
-            // ValueImpl::ContainerRef(_) => {}
-            // ValueImpl::IndexedRef(_) => {}
             _ => unreachable!(),
         };
 
         self.bytes.clear();
-        r
     }
 }
 
@@ -628,8 +622,8 @@ impl MoveFunctionInput {
                 *v = !*v;
                 return MutationResult::Mutated;
             }
-            ValueImpl::Address(mut v) => {
-                v = _state.get_rand_address();
+            ValueImpl::Address(mut _v) => {
+                _v = _state.get_rand_address();
                 return MutationResult::Mutated;
             }
             ValueImpl::U128(_) => {
@@ -836,6 +830,7 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
     }
 }
 
+#[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc, sync::Arc};
 

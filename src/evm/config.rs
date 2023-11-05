@@ -3,6 +3,7 @@ use std::{
     collections::HashSet,
     fmt::{self, Debug},
     rc::Rc,
+    str::FromStr,
 };
 
 /// Configuration for the EVM fuzzer
@@ -29,18 +30,22 @@ pub enum StorageFetchingMode {
     OneByOne,
 }
 
-impl StorageFetchingMode {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for StorageFetchingMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "dump" => Some(StorageFetchingMode::Dump),
-            "onebyone" => Some(StorageFetchingMode::OneByOne),
-            _ => None,
+            "dump" => Ok(StorageFetchingMode::Dump),
+            "onebyone" => Ok(StorageFetchingMode::OneByOne),
+            _ => Err(format!("Unknown storage fetching mode: {}", s)),
         }
     }
 }
 
-impl FuzzerTypes {
-    pub fn from_str(s: &str) -> Result<Self, String> {
+impl FromStr for FuzzerTypes {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "cmp" => Ok(FuzzerTypes::CMP),
             "dataflow" => Ok(FuzzerTypes::DATAFLOW),
@@ -50,6 +55,7 @@ impl FuzzerTypes {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub onchain: Option<OnChainConfig>,
     pub onchain_storage_fetching: Option<StorageFetchingMode>,

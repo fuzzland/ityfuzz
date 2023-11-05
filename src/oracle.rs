@@ -23,6 +23,7 @@ use crate::{
 };
 
 /// The context passed to the oracle
+#[allow(clippy::type_complexity)]
 pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -58,6 +59,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new oracle context
+    #[allow(clippy::type_complexity)]
     pub fn new(
         fuzz_state: &'a mut S,
         pre_state: &'a VS,
@@ -75,28 +77,12 @@ where
         }
     }
 
-    /// Conduct a batch of static calls on the state before the execution
-    pub(crate) fn call_pre_batch(&mut self, data: &[(Addr, By)]) -> Vec<Out> {
-        self.executor
-            .deref()
-            .borrow_mut()
-            .fast_static_call(data, self.pre_state, self.fuzz_state)
-    }
-
     /// Conduct a batch of static calls on the state after the execution
     pub(crate) fn call_post_batch(&mut self, data: &[(Addr, By)]) -> Vec<Out> {
         self.executor
             .deref()
             .borrow_mut()
             .fast_static_call(data, &self.post_state, self.fuzz_state)
-    }
-
-    /// Conduct a batch of dynamic calls on the state before the execution
-    pub(crate) fn call_pre_batch_dyn(&mut self, data: &[(Addr, Addr, By)]) -> (Vec<(Out, bool)>, VS) {
-        self.executor
-            .deref()
-            .borrow_mut()
-            .fast_call(data, self.pre_state, self.fuzz_state)
     }
 
     /// Conduct a batch of dynamic calls on the state after the execution

@@ -252,6 +252,7 @@ where
     }
 
     // if struct is found, return None because we cannot instantiate a struct
+    #[allow(clippy::boxed_local)]
     fn gen_default_value(state: &mut MoveFuzzState, ty: Box<Type>) -> MoveInputStatus {
         match *ty {
             Type::Bool => MoveInputStatus::Complete(Value::bool(false)),
@@ -343,18 +344,6 @@ where
                 }
             }
             ty => todo!("gen_default_value failed: {:?}", ty),
-        }
-    }
-
-    fn find_struct_deps(&mut self, ty: Box<Type>) -> Vec<Type> {
-        match *ty {
-            Type::Vector(v) => self.find_struct_deps(v),
-
-            Type::Struct(v) => {
-                vec![Type::Struct(v)]
-            }
-            Type::Reference(ty) | Type::MutableReference(ty) => self.find_struct_deps(ty),
-            _ => vec![],
         }
     }
 

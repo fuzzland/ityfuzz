@@ -31,6 +31,7 @@ use crate::{
 
 /// A wrapper around a feedback that also performs sha3 taint analysis
 /// when the feedback is interesting.
+#[allow(clippy::type_complexity)]
 pub struct Sha3WrappedFeedback<I, S, VS, F, SC>
 where
     S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
@@ -128,6 +129,7 @@ where
     F: Feedback<S>,
     SC: Scheduler<State = S> + Clone,
 {
+    #[allow(clippy::type_complexity)]
     pub(crate) fn new(
         inner_feedback: F,
         sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,

@@ -25,6 +25,7 @@ use crate::{
 /// Wrapper of smart contract VM, which implements LibAFL [`Executor`]
 /// TODO: in the future, we may need to add handlers?
 /// handle timeout/crash of executing contract
+#[allow(clippy::type_complexity)]
 pub struct FuzzExecutor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, OT, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
@@ -101,6 +102,7 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
 {
     /// Create a new [`FuzzExecutor`]
+    #[allow(clippy::type_complexity)]
     pub fn new(
         vm_executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
         observers: OT,

@@ -50,7 +50,6 @@ use revm_primitives::{
     MergeSpec,
     PetersburgSpec,
     ShanghaiSpec,
-    Spec,
     SpecId,
     SpuriousDragonSpec,
     TangerineSpec,
@@ -138,6 +137,7 @@ pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
     num.wrapping_sub(1) < num_of_precompiles as u16
 }
 
+#[allow(clippy::type_complexity)]
 pub struct FuzzHost<VS, I, S, SC>
 where
     S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
@@ -301,7 +301,6 @@ where
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
-const CONTROL_LEAK_DETECTION: bool = false;
 const UNBOUND_CALL_THRESHOLD: usize = 3;
 
 // if a PC transfers control to >10 addresses, we consider call at this PC to be

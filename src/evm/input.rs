@@ -288,6 +288,8 @@ impl ConciseEVMInput {
         )
     }
 
+    // Variable `liq` is used when `debug` feature is disabled
+    #[allow(unused_variables)]
     #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
         let liq: u8 = self.liquidation_percent;

@@ -426,6 +426,7 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
     use bytes::Bytes;
 

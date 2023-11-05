@@ -9,7 +9,7 @@ use libafl::{
     Evaluator,
     Fuzzer,
 };
-use libafl_bolts::{bolts_prelude::ShMemProvider, tuples::tuple_list};
+use libafl_bolts::tuples::tuple_list;
 use revm_primitives::Bytecode;
 use tracing::{debug, error, info};
 
@@ -86,6 +86,7 @@ use crate::{
     state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
 };
 
+#[allow(clippy::type_complexity)]
 pub fn evm_fuzzer(
     config: Config<
         EVMState,
@@ -129,7 +130,6 @@ pub fn evm_fuzzer(
     // visible to other middlewares.
     // fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
 
-    #[allow(unused_variables)]
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({

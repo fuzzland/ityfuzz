@@ -313,6 +313,7 @@ enum EVMTargetType {
     Config,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();

@@ -1,7 +1,6 @@
 use core::ops::Range;
 use std::{
     any::Any,
-    borrow::Borrow,
     cell::RefCell,
     cmp::min,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
@@ -146,22 +145,24 @@ pub struct SinglePostExecution {
     pub output_offset: usize,
 }
 
-impl SinglePostExecution {
-    pub fn hash(&self, hasher: &mut impl Hasher) {
-        self.program_counter.hash(hasher);
-        self.memory.data.hash(hasher);
-        self.stack.data.hash(hasher);
-        self.return_range.hash(hasher);
-        self.is_static.hash(hasher);
-        self.input.hash(hasher);
-        self.code_address.hash(hasher);
-        self.address.hash(hasher);
-        self.caller.hash(hasher);
-        self.value.hash(hasher);
-        self.output_len.hash(hasher);
-        self.output_offset.hash(hasher);
+impl Hash for SinglePostExecution {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.program_counter.hash(state);
+        self.memory.data.hash(state);
+        self.stack.data.hash(state);
+        self.return_range.hash(state);
+        self.is_static.hash(state);
+        self.input.hash(state);
+        self.code_address.hash(state);
+        self.address.hash(state);
+        self.caller.hash(state);
+        self.value.hash(state);
+        self.output_len.hash(state);
+        self.output_offset.hash(state);
     }
+}
 
+impl SinglePostExecution {
     /// Convert the post execution context to revm [`CallContext`]
     fn get_call_ctx(&self) -> CallContext {
         CallContext {
@@ -222,10 +223,10 @@ pub struct PostExecutionCtx {
     pub must_step: bool,
 }
 
-impl PostExecutionCtx {
-    pub fn hash(&self, hasher: &mut impl Hasher) {
+impl Hash for PostExecutionCtx {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         for pe in &self.pes {
-            pe.hash(hasher);
+            pe.hash(state);
         }
     }
 }
@@ -489,6 +490,7 @@ where
     /// leak call. `post_exec` is the post execution context to use, if any
     ///     If `post_exec` is `None`, then the execution is from the beginning,
     /// otherwise it is from     the post execution context.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_from_pc(
         &mut self,
         call_ctx: &CallContext,
@@ -542,19 +544,17 @@ where
             // If there is a post execution context, then we need to create the interpreter
             // from the post execution context
             repeats = 1;
-            unsafe {
-                // setup the pc, memory, and stack as the post execution context
-                let mut interp = post_exec_ctx.get_interpreter(bytecode);
-                // set return buffer as the input
-                // we remove the first 4 bytes because the first 4 bytes is the function hash
-                // (00000000 here)
-                interp.return_data_buffer = data.slice(4..);
-                let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
-                interp
-                    .memory
-                    .set(post_exec_ctx.output_offset, &interp.return_data_buffer[..target_len]);
-                interp
-            }
+            // setup the pc, memory, and stack as the post execution context
+            let mut interp = post_exec_ctx.get_interpreter(bytecode);
+            // set return buffer as the input
+            // we remove the first 4 bytes because the first 4 bytes is the function hash
+            // (00000000 here)
+            interp.return_data_buffer = data.slice(4..);
+            let target_len = min(post_exec_ctx.output_len, interp.return_data_buffer.len());
+            interp
+                .memory
+                .set(post_exec_ctx.output_offset, &interp.return_data_buffer[..target_len]);
+            interp
         } else {
             // if there is no post execution context, then we create the interpreter from
             // the beginning
@@ -762,7 +762,7 @@ where
         match r.ret {
             ControlLeak |
             InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) |
-            InstructionResult::AddressUnboundedStaticCall => unsafe {
+            InstructionResult::AddressUnboundedStaticCall => {
                 if r.new_state.post_execution.len() + 1 > MAX_POST_EXECUTION {
                     return ExecutionResult {
                         output: r.output.to_vec(),
@@ -797,7 +797,7 @@ where
                         _ => unreachable!(),
                     },
                 });
-            },
+            }
             _ => {}
         }
 
@@ -987,9 +987,7 @@ where
                                 output: res.output.to_vec(),
                                 reverted: !is_call_success!(res.ret),
                                 new_state: StagedVMState::new_with_state(
-                                    VMStateT::as_any(&mut res.new_state)
-                                        .downcast_ref_unchecked::<VS>()
-                                        .clone(),
+                                    VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
                                 ),
                                 additional_info: None,
                             }
@@ -1097,9 +1095,6 @@ where
             })
             .collect::<Vec<(Vec<u8>, bool)>>();
 
-        unsafe {
-            // IS_FAST_CALL = false;
-        }
         (res, unsafe {
             self.host.evmstate.as_any().downcast_ref_unchecked::<VS>().clone()
         })
