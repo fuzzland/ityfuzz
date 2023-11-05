@@ -17,6 +17,10 @@ jobs:
         with:
           submodules: recursive
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Check code format
+        run: cargo fmt -- --check
+      - name: Clippy
+        run: cargo clippy --all-features
       - name: Download and Extract Cache
         run: curl -L https://github.com/fuzzland/ityfuzz-test-cache/releases/latest/download/cache.tar.gz -o cache.tar.gz && tar -xzf cache.tar.gz
       - name: Build
@@ -39,4 +43,3 @@ jobs:
           BOT_GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
           PR_NUMBER: ${{ github.event.number }}
         run: echo "PR=$PR_NUMBER" && python3 ci.py
-  
