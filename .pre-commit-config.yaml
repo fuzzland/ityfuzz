@@ -1,0 +1,14 @@
+# Install:
+# 1. pip3 install pre-commit
+# 2. pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-merge-conflict
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: master
+    hooks:
+      - id: fmt
+      - id: clippy
+        args: [--all-features]
