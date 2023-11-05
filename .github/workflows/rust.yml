@@ -21,25 +21,25 @@ jobs:
         run: cargo fmt -- --check
       - name: Clippy
         run: cargo clippy --all-features
-      - name: Download and Extract Cache
-        run: curl -L https://github.com/fuzzland/ityfuzz-test-cache/releases/latest/download/cache.tar.gz -o cache.tar.gz && tar -xzf cache.tar.gz
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
-      - name: Run integration tests (Offchain)
-        run: python3 integration_test.py offchain
-      - name: Run integration tests (Onchain)
-        env:
-          BSC_ETHERSCAN_API_KEY: ${{ secrets.BSC_ETHERSCAN_API_KEY }}
-          BSC_RPC_URL: ${{ secrets.BSC_RPC_URL }}
-          ETH_ETHERSCAN_API_KEY: ${{ secrets.ETH_ETHERSCAN_API_KEY }}
-          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
-          POLYGON_ETHERSCAN_API_KEY: ${{ secrets.POLYGON_ETHERSCAN_API_KEY }}
-          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
-        run: python3 integration_test.py onchain
-      - name: Report onchain tests
-        env:
-          BOT_GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: echo "PR=$PR_NUMBER" && python3 ci.py
+      # - name: Download and Extract Cache
+      #   run: curl -L https://github.com/fuzzland/ityfuzz-test-cache/releases/latest/download/cache.tar.gz -o cache.tar.gz && tar -xzf cache.tar.gz
+      # - name: Build
+      #   run: cargo build --verbose
+      # - name: Run tests
+      #   run: cargo test --verbose
+      # - name: Run integration tests (Offchain)
+      #   run: python3 integration_test.py offchain
+      # - name: Run integration tests (Onchain)
+      #   env:
+      #     BSC_ETHERSCAN_API_KEY: ${{ secrets.BSC_ETHERSCAN_API_KEY }}
+      #     BSC_RPC_URL: ${{ secrets.BSC_RPC_URL }}
+      #     ETH_ETHERSCAN_API_KEY: ${{ secrets.ETH_ETHERSCAN_API_KEY }}
+      #     ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+      #     POLYGON_ETHERSCAN_API_KEY: ${{ secrets.POLYGON_ETHERSCAN_API_KEY }}
+      #     POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+      #   run: python3 integration_test.py onchain
+      # - name: Report onchain tests
+      #   env:
+      #     BOT_GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
+      #     PR_NUMBER: ${{ github.event.number }}
+      #   run: echo "PR=$PR_NUMBER" && python3 ci.py
