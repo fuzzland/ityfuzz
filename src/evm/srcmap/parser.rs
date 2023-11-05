@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs::File, io::Read};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+    fs::File,
+    io::Read,
+};
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -15,9 +20,10 @@ pub struct SourceMapWithCode {
     pub code: String,
 }
 
-impl SourceMapWithCode {
-    pub fn to_string(&self) -> String {
-        format!(
+impl Display for SourceMapWithCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "@ {} ({}-{}):\n{}",
             self.file, self.line_start, self.line_end, self.code
         )
