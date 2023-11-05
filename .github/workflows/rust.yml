@@ -17,7 +17,7 @@ jobs:
         with:
           submodules: recursive
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Check code format
+      - name: Format check
         run: cargo fmt -- --check
       - name: Clippy
         run: cargo clippy --all-features
