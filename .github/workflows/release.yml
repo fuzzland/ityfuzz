@@ -110,11 +110,12 @@ jobs:
           cache-on-failure: true
           prefix-key: "v1"
           key: ${{ matrix.job.target }}
-          # cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
+          cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
 
-      - name: MacOS setup Z3
+      - name: MacOS setup distutils && Z3
         if: ${{ matrix.job.platform == 'darwin' }}
         run: |
+          python3 -m pip install distutils
           brew install z3
           # git clone https://github.com/Z3Prover/z3
           # cd z3
