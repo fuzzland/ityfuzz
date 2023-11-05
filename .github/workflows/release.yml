@@ -83,12 +83,12 @@ jobs:
             target: aarch64-unknown-linux-gnu
             arch: arm64
             svm_target_platform: linux-aarch64
-          - os: macos-latest
+          - os: macos-12
             platform: darwin
             target: x86_64-apple-darwin
             arch: amd64
             svm_target_platform: macosx-amd64
-          - os: macos-latest
+          - os: macos-12
             platform: darwin
             target: aarch64-apple-darwin
             arch: arm64
@@ -113,24 +113,25 @@ jobs:
           cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
 
       - name: MacOS setup 
-        if: ${{ matrix.job.target == 'x86_64-apple-darwin' }}
+        if: ${{ matrix.job.platform == 'darwin' }}
         run: |
           python -V
           python3 -V
-          git clone https://github.com/Z3Prover/z3
-          cd z3
-          git checkout z3-4.12.2
-          python scripts/mk_make.py --prefix=/usr/local
-          cd build
-          make -j64
-          sudo make install
+          brew install z3
+          # git clone https://github.com/Z3Prover/z3
+          # cd z3
+          # git checkout z3-4.12.2
+          # python scripts/mk_make.py --prefix=/usr/local
+          # cd build
+          # make -j64
+          # sudo make install
 
       - name: Apple M1 setup
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
           python -V
           python3 -V
-          brew install z3 llvm
+          brew install llvm
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
