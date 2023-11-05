@@ -6,9 +6,15 @@ repos:
     rev: v4.4.0
     hooks:
       - id: check-merge-conflict
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: master
+  - repo: local
     hooks:
-      - id: fmt
-      - id: clippy
-        args: [--all-features]
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt
+        language: rust
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-features --offline
+        language: rust
+        pass_filenames: false
