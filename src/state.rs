@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+// Some components are used when `evaluation` feature is disabled
+#[allow(unused_imports)]
 use libafl::{
     corpus::{Corpus, InMemoryCorpus, OnDiskCorpus, Testcase},
     inputs::Input,
@@ -35,7 +37,7 @@ use tracing::debug;
 /// Implements LibAFL's State trait supporting our fuzzing logic.
 use crate::indexed_corpus::IndexedInMemoryCorpus;
 use crate::{
-    evm::{abi::BoxedABI, presets::presets::ExploitTemplate, types::EVMAddress},
+    evm::{abi::BoxedABI, presets::ExploitTemplate, types::EVMAddress},
     generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
     input::{ConciseSerde, VMInputT},
     state_input::StagedVMState,

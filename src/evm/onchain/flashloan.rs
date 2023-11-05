@@ -23,11 +23,15 @@ use libafl::{
     schedulers::Scheduler,
     state::{HasMetadata, HasRand},
 };
+// impl_serdeany is used when `flashloan_v2` feature is not enabled
+#[allow(unused_imports)]
 use libafl_bolts::impl_serdeany;
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+// Some components are used when `flashloan_v2` feature is not enabled
+#[allow(unused_imports)]
 use crate::{
     evm::{
         contract_utils::ABIConfig,
@@ -37,7 +41,7 @@ use crate::{
         mutator::AccessPattern,
         onchain::{
             endpoints::{OnChainConfig, PriceOracle},
-            onchain::OnChain,
+            OnChain,
         },
         oracles::erc20::IERC20OracleFlashloan,
         types::{as_u64, convert_u256_to_h160, float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
@@ -193,6 +197,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: EVMU256) -> EVMU512 {
         let amount = if decimals > 18 {
             EVMU512::from(amount) / EVMU512::from(10u64.pow(decimals - 18))
@@ -203,6 +208,7 @@ where
         amount * EVMU512::from(eth_price)
     }
 
+    #[allow(dead_code)]
     fn calculate_usd_value_from_addr(&mut self, addr: EVMAddress, amount: EVMU256) -> Option<EVMU512> {
         self.oracle
             .fetch_token_price(addr)

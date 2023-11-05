@@ -25,7 +25,6 @@ use move_vm_types::{
     gas::{GasMeter, UnmeteredGasMeter},
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
-    values,
     values::{Container, Locals, Reference, StructRef, VMValueCast, Value, ValueImpl},
 };
 use revm_primitives::HashSet;
@@ -868,7 +867,7 @@ mod tests {
 
     use move_vm_types::{
         loaded_data::runtime_types::{CachedStructIndex, Type::Struct},
-        values::{ContainerRef, Value, ValueImpl},
+        values::{self, ContainerRef, Value, ValueImpl},
     };
     use tracing::debug;
 

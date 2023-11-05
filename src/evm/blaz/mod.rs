@@ -3,6 +3,8 @@ use std::time::Duration;
 use bytes::Bytes;
 use revm_primitives::{Bytecode, HashSet};
 
+// SKIP_CBOR is used in the `skip_cbor` macro
+#[allow(unused_imports)]
 use crate::{
     evm::{bytecode_analyzer::find_constants, bytecode_iterator::SKIP_CBOR, contract_utils::extract_sig_from_contract},
     skip_cbor,

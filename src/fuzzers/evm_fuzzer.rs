@@ -54,10 +54,7 @@ use crate::{
         },
         minimizer::EVMMinimizer,
         mutator::FuzzMutator,
-        onchain::{
-            flashloan::Flashloan,
-            onchain::{OnChain, WHITELIST_ADDR},
-        },
+        onchain::{flashloan::Flashloan, OnChain, WHITELIST_ADDR},
         oracles::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
@@ -68,7 +65,7 @@ use crate::{
             state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
-        presets::presets::ExploitTemplate,
+        presets::ExploitTemplate,
         srcmap::parser::BASE_PATH,
         types::{
             fixed_address,

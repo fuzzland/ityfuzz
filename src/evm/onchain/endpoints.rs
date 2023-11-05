@@ -58,30 +58,34 @@ pub trait PriceOracle: Debug {
     fn fetch_token_price(&mut self, token_address: EVMAddress) -> Option<(u32, u32)>;
 }
 
-impl Chain {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for Chain {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "ETH" | "eth" => Some(Self::ETH),
-            "GOERLI" | "goerli" => Some(Self::GOERLI),
-            "SEPOLIA" | "sepolia" => Some(Self::SEPOLIA),
-            "BSC" | "bsc" => Some(Self::BSC),
-            "CHAPEL" | "chapel" => Some(Self::CHAPEL),
-            "POLYGON" | "polygon" => Some(Self::POLYGON),
-            "MUMBAI" | "mumbai" => Some(Self::MUMBAI),
-            "FANTOM" | "fantom" => Some(Self::FANTOM),
-            "AVALANCHE" | "avalanche" => Some(Self::AVALANCHE),
-            "OPTIMISM" | "optimism" => Some(Self::OPTIMISM),
-            "ARBITRUM" | "arbitrum" => Some(Self::ARBITRUM),
-            "GNOSIS" | "gnosis" => Some(Self::GNOSIS),
-            "BASE" | "base" => Some(Self::BASE),
-            "CELO" | "celo" => Some(Self::CELO),
-            "ZKEVM" | "zkevm" => Some(Self::ZKEVM),
-            "ZKEVM_TESTNET" | "zkevm_testnet" => Some(Self::ZkevmTestnet),
-            "LOCAL" | "local" => Some(Self::LOCAL),
-            _ => None,
+            "ETH" | "eth" => Ok(Self::ETH),
+            "GOERLI" | "goerli" => Ok(Self::GOERLI),
+            "SEPOLIA" | "sepolia" => Ok(Self::SEPOLIA),
+            "BSC" | "bsc" => Ok(Self::BSC),
+            "CHAPEL" | "chapel" => Ok(Self::CHAPEL),
+            "POLYGON" | "polygon" => Ok(Self::POLYGON),
+            "MUMBAI" | "mumbai" => Ok(Self::MUMBAI),
+            "FANTOM" | "fantom" => Ok(Self::FANTOM),
+            "AVALANCHE" | "avalanche" => Ok(Self::AVALANCHE),
+            "OPTIMISM" | "optimism" => Ok(Self::OPTIMISM),
+            "ARBITRUM" | "arbitrum" => Ok(Self::ARBITRUM),
+            "GNOSIS" | "gnosis" => Ok(Self::GNOSIS),
+            "BASE" | "base" => Ok(Self::BASE),
+            "CELO" | "celo" => Ok(Self::CELO),
+            "ZKEVM" | "zkevm" => Ok(Self::ZKEVM),
+            "ZKEVM_TESTNET" | "zkevm_testnet" => Ok(Self::ZkevmTestnet),
+            "LOCAL" | "local" => Ok(Self::LOCAL),
+            _ => Err(()),
         }
     }
+}
 
+impl Chain {
     pub fn get_chain_id(&self) -> u32 {
         match self {
             Chain::ETH => 1,

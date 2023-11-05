@@ -155,7 +155,7 @@ where
 
         macro_rules! push_false {
             () => {
-                self.dirty_stack.push(false);
+                self.dirty_stack.push(false)
             };
         }
 
@@ -223,14 +223,14 @@ where
                     let ctx = self.ctxs.last().unwrap();
                     let offset = as_u64(interp.stack.peek(0).expect("stack is empty")) as usize;
                     if offset == 0 {
-                        push_false!()
+                        push_false!();
                     } else {
                         let input = ctx.read_input(offset, 32).contains(&true);
                         // debug!("CALLDATALOAD: {:x} -> {}", offset, input);
-                        self.dirty_stack.push(input)
+                        self.dirty_stack.push(input);
                     }
                 } else {
-                    push_false!()
+                    push_false!();
                 }
             }
             // CALLDATASIZE

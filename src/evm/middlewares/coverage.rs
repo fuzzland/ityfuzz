@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{Debug, Display, Formatter},
     fs,
     fs::OpenOptions,
     io::Write,
@@ -158,36 +158,6 @@ impl CoverageReport {
         succint_cov_map
     }
 
-    pub fn to_string(&self) -> String {
-        let mut s = String::new();
-        for (addr, cov) in &self.coverage {
-            s.push_str(&format!("Contract: {}\n", addr));
-            s.push_str(&format!(
-                "Instruction Coverage: {}/{} ({:.2}%) \n",
-                cov.instruction_coverage,
-                cov.total_instructions,
-                (cov.instruction_coverage * 100) as f64 / cov.total_instructions as f64
-            ));
-            s.push_str(&format!(
-                "Branch Coverage: {}/{} ({:.2}%) \n",
-                cov.branch_coverage,
-                cov.total_branches,
-                (cov.branch_coverage * 100) as f64 / cov.total_branches as f64
-            ));
-
-            if !cov.uncovered.is_empty() {
-                s.push_str("Uncovered Code:\n");
-                for uncovered in &cov.uncovered {
-                    s.push_str(&format!("{}\n\n", uncovered.to_string()));
-                }
-            }
-
-            s.push_str(&format!("Uncovered PCs: {:?}\n", cov.uncovered_pc));
-            s.push_str("--------------------------------\n");
-        }
-        s
-    }
-
     pub fn dump_file(&self, work_dir: String) {
         // write text file
         let mut text_file = OpenOptions::new()
@@ -258,6 +228,38 @@ impl CoverageReport {
     }
 }
 
+impl Display for CoverageReport {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        for (addr, cov) in &self.coverage {
+            s.push_str(&format!("Contract: {}\n", addr));
+            s.push_str(&format!(
+                "Instruction Coverage: {}/{} ({:.2}%) \n",
+                cov.instruction_coverage,
+                cov.total_instructions,
+                (cov.instruction_coverage * 100) as f64 / cov.total_instructions as f64
+            ));
+            s.push_str(&format!(
+                "Branch Coverage: {}/{} ({:.2}%) \n",
+                cov.branch_coverage,
+                cov.total_branches,
+                (cov.branch_coverage * 100) as f64 / cov.total_branches as f64
+            ));
+
+            if !cov.uncovered.is_empty() {
+                s.push_str("Uncovered Code:\n");
+                for uncovered in &cov.uncovered {
+                    s.push_str(&format!("{}\n\n", uncovered.to_string()));
+                }
+            }
+
+            s.push_str(&format!("Uncovered PCs: {:?}\n", cov.uncovered_pc));
+            s.push_str("--------------------------------\n");
+        }
+        write!(f, "{}", s)
+    }
+}
+
 impl Coverage {
     pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>, work_dir: String) -> Self {
         Self {
@@ -277,7 +279,7 @@ impl Coverage {
     pub fn record_instruction_coverage(&mut self) {
         let mut report = CoverageReport::new();
 
-        /// Figure out covered and not covered instructions
+        // Figure out covered and not covered instructions
         let default_skipper = HashSet::new();
 
         for (addr, all_pcs) in &self.total_instr_set {

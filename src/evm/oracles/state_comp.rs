@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use bytes::Bytes;
 use revm_primitives::Bytecode;
 
@@ -21,13 +23,15 @@ pub enum StateCompMatching {
     StateContain,
 }
 
-impl StateCompMatching {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for StateCompMatching {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Exact" => Some(StateCompMatching::Exact),
-            "DesiredContain" => Some(StateCompMatching::DesiredContain),
-            "StateContain" => Some(StateCompMatching::StateContain),
-            _ => None,
+            "Exact" => Ok(StateCompMatching::Exact),
+            "DesiredContain" => Ok(StateCompMatching::DesiredContain),
+            "StateContain" => Ok(StateCompMatching::StateContain),
+            _ => Err(()),
         }
     }
 }

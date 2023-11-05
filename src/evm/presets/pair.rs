@@ -9,7 +9,7 @@ use crate::{
     evm::{
         abi::{A256InnerType, BoxedABI, A256},
         input::{ConciseEVMInput, EVMInput, EVMInputT},
-        presets::presets::Preset,
+        presets::Preset,
         types::EVMAddress,
         vm::EVMExecutor,
     },

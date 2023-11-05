@@ -38,6 +38,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::middlewares::reentrancy::ReentrancyData;
+// Some components are used when `flashloan_v2` feature is disabled
+#[allow(unused_imports)]
 use crate::{
     evm::{
         bytecode_analyzer,

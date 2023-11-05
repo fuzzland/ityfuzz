@@ -98,8 +98,10 @@ where
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
 {
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S);
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
@@ -109,6 +111,7 @@ where
     ) {
     }
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn before_execute(
         &mut self,
         _interp: Option<&mut Interpreter>,
@@ -120,6 +123,7 @@ where
     ) {
     }
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn on_insert(
         &mut self,
         _interp: Option<&mut Interpreter>,

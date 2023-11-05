@@ -241,7 +241,7 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
 
 fn get_router(chain: &str) -> String {
     let chain = Chain::from_str(chain);
-    if chain.is_none() {
+    if chain.is_err() {
         return EVMAddress::zero().to_string();
     }
     let chain = chain.unwrap();
@@ -281,7 +281,7 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
 
 fn get_weth(oc: &OnChainConfig) -> String {
     let chain = Chain::from_str(&oc.chain_name);
-    if chain.is_none() {
+    if chain.is_err() {
         return EVMAddress::zero().to_string();
     }
     let chain = chain.unwrap();
