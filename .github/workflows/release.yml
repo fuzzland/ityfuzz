@@ -105,15 +105,15 @@ jobs:
         with:
           toolchain: "nightly-2023-09-09"
           targets: ${{ matrix.job.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          prefix-key: "v1"
-          key: ${{ matrix.job.target }}
-          cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-on-failure: false
+      #     prefix-key: "v1"
+      #     key: ${{ matrix.job.target }}
+      #     cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
 
       - name: MacOS setup 
-        if: ${{ matrix.job.platform == 'darwin' }}
+        if: ${{ matrix.job.target == 'x86_64-apple-darwin' }}
         run: |
           git clone https://github.com/Z3Prover/z3
           cd z3
@@ -126,7 +126,7 @@ jobs:
       - name: Apple M1 setup
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
-          brew install llvm
+          brew install z3 llvm
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
