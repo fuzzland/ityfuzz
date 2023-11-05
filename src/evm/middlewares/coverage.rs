@@ -14,6 +14,7 @@ use revm_interpreter::Interpreter;
 use revm_interpreter::opcode::{INVALID, JUMPDEST, JUMPI, REVERT, STOP};
 use revm_primitives::Bytecode;
 use serde::Serialize;
+use tracing::info;
 use crate::evm::host::FuzzHost;
 use crate::evm::input::{ConciseEVMInput, EVMInput, EVMInputT};
 use crate::evm::middlewares::middleware::{Middleware, MiddlewareType};
@@ -218,9 +219,9 @@ impl CoverageReport {
     }
 
     pub fn summarize(&self) {
-        println!("============= Coverage Summary =============");
+        info!("============= Coverage Summary =============");
         for (addr, cov) in &self.coverage {
-            println!(
+            info!(
                 "{}: {:.2}% Instruction Covered, {:.2}% Branch Covered",
                 addr,
                 (cov.instruction_coverage * 100) as f64 / cov.total_instructions as f64,

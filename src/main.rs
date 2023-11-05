@@ -32,6 +32,8 @@ use clap::Parser;
 use clap::Subcommand;
 
 use evm::{evm_main, EvmArgs};
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 pub fn init_sentry() {
     let _guard = sentry::init(("https://96f3517bd77346ea835d28f956a84b9d@o4504503751344128.ingest.sentry.io/4504503752523776", sentry::ClientOptions {
@@ -56,6 +58,20 @@ enum Commands {
 
 fn main() {
     init_sentry();
+
+    // initialize logger
+    let subscriber_builder = FmtSubscriber::builder()
+        .compact()
+        .with_target(false)
+        .without_time();
+    #[cfg(debug_assertions)]
+    let subscriber = subscriber_builder.with_max_level(Level::DEBUG).finish();
+    #[cfg(not(debug_assertions))]
+    let subscriber = subscriber_builder.with_max_level(Level::INFO).finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("failed to initialize logger");
+
     let args = Cli::parse();
     match args.command {
         Commands::EVM(args) => {

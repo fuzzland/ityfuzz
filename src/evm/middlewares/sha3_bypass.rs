@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::rc::Rc;
-
+use tracing::debug;
 #[derive(Clone, Debug)]
 pub struct Sha3TaintAnalysisCtx {
     pub dirty_memory: Vec<bool>,
@@ -94,7 +94,7 @@ impl Sha3TaintAnalysis {
     }
 
     pub fn pop_ctx(&mut self) {
-        // println!("pop_ctx");
+        // debug!("pop_ctx");
         let ctx = self.ctxs.pop().expect("ctxs is empty");
         self.dirty_memory = ctx.dirty_memory;
         self.dirty_storage = ctx.dirty_storage;
@@ -123,9 +123,9 @@ where
         state: &mut S,
     ) {
         //
-        // println!("on_step: {:?} with {:x}", interp.program_counter(), *interp.instruction_pointer);
-        // println!("stack: {:?}", self.dirty_stack);
-        // println!("origin: {:?}", interp.stack);
+        // debug!("on_step: {:?} with {:x}", interp.program_counter(), *interp.instruction_pointer);
+        // debug!("stack: {:?}", self.dirty_stack);
+        // debug!("origin: {:?}", interp.stack);
 
         macro_rules! pop_push {
             ($pop_cnt: expr,$push_cnt: expr) => {{
@@ -221,7 +221,7 @@ where
                         push_false!()
                     } else {
                         let input = ctx.read_input(offset, 32).contains(&true);
-                        // println!("CALLDATALOAD: {:x} -> {}", offset, input);
+                        // debug!("CALLDATALOAD: {:x} -> {}", offset, input);
                         self.dirty_stack.push(input)
                     }
                 } else {
@@ -305,7 +305,7 @@ where
                 self.dirty_stack.pop();
                 let v = self.dirty_stack.pop().expect("stack is empty");
                 if v {
-                    println!(
+                    debug!(
                         "new tainted jumpi: {:x} {:x}",
                         interp.contract.address,
                         interp.program_counter()
@@ -573,7 +573,7 @@ mod tests {
             Bytes::from(hex::decode("608060405260003660608282604051610019929190610132565b604051809103902060008060018152602001908152602001600020819055507fcccc0000000000000000000000000000000000000000000000000000000000006000806001815260200190815260200160002054036100af576040518060400160405280600481526020017f636363630000000000000000000000000000000000000000000000000000000081525090506100e8565b6040518060400160405280600481526020017f646464640000000000000000000000000000000000000000000000000000000081525090505b915050805190602001f35b600081905092915050565b82818337600083830152505050565b600061011983856100f3565b93506101268385846100fe565b82840190509392505050565b600061013f82848661010d565b9150819050939250505056fea26469706673582212200b9b2e1716d1b88774664613e1e244bbf62489a4aded40c5a9118d1f302068e364736f6c63430008130033").unwrap())
         );
         assert_eq!(taints.len(), 1);
-        println!("{:?}", taints);
+        debug!("{:?}", taints);
     }
 
     #[test]
@@ -619,7 +619,7 @@ mod tests {
             Bytes::new(),
             Bytes::from(hex::decode("608060405260003660608282604051610019929190610170565b604051809103902060008060018152602001908152602001600020819055507faaaa00000000000000000000000000000000000000000000000000000000000060008060018152602001908152602001600020541860008060028152602001908152602001600020819055506001607b600080600281526020019081526020016000205460001c6100aa91906101c2565b11156100ed576040518060400160405280600481526020017f63636363000000000000000000000000000000000000000000000000000000008152509050610126565b6040518060400160405280600481526020017f646464640000000000000000000000000000000000000000000000000000000081525090505b915050805190602001f35b600081905092915050565b82818337600083830152505050565b60006101578385610131565b935061016483858461013c565b82840190509392505050565b600061017d82848661014b565b91508190509392505050565b6000819050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b60006101cd82610189565b91506101d883610189565b92508282019050808211156101f0576101ef610193565b5b9291505056fea26469706673582212204d99e1e8876b38e211054a692fb1e98d19a40c8ef970e16a43602abed56a693164736f6c63430008130033").unwrap())
         );
-        println!("{:?}", taints);
+        debug!("{:?}", taints);
         assert_eq!(taints.len(), 2);
     }
 }

@@ -14,6 +14,7 @@ use revm_interpreter::{Interpreter, opcode, InstructionResult};
 use revm_primitives::{B160, SpecId, Env, U256, Bytecode};
 use libafl::schedulers::Scheduler;
 use libafl::state::{HasCorpus, State, HasMetadata, HasRand};
+use tracing::{debug, error};
 
 use crate::evm::host::FuzzHost;
 use crate::evm::vm::EVMState;
@@ -158,7 +159,7 @@ macro_rules! try_or_continue {
         match $e {
             Ok(v) => v,
             Err(e) => {
-                println!("skip cheatcode due to: {:?}", e);
+                debug!("skip cheatcode due to: {:?}", e);
                 return
             },
         }
@@ -232,7 +233,7 @@ where
         let op = interp.current_opcode();
         let calldata = unsafe { pop_cheatcall_stack(interp, op) };
         if let Err(err) = calldata {
-            println!("[cheatcode] failed to get calldata {:?}", err);
+            error!("[cheatcode] failed to get calldata {:?}", err);
             interp.instruction_result = err;
             let _ = interp.stack.push(U256::ZERO);
             interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
@@ -243,7 +244,7 @@ where
         let (caller, tx_origin) = (&interp.contract().caller, &host.env.tx.caller.clone());
         // handle vm calls
         let vm_call = VmCalls::abi_decode(&input, false).expect("decode cheatcode failed");
-        println!("[cheatcode] vm.{:?}", vm_call);
+        debug!("[cheatcode] vm.{:?}", vm_call);
         let res = match vm_call {
             VmCalls::warp(args) => self.warp(&mut host.env, args),
             VmCalls::roll(args) => self.roll(&mut host.env, args),
@@ -285,6 +286,7 @@ where
             VmCalls::addr(args) => self.addr(args),
             _ => None,
         };
+        debug!("[cheatcode] VmCall result: {:?}", res);
 
         // set up return data
         interp.instruction_result = InstructionResult::Continue;
@@ -305,6 +307,7 @@ where
         let target = Address::from(interp.contract().address.0);
         // Grab the different calldatas expected.
         if let Some(expected_calls_for_target) = expected_calls.get_mut(&target) {
+            debug!("[cheatcode] real_call");
             let contract = interp.contract();
             let (input, value) = (&contract.input, contract.value);
             // Match every partial/full calldata
@@ -327,6 +330,7 @@ where
     /// Record storage writes and reads if `record` has been called
     pub fn record_accesses(&mut self, interp: &mut Interpreter) {
         if let Some(storage_accesses) = &mut self.accesses {
+            debug!("[cheatcode] record_accesses");
             match interp.current_opcode() {
                 opcode::SLOAD => {
                     let key = try_or_continue!(interp.stack().peek(0));
@@ -362,6 +366,7 @@ where
             return;
         }
 
+        debug!("[cheatcode] log");
         let op = interp.current_opcode();
         let data = try_or_continue!(peek_log_data(interp));
         let topics = try_or_continue!(peek_log_topics(interp, op));
@@ -1144,10 +1149,10 @@ mod tests {
             generate_random_address(&mut state),
             &mut FuzzState::new(0),
         ).unwrap();
-        println!("deployed to address: {:?}", contract_addr);
+        debug!("deployed to address: {:?}", contract_addr);
 
         let code_addrs = evm_executor.host.code.keys().cloned().collect::<Vec<_>>();
-        println!("code_addrs: {:?}", code_addrs);
+        debug!("code_addrs: {:?}", code_addrs);
 
         // test()
         let function_hash = hex::decode("f8a8fd6d").unwrap();

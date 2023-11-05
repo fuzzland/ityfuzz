@@ -30,6 +30,7 @@ use crate::generic_vm::vm_state::VMStateT;
 use crate::input::ConciseSerde;
 use crate::input::VMInputT;
 use crate::state::HasParent;
+use tracing::{debug, info};
 
 /// A trait providing functions necessary for voting mechanisms
 pub trait HasVote<S>
@@ -289,7 +290,7 @@ where
             let data = state.metadata_map().get::<VoteData>().unwrap();
             use crate::r#const::DEBUG_PRINT_PERCENT;
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-                println!(
+                info!(
                     "======================= corpus size: {} =======================",
                     corpus_size
                 );
@@ -298,7 +299,7 @@ where
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
                     match inp.into_inner().input() {
                         Some(x) => {
-                            println!(
+                            info!(
                                 "idx: {}, votes: {}, visits: {}: {:?}",
                                 idx, votes, visits, x
                             );
@@ -306,7 +307,7 @@ where
                         _ => {}
                     }
                 }
-                println!("======================= corpus  =======================");
+                info!("======================= corpus  =======================");
             }
         }
 
@@ -377,10 +378,9 @@ where
             if v.is_some() {
                 let (votes, _visits) = v.expect("scheduler metadata malformed");
                 *votes += increment;
-                #[cfg(feature = "debug")]
-                println!("Voted for {}", idx);
+                debug!("Voted for {}", idx);
             } else {
-                println!("scheduler metadata malformed");
+                debug!("scheduler metadata malformed");
             }
         }
 
@@ -465,7 +465,7 @@ impl<S> PowerABIScheduler<S> {
             }
         };
         let tc_func_name = unsafe { FUNCTION_SIG.get(&tc_func).expect(format!(
-            "function signature {} @ {:?} not found in FUNCTION_SIG", 
+            "function signature {} @ {:?} not found in FUNCTION_SIG",
             hex::encode(tc_func), input.get_contract()
         ).as_str()) };
         let tc_func_slug = {

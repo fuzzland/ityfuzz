@@ -30,6 +30,7 @@ use serde::de::DeserializeOwned;
 use std::path::Path;
 use crate::evm::types::EVMAddress;
 use crate::evm::presets::presets::ExploitTemplate;
+use tracing::debug;
 
 /// Amount of accounts and contracts that can be caller during fuzzing.
 /// We will generate random addresses for these accounts and contracts.
@@ -250,7 +251,7 @@ where
         if lparam_seed == 0 {
             seed = current_nanos();
         }
-        println!("Seed: {}", seed);
+        debug!("Seed: {}", seed);
         Self {
             infant_states_state: InfantStateState::new(),
             #[cfg(not(feature = "evaluation"))]
@@ -852,7 +853,7 @@ where
                 return Some((addr.clone(), abi.clone()))
             },
             None => {
-                println!("No abi found for sig: {:?}", sig);
+                debug!("No abi found for sig: {:?}", sig);
                 return None;
             }
         };
