@@ -112,10 +112,9 @@ jobs:
           key: ${{ matrix.job.target }}
           cache-directories: "/Users/runner/work/ityfuzz/ityfuzz/target_f"
 
-      - name: MacOS x86 setup 
-        if: ${{ matrix.job.target == 'x86_64-apple-darwin' }}
+      - name: MacOS setup 
+        if: ${{ matrix.job.platform == 'darwin' }}
         run: |
-          # brew install z3
           git clone https://github.com/Z3Prover/z3
           cd z3
           git checkout z3-4.12.2
@@ -127,7 +126,7 @@ jobs:
       - name: Apple M1 setup
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
-          brew install z3 llvm
+          brew install llvm
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
