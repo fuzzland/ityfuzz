@@ -818,7 +818,7 @@ where
         let mut expected_revert = self.expected_revert.take().unwrap();
 
         // Check result
-        if !matches!(result, return_ok!()) {
+        if matches!(result, return_ok!()) {
             return (
                 InstructionResult::Revert,
                 gas,

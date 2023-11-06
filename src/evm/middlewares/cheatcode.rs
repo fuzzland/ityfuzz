@@ -1154,7 +1154,7 @@ fn expect_call_with_count(
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, fs, path::Path, rc::Rc};
+    use std::{cell::RefCell, fs, path::Path, rc::Rc, str::FromStr};
 
     use bytes::Bytes;
     use libafl::prelude::StdScheduler;
@@ -1176,11 +1176,12 @@ mod tests {
 
     #[test]
     fn test_foundry_contract() {
-        // solidity code: tests/presets/cheatcode_test.sol
-        let bytecode = fs::read_to_string("tests/presets/cheatcode_test.bin")
-            .expect("cheatcode_test.bin not found")
-            .trim()
-            .to_string();
+        // Reverter.sol: tests/presets/cheatcode/Reverter.sol
+        let reverter_addr = B160::from_str("0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf").unwrap();
+        let reverter_code = load_bytecode("tests/presets/cheatcode/Reverter.bytecode");
+
+        // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
+        let cheatcode_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
 
         let mut state: EVMFuzzState = FuzzState::new(0);
         let path = Path::new("work_dir");
@@ -1203,48 +1204,69 @@ mod tests {
             StdScheduler<EVMFuzzState>,
         > = EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
-        let bytecode = hex::decode(bytecode).unwrap();
-        let contract_addr = evm_executor
+        // Deploy Reverter
+        let _ = evm_executor
+            .deploy(reverter_code, None, reverter_addr, &mut FuzzState::new(0))
+            .unwrap();
+
+        // Deploy Cheatcode
+        let cheatcode_addr = evm_executor
             .deploy(
-                Bytecode::new_raw(Bytes::from(bytecode)),
+                cheatcode_code,
                 None,
                 generate_random_address(&mut state),
                 &mut FuzzState::new(0),
             )
             .unwrap();
-        debug!("deployed to address: {:?}", contract_addr);
 
-        let code_addrs = evm_executor.host.code.keys().cloned().collect::<Vec<_>>();
-        debug!("code_addrs: {:?}", code_addrs);
+        macro_rules! assert_fn_success {
+            ($fn_selector:expr) => {
+                let function_hash = hex::decode($fn_selector).unwrap();
+                let input = EVMInput {
+                    caller: generate_random_address(&mut state),
+                    contract: cheatcode_addr,
+                    data: None,
+                    sstate: StagedVMState::new_uninitialized(),
+                    sstate_idx: 0,
+                    txn_value: Some(EVMU256::ZERO),
+                    step: false,
+                    env: Default::default(),
+                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                    #[cfg(feature = "flashloan_v2")]
+                    liquidation_percent: 0,
+                    direct_data: Bytes::from(
+                        [
+                            function_hash.clone(),
+                            hex::decode("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
+                        ]
+                        .concat(),
+                    ),
+                    #[cfg(feature = "flashloan_v2")]
+                    input_type: EVMInputTy::ABI,
+                    randomness: vec![],
+                    repeat: 1,
+                };
+                let mut state = FuzzState::new(0);
+                let res = evm_executor.execute(&input, &mut state);
+                assert!(!res.reverted);
+            };
+        }
 
         // test()
-        let function_hash = hex::decode("f8a8fd6d").unwrap();
-        let input = EVMInput {
-            caller: generate_random_address(&mut state),
-            contract: contract_addr,
-            data: None,
-            sstate: StagedVMState::new_uninitialized(),
-            sstate_idx: 0,
-            txn_value: Some(EVMU256::ZERO),
-            step: false,
-            env: Default::default(),
-            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
-            liquidation_percent: 0,
-            direct_data: Bytes::from(
-                [
-                    function_hash.clone(),
-                    hex::decode("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-                ]
-                .concat(),
-            ),
-            #[cfg(feature = "flashloan_v2")]
-            input_type: EVMInputTy::ABI,
-            randomness: vec![],
-            repeat: 1,
-        };
-        let mut state = FuzzState::new(0);
-        let res = evm_executor.execute(&input, &mut state);
-        assert!(!res.reverted);
+        assert_fn_success!("f8a8fd6d");
+        // testExpectRevertWithoutReason()
+        assert_fn_success!("6bd496f0");
+        // testExpectRevertWithMessage()
+        assert_fn_success!("0b324ebf");
+        // testExpectRevertCustomError()
+        assert_fn_success!("10fca384");
+        // testExpectRevertNested()
+        assert_fn_success!("cc017d5c");
+    }
+
+    fn load_bytecode(path: &str) -> Bytecode {
+        let hex_code = fs::read_to_string(path).expect("bytecode not found").trim().to_string();
+        let bytecode = hex::decode(hex_code).unwrap();
+        Bytecode::new_raw(Bytes::from(bytecode))
     }
 }
