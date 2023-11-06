@@ -951,6 +951,8 @@ where
     /// Execute an input (can be transaction or borrow)
     #[cfg(feature = "flashloan_v2")]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
+        use super::host::clear_branch_status;
+        clear_branch_status();
         match input.get_input_type() {
             // buy (borrow because we have infinite ETH) tokens with ETH using uniswap
             EVMInputTy::Borrow => {

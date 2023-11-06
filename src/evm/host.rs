@@ -121,6 +121,29 @@ pub static mut CALL_UNTIL: u32 = u32::MAX;
 /// Shall we dump the contract calls
 pub static mut WRITE_RELATIONSHIPS: bool = false;
 
+/// Branch status of the current execution
+pub static mut BRANCH_STATUS: [Option<(EVMAddress, usize, bool)>; MAP_SIZE] = [None; MAP_SIZE];
+pub static mut BRANCH_STATUS_IDX: usize = 0;
+
+pub fn clear_branch_status() {
+    unsafe {
+        for i in 0..BRANCH_STATUS_IDX + 1 {
+            BRANCH_STATUS[i] = None;
+        }
+
+        BRANCH_STATUS_IDX = 0;
+    }
+}
+
+
+pub fn add_branch(branch: (EVMAddress, usize, bool)) {
+    unsafe {
+        BRANCH_STATUS[BRANCH_STATUS_IDX] = Some(branch);
+        BRANCH_STATUS_IDX += 1;
+    }
+}
+
+
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [
     0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c, 0x1b, 0x48, 0x26,
     0x46, 0x5e, 0x8b, 0xc5, 0x04, 0xb3, 0xeb, 0x3e, 0x88, 0xb3, 0xe6, 0xa4, 0xa0,
@@ -1013,6 +1036,12 @@ where
                         let idx = (interp.program_counter()) % MAP_SIZE;
                         CMP_MAP[idx] = br;
                     }
+
+                    add_branch((
+                        interp.contract.address,
+                        interp.program_counter(),
+                        jump_dest != 1,
+                    ));
                 }
 
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
