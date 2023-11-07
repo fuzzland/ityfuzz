@@ -122,7 +122,7 @@ pub static mut CALL_UNTIL: u32 = u32::MAX;
 pub static mut WRITE_RELATIONSHIPS: bool = false;
 
 /// Branch status of the current execution
-pub static mut BRANCH_STATUS: [Option<(EVMAddress, usize, bool)>; MAP_SIZE * 10] = [None; MAP_SIZE * 10];
+pub static mut BRANCH_STATUS: [Option<(EVMAddress, usize, bool)>; MAP_SIZE] = [None; MAP_SIZE];
 pub static mut BRANCH_STATUS_IDX: usize = 0;
 
 pub fn clear_branch_status() {
@@ -137,6 +137,9 @@ pub fn clear_branch_status() {
 
 pub fn add_branch(branch: (EVMAddress, usize, bool)) {
     unsafe {
+        if BRANCH_STATUS_IDX >= MAP_SIZE {
+            return;
+        }
         BRANCH_STATUS[BRANCH_STATUS_IDX] = Some(branch);
         BRANCH_STATUS_IDX += 1;
     }
