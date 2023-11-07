@@ -1176,14 +1176,16 @@ mod tests {
 
     #[test]
     fn test_foundry_contract() {
+        let mut state: EVMFuzzState = FuzzState::new(0);
+
         // Reverter.sol: tests/presets/cheatcode/Reverter.sol
         let reverter_addr = B160::from_str("0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf").unwrap();
         let reverter_code = load_bytecode("tests/presets/cheatcode/Reverter.bytecode");
 
         // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
-        let cheatcode_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
+        let cheat_addr = generate_random_address(&mut state);
+        let cheat_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
 
-        let mut state: EVMFuzzState = FuzzState::new(0);
         let path = Path::new("work_dir");
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
@@ -1204,19 +1206,15 @@ mod tests {
             StdScheduler<EVMFuzzState>,
         > = EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
+        let mut deploy_state = FuzzState::new(0);
         // Deploy Reverter
         let _ = evm_executor
-            .deploy(reverter_code, None, reverter_addr, &mut FuzzState::new(0))
+            .deploy(reverter_code, None, reverter_addr, &mut deploy_state)
             .unwrap();
 
         // Deploy Cheatcode
-        let cheatcode_addr = evm_executor
-            .deploy(
-                cheatcode_code,
-                None,
-                generate_random_address(&mut state),
-                &mut FuzzState::new(0),
-            )
+        let _ = evm_executor
+            .deploy(cheat_code, None, cheat_addr, &mut deploy_state)
             .unwrap();
 
         macro_rules! assert_fn_success {
@@ -1224,7 +1222,7 @@ mod tests {
                 let function_hash = hex::decode($fn_selector).unwrap();
                 let input = EVMInput {
                     caller: generate_random_address(&mut state),
-                    contract: cheatcode_addr,
+                    contract: cheat_addr,
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
