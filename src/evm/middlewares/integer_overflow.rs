@@ -50,7 +50,7 @@ where
                 (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap())
             };
         }
-        let addr = interp.contract.address;
+        let addr = interp.contract.code_address;
         let pc = interp.program_counter();
         match *interp.instruction_pointer {
             0x01 => {
@@ -58,7 +58,7 @@ where
                 let (l, r) = l_r!();
                 if l.overflowing_add(r).1 {
                     debug!("contract {:?} overflow on pc[{pc:x}]: {} + {}", addr, l, r);
-                    host.current_integer_overflow.push((addr, pc, "+"));
+                    host.current_integer_overflow.insert((addr, pc, "+"));
                 }
             }
             0x02 => {
@@ -66,7 +66,7 @@ where
                 let (l, r) = l_r!();
                 if l.overflowing_mul(r).1 {
                     debug!("contract {:?} overflow on pc[{pc:x}]: {} * {}", addr, l, r);
-                    host.current_integer_overflow.push((addr, pc, "*"));
+                    host.current_integer_overflow.insert((addr, pc, "*"));
                 }
             }
             0x03 => {
@@ -74,7 +74,15 @@ where
                 let (l, r) = l_r!();
                 if l.overflowing_sub(r).1 {
                     debug!("contract {:?} overflow on pc[{pc:x}]: {} - {}", addr, l, r);
-                    host.current_integer_overflow.push((addr, pc, "-"));
+                    host.current_integer_overflow.insert((addr, pc, "-"));
+                }
+            }
+            0x04 | 0x05 => {
+                // DIV/ SDIV
+                let (l, r) = l_r!();
+                if l < r {
+                    debug!("contract {:?} loss of accuracy on pc[{pc:x}]: {} / {}", addr, l, r);
+                    host.current_integer_overflow.insert((addr, pc, "/"));
                 }
             }
             0x0a => {
@@ -82,7 +90,7 @@ where
                 let (l, r) = l_r!();
                 if l.overflowing_pow(r).1 {
                     debug!("contract {:?} overflow on pc[{pc:x}]: {} ** {}", addr, l, r);
-                    host.current_integer_overflow.push((addr, pc, "**"));
+                    host.current_integer_overflow.insert((addr, pc, "**"));
                 }
             }
             _ => {}

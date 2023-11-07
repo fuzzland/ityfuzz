@@ -15,18 +15,14 @@ pub static mut BASE_PATH: String = String::new();
 #[derive(Debug, Clone, Serialize, Hash, PartialEq, Eq)]
 pub struct SourceMapWithCode {
     pub file: String,
-    pub line_start: usize,
-    pub line_end: usize,
+    pub start: usize,
+    pub end: usize,
     pub code: String,
 }
 
 impl Display for SourceMapWithCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "@ {} ({}-{}):\n{}",
-            self.file, self.line_start, self.line_end, self.code
-        )
+        write!(f, "@ {} ({}-{}):\n{}", self.file, self.start, self.end, self.code)
     }
 }
 
@@ -57,16 +53,30 @@ pub enum SourceMapAvailability {
     Unknown,
 }
 
-pub fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String)>) -> SourceMapWithCode {
-    let file_name = loc.file.clone().unwrap();
+pub fn read_source_code(
+    loc: &SourceMapLocation,
+    file_blob: &Vec<(String, String)>,
+    whole_line: bool,
+) -> SourceMapWithCode {
     let offset = loc.offset;
     let length = loc.length;
+    let file_name = match loc.file {
+        Some(ref file) => file.clone(),
+        None => {
+            return SourceMapWithCode {
+                file: "None".to_string(),
+                start: 0,
+                end: 0,
+                code: "code not available".to_string(),
+            };
+        }
+    };
 
     let mut contents = String::new();
     let bad_file = SourceMapWithCode {
         file: file_name.clone(),
-        line_start: offset,
-        line_end: length,
+        start: offset,
+        end: length,
         code: "code not available".to_string(),
     };
 
@@ -81,6 +91,22 @@ pub fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String
             }
         };
         file.read_to_string(&mut contents).unwrap();
+    }
+
+    let code = match contents.get(offset..offset + length) {
+        Some(code) => code.to_string(),
+        None => {
+            return bad_file;
+        }
+    };
+
+    if !whole_line {
+        return SourceMapWithCode {
+            file: file_name,
+            start: offset,
+            end: offset + length,
+            code,
+        };
     }
 
     // get starting and ending line number
@@ -112,8 +138,8 @@ pub fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String
 
     SourceMapWithCode {
         file: file_name,
-        line_start: start_line,
-        line_end: end_line,
+        start: start_line,
+        end: end_line,
         code: lines_in_range,
     }
 }
@@ -132,7 +158,7 @@ pub fn pretty_print_source_map_single(
 ) -> SourceMapAvailability {
     match data.get(&pc) {
         Some(info) => match info.file {
-            Some(ref _file) => SourceMapAvailability::Available(read_source_code(info, file_blob)),
+            Some(ref _file) => SourceMapAvailability::Available(read_source_code(info, file_blob, true)),
             None => SourceMapAvailability::Unknown,
         },
         None => SourceMapAvailability::Unknown,
