@@ -881,7 +881,7 @@ impl ABI for AArray {
             };
 
             let start = item_offset + base_offset;
-            if start + size >= bytes.len() {
+            if start + size > bytes.len() {
                 return false;
             }
             item.b.set_bytes(bytes[start..].to_vec());
