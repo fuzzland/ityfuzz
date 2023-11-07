@@ -3,11 +3,17 @@ pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import {VmSafe} from "forge-std/Vm.sol";
+import "./Reverter.sol";
+import "./Emitter.sol";
 
 contract CheatcodeTest is Test {
     bytes32 slot0 = bytes32(uint256(0));
 
     event LogCompleted(uint256 indexed topic1, bytes data);
+
+    // test expected emits
+    event Something(uint256 indexed topic1, uint256 indexed topic2, uint256 indexed topic3, uint256 data);
+    event SomethingNonIndexed(uint256 data);
 
     function test() external {
         string memory s = string(abi.encodePacked(block.timestamp));
@@ -140,6 +146,8 @@ contract CheatcodeTest is Test {
         assertEq(abi.decode(entries[0].data, (string)), "operation completed");
     }
 
+    // Test revert -------------------------------
+
     function testExpectRevertWithoutReason() public {
         vm.expectRevert(bytes(""));
         Reverter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).revertWithoutReason();
@@ -161,5 +169,56 @@ contract CheatcodeTest is Test {
         Reverter inner = Reverter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf);
         vm.expectRevert("nested revert");
         reverter.nestedRevert(inner, "nested revert");
+    }
+
+    // Test emit -------------------------------
+
+    function testExpectEmitMultiple() public {
+        vm.expectEmit();
+        emit Something(1, 2, 3, 4);
+        vm.expectEmit();
+        emit Something(5, 6, 7, 8);
+
+        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitMultiple(
+            [uint256(1), uint256(5)], [uint256(2), uint256(6)], [uint256(3), uint256(7)], [uint256(4), uint256(8)]
+        );
+    }
+
+    function testExpectedEmitMultipleNested() public {
+        vm.expectEmit();
+        emit Something(1, 2, 3, 4);
+        vm.expectEmit();
+        emit Something(1, 2, 3, 4);
+
+        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitAndNest();
+    }
+
+    function testExpectEmitMultipleWithArgs() public {
+        vm.expectEmit(true, true, true, true);
+        emit Something(1, 2, 3, 4);
+        vm.expectEmit(true, true, true, true);
+        emit Something(5, 6, 7, 8);
+
+        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitMultiple(
+            [uint256(1), uint256(5)], [uint256(2), uint256(6)], [uint256(3), uint256(7)], [uint256(4), uint256(8)]
+        );
+    }
+
+    function testExpectEmitCanMatchWithoutExactOrder() public {
+        vm.expectEmit(true, true, true, true);
+        emit Something(1, 2, 3, 4);
+        vm.expectEmit(true, true, true, true);
+        emit Something(1, 2, 3, 4);
+
+        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitOutOfExactOrder();
+    }
+
+    function testExpectEmitCanMatchWithoutExactOrder2() public {
+        vm.expectEmit(true, true, true, true);
+        emit SomethingNonIndexed(1);
+        vm.expectEmit(true, true, true, true);
+        emit Something(1, 2, 3, 4);
+
+        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitOutOfExactOrder();
     }
 }

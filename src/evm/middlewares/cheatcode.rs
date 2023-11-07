@@ -1182,6 +1182,10 @@ mod tests {
         let reverter_addr = B160::from_str("0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf").unwrap();
         let reverter_code = load_bytecode("tests/presets/cheatcode/Reverter.bytecode");
 
+        // Emitter.sol: tests/presets/cheatcode/Emitter.sol
+        let emitter_addr = B160::from_str("0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD").unwrap();
+        let emitter_code = load_bytecode("tests/presets/cheatcode/Emitter.bytecode");
+
         // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
         let cheat_addr = generate_random_address(&mut state);
         let cheat_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
@@ -1211,7 +1215,10 @@ mod tests {
         let _ = evm_executor
             .deploy(reverter_code, None, reverter_addr, &mut deploy_state)
             .unwrap();
-
+        // Deploy Emitter
+        let _ = evm_executor
+            .deploy(emitter_code, None, emitter_addr, &mut deploy_state)
+            .unwrap();
         // Deploy Cheatcode
         let _ = evm_executor
             .deploy(cheat_code, None, cheat_addr, &mut deploy_state)
@@ -1260,6 +1267,8 @@ mod tests {
         assert_fn_success!("10fca384");
         // testExpectRevertNested()
         assert_fn_success!("cc017d5c");
+        // testExpectEmitMultiple()
+        assert_fn_success!("8795d87a");
     }
 
     fn load_bytecode(path: &str) -> Bytecode {
