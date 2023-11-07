@@ -46,6 +46,7 @@ use crate::{
         input::{ConciseEVMInput, EVMInput},
         middlewares::{
             call_printer::CallPrinter,
+            cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
             integer_overflow::IntegerOverflowMiddleware,
             middleware::Middleware,
@@ -128,7 +129,7 @@ pub fn evm_fuzzer(
     // **Note**: cheatcode should be the first middleware because it consumes the
     // step if it is a call to cheatcode_address, and this step should not be
     // visible to other middlewares.
-    // fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+    fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
