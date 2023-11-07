@@ -203,7 +203,7 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
 
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "true")]
     integer_overflow_oracle: bool,
 
     #[arg(long, default_value = "true")]
