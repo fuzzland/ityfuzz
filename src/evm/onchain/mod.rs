@@ -21,7 +21,6 @@ use libafl::{
 };
 use revm_interpreter::Interpreter;
 use tracing::debug;
-use tracing_subscriber::field::debug;
 
 use crate::{
     evm::{
@@ -405,7 +404,6 @@ where
                         .add(address_h160, job.clone());
 
                     let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
-
 
                     debug!("start save_builder_addr_source_code");
                     save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);

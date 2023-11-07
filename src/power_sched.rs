@@ -1,4 +1,5 @@
-//! The power schedules. This stage should be invoked after the calibration stage.
+//! The power schedules. This stage should be invoked after the calibration
+//! stage.
 
 use core::{fmt::Debug, marker::PhantomData};
 
@@ -7,9 +8,10 @@ use libafl::{
     executors::{Executor, HasObservers},
     fuzzer::Evaluator,
     mutators::Mutator,
+    prelude::Testcase,
     stages::{mutational::MutatedTransform, MutationalStage, Stage},
     state::{HasClientPerfMonitor, HasCorpus, HasMetadata, HasRand, UsesState},
-    Error, prelude::Testcase,
+    Error,
 };
 
 pub trait TestcaseScoreWithId<S>
@@ -19,7 +21,6 @@ where
     /// Computes the favor factor of a [`Testcase`]. Lower is better.
     fn compute(state: &S, entry: &mut Testcase<S::Input>, id: CorpusId) -> Result<f64, Error>;
 }
-
 
 /// The mutational stage using power schedules
 #[derive(Clone, Debug)]

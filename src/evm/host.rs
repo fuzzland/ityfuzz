@@ -127,14 +127,13 @@ pub static mut BRANCH_STATUS_IDX: usize = 0;
 
 pub fn clear_branch_status() {
     unsafe {
-        for i in 0..BRANCH_STATUS_IDX + 1 {
-            BRANCH_STATUS[i] = None;
+        for i in BRANCH_STATUS.iter_mut().take(BRANCH_STATUS_IDX + 1) {
+            *i = None;
         }
 
         BRANCH_STATUS_IDX = 0;
     }
 }
-
 
 pub fn add_branch(branch: (EVMAddress, usize, bool)) {
     unsafe {
@@ -142,7 +141,6 @@ pub fn add_branch(branch: (EVMAddress, usize, bool)) {
         BRANCH_STATUS_IDX += 1;
     }
 }
-
 
 const SCRIBBLE_EVENT_HEX: [u8; 32] = [
     0xb4, 0x26, 0x04, 0xcb, 0x10, 0x5a, 0x16, 0xc8, 0xf6, 0xdb, 0x8a, 0x41, 0xe6, 0xb0, 0x0c, 0x0c, 0x1b, 0x48, 0x26,
@@ -1037,11 +1035,7 @@ where
                         CMP_MAP[idx] = br;
                     }
 
-                    add_branch((
-                        interp.contract.address,
-                        interp.program_counter(),
-                        jump_dest != 1,
-                    ));
+                    add_branch((interp.contract.address, interp.program_counter(), jump_dest != 1));
                 }
 
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]

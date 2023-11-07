@@ -5,20 +5,19 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 use libafl::corpus::Corpus;
 use libafl::{
     corpus::Testcase,
-    prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, UsesInput},
-    schedulers::{RemovableScheduler, Scheduler, TestcaseScore},
-    stages::PowerMutationalStage,
+    prelude::{CorpusId, HasMetadata, HasTestcase, UsesInput},
+    schedulers::{RemovableScheduler, Scheduler},
     state::{HasCorpus, UsesState},
     Error,
 };
-use libafl_bolts::{impl_serdeany, prelude::Rand};
-use rand::random;
-use revm::new;
+use libafl_bolts::impl_serdeany;
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
 
-use crate::power_sched::{TestcaseScoreWithId, PowerMutationalStageWithId};
+use super::{
+    host::{BRANCH_STATUS, BRANCH_STATUS_IDX},
+    types::EVMAddress,
+};
 use crate::{
     evm::{
         abi::FUNCTION_SIG,
@@ -27,10 +26,8 @@ use crate::{
         input::EVMInput,
     },
     input::VMInputT,
+    power_sched::{PowerMutationalStageWithId, TestcaseScoreWithId},
 };
-
-use super::host::{BRANCH_STATUS, BRANCH_STATUS_IDX};
-use super::types::EVMAddress;
 
 /// The status of the branch, whether it is covered on true, false or both
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -64,7 +61,6 @@ impl BranchCoveredStatus {
         }
     }
 
-
     fn from(branch_status: bool) -> Self {
         if branch_status {
             Self::True
@@ -86,11 +82,17 @@ pub struct UncoveredBranchesMetadata {
     branch_status: HashMap<(EVMAddress, usize), BranchCoveredStatus>,
 }
 
+impl Default for UncoveredBranchesMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UncoveredBranchesMetadata {
     /// Create new [`struct@UncoveredBranchesMetadata`]
     #[must_use]
     pub fn new() -> Self {
-        Self { 
+        Self {
             branch_to_testcases: HashMap::new(),
             testcase_to_uncovered_branches: HashMap::new(),
             branch_status: HashMap::new(),
@@ -99,7 +101,6 @@ impl UncoveredBranchesMetadata {
 }
 
 impl_serdeany!(UncoveredBranchesMetadata);
-
 
 /// The Metadata for each testcase used in ABI power schedules.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -121,8 +122,6 @@ impl PowerABITestcaseMetadata {
 }
 
 impl_serdeany!(PowerABITestcaseMetadata);
-
-
 
 #[derive(Debug, Clone)]
 pub struct PowerABIScheduler<S> {
@@ -211,8 +210,6 @@ where
     S: HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
 {
     fn on_add(&mut self, state: &mut Self::State, idx: CorpusId) -> Result<(), Error> {
-        
-
         // adding power scheduling information based on code size
         {
             let mut testcase = state.testcase_mut(idx).unwrap();
@@ -236,13 +233,14 @@ where
 
         // adding power scheduling information based on branch covered
         {
-            let meta: &mut UncoveredBranchesMetadata = state.metadata_map_mut().get_mut::<UncoveredBranchesMetadata>().unwrap();
+            let meta: &mut UncoveredBranchesMetadata =
+                state.metadata_map_mut().get_mut::<UncoveredBranchesMetadata>().unwrap();
             let mut uncovered_counters = 0;
 
             let mut fullfilled = HashSet::new();
 
-            for br_idx in 0..unsafe { BRANCH_STATUS_IDX } {
-                let (addr, pc, br) = unsafe {BRANCH_STATUS[br_idx].unwrap()};
+            for it in unsafe { BRANCH_STATUS.iter().take(BRANCH_STATUS_IDX) } {
+                let (addr, pc, br) = it.unwrap();
                 if fullfilled.contains(&(addr, pc)) {
                     continue;
                 }
@@ -250,7 +248,7 @@ where
                 match meta.branch_status.get_mut(&(addr, pc)) {
                     Some(v) => {
                         let (new_v, is_updated) = v.merge(br);
-                        
+
                         // remove all testcases that already cover this branch
                         if is_updated {
                             assert_eq!(new_v, BranchCoveredStatus::Both);
@@ -270,10 +268,7 @@ where
                             meta.branch_to_testcases.remove(&(addr, pc));
                         } else {
                             // not fully covered, so add this testcase to the branch
-                            meta.branch_to_testcases
-                                .entry((addr, pc))
-                                .or_insert_with(HashSet::new)
-                                .insert(idx);
+                            meta.branch_to_testcases.entry((addr, pc)).or_default().insert(idx);
                             uncovered_counters += 1;
                         }
 
@@ -284,10 +279,7 @@ where
                         meta.branch_status.insert((addr, pc), BranchCoveredStatus::from(br));
 
                         // not fully covered, so add this testcase to the branch
-                        meta.branch_to_testcases
-                            .entry((addr, pc))
-                            .or_insert_with(HashSet::new)
-                            .insert(idx);
+                        meta.branch_to_testcases.entry((addr, pc)).or_default().insert(idx);
 
                         uncovered_counters += 1;
                     }
@@ -397,15 +389,12 @@ where
             Err(_e) => 1, // FIXME: should not happen
         };
         // TODO: more sophisticated power score
-        let uncov_branch = {
+        let _uncov_branch = {
             let meta = state.metadata_map().get::<UncoveredBranchesMetadata>().unwrap();
-            meta.testcase_to_uncovered_branches
-                .get(&idx)
-                .unwrap_or(&0)
-                .to_owned() + 1
+            meta.testcase_to_uncovered_branches.get(&idx).unwrap_or(&0).to_owned() + 1
         };
 
-        let mut power = num_lines as f64 * 100.0;
+        let power = num_lines as f64 * 100.0;
 
         Ok(power)
     }

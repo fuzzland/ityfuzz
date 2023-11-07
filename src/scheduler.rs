@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+use std::{collections::HashMap, fmt::Debug};
 
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
@@ -6,8 +6,7 @@ use libafl::corpus::Corpus;
 use libafl::{
     corpus::Testcase,
     prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, UsesInput},
-    schedulers::{RemovableScheduler, Scheduler, TestcaseScore},
-    stages::PowerMutationalStage,
+    schedulers::{RemovableScheduler, Scheduler},
     state::{HasCorpus, UsesState},
     Error,
 };
@@ -16,16 +15,7 @@ use rand::random;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::{
-    evm::{
-        abi::FUNCTION_SIG,
-        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
-        corpus_initializer::EVMInitializationArtifacts,
-        input::EVMInput,
-    },
-    input::VMInputT,
-    state::HasParent,
-};
+use crate::state::HasParent;
 
 /// A trait providing functions necessary for voting mechanisms
 pub trait HasVote<S>
