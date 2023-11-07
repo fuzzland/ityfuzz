@@ -1269,6 +1269,14 @@ mod tests {
         assert_fn_success!("cc017d5c");
         // testExpectEmitMultiple()
         assert_fn_success!("8795d87a");
+        // testExpectEmitMultipleWithArgs()
+        assert_fn_success!("65e9c19f");
+        // testExpectedEmitMultipleNested()
+        assert_fn_success!("d06f71e2");
+        // testExpectEmitCanMatchWithoutExactOrder()
+        assert_fn_success!("47feb1dd");
+        // testExpectEmitCanMatchWithoutExactOrder2()
+        assert_fn_success!("5e553090");
     }
 
     fn load_bytecode(path: &str) -> Bytecode {
