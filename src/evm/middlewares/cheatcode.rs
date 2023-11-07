@@ -1186,6 +1186,10 @@ mod tests {
         let emitter_addr = B160::from_str("0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD").unwrap();
         let emitter_code = load_bytecode("tests/presets/cheatcode/Emitter.bytecode");
 
+        // Caller.sol: tests/presets/cheatcode/Caller.sol
+        let caller_addr = B160::from_str("0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE").unwrap();
+        let caller_code = load_bytecode("tests/presets/cheatcode/Caller.bytecode");
+
         // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
         let cheat_addr = generate_random_address(&mut state);
         let cheat_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
@@ -1218,6 +1222,10 @@ mod tests {
         // Deploy Emitter
         let _ = evm_executor
             .deploy(emitter_code, None, emitter_addr, &mut deploy_state)
+            .unwrap();
+        // Deploy Caller
+        let _ = evm_executor
+            .deploy(caller_code, None, caller_addr, &mut deploy_state)
             .unwrap();
         // Deploy Cheatcode
         let _ = evm_executor
@@ -1257,26 +1265,32 @@ mod tests {
             };
         }
 
-        // test()
-        assert_fn_success!("f8a8fd6d");
-        // testExpectRevertWithoutReason()
-        assert_fn_success!("6bd496f0");
-        // testExpectRevertWithMessage()
-        assert_fn_success!("0b324ebf");
-        // testExpectRevertCustomError()
-        assert_fn_success!("10fca384");
-        // testExpectRevertNested()
-        assert_fn_success!("cc017d5c");
-        // testExpectEmitMultiple()
-        assert_fn_success!("8795d87a");
-        // testExpectEmitMultipleWithArgs()
-        assert_fn_success!("65e9c19f");
-        // testExpectedEmitMultipleNested()
-        assert_fn_success!("d06f71e2");
-        // testExpectEmitCanMatchWithoutExactOrder()
-        assert_fn_success!("47feb1dd");
-        // testExpectEmitCanMatchWithoutExactOrder2()
-        assert_fn_success!("5e553090");
+        // // test()
+        // assert_fn_success!("f8a8fd6d");
+        // // testExpectRevertWithoutReason()
+        // assert_fn_success!("6bd496f0");
+        // // testExpectRevertWithMessage()
+        // assert_fn_success!("0b324ebf");
+        // // testExpectRevertCustomError()
+        // assert_fn_success!("10fca384");
+        // // testExpectRevertNested()
+        // assert_fn_success!("cc017d5c");
+        // // testExpectEmitMultiple()
+        // assert_fn_success!("8795d87a");
+        // // testExpectEmitMultipleWithArgs()
+        // assert_fn_success!("65e9c19f");
+        // // testExpectedEmitMultipleNested()
+        // assert_fn_success!("d06f71e2");
+        // // testExpectEmitCanMatchWithoutExactOrder()
+        // assert_fn_success!("47feb1dd");
+        // // testExpectEmitCanMatchWithoutExactOrder2()
+        // assert_fn_success!("5e553090");
+        // testExpectCallWithData()
+        assert_fn_success!("268100f8");
+        // testExpectCallWithValue()
+        assert_fn_success!("77651c29");
+        // testExpectMultipleCallsWithData()
+        assert_fn_success!("b5a49624");
     }
 
     fn load_bytecode(path: &str) -> Bytecode {

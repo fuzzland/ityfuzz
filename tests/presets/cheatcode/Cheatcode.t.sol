@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {VmSafe} from "forge-std/Vm.sol";
 import "./Reverter.sol";
 import "./Emitter.sol";
+import "./Caller.sol";
 
 contract CheatcodeTest is Test {
     bytes32 slot0 = bytes32(uint256(0));
@@ -179,7 +180,7 @@ contract CheatcodeTest is Test {
         vm.expectEmit();
         emit Something(5, 6, 7, 8);
 
-        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitMultiple(
+        Emitter(0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD).emitMultiple(
             [uint256(1), uint256(5)], [uint256(2), uint256(6)], [uint256(3), uint256(7)], [uint256(4), uint256(8)]
         );
     }
@@ -190,7 +191,7 @@ contract CheatcodeTest is Test {
         vm.expectEmit();
         emit Something(1, 2, 3, 4);
 
-        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitAndNest();
+        Emitter(0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD).emitAndNest();
     }
 
     function testExpectEmitMultipleWithArgs() public {
@@ -199,7 +200,7 @@ contract CheatcodeTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Something(5, 6, 7, 8);
 
-        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitMultiple(
+        Emitter(0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD).emitMultiple(
             [uint256(1), uint256(5)], [uint256(2), uint256(6)], [uint256(3), uint256(7)], [uint256(4), uint256(8)]
         );
     }
@@ -210,7 +211,7 @@ contract CheatcodeTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Something(1, 2, 3, 4);
 
-        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitOutOfExactOrder();
+        Emitter(0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD).emitOutOfExactOrder();
     }
 
     function testExpectEmitCanMatchWithoutExactOrder2() public {
@@ -219,6 +220,28 @@ contract CheatcodeTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Something(1, 2, 3, 4);
 
-        Emitter(0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf).emitOutOfExactOrder();
+        Emitter(0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD).emitOutOfExactOrder();
+    }
+
+    // Test expected calls -------------------------------
+
+    function testExpectCallWithData() public {
+        Caller target = Caller(0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE);
+        vm.expectCall(address(target), abi.encodeWithSelector(target.add.selector, 1, 2));
+        target.add(1, 2);
+    }
+
+    function testExpectMultipleCallsWithData() public {
+        Caller target = Caller(0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE);
+        vm.expectCall(address(target), abi.encodeWithSelector(target.add.selector, 1, 2));
+        // Even though we expect one call, we're using additive behavior, so getting more than one call is okay.
+        target.add(1, 2);
+        target.add(1, 2);
+    }
+
+    function testExpectCallWithValue() public {
+        Caller target = Caller(0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE);
+        vm.expectCall(address(target), 1, abi.encodeWithSelector(target.pay.selector, 2));
+        target.pay{value: 1}(2);
     }
 }
