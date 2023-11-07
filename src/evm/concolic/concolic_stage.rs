@@ -14,7 +14,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, debug};
 
 use crate::{
     evm::{
@@ -140,6 +140,7 @@ where
                     }
                     solutions.clear();
                 }
+                drop(solutions);
 
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);
             }
@@ -155,8 +156,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                // debug!("We have a solution from concolic execution: {}",
-                // solution.to_string());
+                debug!("We have a solution from concolic execution: {}", solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 
@@ -185,6 +185,8 @@ where
             }
 
             for testcase in testcases {
+                debug!("evaluating input: {:?}", testcase);
+                debug!("data: {}", testcase.get_data_abi().unwrap());
                 fuzzer
                     .evaluate_input(state, executor, manager, testcase)
                     .expect("evaluate input");

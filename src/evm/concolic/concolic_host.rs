@@ -289,7 +289,7 @@ impl<'a> Solving<'a> {
                         bv
                     } else {
                         #[cfg(feature = "z3_debug")]
-                        error!("Failed to generate Z3 BV for {:?}", $e);
+                        debug!("Failed to generate Z3 BV for {:?}", $e);
                         continue;
                     }
                 };
@@ -678,6 +678,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             let handle = worker_threads.pop().unwrap();
             handle.join().unwrap();
         }
+        drop(worker_threads);
 
         let handle = std::thread::spawn(move || {
             let context = Context::new(&Config::default());
