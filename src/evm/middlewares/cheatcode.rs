@@ -313,14 +313,28 @@ where
     }
 
     /// Call real addresses
-    pub fn real_call(&self, interp: &Interpreter, expected_calls: &mut ExpectedCallTracker) {
-        // Handle expected calls
-        let target = Address::from(interp.contract().address.0);
+    pub fn real_call(&self, interp: &mut Interpreter, expected_calls: &mut ExpectedCallTracker) {
+        let target = peek_realcall_target(interp);
+        if let Err(err) = target {
+            error!("[cheatcode] failed to peek call target: {:?}", err);
+            return;
+        }
+        let target = target.unwrap();
+
         // Grab the different calldatas expected.
         if let Some(expected_calls_for_target) = expected_calls.get_mut(&target) {
-            debug!("[cheatcode] real_call");
-            let contract = interp.contract();
-            let (input, value) = (&contract.input, contract.value);
+            let op = interp.current_opcode();
+            let callstack = peek_realcall_input_value(interp, op);
+            if let Err(err) = callstack {
+                error!("[cheatcode] failed to peek call input: {:?}", err);
+                return;
+            }
+            let (input, value) = callstack.unwrap();
+            debug!(
+                "[cheatcode] handle expected_calls_for_target: {:?}, input: {:?}, value: {:?}",
+                target, input, value
+            );
+
             // Match every partial/full calldata
             for (calldata, (expected, actual_count)) in expected_calls_for_target {
                 // Increment actual times seen if the calldata is at most, as big as this call's
@@ -974,6 +988,44 @@ unsafe fn pop_cheatcall_stack(interp: &mut Interpreter, op: u8) -> Result<(Bytes
     Ok((input, out_offset, out_len))
 }
 
+// Every real call needs to peek the target address.
+fn peek_realcall_target(interp: &Interpreter) -> Result<Address, InstructionResult> {
+    let addr_bytes = interp.stack().peek(1)?;
+    let addr: Address = addr_bytes.to_be_bytes::<{ U256::BYTES }>()[12..].try_into().unwrap();
+    Ok(addr)
+}
+
+// Peek input and value only when target is in the expected calls.
+//
+// CALL|CALLCODE: gas, addr, val, in_offset, in_len, out_offset, out_len
+// DELEGATECALL|STATICCALL: gas, addr, in_offset, in_len, out_offset, out_len
+fn peek_realcall_input_value(interp: &mut Interpreter, op: u8) -> Result<(Bytes, U256), InstructionResult> {
+    let value = if op == opcode::CALL || op == opcode::CALLCODE {
+        interp.stack().peek(2)?
+    } else {
+        U256::ZERO
+    };
+
+    let (in_offset, in_len) = {
+        let (in_offset, in_len) = if op == opcode::CALL || op == opcode::CALLCODE {
+            (interp.stack().peek(3)?, interp.stack().peek(4)?)
+        } else {
+            (interp.stack().peek(2)?, interp.stack().peek(3)?)
+        };
+
+        (in_offset.as_limbs()[0] as usize, in_len.as_limbs()[0] as usize)
+    };
+
+    let input = if in_len != 0 {
+        memory_resize!(interp, in_offset, in_len);
+        Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+    } else {
+        Bytes::new()
+    };
+
+    Ok((input, value))
+}
+
 fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResult> {
     let offset = interp.stack().peek(0)?;
     let len = interp.stack().peek(1)?;
@@ -1191,8 +1243,8 @@ mod tests {
         let caller_code = load_bytecode("tests/presets/cheatcode/Caller.bytecode");
 
         // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
-        let cheat_addr = generate_random_address(&mut state);
-        let cheat_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
+        let cheat_test_addr = generate_random_address(&mut state);
+        let cheat_test_code = load_bytecode("tests/presets/cheatcode/Cheatcode.t.bytecode");
 
         let path = Path::new("work_dir");
         if !path.exists() {
@@ -1227,17 +1279,17 @@ mod tests {
         let _ = evm_executor
             .deploy(caller_code, None, caller_addr, &mut deploy_state)
             .unwrap();
-        // Deploy Cheatcode
+        // Deploy CheatcodeTest
         let _ = evm_executor
-            .deploy(cheat_code, None, cheat_addr, &mut deploy_state)
+            .deploy(cheat_test_code, None, cheat_test_addr, &mut deploy_state)
             .unwrap();
 
         macro_rules! assert_fn_success {
             ($fn_selector:expr) => {
                 let function_hash = hex::decode($fn_selector).unwrap();
-                let input = EVMInput {
+                let mut input = EVMInput {
                     caller: generate_random_address(&mut state),
-                    contract: cheat_addr,
+                    contract: cheat_test_addr,
                     data: None,
                     sstate: StagedVMState::new_uninitialized(),
                     sstate_idx: 0,
@@ -1260,31 +1312,34 @@ mod tests {
                     repeat: 1,
                 };
                 let mut state = FuzzState::new(0);
+                // deposit some ETH to the test contract
+                input.sstate.state.set_balance(cheat_test_addr, U256::from(1000));
+
                 let res = evm_executor.execute(&input, &mut state);
                 assert!(!res.reverted);
             };
         }
 
-        // // test()
-        // assert_fn_success!("f8a8fd6d");
-        // // testExpectRevertWithoutReason()
-        // assert_fn_success!("6bd496f0");
-        // // testExpectRevertWithMessage()
-        // assert_fn_success!("0b324ebf");
-        // // testExpectRevertCustomError()
-        // assert_fn_success!("10fca384");
-        // // testExpectRevertNested()
-        // assert_fn_success!("cc017d5c");
-        // // testExpectEmitMultiple()
-        // assert_fn_success!("8795d87a");
-        // // testExpectEmitMultipleWithArgs()
-        // assert_fn_success!("65e9c19f");
-        // // testExpectedEmitMultipleNested()
-        // assert_fn_success!("d06f71e2");
-        // // testExpectEmitCanMatchWithoutExactOrder()
-        // assert_fn_success!("47feb1dd");
-        // // testExpectEmitCanMatchWithoutExactOrder2()
-        // assert_fn_success!("5e553090");
+        // test()
+        assert_fn_success!("f8a8fd6d");
+        // testExpectRevertWithoutReason()
+        assert_fn_success!("6bd496f0");
+        // testExpectRevertWithMessage()
+        assert_fn_success!("0b324ebf");
+        // testExpectRevertCustomError()
+        assert_fn_success!("10fca384");
+        // testExpectRevertNested()
+        assert_fn_success!("cc017d5c");
+        // testExpectEmitMultiple()
+        assert_fn_success!("8795d87a");
+        // testExpectEmitMultipleWithArgs()
+        assert_fn_success!("65e9c19f");
+        // testExpectedEmitMultipleNested()
+        assert_fn_success!("d06f71e2");
+        // testExpectEmitCanMatchWithoutExactOrder()
+        assert_fn_success!("47feb1dd");
+        // testExpectEmitCanMatchWithoutExactOrder2()
+        assert_fn_success!("5e553090");
         // testExpectCallWithData()
         assert_fn_success!("268100f8");
         // testExpectCallWithValue()
