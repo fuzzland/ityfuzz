@@ -945,6 +945,8 @@ where
     /// Execute an input (transaction)
     #[cfg(not(feature = "flashloan_v2"))]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
+        use super::host::clear_branch_status;
+        clear_branch_status();
         self.execute_abi(input, state)
     }
 
