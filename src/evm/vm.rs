@@ -266,7 +266,7 @@ pub struct EVMState {
     pub arbitrary_calls: HashSet<(EVMAddress, EVMAddress, usize)>,
     // integer overflow in sol
     #[serde(skip)]
-    pub integer_overflow: HashSet<(EVMAddress, usize)>,
+    pub integer_overflow: HashSet<(EVMAddress, usize, &'static str)>,
 
     #[serde(skip)]
     pub reentrancy_metadata: ReentrancyData,

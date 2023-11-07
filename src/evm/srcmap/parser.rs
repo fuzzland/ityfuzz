@@ -57,7 +57,7 @@ pub enum SourceMapAvailability {
     Unknown,
 }
 
-fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String)>) -> SourceMapWithCode {
+pub fn read_source_code(loc: &SourceMapLocation, file_blob: &Vec<(String, String)>) -> SourceMapWithCode {
     let file_name = loc.file.clone().unwrap();
     let offset = loc.offset;
     let length = loc.length;
