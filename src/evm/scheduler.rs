@@ -384,7 +384,7 @@ where
     S: HasCorpus + HasMetadata,
 {
     fn compute(state: &S, entry: &mut Testcase<S::Input>, idx: CorpusId) -> Result<f64, Error> {
-        let num_lines = match entry.metadata::<PowerABITestcaseMetadata>() {
+        let _num_lines = match entry.metadata::<PowerABITestcaseMetadata>() {
             Ok(meta) => meta.lines,
             Err(_e) => 1, // FIXME: should not happen
         };
