@@ -72,7 +72,7 @@ impl
             let real_bug_idx = hasher.finish() << (8 + INTEGER_OVERFLOW_BUG_IDX);
             println!("addr: {:?}, pc: {:x}, op: {:?} {real_bug_idx}", addr, pc, op);
             if unsafe { FP.get_or_insert_with(HashSet::new).contains(&real_bug_idx) } {
-                println!("FP: {:?}", real_bug_idx);                
+                println!("FP: {:?}", real_bug_idx);
                 continue;
             }
 
@@ -153,7 +153,9 @@ impl
                 EVMBugResult::new(
                     "Loss of Accuracy".to_string(),
                     real_bug_idx,
-                    format!("Loss of accuracy on Contract: {addr:?} , PC: {pc:x}, OP: {op:?} (real logic)\n\t{source_code}"),
+                    format!(
+                        "Loss of accuracy on Contract: {addr:?} , PC: {pc:x}, OP: {op:?} (real logic)\n\t{source_code}"
+                    ),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                     None,
                     Some(name.clone()),
@@ -162,7 +164,7 @@ impl
                 bug_indexes.push(real_bug_idx);
                 continue;
             }
-            
+
             EVMBugResult::new(
                 "IntegerOverflow".to_string(),
                 real_bug_idx,
