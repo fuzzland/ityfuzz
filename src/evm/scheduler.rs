@@ -389,12 +389,20 @@ where
             Err(_e) => 1, // FIXME: should not happen
         };
         // TODO: more sophisticated power score
-        let _uncov_branch = {
+        let uncov_branch = {
             let meta = state.metadata_map().get::<UncoveredBranchesMetadata>().unwrap();
             meta.testcase_to_uncovered_branches.get(&idx).unwrap_or(&0).to_owned() + 1
         };
 
-        let power = num_lines as f64 * 100.0;
+        let mut power = uncov_branch as f64 * 32.0;
+
+        if power >= 3200.0 {
+            power = 3200.0;
+        }
+
+        if power <= 32.0 {
+            power = 32.0;
+        }
 
         Ok(power)
     }
