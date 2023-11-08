@@ -246,7 +246,7 @@ pub struct OnChainConfig {
     balance_cache: HashMap<EVMAddress, EVMU256>,
     pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
-    code_cache: HashMap<EVMAddress, Bytecode>,
+    code_cache: HashMap<EVMAddress, String>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
@@ -673,12 +673,12 @@ impl OnChainConfig {
         gaslimit
     }
 
-    pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
+    pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> String {
         if self.code_cache.contains_key(&address) {
             return self.code_cache[&address].clone();
         }
         if force_cache {
-            return Bytecode::default();
+            return "".to_string();
         }
 
         info!("fetching code from {}", hex::encode(address));
@@ -696,17 +696,32 @@ impl OnChainConfig {
                 }
                 None => "".to_string(),
             }
-        };
-        let code = resp_string.trim_start_matches("0x");
-        if code.is_empty() {
-            debug!("{address} empty code");
-            self.code_cache.insert(address, Bytecode::new());
-            return Bytecode::new();
         }
-        let code = hex::decode(code).unwrap();
-        let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
-        self.code_cache.insert(address, bytes.clone());
-        bytes
+        .trim_start_matches("0x")
+        .to_string();
+        self.code_cache.insert(address, resp_string.clone());
+        resp_string
+        // let code = resp_string.trim_start_matches("0x");
+        // println!("onchain code: {} {}", code, code.len()); // 没问题
+        // if code.is_empty() {
+        //     debug!("{address} empty code");
+        //     self.code_cache.insert(address, "".to_string());
+        //     return "".to_string();
+        // }
+        // let code = hex::decode(code).unwrap();
+        // let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
+        // 有问题
+        // println!
+        // ("{} {}
+        // {:?}",
+        // bytes.len(),
+        //
+        // hex::encode(&bytes.bytecode), bytes.hash()); if address ==
+        // EVMAddress::from_str("0xA269556EdC45581F355742e46D2d722c5F3f551a").
+        // unwrap() {     panic!("stop");
+        // }
+        // self.code_cache.insert(address, bytes.clone());
+        // bytes
     }
 
     pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
@@ -1171,16 +1186,6 @@ mod tests {
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
-        );
-        debug!("{:?}", v)
-    }
-
-    #[test]
-    fn test_get_contract_code() {
-        let mut config = OnChainConfig::new(BSC, 0);
-        let v = config.get_contract_code(
-            EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            false,
         );
         debug!("{:?}", v)
     }

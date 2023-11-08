@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug, str::FromStr};
 
 use libafl::{
     inputs::Input,
@@ -6,15 +6,18 @@ use libafl::{
     schedulers::Scheduler,
 };
 use revm_interpreter::Interpreter;
+use revm_primitives::{keccak256, B256};
 use serde::Serialize;
-use tracing::debug;
+use tracing::info;
 
 use crate::{
     evm::{
         host::FuzzHost,
         input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
+        onchain::endpoints::{Chain, OnChainConfig},
         types::EVMAddress,
+        uniswap::{get_uniswap_info, UniswapProvider, BSC_PANCAKEV2_PAIR_BYTECODE},
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
@@ -22,11 +25,22 @@ use crate::{
 };
 
 #[derive(Serialize, Debug, Clone, Default)]
-pub struct IntegerOverflowMiddleware;
+pub struct IntegerOverflowMiddleware {
+    whitelist: HashSet<EVMAddress>,
+    pair_hash: B256,
+}
 
 impl IntegerOverflowMiddleware {
-    pub fn new() -> Self {
-        Self
+    pub fn new(onchain: Option<OnChainConfig>) -> Self {
+        if let Some(OnChainConfig { chain_name, .. }) = onchain {
+            let chain = &Chain::from_str(&chain_name).unwrap();
+            let info = get_uniswap_info(&UniswapProvider::UniswapV2, chain);
+            let whitelist = HashSet::from([info.router]);
+            let pair_hash = keccak256(&info.pair_bytecode);
+            println!("pair_hash: {:?}", pair_hash);
+            return Self { whitelist, pair_hash };
+        }
+        Self::default()
     }
 }
 
@@ -45,53 +59,47 @@ where
     SC: Scheduler<State = S> + Clone,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
-        macro_rules! l_r {
-            () => {
-                (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap())
-            };
-        }
         let addr = interp.contract.code_address;
         let pc = interp.program_counter();
+        macro_rules! check {
+            ($overflow_fn: ident, $op: expr, $is_div: expr) => {
+                let (l, r) = (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap());
+                let div = if $is_div { l < r } else { l.$overflow_fn(r).1 };
+                if div && !self.whitelist.contains(&interp.contract.code_address) {
+                    let bytecode = host.code.get(&addr).unwrap();
+                    if bytecode.hash() == self.pair_hash {
+                        // add whitelist for uniswap pair
+                        self.whitelist.insert(addr);
+                        info!("add overflow whitelist for uniswap pair: {:?}", addr);
+                    } else {
+                        // println!("bytecode:{addr:?} {:?}", hex::encode(bytecode.bytecode()));
+                        info!("contract {:?} overflow on pc[{pc:x}]: {} {} {}", addr, l, $op, r);
+                        host.current_integer_overflow.insert((addr, pc, $op));
+                    }
+                }
+            };
+        }
         match *interp.instruction_pointer {
             0x01 => {
                 // +ADD
-                let (l, r) = l_r!();
-                if l.overflowing_add(r).1 {
-                    debug!("contract {:?} overflow on pc[{pc:x}]: {} + {}", addr, l, r);
-                    host.current_integer_overflow.insert((addr, pc, "+"));
-                }
+                check!(overflowing_add, "+", false);
             }
             0x02 => {
                 // *MUL
-                let (l, r) = l_r!();
-                if l.overflowing_mul(r).1 {
-                    debug!("contract {:?} overflow on pc[{pc:x}]: {} * {}", addr, l, r);
-                    host.current_integer_overflow.insert((addr, pc, "*"));
-                }
+                check!(overflowing_mul, "*", false);
             }
             0x03 => {
                 // -SUB
-                let (l, r) = l_r!();
-                if l.overflowing_sub(r).1 {
-                    debug!("contract {:?} overflow on pc[{pc:x}]: {} - {}", addr, l, r);
-                    host.current_integer_overflow.insert((addr, pc, "-"));
-                }
+                check!(overflowing_sub, "-", false);
             }
             0x04 | 0x05 => {
                 // DIV/ SDIV
-                let (l, r) = l_r!();
-                if l < r {
-                    debug!("contract {:?} loss of accuracy on pc[{pc:x}]: {} / {}", addr, l, r);
-                    host.current_integer_overflow.insert((addr, pc, "/"));
-                }
+                // overflowing_add for placeholder, not used
+                check!(overflowing_add, "/", true);
             }
             0x0a => {
                 // ** EXP
-                let (l, r) = l_r!();
-                if l.overflowing_pow(r).1 {
-                    debug!("contract {:?} overflow on pc[{pc:x}]: {} ** {}", addr, l, r);
-                    host.current_integer_overflow.insert((addr, pc, "**"));
-                }
+                check!(overflowing_pow, "**", false);
             }
             _ => {}
         }

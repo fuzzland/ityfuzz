@@ -72,7 +72,7 @@ impl
             let real_bug_idx = hasher.finish() << (8 + INTEGER_OVERFLOW_BUG_IDX);
             println!("addr: {:?}, pc: {:x}, op: {:?} {real_bug_idx}", addr, pc, op);
             if unsafe { FP.get_or_insert_with(HashSet::new).contains(&real_bug_idx) } {
-                println!("FP: {:?}", real_bug_idx);
+                println!("existing FP: {:?}", real_bug_idx);
                 continue;
             }
 
@@ -134,7 +134,7 @@ impl
                 unsafe {
                     FP.get_or_insert_with(HashSet::new).insert(real_bug_idx);
                 };
-                println!("fp: loc.file.is_none");
+                println!("new FP: loc.file.is_none");
                 continue;
             }
             let source_code = read_source_code(loc, file_blob, false).code;
@@ -145,7 +145,7 @@ impl
                 unsafe {
                     FP.get_or_insert_with(HashSet::new).insert(real_bug_idx);
                 };
-                println!("fp: !source_code.contains(op)");
+                println!("new FP: !source_code.contains(op)");
                 continue;
             }
             println!();

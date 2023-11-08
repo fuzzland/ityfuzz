@@ -216,7 +216,7 @@ pub fn evm_fuzzer(
     }
 
     if config.integer_overflow_oracle {
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new())));
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new(config.onchain))));
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);

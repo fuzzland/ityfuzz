@@ -235,6 +235,7 @@ where
                 // directly set bytecode
                 let contract_code = Bytecode::new_raw(Bytes::from(contract.code.clone()));
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
+                println!("will set code {}", hex::encode(&contract.code));
                 self.executor
                     .host
                     .set_code(contract.deployed_address, contract_code, self.state);
