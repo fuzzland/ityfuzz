@@ -74,8 +74,13 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
     }
 
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
-    let mut output = File::create(path).unwrap();
-    if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output) {
+    let output = File::create(path);
+    if output.is_err() {
+        error!("generate_test error: failed to create output file.");
+        return;
+    }
+
+    if let Err(e) = handlebars.render_to_write("foundry_test", &args, &mut output.unwrap()) {
         error!("generate_test error: failed to render template: {:?}", e);
     }
 }
@@ -260,19 +265,24 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
         .as_secs();
     let default_name = format!("C{}", now);
 
-    let path = Path::new(&cli_args.target);
-    match path.parent() {
-        Some(parent) => {
-            let dirname = parent.file_name().unwrap().to_str().unwrap();
-            let name: String = dirname.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+    Path::new(&cli_args.target)
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|dirname| dirname.to_str())
+        .map(|dirname| {
+            dirname
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_')
+                .collect::<String>()
+        })
+        .map(|name| {
             if name.is_empty() {
-                default_name
+                default_name.clone()
             } else {
                 format!("{}{}", &name[..1].to_uppercase(), &name[1..])
             }
-        }
-        None => default_name,
-    }
+        })
+        .unwrap_or(default_name)
 }
 
 fn get_weth(oc: &OnChainConfig) -> String {
