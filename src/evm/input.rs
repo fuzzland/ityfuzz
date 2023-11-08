@@ -835,7 +835,6 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
             f += owed_amount.as_limbs()[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
         }
 
-        
         f / self.get_staged_state().trace.derived_time as f64
     }
 

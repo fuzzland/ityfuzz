@@ -428,7 +428,8 @@ where
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
         {
             state.get_execution_result_mut().new_state.trace.from_idx = Some(input.get_state_idx());
-            state.get_execution_result_mut().new_state.trace.derived_time = input.get_staged_state().trace.derived_time + 1;
+            state.get_execution_result_mut().new_state.trace.derived_time =
+                input.get_staged_state().trace.derived_time + 1;
             state
                 .get_execution_result_mut()
                 .new_state
