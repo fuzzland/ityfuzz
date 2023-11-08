@@ -141,6 +141,7 @@ where
                     }
                     solutions.clear();
                 }
+                drop(solutions);
 
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);
             }
