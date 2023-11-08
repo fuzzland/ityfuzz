@@ -754,7 +754,7 @@ where
     /// Apply the prank
     pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs) {
         if let Some(prank) = &self.prank {
-            if self.call_depth >= prank.depth && contract_caller == &prank.new_caller {
+            if self.call_depth >= prank.depth && contract_caller == &prank.old_caller {
                 // At the target depth we set `msg.sender`
                 if self.call_depth == prank.depth {
                     input.context.caller = prank.new_caller;

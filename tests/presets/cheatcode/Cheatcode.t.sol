@@ -6,6 +6,7 @@ import {VmSafe} from "forge-std/Vm.sol";
 import "./Reverter.sol";
 import "./Emitter.sol";
 import "./Caller.sol";
+import "./Pranker.sol";
 
 contract CheatcodeTest is Test {
     bytes32 slot0 = bytes32(uint256(0));
@@ -120,6 +121,10 @@ contract CheatcodeTest is Test {
         assertEq(msgSender, randomAddr);
         assertEq(txOrigin, randomAddr);
         vm.stopPrank();
+        (callerMode, msgSender, txOrigin) = vm.readCallers();
+        assertEq(uint256(callerMode), uint256(VmSafe.CallerMode.None));
+        assertEq(msgSender, oldSender);
+        assertEq(txOrigin, oldOrigin);
 
         // Test record / accesses
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(this));
@@ -145,6 +150,86 @@ contract CheatcodeTest is Test {
         assertEq(entries[0].topics[0], keccak256("LogCompleted(uint256,bytes)"));
         assertEq(entries[0].topics[1], bytes32(uint256(10)));
         assertEq(abi.decode(entries[0].data, (string)), "operation completed");
+    }
+
+    // Test prank with Pranker -------------------------------
+
+    function setPrankerCode() internal {
+        /*
+        contract Pranker {
+            function check_sender() public view {
+                require(msg.sender == address(0x100));
+            }
+
+            function check_sender_origin() public view {
+                require(msg.sender == address(0x100));
+                require(tx.origin == address(0x200));
+            }
+        }
+        */
+        bytes memory prankerCode =
+            hex"6080604052348015600f57600080fd5b506004361060325760003560e01c8063b52c835e146037578063dd3cf6c714603f575b600080fd5b603d6045565b005b603d6061565b3361010014605257600080fd5b3261020014605f57600080fd5b565b3361010014605f57600080fdfea2646970667358221220d9426db6cf358b3b3ed9bfbfa87a7a0dcf3e3d8d836bf226fce186085697085d64736f6c63430008150033";
+        vm.etch(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae, prankerCode);
+    }
+
+    function testPrank() public {
+        setPrankerCode();
+        Pranker panker = Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae);
+
+        vm.prank(address(0x100));
+        panker.check_sender();
+
+        vm.prank(address(0x100), address(0x200));
+        panker.check_sender_origin();
+    }
+
+    function testExpectRevertBeforePrank() public {
+        setPrankerCode();
+        vm.expectRevert(bytes(""));
+        Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae).check_sender();
+    }
+
+    function testExpectRevertAfterConsumePrank() public {
+        setPrankerCode();
+        Pranker panker = Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae);
+
+        vm.prank(address(0x100));
+        // abi call consumes the prank
+        panker.check_sender();
+        vm.expectRevert(bytes(""));
+        panker.check_sender();
+    }
+
+    function testExpectRevertPrankSenderOrigin() public {
+        setPrankerCode();
+        vm.expectRevert(bytes(""));
+        Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae).check_sender_origin();
+    }
+
+    function testStartStopPrank() public {
+        setPrankerCode();
+        Pranker panker = Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae);
+
+        vm.startPrank(address(0x100));
+        // abi can be called multiple times
+        panker.check_sender();
+        panker.check_sender();
+        vm.stopPrank();
+
+        vm.startPrank(address(0x100), address(0x200));
+        panker.check_sender_origin();
+        panker.check_sender_origin();
+        vm.stopPrank();
+    }
+
+    function testExpectRevertAfterStopPrank() public {
+        setPrankerCode();
+        Pranker panker = Pranker(0xB6BeB0D5ec26D7Ea5E224826fF6b924CeCD253Ae);
+
+        vm.startPrank(address(0x100));
+        vm.stopPrank();
+        vm.expectRevert(bytes(""));
+        panker.check_sender();
     }
 
     // Test revert -------------------------------

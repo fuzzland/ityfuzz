@@ -1322,6 +1322,18 @@ mod tests {
 
         // test()
         assert_fn_success!("f8a8fd6d");
+        // testPrank()
+        assert_fn_success!("7e550aac");
+        // testExpectRevertBeforePrank()
+        assert_fn_success!("c2bb38d3");
+        // testExpectRevertAfterConsumePrank()
+        assert_fn_success!("cc5c4741");
+        // testExpectRevertPrankSenderOrigin()
+        assert_fn_success!("177d2a31");
+        // testStartStopPrank()
+        assert_fn_success!("9c0046b9");
+        // testExpectRevertAfterStopPrank()
+        assert_fn_success!("3dee8e2a");
         // testExpectRevertWithoutReason()
         assert_fn_success!("6bd496f0");
         // testExpectRevertWithMessage()
