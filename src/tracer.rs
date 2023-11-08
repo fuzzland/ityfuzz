@@ -55,8 +55,10 @@ where
 
         let mut res = String::new();
         let mut sender = String::new();
-        for (i, input) in inputs.iter().enumerate() {
-            if sender != input.caller() {
+        for input in inputs {
+            // `input.is_step()` indicates that the input is a "stepping with return"
+            // and we should not print the sender address.
+            if sender != input.caller() && !input.is_step() {
                 sender = input.caller().clone();
                 res.push_str(format!("[Sender] {}\n", sender).as_str());
             }

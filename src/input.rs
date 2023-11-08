@@ -102,6 +102,9 @@ pub trait ConciseSerde {
     fn caller(&self) -> String {
         String::from("")
     }
+    fn is_step(&self) -> bool {
+        false
+    }
 }
 
 /// SolutionTx for generating a test file.

@@ -295,14 +295,13 @@ impl ConciseEVMInput {
         let liq: u8 = self.liquidation_percent;
 
         #[cfg(not(feature = "debug"))]
-        let mut output = match self.data {
+        let output = match self.data {
             Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
+                "{:?} => {:?} {} with {} ETH, liq percent: {}",
                 self.caller,
                 self.contract,
                 d,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
-                hex::encode(d.get_bytes()),
                 liq
             ),
             None => match self.input_type {
@@ -325,18 +324,7 @@ impl ConciseEVMInput {
         };
 
         #[cfg(feature = "debug")]
-        let mut output = format!(
-            "{:?} => {:?} with {:?} ETH, {}",
-            self.caller,
-            self.contract,
-            self.txn_value,
-            hex::encode(self.direct_data.clone())
-        );
-
-        if !output.is_empty() && self.return_data.is_some() {
-            let return_data = hex::encode(self.return_data.as_ref().unwrap());
-            output.push_str(format!(", return data: 0x{}", return_data).as_str());
-        }
+        let output = format!("{:?} => {:?} with {:?} ETH", self.caller, self.contract, self.txn_value);
 
         if output.is_empty() {
             None
@@ -347,14 +335,13 @@ impl ConciseEVMInput {
 
     #[cfg(not(feature = "flashloan_v2"))]
     fn pretty_txn(&self) -> Option<String> {
-        let mut output = match self.data {
+        let output = match self.data {
             Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH ({})",
+                "{:?} => {:?} {} with {} ETH",
                 self.caller,
                 self.contract,
                 d.to_string(),
                 self.txn_value.unwrap_or(EVMU256::ZERO),
-                hex::encode(d.get_bytes())
             ),
             None => format!(
                 "{:?} => {:?} transfer {} ETH",
@@ -364,10 +351,6 @@ impl ConciseEVMInput {
             ),
         };
 
-        if self.return_data.is_some() {
-            let return_data = hex::encode(self.return_data.as_ref().unwrap());
-            output.push_str(format!(", return data: 0x{}", return_data).as_str());
-        }
         Some(output)
     }
 }
@@ -734,21 +717,34 @@ impl ConciseSerde for ConciseEVMInput {
             call.push_str("│  ");
         }
         let mut ret = call.clone();
-
         call.push_str("├─ ");
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+        // If a call causes a control leak, it will not return immediately,
+        // but when "stepping with return" happens.
+        if self.call_leak < u32::MAX {
+            return call;
+        }
 
         let return_data = match &self.return_data {
             Some(v) => "0x".to_string() + &hex::encode(v),
             None => "()".to_string(),
         };
-        ret.push_str(format!("│  └─ <- {}", return_data).as_str());
+        // Stepping with return
+        if self.step {
+            ret.push_str(format!("└─ <- {}", return_data).as_str());
+            return ret;
+        }
 
+        ret.push_str(format!("│  └─ <- {}", return_data).as_str());
         [call, ret].join("\n")
     }
 
     fn caller(&self) -> String {
         checksum(&self.caller)
+    }
+
+    fn is_step(&self) -> bool {
+        self.step
     }
 }
 
