@@ -48,31 +48,22 @@ where
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
-        // If from_idx is None, it means that the trace is from the initial state
-        if self.from_idx.is_none() {
-            return String::from("Begin\n");
-        }
-        let current_idx = self.from_idx.unwrap();
-        let corpus_item = state.get_infant_state_state().corpus().get(current_idx.into());
-        // This happens when full_trace feature is not enabled, the corpus item may be
-        // discarded
-        if corpus_item.is_err() {
-            return String::from("Corpus returning error\n");
-        }
-        let testcase = corpus_item.unwrap().clone().into_inner();
-        let testcase_input = testcase.input();
-        if testcase_input.is_none() {
+        let inputs = self.get_concise_inputs(state);
+        if inputs.is_empty() {
             return String::from("[REDACTED]\n");
         }
 
-        // Try to reconstruct transactions leading to the current VMState recursively
-        let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
-
-        // Dump the current transaction
-        for concise_input in &self.transactions {
-            s.push_str(format!("{}\n", concise_input.serialize_string()).as_str());
+        let mut res = String::new();
+        let mut sender = String::new();
+        for (i, input) in inputs.iter().enumerate() {
+            if sender != input.caller() {
+                sender = input.caller().clone();
+                res.push_str(format!("[Sender] {}\n", sender).as_str());
+            }
+            res.push_str(format!("{}\n", input.serialize_string()).as_str());
         }
-        s
+
+        res
     }
 
     /// Serialize the trace so that it can be replayed by using --replay-file

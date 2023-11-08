@@ -299,7 +299,7 @@ macro_rules! dump_file {
             let txn_text_replayable = tx_trace.to_file_str($state);
 
             let data = format!(
-                "Reverted? {} \n Txn: {}",
+                "Reverted? {} \n Txn:\n{}",
                 $state.get_execution_result().reverted,
                 txn_text
             );
@@ -551,6 +551,7 @@ where
                         &mut self.objective,
                         corpus_idx.into(),
                     );
+                    // TODO
                     let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
                     let txn_json = minimized
                         .iter()

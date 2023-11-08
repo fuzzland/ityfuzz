@@ -729,16 +729,26 @@ impl ConciseSerde for ConciseEVMInput {
     }
 
     fn serialize_string(&self) -> String {
-        let mut s = String::new();
+        let mut call = String::from("│  ");
         for _ in 0..self.layer {
-            s.push_str("==");
+            call.push_str("│  ");
         }
-        if self.layer > 0 {
-            s.push(' ');
-        }
+        let mut ret = call.clone();
 
-        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
-        s
+        call.push_str("├─ ");
+        call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+
+        let return_data = match &self.return_data {
+            Some(v) => "0x".to_string() + &hex::encode(v),
+            None => "()".to_string(),
+        };
+        ret.push_str(format!("│  └─ <- {}", return_data).as_str());
+
+        [call, ret].join("\n")
+    }
+
+    fn caller(&self) -> String {
+        checksum(&self.caller)
     }
 }
 

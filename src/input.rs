@@ -98,6 +98,10 @@ pub trait ConciseSerde {
     fn serialize_concise(&self) -> Vec<u8>;
     fn deserialize_concise(data: &[u8]) -> Self;
     fn serialize_string(&self) -> String;
+
+    fn caller(&self) -> String {
+        String::from("")
+    }
 }
 
 /// SolutionTx for generating a test file.
