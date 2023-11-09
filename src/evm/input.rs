@@ -315,16 +315,41 @@ impl ConciseEVMInput {
     }
 
     fn as_abi_call(&self, call_str: String) -> Option<String> {
-        let parts: Vec<&str> = call_str.split('(').collect();
+        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
+        if parts.len() < 2 && call_str.len() == 8 {
+            return self.as_fn_selector_call();
+        }
+
+        let mut fn_call = parts[0].to_string();
         let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        if value != EVMU256::ZERO {
+            fn_call.push_str(format!("{{value: {} Ether}}", value).as_str());
+        }
 
-        let fn_call = if value == EVMU256::ZERO || parts.len() != 2 {
-            call_str
+        if parts.len() < 2 {
+            fn_call.push_str("()");
         } else {
-            format!("{}{{value: {} Ether}}{}", parts[0], value, parts[1])
-        };
+            fn_call.push_str(format!("({}", parts[1]).as_str());
+        }
 
-        Some(format!("[{} → CALL] {:?}.{}", self.layer, self.contract, fn_call,))
+        Some(format!("[{} → CALL] {:?}.{}", self.layer, self.contract, fn_call))
+    }
+
+    fn as_fn_selector_call(&self) -> Option<String> {
+        let mut call = format!("[{} → CALL] {:?}.call", self.layer, self.contract);
+        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        if value != EVMU256::ZERO {
+            call.push_str(format!("{{value: {} Ether}}", value).as_str());
+        }
+
+        call.push_str(format!("(abi.encodeWithSelector({}", self.fn_selector()).as_str());
+        if self.fn_args().is_empty() {
+            call.push_str("))");
+        } else {
+            call.push_str(format!(", {})))", self.fn_args()).as_str());
+        }
+
+        Some(call)
     }
 
     fn as_transfer(&self) -> Option<String> {
