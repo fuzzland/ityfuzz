@@ -2,6 +2,11 @@ pub mod parser;
 
 use crate::evm::EVMAddress;
 use std::collections::HashMap;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref SOURCE_MAP_PROVIDER: SourceMapProvider = SourceMapProvider::default();
+}
 
 // Identical to SourceMapLocation
 #[derive(Default, Clone, Debug)]
