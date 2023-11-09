@@ -2,7 +2,9 @@ use std::{
     cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
     fs,
+    fs::OpenOptions,
     hash::{Hash, Hasher},
+    io::Write,
     rc::Rc,
     str::FromStr,
     thread::sleep,
@@ -57,9 +59,19 @@ impl BuildJob {
             error!("submit onchain job failed for {:?}", addr);
             return None;
         }
-        Some(JobContext::new(
-            json["task_id"].as_str().expect("get job id failed").to_string(),
-        ))
+        if let Some(task_id) = json["task_id"].as_str() {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("builder_id.txt")
+                .expect("Failed to open or create builder_id.txt");
+            writeln!(file, "{}", task_id).expect("Failed to write task_id to builder_id.txt");
+
+            Some(JobContext::new(task_id.to_string()))
+        } else {
+            error!("submit onchain job failed for {:?}", addr);
+            None
+        }
     }
 
     pub fn onchain_job(&self, chain: String, addr: EVMAddress) -> Option<BuildJobResult> {
