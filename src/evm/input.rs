@@ -292,69 +292,57 @@ impl ConciseEVMInput {
     #[allow(unused_variables)]
     #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
-        let liq: u8 = self.liquidation_percent;
-
         #[cfg(not(feature = "debug"))]
-        let output = match self.data {
-            Some(ref d) => format!(
-                "[{} → CALL] {:?}.{} with {} ETH, liq percent: {}",
-                self.layer,
-                self.contract,
-                d,
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-                liq
-            ),
+        match self.data {
+            Some(ref d) => self.as_abi_call(d.to_string()),
             None => match self.input_type {
-                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => format!(
-                    "[{} → CALL] {:?} with {} ETH, liq percent: {}",
-                    self.layer,
-                    self.contract,
-                    self.txn_value.unwrap_or(EVMU256::ZERO),
-                    liq
-                ),
-                EVMInputTy::Borrow => format!(
-                    "{:?} borrow token {:?} with {} ETH, liq percent: {}",
-                    self.layer,
-                    self.contract,
-                    self.txn_value.unwrap_or(EVMU256::ZERO),
-                    liq
-                ),
-                EVMInputTy::Liquidate => "".to_string(),
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => self.as_transfer(),
+                EVMInputTy::Borrow => self.as_borrow(),
+                EVMInputTy::Liquidate => None,
             },
-        };
+        }
 
         #[cfg(feature = "debug")]
-        let output = format!(
-            "[{} → CALL] {:?} with {:?} ETH",
-            self.layer, self.contract, self.txn_value
-        );
-
-        if output.is_empty() {
-            None
-        } else {
-            Some(output)
-        }
+        self.as_transfer()
     }
 
     #[cfg(not(feature = "flashloan_v2"))]
     fn pretty_txn(&self) -> Option<String> {
-        let output = match self.data {
-            Some(ref d) => format!(
-                "[{} → CALL] {:?}.{} with {} ETH",
-                self.layer,
-                self.contract,
-                d.to_string(),
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-            ),
-            None => format!(
-                "[{} → CALL] {:?} transfer {} ETH",
-                self.layer,
-                self.contract,
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-            ),
+        match self.data {
+            Some(ref d) => self.as_abi_call(d.to_string()),
+            None => self.as_transfer(),
+        }
+    }
+
+    fn as_abi_call(&self, call_str: String) -> Option<String> {
+        let parts: Vec<&str> = call_str.split('(').collect();
+        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+
+        let fn_call = if value == EVMU256::ZERO || parts.len() != 2 {
+            call_str
+        } else {
+            format!("{}{{value: {} Ether}}{}", parts[0], value, parts[1])
         };
 
-        Some(output)
+        Some(format!("[{} → CALL] {:?}.{}", self.layer, self.contract, fn_call,))
+    }
+
+    fn as_transfer(&self) -> Option<String> {
+        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+
+        Some(format!(
+            "[{} → CALL] {:?}.call{{value: {} Ether}}(\"\")",
+            self.layer, self.contract, value
+        ))
+    }
+
+    fn as_borrow(&self) -> Option<String> {
+        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+
+        Some(format!(
+            "[{} → CALL] Router.swapExactETHForTokens{{value: {} Ether}}(0, path:(ETH → {:?}), address(this), block.timestamp);",
+            self.layer, value, self.contract
+        ))
     }
 }
 
