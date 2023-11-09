@@ -494,12 +494,6 @@ where
         unsafe {
             invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
-        println!(
-            "set code: {:?} -> {:?} {}",
-            address,
-            code.hash(),
-            hex::encode(&code.bytecode)
-        );
         self.code
             .insert(address, Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap()));
     }

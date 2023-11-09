@@ -830,8 +830,6 @@ where
                 .chain(self.host.current_integer_overflow.iter().cloned()),
         );
 
-        // debug!("r.ret: {:?}", r.ret);
-
         unsafe {
             ExecutionResult {
                 output: r.output.to_vec(),

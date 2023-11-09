@@ -701,27 +701,6 @@ impl OnChainConfig {
         .to_string();
         self.code_cache.insert(address, resp_string.clone());
         resp_string
-        // let code = resp_string.trim_start_matches("0x");
-        // println!("onchain code: {} {}", code, code.len()); // 没问题
-        // if code.is_empty() {
-        //     debug!("{address} empty code");
-        //     self.code_cache.insert(address, "".to_string());
-        //     return "".to_string();
-        // }
-        // let code = hex::decode(code).unwrap();
-        // let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
-        // 有问题
-        // println!
-        // ("{} {}
-        // {:?}",
-        // bytes.len(),
-        //
-        // hex::encode(&bytes.bytecode), bytes.hash()); if address ==
-        // EVMAddress::from_str("0xA269556EdC45581F355742e46D2d722c5F3f551a").
-        // unwrap() {     panic!("stop");
-        // }
-        // self.code_cache.insert(address, bytes.clone());
-        // bytes
     }
 
     pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
@@ -962,7 +941,7 @@ impl OnChainConfig {
             "data": "0x0902f1ac",
             "id": 1
         }, self.block_number]);
-            info!("fetching reserve for {pair} {} {params}", self.block_number);
+            debug!("fetching reserve for {pair} {}", self.block_number);
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),

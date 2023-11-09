@@ -8,7 +8,7 @@ use libafl::{
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     evm::{
@@ -17,7 +17,7 @@ use crate::{
         middlewares::middleware::{Middleware, MiddlewareType},
         onchain::endpoints::{Chain, OnChainConfig},
         types::EVMAddress,
-        uniswap::{get_uniswap_info, UniswapProvider, BSC_PANCAKEV2_PAIR_BYTECODE},
+        uniswap::{get_uniswap_info, UniswapProvider},
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
@@ -27,6 +27,7 @@ use crate::{
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct IntegerOverflowMiddleware {
     whitelist: HashSet<EVMAddress>,
+    pub fp: HashSet<(EVMAddress, usize, &'static str)>,
     pair_hash: B256,
 }
 
@@ -38,7 +39,11 @@ impl IntegerOverflowMiddleware {
             let whitelist = HashSet::from([info.router]);
             let pair_hash = keccak256(&info.pair_bytecode);
             println!("pair_hash: {:?}", pair_hash);
-            return Self { whitelist, pair_hash };
+            return Self {
+                whitelist,
+                fp: HashSet::new(),
+                pair_hash,
+            };
         }
         Self::default()
     }
@@ -65,7 +70,11 @@ where
             ($overflow_fn: ident, $op: expr, $is_div: expr) => {
                 let (l, r) = (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap());
                 let div = if $is_div { l < r } else { l.$overflow_fn(r).1 };
-                if div && !self.whitelist.contains(&interp.contract.code_address) {
+                if !self.whitelist.contains(&interp.contract.code_address) &&
+                    div &&
+                    !host.current_integer_overflow.contains(&(addr, pc, $op)) &&
+                    !self.fp.contains(&(addr, pc, $op))
+                {
                     let bytecode = host.code.get(&addr).unwrap();
                     if bytecode.hash() == self.pair_hash {
                         // add whitelist for uniswap pair

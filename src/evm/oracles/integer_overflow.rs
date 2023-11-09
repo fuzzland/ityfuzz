@@ -1,18 +1,22 @@
 use std::{
+    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    rc::Rc,
 };
 
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::HasMetadata;
 use revm_primitives::Bytecode;
+use tracing::debug;
 
 use crate::{
     evm::{
         blaz::builder::ArtifactInfoMetadata,
         corpus_initializer::SourceMapMap,
         input::{ConciseEVMInput, EVMInput},
+        middlewares::integer_overflow::IntegerOverflowMiddleware,
         oracle::EVMBugResult,
         oracles::INTEGER_OVERFLOW_BUG_IDX,
         srcmap::parser::read_source_code,
@@ -24,18 +28,24 @@ use crate::{
 };
 
 // whether real_bug_idx is FP
-static mut FP: Option<HashSet<u64>> = None;
+// static mut FP: Option<HashSet<u64>> = None;
 
 pub struct IntegerOverflowOracle {
     pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
+    pub middleware: Rc<RefCell<IntegerOverflowMiddleware>>,
 }
 
 impl IntegerOverflowOracle {
-    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>) -> Self {
+    pub fn new(
+        sourcemap: ProjectSourceMapTy,
+        address_to_name: HashMap<EVMAddress, String>,
+        middleware: Rc<RefCell<IntegerOverflowMiddleware>>,
+    ) -> Self {
         Self {
             sourcemap,
             address_to_name,
+            middleware,
         }
     }
 }
@@ -65,18 +75,26 @@ impl
         _stage: u64,
     ) -> Vec<u64> {
         let mut bug_indexes = Vec::new();
-        for (addr, pc, op) in ctx.post_state.integer_overflow.iter() {
+        for (addr, pc, op) in ctx.post_state.integer_overflow.clone().into_iter() {
             let mut hasher = DefaultHasher::new();
             addr.hash(&mut hasher);
             pc.hash(&mut hasher);
             let real_bug_idx = hasher.finish() << (8 + INTEGER_OVERFLOW_BUG_IDX);
-            println!("addr: {:?}, pc: {:x}, op: {:?} {real_bug_idx}", addr, pc, op);
-            if unsafe { FP.get_or_insert_with(HashSet::new).contains(&real_bug_idx) } {
-                println!("existing FP: {:?}", real_bug_idx);
+            if self.middleware.borrow().fp.contains(&(addr, pc, op)) {
+                debug!("existing FP: {:?}", real_bug_idx);
+                ctx.post_state.integer_overflow.remove(&(addr, pc, op));
                 continue;
             }
+            // if unsafe { FP.get_or_insert_with(HashSet::new).contains(&real_bug_idx) } {
+            //     println!("existing FP: {:?}", real_bug_idx);
+            //     continue;
+            // }
 
-            let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
+            let name = self
+                .address_to_name
+                .get(&addr)
+                .unwrap_or(&format!("{:?}", addr))
+                .clone();
 
             /*
             1. no code/unverifyed -> maybe_fp
@@ -90,7 +108,7 @@ impl
                 .metadata_map()
                 .get::<ArtifactInfoMetadata>()
                 .expect("get metadata failed")
-                .get(addr);
+                .get(&addr);
             if build_job_result.is_none() {
                 // case 1/2
                 EVMBugResult::new(
@@ -103,11 +121,12 @@ impl
                 )
                 .push_to_output();
                 bug_indexes.push(real_bug_idx);
+                println!("addr: {:?}, pc: {:x}, op: {:?} {real_bug_idx}", addr, pc, op);
                 println!("no build_job_result");
                 continue;
             }
 
-            let src_map = ctx.fuzz_state.metadata_map().get::<SourceMapMap>().unwrap().get(addr);
+            let src_map = ctx.fuzz_state.metadata_map().get::<SourceMapMap>().unwrap().get(&addr);
             if src_map.is_none() {
                 // case 1/2
                 EVMBugResult::new(
@@ -120,6 +139,7 @@ impl
                 )
                 .push_to_output();
                 bug_indexes.push(real_bug_idx);
+                println!("addr: {:?}, pc: {:x}, op: {:?} {real_bug_idx}", addr, pc, op);
                 println!("no src_map");
                 continue;
             }
@@ -127,29 +147,25 @@ impl
             let file_blob = &build_job_result.unwrap().sources;
 
             let binding = src_map.unwrap().clone().unwrap();
-            let loc = binding.get(pc).unwrap();
-            println!("loc: {:?}", loc);
+            let loc = binding.get(&pc).unwrap();
             if loc.file.is_none() {
                 // case 3, fp
-                unsafe {
-                    FP.get_or_insert_with(HashSet::new).insert(real_bug_idx);
-                };
-                println!("new FP: loc.file.is_none");
+                self.middleware.borrow_mut().fp.insert((addr, pc, op));
+                debug!("new FP: loc.file.is_none");
+                ctx.post_state.integer_overflow.remove(&(addr, pc, op));
                 continue;
             }
             let source_code = read_source_code(loc, file_blob, false).code;
-            println!("source_code: {:?}", source_code);
+            debug!("source_code: {:?}", source_code);
             // case 4
             if !source_code.contains(op) {
                 // case 4 fp
-                unsafe {
-                    FP.get_or_insert_with(HashSet::new).insert(real_bug_idx);
-                };
-                println!("new FP: !source_code.contains(op)");
+                self.middleware.borrow_mut().fp.insert((addr, pc, op));
+                debug!("new FP: !source_code.contains(op)");
+                ctx.post_state.integer_overflow.remove(&(addr, pc, op));
                 continue;
             }
-            println!();
-            if *op == "/" {
+            if op == "/" {
                 EVMBugResult::new(
                     "Loss of Accuracy".to_string(),
                     real_bug_idx,
