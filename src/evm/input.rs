@@ -322,10 +322,10 @@ impl ConciseEVMInput {
             return self.as_fn_selector_call();
         }
 
-        let mut fn_call = parts[0].to_string();
+        let mut fn_call = parts[0].yellow().to_string();
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
-            fn_call.push_str(format!("{{value: {} Ether}}", value).as_str());
+            fn_call.push_str(&self.colored_value());
         }
 
         if parts.len() < 2 {
@@ -334,18 +334,23 @@ impl ConciseEVMInput {
             fn_call.push_str(format!("({}", parts[1]).as_str());
         }
 
-        Some(format!("{} {:?}.{}", self.colored_call(), self.contract, fn_call))
+        Some(format!(
+            "{} {}.{}",
+            self.colored_call(),
+            self.contract().blue(),
+            fn_call
+        ))
     }
 
     #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
-        let mut call = format!("{} {:?}.call", self.colored_call(), self.contract);
+        let mut call = format!("{} {}.{}", self.colored_call(), self.contract().blue(), "call".yellow());
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
-            call.push_str(format!("{{value: {} Ether}}", value).as_str());
+            call.push_str(&self.colored_value());
         }
 
-        call.push_str(format!("(abi.encodeWithSelector({}", self.fn_selector()).as_str());
+        call.push_str(format!("({}({}", "abi.encodeWithSelector".yellow(), self.fn_selector().purple()).as_str());
         if self.fn_args().is_empty() {
             call.push_str("))");
         } else {
@@ -357,25 +362,23 @@ impl ConciseEVMInput {
 
     #[inline]
     fn as_transfer(&self) -> Option<String> {
-        let value = self.txn_value.unwrap_or_default();
-
         Some(format!(
-            "{} {:?}.call{{value: {} Ether}}(\"\")",
+            "{} {}.call{}(\"\")",
             self.colored_call(),
-            self.contract,
-            value
+            self.contract().blue(),
+            self.colored_value()
         ))
     }
 
     #[inline]
     fn as_borrow(&self) -> Option<String> {
-        let value = self.txn_value.unwrap_or_default();
-
         Some(format!(
-            "{} Router.swapExactETHForTokens{{value: {} Ether}}(0, path:(ETH → {:?}), address(this), block.timestamp);",
+            "{} {}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
             self.colored_call(),
-            value,
-            self.contract
+            "Router".blue(),
+            "swapExactETHForTokens".yellow(),
+            self.colored_value(),
+            self.contract()
         ))
     }
 
@@ -387,9 +390,11 @@ impl ConciseEVMInput {
         }
 
         let liq_call = format!(
-            "{} Router.swapExactTokensForETH(100% Balance, 0, path:({:?} → ETH), address(this), block.timestamp);",
+            "{} {}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
             self.colored_call(),
-            self.contract
+            "Router".blue(),
+            "swapExactTokensForETH".yellow(),
+            self.contract()
         );
 
         let mut liq = indent.clone();
@@ -407,7 +412,13 @@ impl ConciseEVMInput {
 
     #[inline]
     fn colored_call(&self) -> ColoredString {
-        format!("[{} → CALL]", self.layer).blue()
+        format!("[{} → CALL]", self.layer).cyan()
+    }
+
+    #[inline]
+    fn colored_value(&self) -> ColoredString {
+        let value = self.txn_value.unwrap_or_default();
+        format!("{{value: {} Ether}}", value).green()
     }
 }
 
