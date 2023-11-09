@@ -622,7 +622,13 @@ impl ABI for A256 {
                 }
             }
             A256InnerType::Bytes => vec_to_hex(&self.data),
-            A256InnerType::Address => checksum(&EVMAddress::from_slice(&self.data)),
+            A256InnerType::Address => checksum(&EVMAddress::from_slice({
+                if self.data.len() == 32 {
+                    &self.data[12..]
+                } else {
+                    &self.data
+                }
+            })),
         }
     }
 
