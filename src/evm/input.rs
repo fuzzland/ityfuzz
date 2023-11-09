@@ -1,6 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
+use colored::{ColoredString, Colorize};
 use libafl::{
     inputs::Input,
     mutators::MutationResult,
@@ -314,6 +315,7 @@ impl ConciseEVMInput {
         }
     }
 
+    #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
         let parts: Vec<&str> = call_str.splitn(2, '(').collect();
         if parts.len() < 2 && call_str.len() == 8 {
@@ -332,11 +334,12 @@ impl ConciseEVMInput {
             fn_call.push_str(format!("({}", parts[1]).as_str());
         }
 
-        Some(format!("[{} → CALL] {:?}.{}", self.layer, self.contract, fn_call))
+        Some(format!("{} {:?}.{}", self.colored_call(), self.contract, fn_call))
     }
 
+    #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
-        let mut call = format!("[{} → CALL] {:?}.call", self.layer, self.contract);
+        let mut call = format!("{} {:?}.call", self.colored_call(), self.contract);
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             call.push_str(format!("{{value: {} Ether}}", value).as_str());
@@ -352,33 +355,41 @@ impl ConciseEVMInput {
         Some(call)
     }
 
+    #[inline]
     fn as_transfer(&self) -> Option<String> {
         let value = self.txn_value.unwrap_or_default();
 
         Some(format!(
-            "[{} → CALL] {:?}.call{{value: {} Ether}}(\"\")",
-            self.layer, self.contract, value
+            "{} {:?}.call{{value: {} Ether}}(\"\")",
+            self.colored_call(),
+            self.contract,
+            value
         ))
     }
 
+    #[inline]
     fn as_borrow(&self) -> Option<String> {
         let value = self.txn_value.unwrap_or_default();
 
         Some(format!(
-            "[{} → CALL] Router.swapExactETHForTokens{{value: {} Ether}}(0, path:(ETH → {:?}), address(this), block.timestamp);",
-            self.layer, value, self.contract
+            "{} Router.swapExactETHForTokens{{value: {} Ether}}(0, path:(ETH → {:?}), address(this), block.timestamp);",
+            self.colored_call(),
+            value,
+            self.contract
         ))
     }
 
     #[cfg(feature = "flashloan_v2")]
+    #[inline]
     fn append_liquidation(&self, indent: String, call: String) -> String {
         if self.liquidation_percent == 0 {
             return call;
         }
 
         let liq_call = format!(
-            "[{} → CALL] Router.swapExactTokensForETH(100% Balance, 0, path:({:?} → ETH), address(this), block.timestamp);",
-            self.layer, self.contract
+            "{} Router.swapExactTokensForETH(100% Balance, 0, path:({:?} → ETH), address(this), block.timestamp);",
+            self.colored_call(),
+            self.contract
         );
 
         let mut liq = indent.clone();
@@ -389,8 +400,14 @@ impl ConciseEVMInput {
     }
 
     #[cfg(not(feature = "flashloan_v2"))]
+    #[inline]
     fn append_liquidation(&self, _indent: String, call: String) -> String {
         call
+    }
+
+    #[inline]
+    fn colored_call(&self) -> ColoredString {
+        format!("[{} → CALL]", self.layer).blue()
     }
 }
 
