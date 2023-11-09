@@ -32,6 +32,7 @@ use crate::{
 pub struct BuildJob {
     pub build_server: String,
     pub replacements: HashMap<EVMAddress, Option<BuildJobResult>>,
+    work_dir: String,
     cache: FileSystemCache,
 }
 
@@ -39,12 +40,17 @@ pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
 const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources,ast,compiler_args";
 
 impl BuildJob {
-    pub fn new(build_server: String, replacements: HashMap<EVMAddress, Option<BuildJobResult>>) -> Self {
+    pub fn new(
+        build_server: String,
+        replacements: HashMap<EVMAddress, Option<BuildJobResult>>,
+        work_dir: String,
+    ) -> Self {
         let cache = FileSystemCache::new("./cache");
         Self {
             build_server,
             replacements,
             cache,
+            work_dir,
         }
     }
 
@@ -60,10 +66,11 @@ impl BuildJob {
             return None;
         }
         if let Some(task_id) = json["task_id"].as_str() {
+            let builder_file = format!("{}/builder_id.txt", self.work_dir.as_str());
             let mut file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open("builder_id.txt")
+                .open(builder_file)
                 .expect("Failed to open or create builder_id.txt");
             writeln!(file, "{}", task_id).expect("Failed to write task_id to builder_id.txt");
 
