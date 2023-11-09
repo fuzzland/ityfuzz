@@ -344,6 +344,29 @@ impl ConciseEVMInput {
             self.layer, value, self.contract
         ))
     }
+
+    #[cfg(feature = "flashloan_v2")]
+    fn append_liquidation(&self, indent: String, call: String) -> String {
+        if self.liquidation_percent == 0 {
+            return call;
+        }
+
+        let liq_call = format!(
+            "[{} → CALL] Router.swapExactTokensForETH(100% Balance, 0, path:({:?} → ETH), address(this), block.timestamp);",
+            self.layer, self.contract
+        );
+
+        let mut liq = indent.clone();
+        liq.push_str(format!("├─ {}\n", liq_call).as_str());
+        liq.push_str(format!("{}|  └─ ← ()", indent).as_str());
+
+        [call, liq].join("\n")
+    }
+
+    #[cfg(not(feature = "flashloan_v2"))]
+    fn append_liquidation(&self, _indent: String, call: String) -> String {
+        call
+    }
 }
 
 impl SolutionTx for ConciseEVMInput {
@@ -703,19 +726,21 @@ impl ConciseSerde for ConciseEVMInput {
     }
 
     fn serialize_string(&self) -> String {
-        let mut call = String::from("│  ");
+        let mut indent = String::from("│  ");
         for _ in 0..self.layer {
-            call.push_str("│  ");
+            indent.push_str("│  ");
         }
-        let mut ret = call.clone();
+
+        let mut call = indent.clone();
         call.push_str("├─ ");
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
         // If a call causes a control leak, it will not return immediately,
         // but when "stepping with return" happens.
         if self.call_leak < u32::MAX {
-            return call;
+            return self.append_liquidation(indent, call);
         }
 
+        let mut ret = indent.clone();
         let return_data = match &self.return_data {
             Some(v) => "0x".to_string() + &hex::encode(v),
             None => "()".to_string(),
@@ -723,11 +748,11 @@ impl ConciseSerde for ConciseEVMInput {
         // Stepping with return
         if self.step {
             ret.push_str(format!("└─ ← {}", return_data).as_str());
-            return ret;
+            return self.append_liquidation(indent, ret);
         }
 
         ret.push_str(format!("│  └─ ← {}", return_data).as_str());
-        [call, ret].join("\n")
+        self.append_liquidation(indent, [call, ret].join("\n"))
     }
 
     fn caller(&self) -> String {
