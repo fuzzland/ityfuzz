@@ -483,7 +483,11 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     let builder = if args.onchain_builder.len() > 1 {
-        Some(BuildJob::new(args.onchain_builder, onchain_replacements))
+        Some(BuildJob::new(
+            args.onchain_builder,
+            onchain_replacements,
+            args.work_dir.clone(),
+        ))
     } else {
         None
     };
