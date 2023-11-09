@@ -336,8 +336,8 @@ impl ConciseEVMInput {
         }
 
         Some(format!(
-            "{} {}.{}",
-            self.colored_call(),
+            "[{} → CALL] {}.{}",
+            self.layer,
             self.colored_address(&self.contract()),
             fn_call
         ))
@@ -346,8 +346,8 @@ impl ConciseEVMInput {
     #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
         let mut call = format!(
-            "{} {}.{}",
-            self.colored_call(),
+            "[{} → CALL] {}.{}",
+            self.layer,
             self.colored_address(&self.contract()),
             self.colored_fn_name("call")
         );
@@ -376,8 +376,8 @@ impl ConciseEVMInput {
     #[inline]
     fn as_transfer(&self) -> Option<String> {
         Some(format!(
-            "{} {}.{}{}(\"\")",
-            self.colored_call(),
+            "[{} → CALL] {}.{}{}(\"\")",
+            self.layer,
             self.colored_address(&self.contract()),
             self.colored_fn_name("call"),
             self.colored_value()
@@ -388,8 +388,8 @@ impl ConciseEVMInput {
     #[inline]
     fn as_borrow(&self) -> Option<String> {
         Some(format!(
-            "{} {}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
-            self.colored_call(),
+            "[{} → CALL] {}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
+            self.layer,
             self.colored_address("Router"),
             self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
@@ -405,8 +405,8 @@ impl ConciseEVMInput {
         }
 
         let liq_call = format!(
-            "{} {}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
-            self.colored_call(),
+            "[{} → CALL] {}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
+            self.layer,
             self.colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
             self.contract()
@@ -423,11 +423,6 @@ impl ConciseEVMInput {
     #[inline]
     fn append_liquidation(&self, _indent: String, call: String) -> String {
         call
-    }
-
-    #[inline]
-    fn colored_call(&self) -> ColoredString {
-        format!("[{} → CALL]", self.layer).truecolor(0x09, 0x58, 0xd9)
     }
 
     #[inline]
