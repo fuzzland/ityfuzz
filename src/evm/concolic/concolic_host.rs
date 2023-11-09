@@ -678,6 +678,7 @@ impl<I, VS> ConcolicHost<I, VS> {
             let handle = worker_threads.pop().unwrap();
             handle.join().unwrap();
         }
+        drop(worker_threads);
 
         let handle = std::thread::spawn(move || {
             let context = Context::new(&Config::default());
