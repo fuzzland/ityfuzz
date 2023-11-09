@@ -321,7 +321,7 @@ impl ConciseEVMInput {
         }
 
         let mut fn_call = parts[0].to_string();
-        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             fn_call.push_str(format!("{{value: {} Ether}}", value).as_str());
         }
@@ -337,7 +337,7 @@ impl ConciseEVMInput {
 
     fn as_fn_selector_call(&self) -> Option<String> {
         let mut call = format!("[{} → CALL] {:?}.call", self.layer, self.contract);
-        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             call.push_str(format!("{{value: {} Ether}}", value).as_str());
         }
@@ -353,7 +353,7 @@ impl ConciseEVMInput {
     }
 
     fn as_transfer(&self) -> Option<String> {
-        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        let value = self.txn_value.unwrap_or_default();
 
         Some(format!(
             "[{} → CALL] {:?}.call{{value: {} Ether}}(\"\")",
@@ -362,7 +362,7 @@ impl ConciseEVMInput {
     }
 
     fn as_borrow(&self) -> Option<String> {
-        let value = self.txn_value.unwrap_or(EVMU256::ZERO);
+        let value = self.txn_value.unwrap_or_default();
 
         Some(format!(
             "[{} → CALL] Router.swapExactETHForTokens{{value: {} Ether}}(0, path:(ETH → {:?}), address(this), block.timestamp);",
@@ -434,7 +434,7 @@ impl SolutionTx for ConciseEVMInput {
     }
 
     fn value(&self) -> String {
-        self.txn_value.unwrap_or(EVMU256::ZERO).to_string()
+        self.txn_value.unwrap_or_default().to_string()
     }
 
     #[cfg(feature = "flashloan_v2")]
@@ -684,7 +684,7 @@ impl EVMInput {
         S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let vm_slots = input.get_state().get(&input.get_contract()).cloned();
-        let input_by: [u8; 32] = input.get_txn_value().unwrap_or(EVMU256::ZERO).to_be_bytes();
+        let input_by: [u8; 32] = input.get_txn_value().unwrap_or_default().to_be_bytes();
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
         let res = byte_mutator(state_, &mut wrapper, vm_slots);
