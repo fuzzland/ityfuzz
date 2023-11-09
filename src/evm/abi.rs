@@ -613,7 +613,18 @@ impl ABI for A256 {
             A256InnerType::Int => I256::from_hex_str(&vec_to_hex(&self.data))
                 .unwrap_or_default()
                 .to_string(),
-            A256InnerType::Uint => U256::try_from_be_slice(&self.data).unwrap_or_default().to_string(),
+            A256InnerType::Uint => {
+                let value = U256::try_from_be_slice(&self.data).unwrap_or_default();
+                if value > U256::from(10).pow(U256::from(15)) {
+                    let one_eth = U256::from(10).pow(U256::from(18));
+                    let integer = value / one_eth;
+                    let decimal: String = (value % one_eth).to_string().chars().take(4).collect();
+
+                    format!("{}.{} Ether", integer, decimal)
+                } else {
+                    value.to_string()
+                }
+            }
             A256InnerType::Bool => {
                 if self.data == [0] {
                     "false".to_string()
