@@ -18,6 +18,7 @@ pub mod oracle;
 pub mod oracles;
 pub mod presets;
 pub mod producers;
+pub mod scheduler;
 pub mod solution;
 pub mod srcmap;
 pub mod types;

@@ -915,21 +915,22 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
     }
 
     fn fav_factor(&self) -> f64 {
+        let mut f: f64 = 0.0;
         if self.sstate.state.flashloan_data.earned > self.sstate.state.flashloan_data.owed {
-            return f64::MAX;
+            f = f64::MAX;
         }
         let owed_amount = self.sstate.state.flashloan_data.owed - self.sstate.state.flashloan_data.earned;
 
         if owed_amount == EVMU512::ZERO {
-            return f64::MAX;
+            f = f64::MAX;
         }
 
         // hacky convert from U512 -> f64
-        let mut res = 0.0;
         for idx in 0..8 {
-            res += owed_amount.as_limbs()[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
+            f += owed_amount.as_limbs()[idx] as f64 * (u64::MAX as f64).powi(idx as i32 - 4);
         }
-        res
+
+        f / self.get_staged_state().trace.derived_time as f64
     }
 
     #[cfg(feature = "evm")]

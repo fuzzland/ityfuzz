@@ -15,6 +15,7 @@ use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state::HasInfan
 pub struct TxnTrace<Loc, Addr, CI> {
     pub transactions: Vec<CI>,   // Transactions
     pub from_idx: Option<usize>, // Starting VMState ID
+    pub derived_time: u64,       // Times spent on deriving this trace
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
@@ -27,6 +28,7 @@ where
         Self {
             transactions: Vec::new(),
             from_idx: None,
+            derived_time: 0,
             phantom: Default::default(),
         }
     }
