@@ -61,7 +61,7 @@ where
             // and we should not print the sender address.
             if sender != input.caller() && !input.is_step() {
                 sender = input.caller().clone();
-                res.push_str(format!("{} {}\n", "[Sender]".yellow(), sender.blue()).as_str());
+                res.push_str(format!("{} {}\n", "[Sender]".yellow(), sender.truecolor(0, 118, 255)).as_str());
             }
             res.push_str(format!("{}\n", input.serialize_string()).as_str());
         }

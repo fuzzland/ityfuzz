@@ -322,7 +322,7 @@ impl ConciseEVMInput {
             return self.as_fn_selector_call();
         }
 
-        let mut fn_call = parts[0].yellow().to_string();
+        let mut fn_call = self.colored_fn_name(parts[0]).to_string();
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             fn_call.push_str(&self.colored_value());
@@ -337,20 +337,32 @@ impl ConciseEVMInput {
         Some(format!(
             "{} {}.{}",
             self.colored_call(),
-            self.contract().blue(),
+            self.colored_address(&self.contract()),
             fn_call
         ))
     }
 
     #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
-        let mut call = format!("{} {}.{}", self.colored_call(), self.contract().blue(), "call".yellow());
+        let mut call = format!(
+            "{} {}.{}",
+            self.colored_call(),
+            self.colored_address(&self.contract()),
+            self.colored_fn_name("call")
+        );
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             call.push_str(&self.colored_value());
         }
 
-        call.push_str(format!("({}({}", "abi.encodeWithSelector".yellow(), self.fn_selector().purple()).as_str());
+        call.push_str(
+            format!(
+                "({}({}",
+                self.colored_fn_name("abi.encodeWithSelector"),
+                self.fn_selector().purple()
+            )
+            .as_str(),
+        );
         if self.fn_args().is_empty() {
             call.push_str("))");
         } else {
@@ -363,9 +375,10 @@ impl ConciseEVMInput {
     #[inline]
     fn as_transfer(&self) -> Option<String> {
         Some(format!(
-            "{} {}.call{}(\"\")",
+            "{} {}.{}{}(\"\")",
             self.colored_call(),
-            self.contract().blue(),
+            self.colored_address(&self.contract()),
+            self.colored_fn_name("call"),
             self.colored_value()
         ))
     }
@@ -375,8 +388,8 @@ impl ConciseEVMInput {
         Some(format!(
             "{} {}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
             self.colored_call(),
-            "Router".blue(),
-            "swapExactETHForTokens".yellow(),
+            self.colored_address("Router"),
+            self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
             self.contract()
         ))
@@ -392,8 +405,8 @@ impl ConciseEVMInput {
         let liq_call = format!(
             "{} {}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
             self.colored_call(),
-            "Router".blue(),
-            "swapExactTokensForETH".yellow(),
+            self.colored_address("Router"),
+            self.colored_fn_name("swapExactTokensForETH"),
             self.contract()
         );
 
@@ -412,13 +425,23 @@ impl ConciseEVMInput {
 
     #[inline]
     fn colored_call(&self) -> ColoredString {
-        format!("[{} → CALL]", self.layer).cyan()
+        format!("[{} → CALL]", self.layer).truecolor(0x09, 0x58, 0xd9)
     }
 
     #[inline]
     fn colored_value(&self) -> ColoredString {
         let value = self.txn_value.unwrap_or_default();
-        format!("{{value: {} Ether}}", value).green()
+        format!("{{value: {} Ether}}", value).truecolor(0x99, 0x00, 0xcc)
+    }
+
+    #[inline]
+    fn colored_address(&self, addr: &str) -> ColoredString {
+        addr.truecolor(0x00, 0x76, 0xff)
+    }
+
+    #[inline]
+    fn colored_fn_name(&self, fn_name: &str) -> ColoredString {
+        fn_name.truecolor(0xff, 0x7b, 0x72)
     }
 }
 
