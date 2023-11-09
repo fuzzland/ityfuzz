@@ -315,6 +315,7 @@ impl ConciseEVMInput {
         }
     }
 
+    #[allow(dead_code)]
     #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
         let parts: Vec<&str> = call_str.splitn(2, '(').collect();
@@ -383,6 +384,7 @@ impl ConciseEVMInput {
         ))
     }
 
+    #[allow(dead_code)]
     #[inline]
     fn as_borrow(&self) -> Option<String> {
         Some(format!(

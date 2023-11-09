@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use colored::Colorize;
 use itertools::Itertools;
 use libafl::{
     fuzzer::Fuzzer,
@@ -189,6 +190,23 @@ where
             }
         }
         None
+    }
+
+    /// Pretty print the trace
+    pub fn pretty_trace(&self, trace: &[CI]) -> String {
+        let mut res = String::new();
+        let mut sender = String::new();
+        for input in trace {
+            // `input.is_step()` indicates that the input is a "stepping with return"
+            // and we should not print the sender address.
+            if sender != input.caller() && !input.is_step() {
+                sender = input.caller().clone();
+                res.push_str(format!("{} {}\n", "[Sender]".yellow(), sender.truecolor(0x00, 0x76, 0xff)).as_str());
+            }
+            res.push_str(format!("{}\n", input.serialize_string()).as_str());
+        }
+
+        res
     }
 }
 
@@ -552,7 +570,7 @@ where
                         corpus_idx.into(),
                     );
                     // TODO
-                    let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
+                    let txn_text = self.pretty_trace(&minimized);
                     let txn_json = minimized
                         .iter()
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
