@@ -297,8 +297,8 @@ impl ConciseEVMInput {
         #[cfg(not(feature = "debug"))]
         let output = match self.data {
             Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH, liq percent: {}",
-                self.caller,
+                "[{} → CALL] {:?}.{} with {} ETH, liq percent: {}",
+                self.layer,
                 self.contract,
                 d,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
@@ -306,15 +306,15 @@ impl ConciseEVMInput {
             ),
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => format!(
-                    "{:?} => {:?} with {} ETH, liq percent: {}",
-                    self.caller,
+                    "[{} → CALL] {:?} with {} ETH, liq percent: {}",
+                    self.layer,
                     self.contract,
                     self.txn_value.unwrap_or(EVMU256::ZERO),
                     liq
                 ),
                 EVMInputTy::Borrow => format!(
                     "{:?} borrow token {:?} with {} ETH, liq percent: {}",
-                    self.caller,
+                    self.layer,
                     self.contract,
                     self.txn_value.unwrap_or(EVMU256::ZERO),
                     liq
@@ -324,7 +324,10 @@ impl ConciseEVMInput {
         };
 
         #[cfg(feature = "debug")]
-        let output = format!("{:?} => {:?} with {:?} ETH", self.caller, self.contract, self.txn_value);
+        let output = format!(
+            "[{} → CALL] {:?} with {:?} ETH",
+            self.layer, self.contract, self.txn_value
+        );
 
         if output.is_empty() {
             None
@@ -337,15 +340,15 @@ impl ConciseEVMInput {
     fn pretty_txn(&self) -> Option<String> {
         let output = match self.data {
             Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH",
-                self.caller,
+                "[{} → CALL] {:?}.{} with {} ETH",
+                self.layer,
                 self.contract,
                 d.to_string(),
                 self.txn_value.unwrap_or(EVMU256::ZERO),
             ),
             None => format!(
-                "{:?} => {:?} transfer {} ETH",
-                self.caller,
+                "[{} → CALL] {:?} transfer {} ETH",
+                self.layer,
                 self.contract,
                 self.txn_value.unwrap_or(EVMU256::ZERO),
             ),
@@ -731,11 +734,11 @@ impl ConciseSerde for ConciseEVMInput {
         };
         // Stepping with return
         if self.step {
-            ret.push_str(format!("└─ <- {}", return_data).as_str());
+            ret.push_str(format!("└─ ← {}", return_data).as_str());
             return ret;
         }
 
-        ret.push_str(format!("│  └─ <- {}", return_data).as_str());
+        ret.push_str(format!("│  └─ ← {}", return_data).as_str());
         [call, ret].join("\n")
     }
 
