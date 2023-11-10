@@ -347,18 +347,18 @@ impl ConciseEVMInput {
             call.push_str(&self.colored_value());
         }
 
-        call.push_str(
-            format!(
-                "({}({}",
-                self.colored_fn_name("abi.encodeWithSelector"),
-                self.fn_selector().purple()
-            )
-            .as_str(),
-        );
         if self.fn_args().is_empty() {
-            call.push_str("))");
+            call.push_str(format!("({})", self.fn_selector().purple()).as_str());
         } else {
-            call.push_str(format!(", {})))", self.fn_args()).as_str());
+            call.push_str(
+                format!(
+                    "({}({}, {}))",
+                    self.colored_fn_name("abi.encodeWithSelector"),
+                    self.fn_selector().purple(),
+                    self.fn_args()
+                )
+                .as_str(),
+            );
         }
 
         Some(call)
@@ -416,9 +416,9 @@ impl ConciseEVMInput {
     }
 
     #[inline]
-    fn colored_value(&self) -> ColoredString {
+    fn colored_value(&self) -> String {
         let value = self.txn_value.unwrap_or_default();
-        format!("{{value: {}}}", pretty_value(value)).truecolor(0x99, 0x00, 0xcc)
+        format!("{{value: {}}}", pretty_value(value).truecolor(0x99, 0x00, 0xcc))
     }
 
     #[inline]
@@ -813,7 +813,6 @@ impl ConciseSerde for ConciseEVMInput {
 
         // Stepping with return
         if self.step {
-            // TODO
             let res = String::from("");
             return self.append_liquidation(indent, res);
         }
