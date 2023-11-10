@@ -804,8 +804,10 @@ impl ConciseSerde for ConciseEVMInput {
 
     fn serialize_string(&self) -> String {
         let mut indent = String::from("   ");
+        let mut tree_level = 1;
         for _ in 0..self.layer {
             indent.push_str("│  │  ");
+            tree_level += 2;
         }
 
         // Stepping with return
@@ -815,7 +817,7 @@ impl ConciseSerde for ConciseEVMInput {
         }
 
         let mut call = indent.clone();
-        call.push_str(format!("├─ [{}] ", self.layer + 1).as_str());
+        call.push_str(format!("├─ [{}] ", tree_level).as_str());
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
 
         // Control leak
@@ -824,7 +826,7 @@ impl ConciseSerde for ConciseEVMInput {
             fallback.push_str(
                 format!(
                     "│  ├─ [{}] {}.fallback()",
-                    self.layer + 1,
+                    tree_level + 1,
                     colored_sender(&self.sender())
                 )
                 .as_str(),
