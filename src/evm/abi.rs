@@ -19,7 +19,10 @@ use revm_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
 
-use super::{types::checksum, utils::colored_address};
+use super::{
+    types::checksum,
+    utils::{colored_address, pretty_value},
+};
 /// Definition of ABI types and their encoding, decoding, mutating methods
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::{
@@ -628,15 +631,7 @@ impl ABI for A256 {
                 .to_string(),
             A256InnerType::Uint => {
                 let value = U256::try_from_be_slice(&self.data).unwrap_or_default();
-                if value > U256::from(10).pow(U256::from(15)) {
-                    let one_eth = U256::from(10).pow(U256::from(18));
-                    let integer = value / one_eth;
-                    let decimal: String = (value % one_eth).to_string().chars().take(4).collect();
-
-                    format!("{}.{} Ether", integer, decimal)
-                } else {
-                    value.to_string()
-                }
+                pretty_value(value)
             }
             A256InnerType::Bool => {
                 if self.data == [0] {

@@ -11,7 +11,7 @@ use libafl_bolts::{prelude::Rand, HasLen};
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::utils::colored_address;
+use super::utils::{colored_address, pretty_value};
 use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
@@ -416,7 +416,7 @@ impl ConciseEVMInput {
     #[inline]
     fn colored_value(&self) -> ColoredString {
         let value = self.txn_value.unwrap_or_default();
-        format!("{{value: {} Ether}}", value).truecolor(0x99, 0x00, 0xcc)
+        format!("{{value: {}}}", pretty_value(value)).truecolor(0x99, 0x00, 0xcc)
     }
 
     #[inline]
