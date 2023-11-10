@@ -335,19 +335,13 @@ impl ConciseEVMInput {
             fn_call.push_str(format!("({}", parts[1]).as_str());
         }
 
-        Some(format!(
-            "[{} → CALL] {}.{}",
-            self.layer,
-            self.colored_address(&self.contract()),
-            fn_call
-        ))
+        Some(format!("{}.{}", self.colored_address(&self.contract()), fn_call))
     }
 
     #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
         let mut call = format!(
-            "[{} → CALL] {}.{}",
-            self.layer,
+            "{}.{}",
             self.colored_address(&self.contract()),
             self.colored_fn_name("call")
         );
@@ -376,8 +370,7 @@ impl ConciseEVMInput {
     #[inline]
     fn as_transfer(&self) -> Option<String> {
         Some(format!(
-            "[{} → CALL] {}.{}{}(\"\")",
-            self.layer,
+            "{}.{}{}(\"\")",
             self.colored_address(&self.contract()),
             self.colored_fn_name("call"),
             self.colored_value()
@@ -388,8 +381,7 @@ impl ConciseEVMInput {
     #[inline]
     fn as_borrow(&self) -> Option<String> {
         Some(format!(
-            "[{} → CALL] {}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
-            self.layer,
+            "{}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
             self.colored_address("Router"),
             self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
@@ -405,8 +397,7 @@ impl ConciseEVMInput {
         }
 
         let liq_call = format!(
-            "[{} → CALL] {}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
-            self.layer,
+            "{}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
             self.colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
             self.contract()
