@@ -423,6 +423,28 @@ impl ConciseEVMInput {
     fn colored_fn_name(&self, fn_name: &str) -> ColoredString {
         fn_name.truecolor(0xff, 0x7b, 0x72)
     }
+
+    #[inline]
+    fn pretty_return(&self, ret: &[u8]) -> String {
+        if ret.len() != 32 {
+            return format!("0x{}", hex::encode(ret));
+        }
+
+        // Try to encode it as an address
+        if ret.len() == 32 && ret[..12] == [0; 12] && (ret[12] != 0 || ret[13] != 0) {
+            let addr = EVMAddress::from_slice(&ret[12..]);
+            return colored_address(&checksum(&addr));
+        }
+
+        // Remove leading zeros
+        let res = match hex::encode(ret).trim_start_matches('0') {
+            "" => "00".to_string(),
+            v if v.len() % 2 != 0 => format!("0{}", v),
+            v => v.to_string(),
+        };
+
+        format!("0x{}", res)
+    }
 }
 
 impl SolutionTx for ConciseEVMInput {
@@ -798,7 +820,7 @@ impl ConciseSerde for ConciseEVMInput {
 
         let mut ret = indent.clone();
         let return_data = match &self.return_data {
-            Some(v) => "0x".to_string() + &hex::encode(v),
+            Some(v) => self.pretty_return(v),
             None => "()".to_string(),
         };
         // Stepping with return
