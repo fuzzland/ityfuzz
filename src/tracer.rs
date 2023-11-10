@@ -7,7 +7,7 @@ use libafl::{corpus::Corpus, prelude::HasCorpus};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    evm::utils::pretty_concise_inputs,
+    evm::utils::prettify_concise_inputs,
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
     state::HasInfantStateState,
@@ -60,7 +60,7 @@ where
             return String::from("[REDACTED]\n");
         }
 
-        pretty_concise_inputs(&inputs)
+        prettify_concise_inputs(&inputs)
     }
 
     /// Serialize the trace so that it can be replayed by using --replay-file

@@ -11,7 +11,7 @@ use libafl_bolts::{prelude::Rand, HasLen};
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::utils::{colored_address, pretty_value};
+use super::utils::{colored_address, colored_sender, prettify_value};
 use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
@@ -418,7 +418,7 @@ impl ConciseEVMInput {
     #[inline]
     fn colored_value(&self) -> String {
         let value = self.txn_value.unwrap_or_default();
-        format!("{{value: {}}}", pretty_value(value).truecolor(0x99, 0x00, 0xcc))
+        format!("{{value: {}}}", prettify_value(value).truecolor(0x99, 0x00, 0xcc))
     }
 
     #[inline]
@@ -824,7 +824,7 @@ impl ConciseSerde for ConciseEVMInput {
         // Control leak
         if self.call_leak != u32::MAX {
             let mut fallback = indent.clone();
-            fallback.push_str(format!("│  ├─ {}.fallback()", colored_address(&self.sender())).as_str());
+            fallback.push_str(format!("│  ├─ {}.fallback()", colored_sender(&self.sender())).as_str());
             call.push('\n');
             call.push_str(fallback.as_str());
         }

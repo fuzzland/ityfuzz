@@ -42,7 +42,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
 use crate::{
-    evm::{host::JMP_MAP, solution, utils::pretty_concise_inputs},
+    evm::{host::JMP_MAP, solution, utils::prettify_concise_inputs},
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
@@ -547,7 +547,7 @@ where
                         &mut self.objective,
                         corpus_idx.into(),
                     );
-                    let txn_text = pretty_concise_inputs(&minimized);
+                    let txn_text = prettify_concise_inputs(&minimized);
                     let txn_json = minimized
                         .iter()
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))

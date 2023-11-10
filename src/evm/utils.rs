@@ -4,6 +4,57 @@ use revm_primitives::U256;
 use crate::input::ConciseSerde;
 
 pub fn colored_address(addr: &str) -> String {
+    let (r, g, b) = get_rgb_by_address(addr);
+    addr.truecolor(r, g, b).to_string()
+}
+
+// The `[Sender]` and the address should be the same color.
+pub fn colored_sender(sender: &str) -> String {
+    let (r, g, b) = get_rgb_by_address(sender);
+    format!("[Sender] {}", sender).truecolor(r, g, b).to_string()
+}
+
+pub fn prettify_value(value: U256) -> String {
+    if value > U256::from(10).pow(U256::from(15)) {
+        let one_eth = U256::from(10).pow(U256::from(18));
+        let integer = value / one_eth;
+        let decimal: String = (value % one_eth).to_string().chars().take(4).collect();
+
+        format!("{}.{} Ether", integer, decimal)
+    } else {
+        format!("{} Wei", value)
+    }
+}
+
+pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
+    let mut res = String::new();
+    let mut sender = String::new();
+    let mut pending: Option<String> = None;
+    for input in inputs {
+        let current = input.serialize_string();
+        // Stepping with return
+        if current.is_empty() {
+            continue;
+        }
+
+        // Sender has changed
+        if sender != input.sender() {
+            push_last_input(&mut res, pending.take());
+            sender = input.sender().clone();
+            res.push_str(format!("{}{}\n", input.indent(), colored_sender(&sender)).as_str());
+        }
+
+        if let Some(s) = pending.take() {
+            res.push_str(format!("{}\n", s).as_str());
+        }
+        pending = Some(current);
+    }
+
+    push_last_input(&mut res, pending);
+    res
+}
+
+fn get_rgb_by_address(addr: &str) -> (u8, u8, u8) {
     let default = vec![0x00, 0x76, 0xff];
     // 8 is the length of `0x` + 3 bytes
     let mut rgb = if addr.len() < 8 {
@@ -16,46 +67,22 @@ pub fn colored_address(addr: &str) -> String {
         rgb = default;
     }
 
-    addr.truecolor(rgb[0], rgb[1], rgb[2]).to_string()
+    (rgb[0], rgb[1], rgb[2])
 }
 
-pub fn pretty_value(value: U256) -> String {
-    if value > U256::from(10).pow(U256::from(15)) {
-        let one_eth = U256::from(10).pow(U256::from(18));
-        let integer = value / one_eth;
-        let decimal: String = (value % one_eth).to_string().chars().take(4).collect();
-
-        format!("{}.{} Ether", integer, decimal)
-    } else {
-        format!("{} Wei", value)
+fn push_last_input(res: &mut String, input: Option<String>) {
+    if input.is_none() {
+        return;
     }
-}
-
-pub fn pretty_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
-    let mut res = String::new();
-    let mut sender = String::new();
-    for input in inputs {
-        // `input.is_step()` indicates that the input is a "stepping with return"
-        // and we should not print the sender address.
-        if sender != input.sender() && !input.is_step() {
-            sender = input.sender().clone();
-            res.push_str(
-                format!(
-                    "{}{} {}\n",
-                    input.indent(),
-                    "[Sender]".yellow(),
-                    colored_address(&sender)
-                )
-                .as_str(),
-            );
-        }
-
-        let tx = input.serialize_string();
-        if tx.is_empty() {
-            continue;
-        }
-        res.push_str(format!("{}\n", tx).as_str());
+    let s = input.unwrap();
+    if s.contains("└─") {
+        res.push_str(format!("{}\n", s).as_str());
+        return;
     }
 
-    res
+    let mut parts: Vec<&str> = s.split("├─").collect();
+    if let Some(last) = parts.pop() {
+        let input = format!("{}└─{}\n", parts.join("├─"), last);
+        res.push_str(input.as_str());
+    }
 }

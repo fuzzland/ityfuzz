@@ -21,7 +21,7 @@ use tracing::debug;
 
 use super::{
     types::checksum,
-    utils::{colored_address, pretty_value},
+    utils::{colored_address, prettify_value},
 };
 /// Definition of ABI types and their encoding, decoding, mutating methods
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
@@ -631,7 +631,7 @@ impl ABI for A256 {
                 .to_string(),
             A256InnerType::Uint => {
                 let value = U256::try_from_be_slice(&self.data).unwrap_or_default();
-                pretty_value(value)
+                prettify_value(value)
             }
             A256InnerType::Bool => {
                 if self.data == [0] {
