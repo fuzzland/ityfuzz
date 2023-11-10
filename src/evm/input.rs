@@ -401,7 +401,7 @@ impl ConciseEVMInput {
         );
 
         let mut liq = indent.clone();
-        liq.push_str(format!("├─ {}\n", liq_call).as_str());
+        liq.push_str(format!("├─ {}", liq_call).as_str());
 
         if call.is_empty() {
             return liq;
