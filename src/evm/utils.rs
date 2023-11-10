@@ -1,6 +1,8 @@
 use colored::Colorize;
 use revm_primitives::U256;
 
+use crate::input::ConciseSerde;
+
 pub fn colored_address(addr: &str) -> String {
     let default = vec![0x00, 0x76, 0xff];
     // 8 is the length of `0x` + 3 bytes
@@ -27,4 +29,33 @@ pub fn pretty_value(value: U256) -> String {
     } else {
         format!("{} Wei", value)
     }
+}
+
+pub fn pretty_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
+    let mut res = String::new();
+    let mut sender = String::new();
+    for input in inputs {
+        // `input.is_step()` indicates that the input is a "stepping with return"
+        // and we should not print the sender address.
+        if sender != input.sender() && !input.is_step() {
+            sender = input.sender().clone();
+            res.push_str(
+                format!(
+                    "{}{} {}\n",
+                    input.indent(),
+                    "[Sender]".yellow(),
+                    colored_address(&sender)
+                )
+                .as_str(),
+            );
+        }
+
+        let tx = input.serialize_string();
+        if tx.is_empty() {
+            continue;
+        }
+        res.push_str(format!("{}\n", tx).as_str());
+    }
+
+    res
 }

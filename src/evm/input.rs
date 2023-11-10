@@ -403,6 +403,9 @@ impl ConciseEVMInput {
         let mut liq = indent.clone();
         liq.push_str(format!("├─ {}\n", liq_call).as_str());
 
+        if call.is_empty() {
+            return liq;
+        }
         [call, liq].join("\n")
     }
 
@@ -805,18 +808,28 @@ impl ConciseSerde for ConciseEVMInput {
     fn serialize_string(&self) -> String {
         let mut indent = String::from("   ");
         for _ in 0..self.layer {
-            indent.push_str("│  ");
+            indent.push_str("│  │  ");
         }
 
         // Stepping with return
         if self.step {
-            let call = String::from("TODO Stepping with return");
-            return self.append_liquidation(indent, call);
+            // TODO
+            let res = String::from("");
+            return self.append_liquidation(indent, res);
         }
 
         let mut call = indent.clone();
         call.push_str("├─ ");
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+
+        // Control leak
+        if self.call_leak != u32::MAX {
+            let mut fallback = indent.clone();
+            fallback.push_str(format!("│  ├─ {}.fallback()", colored_address(&self.sender())).as_str());
+            call.push('\n');
+            call.push_str(fallback.as_str());
+        }
+
         if self.return_data.is_some() {
             let mut ret = indent.clone();
             let v = self.return_data.as_ref().unwrap();
@@ -828,7 +841,7 @@ impl ConciseSerde for ConciseEVMInput {
         self.append_liquidation(indent, call)
     }
 
-    fn caller(&self) -> String {
+    fn sender(&self) -> String {
         checksum(&self.caller)
     }
 
@@ -839,7 +852,7 @@ impl ConciseSerde for ConciseEVMInput {
 
         let mut indent = String::from("   ");
         for _ in 1..self.layer {
-            indent.push_str("│  ");
+            indent.push_str("│  │  ");
         }
         indent
     }

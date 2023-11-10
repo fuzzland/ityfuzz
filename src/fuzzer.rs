@@ -11,7 +11,6 @@ use std::{
     time::Duration,
 };
 
-use colored::Colorize;
 use itertools::Itertools;
 use libafl::{
     fuzzer::Fuzzer,
@@ -43,7 +42,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
 use crate::{
-    evm::{host::JMP_MAP, solution, utils::colored_address},
+    evm::{host::JMP_MAP, solution, utils::pretty_concise_inputs},
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
@@ -184,32 +183,6 @@ where
             }
         }
         None
-    }
-
-    /// Pretty print the trace
-    pub fn pretty_trace(&self, trace: &[CI]) -> String {
-        let mut res = String::new();
-        let mut sender = String::new();
-        for input in trace {
-            // `input.is_step()` indicates that the input is a "stepping with return"
-            // and we should not print the sender address.
-            if sender != input.caller() && !input.is_step() {
-                sender = input.caller().clone();
-                res.push_str(
-                    format!(
-                        "{}{} {}\n",
-                        input.indent(),
-                        "[Sender]".yellow(),
-                        colored_address(&sender)
-                    )
-                    .as_str(),
-                );
-            }
-
-            res.push_str(format!("{}\n", input.serialize_string()).as_str());
-        }
-
-        res
     }
 }
 
@@ -574,8 +547,7 @@ where
                         &mut self.objective,
                         corpus_idx.into(),
                     );
-                    // TODO
-                    let txn_text = self.pretty_trace(&minimized);
+                    let txn_text = pretty_concise_inputs(&minimized);
                     let txn_json = minimized
                         .iter()
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))

@@ -99,7 +99,7 @@ pub trait ConciseSerde {
     fn deserialize_concise(data: &[u8]) -> Self;
     fn serialize_string(&self) -> String;
 
-    fn caller(&self) -> String {
+    fn sender(&self) -> String {
         String::from("")
     }
     // Get the indentation of the input

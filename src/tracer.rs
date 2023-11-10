@@ -3,12 +3,11 @@
 
 use std::fmt::Debug;
 
-use colored::Colorize;
 use libafl::{corpus::Corpus, prelude::HasCorpus};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    evm::utils::colored_address,
+    evm::utils::pretty_concise_inputs,
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
     state::HasInfantStateState,
@@ -61,27 +60,7 @@ where
             return String::from("[REDACTED]\n");
         }
 
-        let mut res = String::new();
-        let mut sender = String::new();
-        for input in inputs {
-            // `input.is_step()` indicates that the input is a "stepping with return"
-            // and we should not print the sender address.
-            if sender != input.caller() && !input.is_step() {
-                sender = input.caller().clone();
-                res.push_str(
-                    format!(
-                        "{}{} {}\n",
-                        input.indent(),
-                        "[Sender]".yellow(),
-                        colored_address(&sender)
-                    )
-                    .as_str(),
-                );
-            }
-            res.push_str(format!("{}\n", input.serialize_string()).as_str());
-        }
-
-        res
+        pretty_concise_inputs(&inputs)
     }
 
     /// Serialize the trace so that it can be replayed by using --replay-file
