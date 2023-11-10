@@ -403,9 +403,6 @@ impl ConciseEVMInput {
         let mut liq = indent.clone();
         liq.push_str(format!("├─ [{}] {}", self.layer + 1, liq_call).as_str());
 
-        if call.is_empty() {
-            return liq;
-        }
         [call, liq].join("\n")
     }
 
@@ -813,7 +810,7 @@ impl ConciseSerde for ConciseEVMInput {
 
         // Stepping with return
         if self.step {
-            let res = String::from("");
+            let res = format!("{}└─ ← ()", indent.clone());
             return self.append_liquidation(indent, res);
         }
 
@@ -860,6 +857,7 @@ impl ConciseSerde for ConciseEVMInput {
         for _ in 1..self.layer {
             indent.push_str("│  │  ");
         }
+
         indent
     }
 

@@ -32,37 +32,34 @@ pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
 
     /*
      * The rules for replacing the last `├─` with `└─`:
-     * 1. the sender has changed
-     * 2. the indentation has reduced
+     * 1. the indentation has reduced
+     * 2. the sender has changed in the same layer
      * 3. the last input
      */
     let mut prev_indent_len = 0;
     let mut pending: Option<String> = None;
 
     for input in inputs {
-        let current = input.serialize_string();
-        // Stepping with return
-        if current.is_empty() {
-            continue;
+        // Indentation has reduced.
+        if input.indent().len() < prev_indent_len {
+            push_last_input(&mut res, pending.take());
         }
 
         // Sender has changed
-        if sender != input.sender() {
-            push_last_input(&mut res, pending.take());
+        if sender != input.sender() && !input.is_step() {
+            if input.indent().len() == prev_indent_len {
+                push_last_input(&mut res, pending.take());
+            }
+
             sender = input.sender().clone();
             res.push_str(format!("{}{}\n", input.indent(), colored_sender(&sender)).as_str());
-        }
-
-        // Indentation has reduced.
-        if input.indent().len() < prev_indent_len {
-            prev_indent_len = input.indent().len();
-            push_last_input(&mut res, pending.take());
         }
 
         if let Some(s) = pending.take() {
             res.push_str(format!("{}\n", s).as_str());
         }
-        pending = Some(current);
+        pending = Some(input.serialize_string());
+        prev_indent_len = input.indent().len();
     }
 
     push_last_input(&mut res, pending);
