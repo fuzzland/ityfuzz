@@ -808,28 +808,24 @@ impl ConciseSerde for ConciseEVMInput {
             indent.push_str("│  ");
         }
 
-        let mut call = indent.clone();
-        call.push_str("├─ ");
-        call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
-        // If a call causes a control leak, it will not return immediately,
-        // but when "stepping with return" happens.
-        if self.call_leak < u32::MAX {
+        // Stepping with return
+        if self.step {
+            let call = String::from("TODO Stepping with return");
             return self.append_liquidation(indent, call);
         }
 
-        let mut ret = indent.clone();
-        let return_data = match &self.return_data {
-            Some(v) => self.pretty_return(v),
-            None => "()".to_string(),
-        };
-        // Stepping with return
-        if self.step {
-            ret.push_str(format!("└─ ← {}", return_data).as_str());
-            return self.append_liquidation(indent, ret);
+        let mut call = indent.clone();
+        call.push_str("├─ ");
+        call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+        if self.return_data.is_some() {
+            let mut ret = indent.clone();
+            let v = self.return_data.as_ref().unwrap();
+            ret.push_str(format!("│  └─ ← {}", self.pretty_return(v)).as_str());
+            call.push('\n');
+            call.push_str(ret.as_str());
         }
 
-        ret.push_str(format!("│  └─ ← {}", return_data).as_str());
-        self.append_liquidation(indent, [call, ret].join("\n"))
+        self.append_liquidation(indent, call)
     }
 
     fn caller(&self) -> String {

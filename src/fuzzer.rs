@@ -43,19 +43,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
 use crate::{
-    evm::host::JMP_MAP,
+    evm::{host::JMP_MAP, solution, utils::colored_address},
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
-    input::{ConciseSerde, SolutionTx},
+    input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
     oracle::BugMetadata,
     scheduler::HasReportCorpus,
-    state::HasExecutionResult,
-};
-/// Implements fuzzing logic for ItyFuzz
-use crate::{
-    evm::solution,
-    input::VMInputT,
-    state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
+    state::{HasCurrentInputIdx, HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState},
 };
 
 pub static mut RUN_FOREVER: bool = false;
@@ -206,11 +200,12 @@ where
                         "{}{} {}\n",
                         input.indent(),
                         "[Sender]".yellow(),
-                        sender.truecolor(0x00, 0x76, 0xff)
+                        colored_address(&sender)
                     )
                     .as_str(),
                 );
             }
+
             res.push_str(format!("{}\n", input.serialize_string()).as_str());
         }
 

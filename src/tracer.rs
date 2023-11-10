@@ -7,7 +7,12 @@ use colored::Colorize;
 use libafl::{corpus::Corpus, prelude::HasCorpus};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state::HasInfantStateState};
+use crate::{
+    evm::utils::colored_address,
+    generic_vm::vm_state::VMStateT,
+    input::ConciseSerde,
+    state::HasInfantStateState,
+};
 
 /// Represent a trace of transactions with starting VMState ID (from_idx).
 /// If VMState ID is None, it means that the trace is from the initial state.
@@ -68,7 +73,7 @@ where
                         "{}{} {}\n",
                         input.indent(),
                         "[Sender]".yellow(),
-                        sender.truecolor(0x00, 0x76, 0xff)
+                        colored_address(&sender)
                     )
                     .as_str(),
                 );
