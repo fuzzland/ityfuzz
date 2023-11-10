@@ -850,7 +850,7 @@ impl ConciseSerde for ConciseEVMInput {
             return "".to_string();
         }
 
-        let mut indent = String::from("   ");
+        let mut indent = String::from("   │  ");
         for _ in 1..self.layer {
             indent.push_str("│  │  ");
         }
