@@ -859,7 +859,7 @@ impl ABI for AArray {
     }
 
     fn to_string(&self) -> String {
-        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(","))
+        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(", "))
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
