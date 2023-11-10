@@ -378,7 +378,7 @@ impl ConciseEVMInput {
     #[inline]
     fn as_borrow(&self) -> Option<String> {
         Some(format!(
-            "{}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
+            "{}.{}{}(0, path:(WETH → {}), address(this), block.timestamp);",
             colored_address("Router"),
             self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
@@ -394,7 +394,7 @@ impl ConciseEVMInput {
         }
 
         let liq_call = format!(
-            "{}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
+            "{}.{}(100% Balance, 0, path:({} → WETH), address(this), block.timestamp);",
             colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
             colored_address(&self.contract())
