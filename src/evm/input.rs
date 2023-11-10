@@ -11,6 +11,7 @@ use libafl_bolts::{prelude::Rand, HasLen};
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use super::utils::colored_address;
 use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
@@ -295,7 +296,7 @@ impl ConciseEVMInput {
     fn pretty_txn(&self) -> Option<String> {
         #[cfg(not(feature = "debug"))]
         match self.data {
-            Some(ref d) => self.as_abi_call(d.to_string()),
+            Some(ref d) => self.as_abi_call(d.to_colored_string()),
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => self.as_transfer(),
                 EVMInputTy::Borrow => self.as_borrow(),
@@ -310,7 +311,7 @@ impl ConciseEVMInput {
     #[cfg(not(feature = "flashloan_v2"))]
     fn pretty_txn(&self) -> Option<String> {
         match self.data {
-            Some(ref d) => self.as_abi_call(d.to_string()),
+            Some(ref d) => self.as_abi_call(d.to_colored_string()),
             None => self.as_transfer(),
         }
     }
@@ -335,16 +336,12 @@ impl ConciseEVMInput {
             fn_call.push_str(format!("({}", parts[1]).as_str());
         }
 
-        Some(format!("{}.{}", self.colored_address(&self.contract()), fn_call))
+        Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
     }
 
     #[inline]
     fn as_fn_selector_call(&self) -> Option<String> {
-        let mut call = format!(
-            "{}.{}",
-            self.colored_address(&self.contract()),
-            self.colored_fn_name("call")
-        );
+        let mut call = format!("{}.{}", colored_address(&self.contract()), self.colored_fn_name("call"));
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             call.push_str(&self.colored_value());
@@ -371,7 +368,7 @@ impl ConciseEVMInput {
     fn as_transfer(&self) -> Option<String> {
         Some(format!(
             "{}.{}{}()",
-            self.colored_address(&self.contract()),
+            colored_address(&self.contract()),
             self.colored_fn_name("call"),
             self.colored_value()
         ))
@@ -382,10 +379,10 @@ impl ConciseEVMInput {
     fn as_borrow(&self) -> Option<String> {
         Some(format!(
             "{}.{}{}(0, path:(ETH → {}), address(this), block.timestamp);",
-            self.colored_address("Router"),
+            colored_address("Router"),
             self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
-            self.colored_address(&self.contract())
+            colored_address(&self.contract())
         ))
     }
 
@@ -398,9 +395,9 @@ impl ConciseEVMInput {
 
         let liq_call = format!(
             "{}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
-            self.colored_address("Router"),
+            colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
-            self.colored_address(&self.contract())
+            colored_address(&self.contract())
         );
 
         let mut liq = indent.clone();
@@ -420,17 +417,6 @@ impl ConciseEVMInput {
     fn colored_value(&self) -> ColoredString {
         let value = self.txn_value.unwrap_or_default();
         format!("{{value: {} Ether}}", value).truecolor(0x99, 0x00, 0xcc)
-    }
-
-    #[inline]
-    fn colored_address(&self, addr: &str) -> ColoredString {
-        let default = vec![0x00, 0x76, 0xff];
-        if addr.len() < 8 {
-            return addr.truecolor(default[0], default[1], default[2]);
-        }
-
-        let rgb = hex::decode(&addr[addr.len() - 6..]).unwrap_or(default);
-        addr.truecolor(rgb[0], rgb[1], rgb[2])
     }
 
     #[inline]

@@ -23,6 +23,7 @@ pub mod solution;
 pub mod srcmap;
 pub mod types;
 pub mod uniswap;
+pub mod utils;
 pub mod vm;
 
 use std::{

@@ -19,7 +19,7 @@ use revm_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
 
-use super::types::checksum;
+use super::{types::checksum, utils::colored_address};
 /// Definition of ABI types and their encoding, decoding, mutating methods
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::{
@@ -140,6 +140,11 @@ pub trait ABI: CloneABI {
     fn get_concolic(&self) -> Vec<Box<Expr>>;
     /// Get the size of args
     fn get_size(&self) -> usize;
+
+    /// Convert args to colored string
+    fn to_colored_string(&self) -> String {
+        self.to_string()
+    }
 }
 
 impl Default for Box<dyn ABI> {
@@ -282,6 +287,14 @@ impl BoxedABI {
     /// Set the bytes to args, used for decoding
     pub fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         self.b.set_bytes(bytes[4..].to_vec())
+    }
+
+    pub fn to_colored_string(&self) -> String {
+        if self.function == [0; 4] {
+            self.to_string()
+        } else {
+            format!("{}{}", self.get_func_name(), self.b.to_colored_string())
+        }
     }
 }
 
@@ -643,6 +656,13 @@ impl ABI for A256 {
         }
     }
 
+    fn to_colored_string(&self) -> String {
+        match self.inner_type {
+            A256InnerType::Address => colored_address(&self.to_string()),
+            _ => self.to_string(),
+        }
+    }
+
     fn get_concolic(&self) -> Vec<Box<Expr>> {
         let mut bytes = vec![Expr::const_byte(0u8); 32];
         let data_len = self.data.len();
@@ -860,6 +880,13 @@ impl ABI for AArray {
 
     fn to_string(&self) -> String {
         format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(", "))
+    }
+
+    fn to_colored_string(&self) -> String {
+        format!(
+            "({})",
+            self.data.iter().map(|x| x.b.deref().to_colored_string()).join(", ")
+        )
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
