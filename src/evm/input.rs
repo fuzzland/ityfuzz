@@ -401,7 +401,7 @@ impl ConciseEVMInput {
         );
 
         let mut liq = indent.clone();
-        liq.push_str(format!("├─ {}", liq_call).as_str());
+        liq.push_str(format!("├─ [{}] {}", self.layer + 1, liq_call).as_str());
 
         if call.is_empty() {
             return liq;
@@ -818,13 +818,20 @@ impl ConciseSerde for ConciseEVMInput {
         }
 
         let mut call = indent.clone();
-        call.push_str("├─ ");
+        call.push_str(format!("├─ [{}] ", self.layer + 1).as_str());
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
 
         // Control leak
         if self.call_leak != u32::MAX {
             let mut fallback = indent.clone();
-            fallback.push_str(format!("│  ├─ {}.fallback()", colored_sender(&self.sender())).as_str());
+            fallback.push_str(
+                format!(
+                    "│  ├─ [{}] {}.fallback()",
+                    self.layer + 1,
+                    colored_sender(&self.sender())
+                )
+                .as_str(),
+            );
             call.push('\n');
             call.push_str(fallback.as_str());
         }

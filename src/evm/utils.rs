@@ -22,14 +22,23 @@ pub fn prettify_value(value: U256) -> String {
 
         format!("{}.{} Ether", integer, decimal)
     } else {
-        format!("{} Wei", value)
+        value.to_string()
     }
 }
 
 pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
     let mut res = String::new();
     let mut sender = String::new();
+
+    /*
+     * The rules for replacing the last `├─` with `└─`:
+     * 1. the sender has changed
+     * 2. the indentation has reduced
+     * 3. the last input
+     */
+    let mut prev_indent_len = 0;
     let mut pending: Option<String> = None;
+
     for input in inputs {
         let current = input.serialize_string();
         // Stepping with return
@@ -42,6 +51,12 @@ pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
             push_last_input(&mut res, pending.take());
             sender = input.sender().clone();
             res.push_str(format!("{}{}\n", input.indent(), colored_sender(&sender)).as_str());
+        }
+
+        // Indentation has reduced.
+        if input.indent().len() < prev_indent_len {
+            prev_indent_len = input.indent().len();
+            push_last_input(&mut res, pending.take());
         }
 
         if let Some(s) = pending.take() {
