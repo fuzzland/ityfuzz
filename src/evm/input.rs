@@ -370,7 +370,7 @@ impl ConciseEVMInput {
     #[inline]
     fn as_transfer(&self) -> Option<String> {
         Some(format!(
-            "{}.{}{}(\"\")",
+            "{}.{}{}()",
             self.colored_address(&self.contract()),
             self.colored_fn_name("call"),
             self.colored_value()
@@ -385,7 +385,7 @@ impl ConciseEVMInput {
             self.colored_address("Router"),
             self.colored_fn_name("swapExactETHForTokens"),
             self.colored_value(),
-            self.contract()
+            self.colored_address(&self.contract())
         ))
     }
 
@@ -400,7 +400,7 @@ impl ConciseEVMInput {
             "{}.{}(100% Balance, 0, path:({} → ETH), address(this), block.timestamp);",
             self.colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
-            self.contract()
+            self.colored_address(&self.contract())
         );
 
         let mut liq = indent.clone();
@@ -424,7 +424,13 @@ impl ConciseEVMInput {
 
     #[inline]
     fn colored_address(&self, addr: &str) -> ColoredString {
-        addr.truecolor(0x00, 0x76, 0xff)
+        let default = vec![0x00, 0x76, 0xff];
+        if addr.len() < 8 {
+            return addr.truecolor(default[0], default[1], default[2]);
+        }
+
+        let rgb = hex::decode(&addr[addr.len() - 6..]).unwrap_or(default);
+        addr.truecolor(rgb[0], rgb[1], rgb[2])
     }
 
     #[inline]
@@ -445,7 +451,7 @@ impl SolutionTx for ConciseEVMInput {
     #[cfg(not(feature = "debug"))]
     fn fn_signature(&self) -> String {
         match self.data {
-            Some(ref d) => d.get_func_signature().unwrap_or("".to_string()),
+            Some(ref d) => d.get_func_signature().unwrap_or_default(),
             None => "".to_string(),
         }
     }
