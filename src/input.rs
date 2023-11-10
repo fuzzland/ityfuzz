@@ -102,6 +102,10 @@ pub trait ConciseSerde {
     fn caller(&self) -> String {
         String::from("")
     }
+    // Get the indentation of the input
+    fn indent(&self) -> String {
+        String::from("")
+    }
     fn is_step(&self) -> bool {
         false
     }

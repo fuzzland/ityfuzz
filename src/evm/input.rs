@@ -402,7 +402,6 @@ impl ConciseEVMInput {
 
         let mut liq = indent.clone();
         liq.push_str(format!("├─ {}\n", liq_call).as_str());
-        liq.push_str(format!("{}|  └─ ← ()", indent).as_str());
 
         [call, liq].join("\n")
     }
@@ -804,7 +803,7 @@ impl ConciseSerde for ConciseEVMInput {
     }
 
     fn serialize_string(&self) -> String {
-        let mut indent = String::from("│  ");
+        let mut indent = String::from("   ");
         for _ in 0..self.layer {
             indent.push_str("│  ");
         }
@@ -835,6 +834,18 @@ impl ConciseSerde for ConciseEVMInput {
 
     fn caller(&self) -> String {
         checksum(&self.caller)
+    }
+
+    fn indent(&self) -> String {
+        if self.layer == 0 {
+            return "".to_string();
+        }
+
+        let mut indent = String::from("   ");
+        for _ in 1..self.layer {
+            indent.push_str("│  ");
+        }
+        indent
     }
 
     fn is_step(&self) -> bool {
