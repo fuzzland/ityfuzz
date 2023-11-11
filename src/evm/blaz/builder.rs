@@ -5,6 +5,7 @@ use std::{
     fs::OpenOptions,
     hash::{Hash, Hasher},
     io::Write,
+    path::Path,
     rc::Rc,
     str::FromStr,
     thread::sleep,
@@ -66,6 +67,10 @@ impl BuildJob {
             return None;
         }
         if let Some(task_id) = json["task_id"].as_str() {
+            let path = Path::new(self.work_dir.as_str());
+            if !path.exists() {
+                std::fs::create_dir_all(path).unwrap();
+            }
             let builder_file = format!("{}/builder_id.txt", self.work_dir.as_str());
             let mut file = OpenOptions::new()
                 .create(true)
