@@ -1,7 +1,7 @@
 pub mod parser;
 
 use crate::evm::EVMAddress;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -32,11 +32,13 @@ struct SourceMap {
 #[derive(Debug, Default)]
 pub struct SourceMapProvider {
     source_maps: HashMap<EVMAddress, SourceMap>,  // address -> SourceMap
+    saved_filenames: HashSet<String>,
 }
 
 impl SourceMapProvider {
-    pub fn decode_instructions(&mut self, address: EVMAddress, bytecode: Vec<u8>, map: String, files: &Vec<String>, replacements: Option<&Vec<(String, String)>>) {
-        let list_raw_infos = self.uncompress_srcmap_single(map, files, replacements);
+    pub fn decode_instructions(&mut self, address: EVMAddress, bytecode: Vec<u8>, map: String, files: &Vec<String, String>, replacements: Option<&Vec<(String, String)>>) {
+        let filenames = files.iter().map(|(name, _)| (name)).cloned().collect();
+        let list_raw_infos = self.uncompress_srcmap_single(map, filenames, replacements);
         let bytecode_len = bytecode.len();
 
         let mut result = SourceMap::new();
@@ -51,8 +53,14 @@ impl SourceMapProvider {
             let opcode = bytecode[pc];
             let raw_info = list_raw_infos.get(raw_info_idx);
 
-            if let Some(info) = raw_info { 
-                let source_map_item = SourceMapItem::new(info.clone(), None);
+            if let Some(info) = raw_info {
+                let (file_name, file_content) = files.get(info.file_idx);
+
+
+                let source_map_item = SourceMapItem::new(
+                    info.clone(),
+                    file_content[info.offset..info.offset + info.length].to_string(),
+                );
                 result.insert_source_map_item(pc, source_map_item)
             }
 
@@ -171,6 +179,11 @@ impl SourceMapProvider {
             }
         }
         results
+    }
+
+    fn save_source_code(&mut self, filename: String, source_code: String) {
+        // refer to contract_utils.rs save_builder_addr_source_code
+        todo!("save source code to file")
     }
 }
 

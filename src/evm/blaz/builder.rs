@@ -22,6 +22,7 @@ use crate::{
         blaz::get_client,
         srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation},
         types::{EVMAddress, EVMQueueExecutor, ProjectSourceMapTy},
+        srcmap::SOURCE_MAP_PROVIDER,
     },
     generic_vm::vm_executor::GenericVM,
 };
@@ -285,6 +286,20 @@ impl BuildJobResult {
             return srcmap.get(&pc).cloned();
         }
         None
+    }
+
+    pub fn save_source_map(&self, address: &EVMAddress, bytecode: Vec<u8>) {
+        if SOURCE_MAP_PROVIDER.has_source_map(address) {
+            return;
+        }
+
+        SOURCE_MAP_PROVIDER.decode_instructions(
+            address,
+            bytecode,
+            self.source_maps.clone(),
+            &self.sources.iter().map(|(name, _)| (name)).cloned().collect(),
+            Some(&self.source_maps_replacements)
+        );
     }
 }
 
