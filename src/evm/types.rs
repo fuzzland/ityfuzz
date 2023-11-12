@@ -12,13 +12,14 @@ use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::{
     evm::{
         mutator::FuzzMutator,
+        scheduler::PowerABIScheduler,
         srcmap::parser::SourceMapLocation,
         vm::{EVMExecutor, EVMState},
     },
     executor::FuzzExecutor,
     generic_vm::vm_executor::ExecutionResult,
     oracle::OracleCtx,
-    scheduler::{PowerABIScheduler, SortedDroppingScheduler},
+    scheduler::SortedDroppingScheduler,
     state::{FuzzState, InfantStateState},
     state_input::StagedVMState,
 };

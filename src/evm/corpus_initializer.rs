@@ -23,7 +23,7 @@ use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
-use super::srcmap::parser::SourceMapLocation;
+use super::{scheduler::ABIScheduler, srcmap::parser::SourceMapLocation};
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
 use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
@@ -55,7 +55,6 @@ use crate::{
     fuzzer::REPLAY,
     generic_vm::vm_executor::GenericVM,
     input::ConciseSerde,
-    scheduler::ABIScheduler,
     state::HasCaller,
     state_input::StagedVMState,
 };

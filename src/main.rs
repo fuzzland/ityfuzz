@@ -18,6 +18,7 @@ pub mod input;
 pub mod minimizer;
 pub mod mutation_utils;
 pub mod oracle;
+pub mod power_sched;
 pub mod scheduler;
 pub mod state;
 pub mod state_input;
