@@ -19,7 +19,10 @@ use revm_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
 
-use super::types::checksum;
+use super::{
+    types::checksum,
+    utils::{colored_address, prettify_value},
+};
 /// Definition of ABI types and their encoding, decoding, mutating methods
 use crate::evm::abi::ABILossyType::{TArray, TDynamic, TEmpty, TUnknown, T256};
 use crate::{
@@ -140,6 +143,11 @@ pub trait ABI: CloneABI {
     fn get_concolic(&self) -> Vec<Box<Expr>>;
     /// Get the size of args
     fn get_size(&self) -> usize;
+
+    /// Convert args to colored string
+    fn to_colored_string(&self) -> String {
+        self.to_string()
+    }
 }
 
 impl Default for Box<dyn ABI> {
@@ -282,6 +290,14 @@ impl BoxedABI {
     /// Set the bytes to args, used for decoding
     pub fn set_bytes(&mut self, bytes: Vec<u8>) -> bool {
         self.b.set_bytes(bytes[4..].to_vec())
+    }
+
+    pub fn to_colored_string(&self) -> String {
+        if self.function == [0; 4] {
+            self.to_string()
+        } else {
+            format!("{}{}", self.get_func_name(), self.b.to_colored_string())
+        }
     }
 }
 
@@ -613,7 +629,10 @@ impl ABI for A256 {
             A256InnerType::Int => I256::from_hex_str(&vec_to_hex(&self.data))
                 .unwrap_or_default()
                 .to_string(),
-            A256InnerType::Uint => U256::try_from_be_slice(&self.data).unwrap_or_default().to_string(),
+            A256InnerType::Uint => {
+                let value = U256::try_from_be_slice(&self.data).unwrap_or_default();
+                prettify_value(value)
+            }
             A256InnerType::Bool => {
                 if self.data == [0] {
                     "false".to_string()
@@ -629,6 +648,13 @@ impl ABI for A256 {
                     &self.data
                 }
             })),
+        }
+    }
+
+    fn to_colored_string(&self) -> String {
+        match self.inner_type {
+            A256InnerType::Address => colored_address(&self.to_string()),
+            _ => self.to_string(),
         }
     }
 
@@ -848,7 +874,14 @@ impl ABI for AArray {
     }
 
     fn to_string(&self) -> String {
-        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(","))
+        format!("({})", self.data.iter().map(|x| x.b.deref().to_string()).join(", "))
+    }
+
+    fn to_colored_string(&self) -> String {
+        format!(
+            "({})",
+            self.data.iter().map(|x| x.b.deref().to_colored_string()).join(", ")
+        )
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
