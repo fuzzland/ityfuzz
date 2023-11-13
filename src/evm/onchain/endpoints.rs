@@ -16,10 +16,10 @@ use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, B160};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     cache::{Cache, FileSystemCache},
@@ -949,10 +949,12 @@ impl OnChainConfig {
             }
         };
 
-        assert!(
-            result.len() == 196,
-            "Unexpected RPC error, consider setting env <ETH_RPC_URL> "
-        );
+        if result.len() != 196 {
+            let rpc = &self.endpoint_url;
+            let pair_code = self.clone().get_contract_code(B160::from_str(pair).unwrap(), true);
+            warn!("rpc: {rpc}, result: {result}, pair: {pair}, pair code: {pair_code}");
+            panic!("Unexpected RPC error, consider setting env <ETH_RPC_URL> ");
+        }
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];

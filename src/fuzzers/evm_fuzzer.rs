@@ -216,7 +216,7 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
     }
 
-    if config.integer_overflow_oracle {
+    if config.math_calculate_oracle {
         let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(config.onchain)));
         fuzz_host.add_middlewares(integer_overflow_middleware);
     }
@@ -500,7 +500,7 @@ pub fn evm_fuzzer(
         ))));
     }
 
-    if config.integer_overflow_oracle {
+    if config.math_calculate_oracle {
         oracles.push(Rc::new(RefCell::new(MathCalculateOracle::new(
             artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),

@@ -203,8 +203,8 @@ pub struct EvmArgs {
     #[arg(long, default_value = "true")]
     arbitrary_external_call_oracle: bool,
 
-    #[arg(long, default_value = "true")]
-    integer_overflow_oracle: bool,
+    #[arg(long, default_value = "false")]
+    math_calculate_oracle: bool,
 
     #[arg(long, default_value = "true")]
     echidna_oracle: bool,
@@ -621,7 +621,7 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
         arbitrary_external_call: args.arbitrary_external_call_oracle,
-        integer_overflow_oracle: args.integer_overflow_oracle,
+        math_calculate_oracle: args.math_calculate_oracle,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
