@@ -208,7 +208,7 @@ where
     // arbitrary calls
     pub current_arbitrary_calls: Vec<(EVMAddress, EVMAddress, usize)>,
     // integer_overflow
-    pub current_integer_overflow: Vec<(EVMAddress, usize)>,
+    pub current_integer_overflow: HashSet<(EVMAddress, usize, &'static str)>,
     // relations file handle
     relations_file: std::fs::File,
     // Filter duplicate relations

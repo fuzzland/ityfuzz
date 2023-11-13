@@ -12,6 +12,7 @@ use std::{
     sync::Arc,
 };
 
+use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
 use libafl::{
@@ -19,7 +20,8 @@ use libafl::{
     schedulers::Scheduler,
     state::{HasRand, State},
 };
-use revm_interpreter::Interpreter;
+use revm_interpreter::{analysis::to_analysed, Interpreter};
+use revm_primitives::Bytecode;
 use tracing::debug;
 
 use crate::{
@@ -367,6 +369,9 @@ where
         SC: Scheduler<State = S> + Clone,
     {
         let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
+        let code = hex::decode(contract_code).unwrap();
+        let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(code)));
+
         if contract_code.is_empty() || force_cache {
             self.loaded_code.insert(address_h160);
             self.loaded_abi.insert(address_h160);

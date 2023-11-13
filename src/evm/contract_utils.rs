@@ -420,7 +420,7 @@ impl ContractLoader {
                 let result = builder.onchain_job(onchain.chain_name.clone(), addr);
                 if let Some(result) = result {
                     abi = Some(result.abi.clone());
-                    bytecode = Some(onchain.get_contract_code(addr, false)); // Some(to_analysed(Bytecode::new_raw(result.bytecodes.clone())));
+                    bytecode = Some(onchain.get_contract_code(addr, false));
                     build_artifact = Some(result);
                 }
             }
@@ -440,7 +440,7 @@ impl ContractLoader {
             };
             contracts.push(ContractInfo {
                 name: format!("{:?}", addr),
-                code: contract_code.bytes().to_vec(),
+                code: hex::decode(&contract_code).unwrap(),
                 abi: abi_parsed.clone(),
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
@@ -452,6 +452,7 @@ impl ContractLoader {
                 source: addr.to_string(),
                 abi: abi_parsed,
             });
+            println!("Contract loaded: {:?}", addr);
         }
         Self { contracts, abis }
     }
@@ -564,7 +565,8 @@ impl ContractLoader {
 
         for addr in targets {
             let contract_code = onchain.get_contract_code(addr, false);
-            let (artifact_idx, slug) = Self::find_contract_artifact(contract_code.bytes().to_vec(), offchain_artifacts);
+            let (artifact_idx, slug) =
+                Self::find_contract_artifact(hex::decode(&contract_code).unwrap(), offchain_artifacts);
 
             debug!(
                 "Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub",
@@ -578,7 +580,7 @@ impl ContractLoader {
 
             contracts.push(ContractInfo {
                 name: format!("{:?}", addr),
-                code: contract_code.bytes().to_vec(),
+                code: hex::decode(&contract_code).unwrap(),
                 abi,
                 is_code_deployed: true,
                 constructor_args: vec![],
