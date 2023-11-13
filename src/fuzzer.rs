@@ -564,7 +564,7 @@ where
 
                     solution::generate_test(cur_report.clone(), minimized);
 
-                    let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
+                    let vuln_file = format!("{}/vuln_info.json", self.work_dir.as_str());
                     let mut f = OpenOptions::new()
                         .create(true)
                         .append(true)

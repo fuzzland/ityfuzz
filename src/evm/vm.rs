@@ -673,8 +673,9 @@ where
         {
             let tx_value = input.get_txn_value().unwrap_or_default();
             if tx_value > EVMU256::ZERO {
-                let balance = *vm_state.get_balance(&input.get_caller()).unwrap_or(&EVMU256::ZERO);
-                if balance < tx_value {
+                let caller_balance = *vm_state.get_balance(&input.get_caller()).unwrap_or(&EVMU256::ZERO);
+                let contract_balance = *vm_state.get_balance(&input.get_contract()).unwrap_or(&EVMU256::ZERO);
+                if caller_balance < tx_value {
                     return ExecutionResult {
                         output: vec![],
                         reverted: true,
@@ -682,8 +683,8 @@ where
                         additional_info: None,
                     };
                 }
-                vm_state.set_balance(input.get_caller(), balance - tx_value);
-                vm_state.set_balance(input.get_contract(), balance + tx_value);
+                vm_state.set_balance(input.get_caller(), caller_balance - tx_value);
+                vm_state.set_balance(input.get_contract(), contract_balance + tx_value);
             }
         }
 
