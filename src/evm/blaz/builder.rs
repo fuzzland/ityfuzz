@@ -63,7 +63,6 @@ impl BuildJob {
     }
 
     pub fn onchain_job(&self, chain: String, addr: EVMAddress) -> Option<BuildJobResult> {
-        println!("{addr:?}");
         if let Some(replacement) = self.replacements.get(&addr) {
             return replacement.clone();
         }
