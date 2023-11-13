@@ -42,19 +42,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
 use crate::{
-    evm::host::JMP_MAP,
+    evm::{host::JMP_MAP, solution, utils::prettify_concise_inputs},
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
-    input::{ConciseSerde, SolutionTx},
+    input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
     oracle::BugMetadata,
     scheduler::HasReportCorpus,
-    state::HasExecutionResult,
-};
-/// Implements fuzzing logic for ItyFuzz
-use crate::{
-    evm::solution,
-    input::VMInputT,
-    state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
+    state::{HasCurrentInputIdx, HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState},
 };
 
 pub static mut RUN_FOREVER: bool = false;
@@ -299,7 +293,7 @@ macro_rules! dump_file {
             let txn_text_replayable = tx_trace.to_file_str($state);
 
             let data = format!(
-                "Reverted? {} \n Txn: {}",
+                "Reverted? {} \n Txn:\n{}",
                 $state.get_execution_result().reverted,
                 txn_text
             );
@@ -428,6 +422,8 @@ where
         #[cfg(any(feature = "print_infant_corpus", feature = "print_txn_corpus"))]
         {
             state.get_execution_result_mut().new_state.trace.from_idx = Some(input.get_state_idx());
+            state.get_execution_result_mut().new_state.trace.derived_time =
+                input.get_staged_state().trace.derived_time + 1;
             state
                 .get_execution_result_mut()
                 .new_state
@@ -551,7 +547,7 @@ where
                         &mut self.objective,
                         corpus_idx.into(),
                     );
-                    let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
+                    let txn_text = prettify_concise_inputs(&minimized);
                     let txn_json = minimized
                         .iter()
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
@@ -568,7 +564,7 @@ where
 
                     solution::generate_test(cur_report.clone(), minimized);
 
-                    let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
+                    let vuln_file = format!("{}/vuln_info.json", self.work_dir.as_str());
                     let mut f = OpenOptions::new()
                         .create(true)
                         .append(true)

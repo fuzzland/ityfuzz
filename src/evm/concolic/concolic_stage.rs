@@ -128,6 +128,7 @@ where
                     let curr_thread = worker_threads.remove(0);
                     curr_thread.join().unwrap();
                 }
+                drop(worker_threads);
 
                 let mut solutions = ALL_SOLUTIONS.lock().unwrap();
                 if solutions.len() > 0 {
@@ -140,6 +141,7 @@ where
                     }
                     solutions.clear();
                 }
+                drop(solutions);
 
                 vm.host.remove_middlewares_by_ty(&MiddlewareType::Concolic);
             }

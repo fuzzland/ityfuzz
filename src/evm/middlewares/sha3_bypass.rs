@@ -25,6 +25,9 @@ use crate::{
     input::VMInputT,
     state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
+
+const MAX_CALL_DEPTH: u64 = 3;
+
 #[derive(Clone, Debug)]
 pub struct Sha3TaintAnalysisCtx {
     pub dirty_memory: Vec<bool>,
@@ -125,7 +128,12 @@ where
         + Clone,
     SC: Scheduler<State = S> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+        // skip taint analysis if call depth is too deep
+        if host.call_depth > MAX_CALL_DEPTH {
+            return;
+        }
+
         //
         // debug!("on_step: {:?} with {:x}", interp.program_counter(),
         // *interp.instruction_pointer); debug!("stack: {:?}",

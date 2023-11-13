@@ -410,7 +410,10 @@ where
 
                     let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
 
+                    debug!("start save_builder_addr_source_code");
                     save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
+                    debug!("end save_builder_addr_source_code");
+
                     let global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
                     modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
                 }

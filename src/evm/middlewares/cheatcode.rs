@@ -19,7 +19,7 @@ use libafl::{
 };
 use revm_interpreter::{analysis::to_analysed, opcode, BytecodeLocked, InstructionResult, Interpreter};
 use revm_primitives::{Bytecode, Env, SpecId, B160, U256};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use super::middleware::{Middleware, MiddlewareType};
 use crate::{
@@ -295,7 +295,10 @@ where
             VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(&mut host.expected_calls, args),
             VmCalls::addr(args) => self.addr(args),
-            _ => None,
+            _ => {
+                warn!("[cheatcode] unknown VmCall: {:?}", vm_call);
+                None
+            }
         };
         debug!("[cheatcode] VmCall result: {:?}", res);
 

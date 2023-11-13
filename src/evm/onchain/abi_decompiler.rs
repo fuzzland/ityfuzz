@@ -66,7 +66,10 @@ pub fn fetch_abi_heimdall(bytecode: String) -> Vec<ABIConfig> {
 fn decompile_with_bytecode(contract_bytecode: String) -> Result<Vec<ABIStructure>, Box<dyn Error>> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
 
-    let args = DecompilerArgsBuilder::new().target(contract_bytecode).build()?;
+    let args = DecompilerArgsBuilder::new()
+        .target(contract_bytecode)
+        .skip_resolving(true)
+        .build()?;
 
     let res = rt.block_on(decompile(args))?;
     res.abi.ok_or("unable to decompile contract".into())

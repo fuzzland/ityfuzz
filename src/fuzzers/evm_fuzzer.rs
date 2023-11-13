@@ -67,6 +67,7 @@ use crate::{
             typed_bug::TypedBugOracle,
         },
         presets::ExploitTemplate,
+        scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         srcmap::parser::BASE_PATH,
         types::{
             fixed_address,
@@ -83,7 +84,7 @@ use crate::{
     feedback::{CmpFeedback, DataflowFeedback, OracleFeedback},
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
     oracle::BugMetadata,
-    scheduler::{PowerABIMutationalStage, PowerABIScheduler, SortedDroppingScheduler},
+    scheduler::SortedDroppingScheduler,
     state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
 };
 
@@ -378,6 +379,7 @@ pub fn evm_fuzzer(
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
+    state.metadata_map_mut().insert(UncoveredBranchesMetadata::new());
     let std_stage = PowerABIMutationalStage::new(mutator);
 
     let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(

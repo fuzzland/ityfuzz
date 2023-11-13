@@ -6,7 +6,12 @@ use std::fmt::Debug;
 use libafl::{corpus::Corpus, prelude::HasCorpus};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state::HasInfantStateState};
+use crate::{
+    evm::utils::prettify_concise_inputs,
+    generic_vm::vm_state::VMStateT,
+    input::ConciseSerde,
+    state::HasInfantStateState,
+};
 
 /// Represent a trace of transactions with starting VMState ID (from_idx).
 /// If VMState ID is None, it means that the trace is from the initial state.
@@ -14,6 +19,7 @@ use crate::{generic_vm::vm_state::VMStateT, input::ConciseSerde, state::HasInfan
 pub struct TxnTrace<Loc, Addr, CI> {
     pub transactions: Vec<CI>,   // Transactions
     pub from_idx: Option<usize>, // Starting VMState ID
+    pub derived_time: u64,       // Times spent on deriving this trace
     pub phantom: std::marker::PhantomData<(Loc, Addr)>,
 }
 
@@ -26,6 +32,7 @@ where
         Self {
             transactions: Vec::new(),
             from_idx: None,
+            derived_time: 0,
             phantom: Default::default(),
         }
     }
@@ -48,31 +55,12 @@ where
         Addr: Debug + Serialize + DeserializeOwned + Clone,
         Loc: Debug + Serialize + DeserializeOwned + Clone,
     {
-        // If from_idx is None, it means that the trace is from the initial state
-        if self.from_idx.is_none() {
-            return String::from("Begin\n");
-        }
-        let current_idx = self.from_idx.unwrap();
-        let corpus_item = state.get_infant_state_state().corpus().get(current_idx.into());
-        // This happens when full_trace feature is not enabled, the corpus item may be
-        // discarded
-        if corpus_item.is_err() {
-            return String::from("Corpus returning error\n");
-        }
-        let testcase = corpus_item.unwrap().clone().into_inner();
-        let testcase_input = testcase.input();
-        if testcase_input.is_none() {
+        let inputs = self.get_concise_inputs(state);
+        if inputs.is_empty() {
             return String::from("[REDACTED]\n");
         }
 
-        // Try to reconstruct transactions leading to the current VMState recursively
-        let mut s = Self::to_string(&testcase_input.as_ref().unwrap().trace.clone(), state);
-
-        // Dump the current transaction
-        for concise_input in &self.transactions {
-            s.push_str(format!("{}\n", concise_input.serialize_string()).as_str());
-        }
-        s
+        prettify_concise_inputs(&inputs)
     }
 
     /// Serialize the trace so that it can be replayed by using --replay-file
