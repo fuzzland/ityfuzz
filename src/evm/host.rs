@@ -83,7 +83,7 @@ use crate::{
             flashloan::{register_borrow_txn, Flashloan},
         },
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
-        vm::{EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC, is_reverted_or_control_leak},
+        vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     handle_contract_insertion,
@@ -1248,7 +1248,7 @@ where
         println!(
             "log: {:?} {:?} {:?}",
             _address,
-            _topics.iter().map(|x| hex::encode(x)).collect_vec(),
+            _topics.iter().map(hex::encode).collect_vec(),
             hex::encode(_data.clone())
         );
         // flag check

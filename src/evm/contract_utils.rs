@@ -1,9 +1,12 @@
 use core::panic;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     fs::File,
     io::Read,
-    path::Path, str::FromStr, rc::Rc, cell::RefCell,
+    path::Path,
+    rc::Rc,
+    str::FromStr,
 };
 
 use bytes::Bytes;
@@ -14,7 +17,14 @@ use libafl::schedulers::StdScheduler;
 use revm_primitives::{Bytecode, Env};
 use serde_json::Value;
 
-use crate::{evm::{types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState}, vm::{IN_DEPLOY, SETCODE_ONLY}}, state::FuzzState, generic_vm::vm_executor::GenericVM};
+use crate::{
+    evm::{
+        types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
+        vm::{IN_DEPLOY, SETCODE_ONLY},
+    },
+    generic_vm::vm_executor::GenericVM,
+    state::FuzzState,
+};
 
 extern crate crypto;
 
@@ -26,7 +36,11 @@ use tracing::{debug, error};
 use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
     blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
-    types::ProjectSourceMapTy, vm::{EVMExecutor, EVMState}, host::FuzzHost, input::{ConciseEVMInput, EVMInput}, middlewares::cheatcode::{CHEATCODE_ADDRESS, Cheatcode},
+    host::FuzzHost,
+    input::{ConciseEVMInput, EVMInput},
+    middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
+    types::ProjectSourceMapTy,
+    vm::{EVMExecutor, EVMState},
 };
 use crate::evm::{
     abi::get_abi_type_boxed_with_address,
@@ -81,7 +95,6 @@ pub struct ContractLoader {
     pub abis: Vec<ABIInfo>,
     pub setup_data: Option<SetupData>,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct SetupData {
@@ -335,7 +348,7 @@ impl ContractLoader {
                 vec![]
             },
             abis: vec![abi_result],
-            setup_data: None
+            setup_data: None,
         }
     }
 
@@ -420,8 +433,10 @@ impl ContractLoader {
             }
         }
 
-        ContractLoader { contracts, abis,
-            setup_data: None
+        ContractLoader {
+            contracts,
+            abis,
+            setup_data: None,
         }
     }
 
@@ -471,7 +486,11 @@ impl ContractLoader {
             });
             println!("Contract loaded: {:?}", addr);
         }
-        Self { contracts, abis, setup_data: None }
+        Self {
+            contracts,
+            abis,
+            setup_data: None,
+        }
     }
 
     pub fn from_config(offchain_artifacts: &Vec<OffChainArtifact>, offchain_config: &OffchainConfig) -> Self {
@@ -519,7 +538,11 @@ impl ContractLoader {
             });
         }
 
-        Self { contracts, abis, setup_data: None }
+        Self {
+            contracts,
+            abis,
+            setup_data: None,
+        }
     }
 
     /// This function is used to find the contract artifact from offchain
@@ -614,14 +637,14 @@ impl ContractLoader {
                 )),
             });
         }
-        Self { contracts, abis, setup_data: None }
+        Self {
+            contracts,
+            abis,
+            setup_data: None,
+        }
     }
 
-
-    pub fn from_setup(
-        offchain_artifacts: &Vec<OffChainArtifact>,
-        setup_file: String,
-    ) -> Self {
+    pub fn from_setup(offchain_artifacts: &Vec<OffChainArtifact>, setup_file: String) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
 
@@ -644,12 +667,9 @@ impl ContractLoader {
                 all_slugs.push(slug.clone());
                 if slug == setup_file {
                     found = true;
-                    setup_data = Some(Self::call_setup(
-                        contract_artifact.deploy_bytecode.clone()
-                    ));
+                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone()));
 
                     break 'artifacts;
-
                 }
             }
         }
@@ -657,8 +677,7 @@ impl ContractLoader {
             panic!("Contract not found. Available contracts: {:?}", all_slugs);
         }
         for (addr, code) in setup_data.clone().unwrap().code {
-            let (artifact_idx, slug) =
-                Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
+            let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
 
             debug!(
                 "Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub",
@@ -688,19 +707,18 @@ impl ContractLoader {
                 )),
             });
         }
-        Self { contracts, abis, setup_data }
+        Self {
+            contracts,
+            abis,
+            setup_data,
+        }
     }
 
-
-    fn get_vm_with_cheatcode(deployer: EVMAddress) -> (
-        EVMExecutor<
-            EVMInput,
-            EVMFuzzState,
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        >,
-        EVMFuzzState
+    fn get_vm_with_cheatcode(
+        deployer: EVMAddress,
+    ) -> (
+        EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
+        EVMFuzzState,
     ) {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let mut executor = EVMExecutor::new(
@@ -716,8 +734,9 @@ impl ContractLoader {
         (executor, state)
     }
 
-    /// Deploy the contract and invoke "setUp()", returns the code, state, and environment after deployment.
-    /// Foundry VM Cheatcodes and Hardhat consoles are enabled here.
+    /// Deploy the contract and invoke "setUp()", returns the code, state, and
+    /// environment after deployment. Foundry VM Cheatcodes and Hardhat
+    /// consoles are enabled here.
     fn call_setup(deploy_code: Bytes) -> SetupData {
         let deployer = EVMAddress::from_str(FOUNDRY_DEPLOYER).unwrap();
         let deployed_addr = EVMAddress::from_str(FOUNDRY_SETUP_ADDR).unwrap();
@@ -725,12 +744,12 @@ impl ContractLoader {
         let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer);
 
         // deploy contract
-        
+
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
             None,
             deployed_addr, // todo: change to foundry default address
-            &mut state
+            &mut state,
         );
         assert!(addr.is_some(), "failed to deploy contract");
         let state_after_deployment = evm_executor.host.evmstate.clone();
@@ -743,11 +762,9 @@ impl ContractLoader {
             SETCODE_ONLY = true;
         }
         let (res, new_vm_state) = evm_executor.fast_call(
-            &[
-                (deployer, deployed_addr, Bytes::from_iter(calldata.iter().cloned()))
-            ],
+            &[(deployer, deployed_addr, Bytes::from_iter(calldata.iter().cloned()))],
             &state_after_deployment,
-            &mut state
+            &mut state,
         );
         unsafe {
             IN_DEPLOY = false;
@@ -760,15 +777,15 @@ impl ContractLoader {
             .host
             .code
             .into_iter()
-            .map(|(k, v)| (k.clone(), Bytes::from_iter(v.bytecode().into_iter().cloned()))).collect();
+            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            .collect();
 
-        SetupData { 
-            evmstate: new_vm_state, 
-            env: evm_executor.host.env.clone(), 
-            code
+        SetupData {
+            evmstate: new_vm_state,
+            env: evm_executor.host.env.clone(),
+            code,
         }
     }
-
 }
 
 type ContractSourceMap = HashMap<usize, SourceMapLocation>;

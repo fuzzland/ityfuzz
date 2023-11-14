@@ -262,7 +262,7 @@ where
             initial_env: match loader.setup_data {
                 Some(ref setup_data) => setup_data.env.clone(),
                 None => Default::default(),
-            }
+            },
         };
         for contract in &mut loader.contracts {
             if contract.abi.is_empty() {

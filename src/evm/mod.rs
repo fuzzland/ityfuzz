@@ -301,7 +301,8 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     load_corpus: String,
 
-    /// Specify the setup file that deploys all the contract. Fuzzer invokes setUp() to deploy. 
+    /// Specify the setup file that deploys all the contract. Fuzzer invokes
+    /// setUp() to deploy.
     #[arg(long, default_value = "")]
     setup_file: String,
 
@@ -317,7 +318,7 @@ enum EVMTargetType {
     Address,
     AnvilFork,
     Config,
-    Setup
+    Setup,
 }
 
 #[allow(clippy::type_complexity)]
@@ -498,7 +499,6 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    
     if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() {
         if onchain.is_some() {
             target_type = EVMTargetType::AnvilFork;
@@ -509,8 +509,7 @@ pub fn evm_main(args: EvmArgs) {
         } else {
             panic!("Builder artifacts is provided, but missing offchain_config_*, Anvil config, or setup_file");
         }
-    } 
-
+    }
 
     let offchain_artifacts = if !args.builder_artifacts_url.is_empty() {
         Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
@@ -552,12 +551,10 @@ pub fn evm_main(args: EvmArgs) {
                     HashSet::from_iter(addresses),
                 )
             }
-            EVMTargetType::Setup => {
-                ContractLoader::from_setup(
-                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                    args.setup_file,
-                )
-            }
+            EVMTargetType::Setup => ContractLoader::from_setup(
+                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                args.setup_file,
+            ),
             EVMTargetType::Address => {
                 if onchain.is_none() {
                     panic!("Onchain is required for address target type");

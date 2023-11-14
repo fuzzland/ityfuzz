@@ -1,7 +1,6 @@
 use std::{cell::RefCell, ops::Deref, rc::Rc, str::FromStr, sync::Arc};
 
 use alloy_primitives::hex;
-use bytes::Bytes;
 
 use crate::evm::{
     abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
