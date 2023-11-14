@@ -153,7 +153,7 @@ pub fn evm_fuzzer(
         None => {
             // enable active match for offchain fuzzing (todo: handle this more elegantly)
             unsafe {
-                ACTIVE_MATCH_EXT_CALL = true;
+                ACTIVE_MATCH_EXT_CALL = false;
             }
             None
         }
