@@ -11,12 +11,10 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::{delay::Fixed, retry_with_index, OperationResult};
-use revm_interpreter::analysis::to_analysed;
-use revm_primitives::{Bytecode, B160};
+use revm_primitives::B160;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};

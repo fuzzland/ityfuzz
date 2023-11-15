@@ -68,7 +68,7 @@ use super::{
         ERROR_PREFIX,
         REVERT_PREFIX,
     },
-    vm::{IS_FAST_CALL, MEM_LIMIT},
+    vm::{IS_FAST_CALL, MEM_LIMIT, SETCODE_ONLY},
 };
 use crate::{
     evm::{
@@ -83,7 +83,7 @@ use crate::{
             flashloan::{register_borrow_txn, Flashloan},
         },
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
-        vm::{EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
+        vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     handle_contract_insertion,
@@ -1245,6 +1245,12 @@ where
     }
 
     fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
+        println!(
+            "log: {:?} {:?} {:?}",
+            _address,
+            _topics.iter().map(hex::encode).collect_vec(),
+            hex::encode(_data.clone())
+        );
         // flag check
         if _topics.len() == 1 {
             let current_flag = _topics.last().unwrap().0;
@@ -1317,10 +1323,11 @@ where
                 MEM_LIMIT,
             );
             let ret = self.run_inspect(&mut interp, state);
-            if ret == InstructionResult::Continue {
-                let runtime_code = interp.return_value();
+            debug!("create: {:?} -> {:?} = {:?}", inputs.caller, r_addr, ret);
+            if !is_reverted_or_control_leak(&ret) {
+                let runtime_code: Bytes = interp.return_value();
                 self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), state);
-                {
+                if !unsafe { SETCODE_ONLY } {
                     // now we build & insert abi
                     let contract_code_str = hex::encode(runtime_code.clone());
                     let sigs = extract_sig_from_contract(&contract_code_str);

@@ -553,18 +553,18 @@ where
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
                         .join("\n");
 
-                    info!("\n\n\n😊😊 Found violations! \n\n");
+                    println!("\n\n\n😊😊 Found violations! \n\n");
                     let cur_report =
                         format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     txn_text
                 );
-                    info!("{}", cur_report);
+                    println!("{}", cur_report);
 
                     solution::generate_test(cur_report.clone(), minimized);
 
-                    let vuln_file = format!("{}/vuln_info.json", self.work_dir.as_str());
+                    let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
                     let mut f = OpenOptions::new()
                         .create(true)
                         .append(true)

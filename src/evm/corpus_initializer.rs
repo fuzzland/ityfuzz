@@ -19,7 +19,7 @@ use libafl::{
     state::HasCorpus,
 };
 use libafl_bolts::impl_serdeany;
-use revm_primitives::Bytecode;
+use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
@@ -83,6 +83,7 @@ pub struct EVMInitializationArtifacts {
     pub address_to_abi_object: HashMap<EVMAddress, Vec<BoxedABI>>,
     pub address_to_name: HashMap<EVMAddress, String>,
     pub initial_state: EVMStagedVMState,
+    pub initial_env: Env,
     pub build_artifacts: HashMap<EVMAddress, BuildJobResult>,
 }
 
@@ -253,8 +254,15 @@ where
             address_to_abi: HashMap::new(),
             address_to_abi_object: Default::default(),
             address_to_name: Default::default(),
-            initial_state: StagedVMState::new_uninitialized(),
+            initial_state: StagedVMState::new_with_state(match loader.setup_data {
+                Some(ref setup_data) => setup_data.evmstate.clone(),
+                None => self.executor.host.evmstate.clone(),
+            }),
             build_artifacts: Default::default(),
+            initial_env: match loader.setup_data {
+                Some(ref setup_data) => setup_data.env.clone(),
+                None => Default::default(),
+            },
         };
         for contract in &mut loader.contracts {
             if contract.abi.is_empty() {
@@ -348,7 +356,6 @@ where
                 self.add_abi(&abi, contract.deployed_address, &mut artifacts);
             }
         }
-        artifacts.initial_state = StagedVMState::new_with_state(self.executor.host.evmstate.clone());
 
         let mut tc = Testcase::new(artifacts.initial_state.clone());
         tc.set_exec_time(Duration::from_secs(0));
@@ -445,7 +452,7 @@ where
             sstate_idx: 0,
             txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
             step: false,
-            env: Default::default(),
+            env: artifacts.initial_env.clone(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
             #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,

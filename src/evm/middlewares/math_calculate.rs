@@ -8,7 +8,7 @@ use libafl::{
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
     evm::{

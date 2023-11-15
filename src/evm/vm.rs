@@ -868,6 +868,7 @@ where
 }
 
 pub static mut IN_DEPLOY: bool = false;
+pub static mut SETCODE_ONLY: bool = false;
 
 impl<VS, I, S, CI, SC> GenericVM<VS, Bytecode, Bytes, EVMAddress, EVMAddress, EVMU256, Vec<u8>, I, S, CI>
     for EVMExecutor<I, S, VS, CI, SC>
