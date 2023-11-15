@@ -401,7 +401,7 @@ impl ConciseEVMInput {
         );
 
         let mut liq = indent.clone();
-        liq.push_str(format!("├─ [{}] {}", self.layer + 1, liq_call).as_str());
+        liq.push_str(format!("├─[{}] {}", self.layer + 1, liq_call).as_str());
 
         [call, liq].join("\n")
     }
@@ -817,7 +817,7 @@ impl ConciseSerde for ConciseEVMInput {
         }
 
         let mut call = indent.clone();
-        call.push_str(format!("├─ [{}] ", tree_level).as_str());
+        call.push_str(format!("├─[{}] ", tree_level).as_str());
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
 
         // Control leak
@@ -825,7 +825,7 @@ impl ConciseSerde for ConciseEVMInput {
             let mut fallback = indent.clone();
             fallback.push_str(
                 format!(
-                    "│  ├─ [{}] {}.fallback()",
+                    "│  ├─[{}] {}.fallback()",
                     tree_level + 1,
                     colored_sender(&self.sender())
                 )

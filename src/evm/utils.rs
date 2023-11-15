@@ -47,10 +47,16 @@ pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
 
         // Sender has changed
         if sender != input.sender() && !input.is_step() {
-            if input.indent().len() == prev_indent_len {
-                push_last_input(&mut res, pending.take());
+            // Print the pending input
+            if let Some(s) = pending.take() {
+                if input.indent().len() == prev_indent_len {
+                    push_last_input(&mut res, Some(s)); // └─ call
+                } else {
+                    res.push_str(format!("{}\n", s).as_str()); // ├─ call
+                }
             }
 
+            // Print new sender
             sender = input.sender().clone();
             res.push_str(format!("{}{}\n", input.indent(), colored_sender(&sender)).as_str());
         }
