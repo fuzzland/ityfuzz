@@ -130,6 +130,11 @@ impl ContractLoader {
                 return format!("({})", v);
             } else if ty.ends_with("[]") {
                 return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
+            } else if ty.ends_with("]") && ty.contains("[") {
+                let split = ty.rsplit_once('[').unwrap();
+                let name = split.0.to_string();
+                let len = split.1.split(']').next().unwrap().parse::<usize>().expect("invalid array length");
+                return format!("{}[{}]", Self::process_input(name, input), len)
             }
             panic!("unknown type: {}", ty);
         } else {
