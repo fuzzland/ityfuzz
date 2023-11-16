@@ -77,7 +77,8 @@ impl BuildJob {
                 .append(true)
                 .open(builder_file)
                 .expect("Failed to open or create builder_id.txt");
-            writeln!(file, "{}", task_id).expect("Failed to write task_id to builder_id.txt");
+            writeln!(file, "0x{}:{}", hex::encode(addr), task_id)
+                .expect("Failed to write addr:task_id to builder_id.txt");
 
             Some(JobContext::new(task_id.to_string()))
         } else {
