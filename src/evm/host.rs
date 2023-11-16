@@ -1245,12 +1245,6 @@ where
     }
 
     fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
-        println!(
-            "log: {:?} {:?} {:?}",
-            _address,
-            _topics.iter().map(hex::encode).collect_vec(),
-            hex::encode(_data.clone())
-        );
         // flag check
         if _topics.len() == 1 {
             let current_flag = _topics.last().unwrap().0;
