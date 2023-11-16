@@ -29,6 +29,9 @@ pub mod vm;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fs::OpenOptions,
+    io::Write,
+    path::Path,
     rc::Rc,
     str::FromStr,
 };
@@ -51,6 +54,7 @@ use onchain::{
 use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
 use serde::Deserialize;
+use serde_json::json;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
 
@@ -633,7 +637,7 @@ pub fn evm_main(args: EvmArgs) {
         } else {
             None
         },
-        work_dir: args.work_dir,
+        work_dir: args.work_dir.clone(),
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
@@ -655,6 +659,42 @@ pub fn evm_main(args: EvmArgs) {
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
     };
+
+    let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
+
+    for contract_info in config.contract_loader.contracts.clone() {
+        let abis: Vec<serde_json::Value> = contract_info
+            .abi
+            .iter()
+            .map(|config| {
+                json!({
+                    hex::encode(&config.function): format!("{}{}", &config.function_name, &config.abi)
+                })
+            })
+            .collect();
+        abis_map
+            .entry(hex::encode(contract_info.deployed_address))
+            .or_insert_with(Vec::new)
+            .push(abis);
+    }
+
+    let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
+
+    let work_dir = args.work_dir.clone();
+
+    let path = Path::new(work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let abis_json = format!("{}/abis.json", work_dir.as_str());
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(abis_json)
+        .expect("Failed to open or create abis.json");
+
+    writeln!(file, "{}", json_str).expect("Failed to write abis to abis.json");
 
     if let FuzzerTypes::CMP = config.fuzzer_type {
         evm_fuzzer(config, &mut state)
