@@ -1,13 +1,10 @@
-#[cfg(feature = "flashloan_v2")]
 use std::collections::HashMap;
-#[cfg(feature = "flashloan_v2")]
 use std::ops::Deref;
 use std::{cell::RefCell, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
 
-#[cfg(feature = "flashloan_v2")]
 use crate::evm::uniswap::TokenContext;
 use crate::{
     evm::{
@@ -22,31 +19,14 @@ use crate::{
     state::HasExecutionResult,
 };
 
-#[cfg(not(feature = "flashloan_v2"))]
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
-}
-
-#[cfg(feature = "flashloan_v2")]
-pub struct IERC20OracleFlashloan {
-    pub balance_of: Vec<u8>,
-    #[cfg(feature = "flashloan_v2")]
     pub known_tokens: HashMap<EVMAddress, TokenContext>,
-    #[cfg(feature = "flashloan_v2")]
     pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
-    #[cfg(feature = "flashloan_v2")]
     pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
 
 impl IERC20OracleFlashloan {
-    #[cfg(not(feature = "flashloan_v2"))]
-    pub fn new(_: Rc<RefCell<ERC20Producer>>) -> Self {
-        Self {
-            balance_of: hex::decode("70a08231").unwrap(),
-        }
-    }
-
-    #[cfg(feature = "flashloan_v2")]
     pub fn new(erc20_producer: Rc<RefCell<ERC20Producer>>) -> Self {
         Self {
             balance_of: hex::decode("70a08231").unwrap(),
@@ -56,12 +36,10 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    #[cfg(feature = "flashloan_v2")]
     pub fn register_token(&mut self, token: EVMAddress, token_ctx: TokenContext) {
         self.known_tokens.insert(token, token_ctx);
     }
 
-    #[cfg(feature = "flashloan_v2")]
     pub fn register_pair_reserve_slot(&mut self, pair: EVMAddress, slot: EVMU256) {
         self.known_pair_reserve_slot.insert(pair, slot);
     }
@@ -75,28 +53,6 @@ impl
         0
     }
 
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
-        // has balance increased?
-        let exec_res = &ctx.fuzz_state.get_execution_result().new_state.state;
-        if exec_res.flashloan_data.earned > exec_res.flashloan_data.owed {
-            EVMBugResult::new_simple(
-                "erc20".to_string(),
-                ERC20_BUG_IDX,
-                format!(
-                    "Earned {}wei more than owed {}wei",
-                    exec_res.flashloan_data.earned, exec_res.flashloan_data.owed
-                ),
-                ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-            )
-            .push_to_output();
-            vec![ERC20_BUG_IDX]
-        } else {
-            vec![]
-        }
-    }
-
-    #[cfg(feature = "flashloan_v2")]
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
         use crate::evm::{input::EVMInputT, uniswap::generate_uniswap_router_sell};
 

@@ -1353,10 +1353,7 @@ where
                         parsed_abi = abis;
                     }
                     // notify flashloan and blacklisting flashloan addresses
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        handle_contract_insertion!(state, self, r_addr, parsed_abi);
-                    }
+                    handle_contract_insertion!(state, self, r_addr, parsed_abi);
 
                     parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
                         #[cfg(not(feature = "fuzz_static"))]
@@ -1379,9 +1376,7 @@ where
 
                             env: Default::default(),
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                            #[cfg(feature = "flashloan_v2")]
                             liquidation_percent: 0,
-                            #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
                             direct_data: Default::default(),
                             randomness: vec![0],

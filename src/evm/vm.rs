@@ -598,17 +598,10 @@ where
         }
 
         // hack to record txn value
-        #[cfg(feature = "flashloan_v2")]
         if let Some(ref m) = self.host.flashloan_middleware {
             m.deref()
                 .borrow_mut()
                 .analyze_call(input, &mut result.new_state.flashloan_data)
-        }
-
-        #[cfg(not(feature = "flashloan_v2"))]
-        {
-            result.new_state.flashloan_data.owed +=
-                EVMU512::from(call_ctx.apparent_value) * float_scale_to_u512(1.0, 5);
         }
 
         result
@@ -942,16 +935,7 @@ where
         Some(deployed_address)
     }
 
-    /// Execute an input (transaction)
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
-        use super::host::clear_branch_status;
-        clear_branch_status();
-        self.execute_abi(input, state)
-    }
-
     /// Execute an input (can be transaction or borrow)
-    #[cfg(feature = "flashloan_v2")]
     fn execute(&mut self, input: &I, state: &mut S) -> ExecutionResult<EVMAddress, EVMAddress, VS, Vec<u8>, CI> {
         use super::host::clear_branch_status;
         clear_branch_status();
@@ -980,7 +964,6 @@ where
                             value,
                             input.get_caller(),
                         );
-                        #[cfg(feature = "flashloan_v2")]
                         if let Some(ref m) = self.host.flashloan_middleware {
                             m.deref()
                                 .borrow_mut()
@@ -1204,7 +1187,6 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
             direct_data: Bytes::from(
                 [
@@ -1213,7 +1195,6 @@ mod tests {
                 ]
                 .concat(),
             ),
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
@@ -1243,7 +1224,6 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
             direct_data: Bytes::from(
                 [
@@ -1252,7 +1232,6 @@ mod tests {
                 ]
                 .concat(),
             ),
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,

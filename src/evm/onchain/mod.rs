@@ -492,7 +492,6 @@ where
         state.add_address(&target);
 
         // notify flashloan and blacklisting flashloan addresses
-        #[cfg(feature = "flashloan_v2")]
         {
             handle_contract_insertion!(
                 state,
@@ -537,9 +536,7 @@ where
 
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
-                    #[cfg(feature = "flashloan_v2")]
                     input_type: EVMInputTy::ABI,
                     direct_data: Default::default(),
                     randomness: vec![0],

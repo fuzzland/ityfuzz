@@ -29,6 +29,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+use crate::evm::uniswap::TokenContext;
 // Some components are used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
 use crate::{
@@ -65,19 +66,11 @@ where
     phantom: PhantomData<(VS, I, S)>,
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
-    #[cfg(feature = "flashloan_v2")]
     known_addresses: HashSet<EVMAddress>,
-    #[cfg(feature = "flashloan_v2")]
-    endpoint: OnChainConfig,
-    #[cfg(feature = "flashloan_v2")]
+    endpoint: Option<OnChainConfig>,
     erc20_address: HashSet<EVMAddress>,
-    #[cfg(feature = "flashloan_v2")]
     pair_address: HashSet<EVMAddress>,
-    #[cfg(feature = "flashloan_v2")]
-    pub onchain_middlware: Rc<RefCell<OnChain<VS, I, S>>>,
-    #[cfg(feature = "flashloan_v2")]
     pub unbound_tracker: HashMap<usize, HashSet<EVMAddress>>, // pc -> [address called]
-    #[cfg(feature = "flashloan_v2")]
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
 }
 
@@ -122,7 +115,6 @@ where
     let mut tc = Testcase::new(
         {
             EVMInput {
-                #[cfg(feature = "flashloan_v2")]
                 input_type: EVMInputTy::Borrow,
                 caller: state.get_rand_caller(),
                 contract: token,
@@ -133,7 +125,6 @@ where
                 step: false,
                 env: Default::default(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: 0,
                 direct_data: Default::default(),
                 randomness: vec![0],
@@ -165,21 +156,10 @@ where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT,
 {
-    #[cfg(not(feature = "flashloan_v2"))]
-    pub fn new(use_contract_value: bool) -> Self {
-        Self {
-            phantom: PhantomData,
-            oracle: Box::new(DummyPriceOracle {}),
-            use_contract_value,
-        }
-    }
-
-    #[cfg(feature = "flashloan_v2")]
     pub fn new(
         use_contract_value: bool,
-        endpoint: OnChainConfig,
+        endpoint: Option<OnChainConfig>,
         price_oracle: Box<dyn PriceOracle>,
-        onchain_middleware: Rc<RefCell<OnChain<VS, I, S>>>,
         flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     ) -> Self {
         Self {
@@ -190,7 +170,6 @@ where
             endpoint,
             erc20_address: Default::default(),
             pair_address: Default::default(),
-            onchain_middlware: onchain_middleware,
             unbound_tracker: Default::default(),
             flashloan_oracle,
         }
@@ -214,7 +193,15 @@ where
             .map(|price| Self::calculate_usd_value(price, amount))
     }
 
-    #[cfg(feature = "flashloan_v2")]
+    fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
+        match &mut self.endpoint {
+            Some(endpoint) => {
+                Some(endpoint.fetch_uniswap_path_cached(addr).clone())
+            }
+            None => None,
+        }
+    }
+
     pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &[ABIConfig], _state: &mut S) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
@@ -237,18 +224,26 @@ where
         let mut is_pair = false;
         // check abi_signatures_token is subset of abi.name
         {
-            let oracle = self.flashloan_oracle.deref().try_borrow_mut();
-            // avoid delegate call on token -> make oracle borrow multiple times
-            if oracle.is_ok() {
-                if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
-                    oracle
-                        .unwrap()
-                        .register_token(*addr, self.endpoint.fetch_uniswap_path_cached(*addr).clone());
-                    self.erc20_address.insert(*addr);
-                    is_erc20 = true;
+            if abi_signatures_token.iter().all(|x| abi_names.contains(x)) {
+                match self.get_token_context(*addr) {
+                    Some(token_ctx) => {
+                        let oracle = self.flashloan_oracle.deref().try_borrow_mut();
+                        // avoid delegate call on token -> make oracle borrow multiple times
+                        if oracle.is_ok() {
+                            oracle
+                                .unwrap()
+                                .register_token(*addr, token_ctx);
+                            self.erc20_address.insert(*addr);
+                            is_erc20 = true;
+                        } else {
+                            debug!("Unable to liquidate token {:?}", addr);
+                        }
+                    }
+                    None => {
+                        debug!("Unable to liquidate token {:?}", addr);
+                    }
                 }
-            } else {
-                debug!("Ignoring token {:?}", addr);
+                
             }
         }
 
@@ -262,7 +257,6 @@ where
         (is_erc20, is_pair)
     }
 
-    #[cfg(feature = "flashloan_v2")]
     pub fn on_pair_insertion<SC>(&mut self, host: &FuzzHost<VS, I, S, SC>, state: &mut S, pair: EVMAddress)
     where
         SC: Scheduler<State = S> + Clone,
@@ -283,7 +277,6 @@ where
     }
 }
 
-#[cfg(feature = "flashloan_v2")]
 impl<VS, I, S> Flashloan<VS, I, S>
 where
     S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
@@ -327,141 +320,6 @@ where
     VS: VMStateT,
     SC: Scheduler<State = S> + Clone,
 {
-    #[cfg(not(feature = "flashloan_v2"))]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
-        macro_rules! earned {
-            ($amount:expr) => {
-                host.evmstate.flashloan_data.earned += $amount;
-            };
-            () => {};
-        }
-
-        macro_rules! owed {
-            ($amount:expr) => {
-                host.evmstate.flashloan_data.owed += $amount;
-            };
-            () => {};
-        }
-
-        let offset_of_arg_offset: usize = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => 3,
-            0xf4 | 0xfa => 2,
-            _ => {
-                return;
-            }
-        };
-
-        let value_transfer = match *interp.instruction_pointer {
-            0xf1 | 0xf2 => interp.stack.peek(2).unwrap(),
-            _ => EVMU256::ZERO,
-        };
-
-        // todo: fix for delegatecall
-        let call_target: EVMAddress = convert_u256_to_h160(interp.stack.peek(1).unwrap());
-
-        if value_transfer > EVMU256::ZERO && call_target == interp.contract.caller {
-            earned!(EVMU512::from(value_transfer) * float_scale_to_u512(1.0, 5))
-        }
-
-        let offset = interp.stack.peek(offset_of_arg_offset).unwrap();
-        let size = interp.stack.peek(offset_of_arg_offset + 1).unwrap();
-        if size < EVMU256::from(4) {
-            return;
-        }
-        let data = interp.memory.get_slice(as_u64(offset) as usize, as_u64(size) as usize);
-        // debug!("Calling address: {:?} {:?}", hex::encode(call_target),
-        // hex::encode(data));
-
-        macro_rules! make_transfer_call_success {
-            () => {
-                host.middlewares_latent_call_actions
-                    .push(ReturnSuccess(Bytes::from([vec![0x0; 31], vec![0x1]].concat())));
-            };
-        }
-
-        macro_rules! make_balance_call_success {
-            () => {
-                host.middlewares_latent_call_actions
-                    .push(ReturnSuccess(Bytes::from(vec![0xff; 32])));
-            };
-        }
-        macro_rules! handle_contract_contract_transfer {
-            () => {
-                if !self.use_contract_value {
-                    make_transfer_call_success!();
-                }
-            };
-        }
-
-        macro_rules! handle_dst_is_attacker {
-            ($amount:expr) => {
-                if self.use_contract_value {
-                    // if we use contract value, we make attacker earns amount for oracle proc
-                    // we assume the subsequent would revert if no enough balance
-                    earned!($amount);
-                } else {
-                    earned!($amount);
-                    make_transfer_call_success!();
-                }
-            };
-        }
-        match data[0..4] {
-            // balanceOf / approval
-            [0x70, 0xa0, 0x82, 0x31] | [0x09, 0x5e, 0xa7, 0xb3] => {
-                if !self.use_contract_value {
-                    make_balance_call_success!();
-                }
-            }
-            // transfer
-            [0xa9, 0x05, 0x9c, 0xbb] => {
-                let dst = EVMAddress::from_slice(&data[16..36]);
-                let amount = EVMU256::try_from_be_slice(&data[36..68]).unwrap();
-                // debug!(
-                //     "transfer from {:?} to {:?} amount {:?}",
-                //     interp.contract.address, dst, amount
-                // );
-
-                match self.calculate_usd_value_from_addr(call_target, amount) {
-                    Some(value) => {
-                        if dst == interp.contract.caller {
-                            return handle_dst_is_attacker!(value);
-                        }
-                    }
-                    // if no value, we can't borrow it!
-                    // bypass by explicitly returning value for every token
-                    _ => {}
-                }
-                handle_contract_contract_transfer!()
-            }
-            // transferFrom
-            [0x23, 0xb8, 0x72, 0xdd] => {
-                let src = EVMAddress::from_slice(&data[16..36]);
-                let dst = EVMAddress::from_slice(&data[48..68]);
-                let amount = EVMU256::try_from_be_slice(&data[68..100]).unwrap();
-                let _make_success =
-                    MiddlewareOp::MakeSubsequentCallSuccess(Bytes::from([vec![0x0; 31], vec![0x1]].concat()));
-                match self.calculate_usd_value_from_addr(call_target, amount) {
-                    Some(value) => {
-                        if src == interp.contract.caller {
-                            make_transfer_call_success!();
-                            return owed!(value);
-                        } else if dst == interp.contract.caller {
-                            return handle_dst_is_attacker!(value);
-                        }
-                    }
-                    // if no value, we can't borrow it!
-                    // bypass by explicitly returning value for every token
-                    _ => {}
-                }
-                if src != interp.contract.caller && dst != interp.contract.caller {
-                    handle_contract_contract_transfer!()
-                }
-            }
-            _ => {}
-        };
-    }
-
-    #[cfg(feature = "flashloan_v2")]
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, s: &mut S)
     where
         S: HasCaller<EVMAddress>,
@@ -514,26 +372,6 @@ where
     }
 }
 
-#[cfg(not(feature = "flashloan_v2"))]
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct FlashloanData {
-    pub owed: EVMU512,
-    pub earned: EVMU512,
-}
-#[cfg(not(feature = "flashloan_v2"))]
-impl FlashloanData {
-    pub fn new() -> Self {
-        Self {
-            owed: EVMU512::from(0),
-            earned: EVMU512::from(0),
-        }
-    }
-}
-
-#[cfg(not(feature = "flashloan_v2"))]
-impl_serdeany!(FlashloanData);
-
-#[cfg(feature = "flashloan_v2")]
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct FlashloanData {
     pub oracle_recheck_reserve: HashSet<EVMAddress>,
@@ -545,7 +383,6 @@ pub struct FlashloanData {
     pub extra_info: String,
 }
 
-#[cfg(feature = "flashloan_v2")]
 impl FlashloanData {
     pub fn new() -> Self {
         Self {

@@ -188,19 +188,11 @@ pub fn evm_fuzzer(
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
-        #[cfg(not(feature = "flashloan_v2"))]
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(
-            Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(config.onchain.is_some()),
-        )));
-
-        #[cfg(feature = "flashloan_v2")]
         {
-            assert!(onchain_middleware.is_some(), "Flashloan v2 requires onchain env");
             fuzz_host.add_flashloan_middleware(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
                 true,
-                config.onchain.clone().unwrap(),
+                config.onchain.clone(),
                 config.price_oracle,
-                onchain_middleware.clone().unwrap(),
                 config.flashloan_oracle,
             ));
         }

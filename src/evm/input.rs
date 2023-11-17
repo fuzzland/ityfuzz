@@ -68,7 +68,6 @@ pub trait EVMInputT {
     fn set_txn_value(&mut self, v: EVMU256);
 
     /// Get input type
-    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy;
 
     /// Get additional random bytes for mutator
@@ -79,12 +78,10 @@ pub trait EVMInputT {
 
     /// Get the percentage of the token amount in all callers' account to
     /// liquidate
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
 
     /// Set the percentage of the token amount in all callers' account to
     /// liquidate
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
 
     fn get_repeat(&self) -> usize;
@@ -94,7 +91,6 @@ pub trait EVMInputT {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EVMInput {
     /// Input type
-    #[cfg(feature = "flashloan_v2")]
     pub input_type: EVMInputTy,
 
     /// Caller address
@@ -128,7 +124,6 @@ pub struct EVMInput {
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     /// Percentage of the token amount in all callers' account to liquidate
-    #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
 
     /// If ABI is empty, use direct data, which is the raw input data
@@ -145,7 +140,6 @@ pub struct EVMInput {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ConciseEVMInput {
     /// Input type
-    #[cfg(feature = "flashloan_v2")]
     pub input_type: EVMInputTy,
 
     /// Caller address
@@ -170,7 +164,6 @@ pub struct ConciseEVMInput {
     pub env: Env,
 
     /// Percentage of the token amount in all callers' account to liquidate
-    #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
 
     /// Additional random bytes for mutator
@@ -204,7 +197,6 @@ impl ConciseEVMInput {
         };
 
         Self {
-            #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
             caller: input.get_caller(),
             contract: input.get_contract(),
@@ -218,7 +210,6 @@ impl ConciseEVMInput {
             txn_value: input.get_txn_value(),
             step: input.is_step(),
             env: input.get_vm_env().clone(),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: input.get_liquidation_percent(),
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
@@ -236,7 +227,6 @@ impl ConciseEVMInput {
         I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     {
         Self {
-            #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
             caller: input.get_caller(),
             contract: input.get_contract(),
@@ -250,7 +240,6 @@ impl ConciseEVMInput {
             txn_value: input.get_txn_value(),
             step: input.is_step(),
             env: input.get_vm_env().clone(),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: input.get_liquidation_percent(),
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
@@ -263,7 +252,6 @@ impl ConciseEVMInput {
     pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
         (
             EVMInput {
-                #[cfg(feature = "flashloan_v2")]
                 input_type: self.input_type.clone(),
                 caller: self.caller,
                 contract: self.contract,
@@ -277,7 +265,6 @@ impl ConciseEVMInput {
                 step: self.step,
                 env: self.env.clone(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: self.liquidation_percent,
                 #[cfg(not(feature = "debug"))]
                 direct_data: Bytes::new(),
@@ -292,7 +279,6 @@ impl ConciseEVMInput {
 
     // Variable `liq` is used when `debug` feature is disabled
     #[allow(unused_variables)]
-    #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
         #[cfg(not(feature = "debug"))]
         match self.data {
@@ -306,14 +292,6 @@ impl ConciseEVMInput {
 
         #[cfg(feature = "debug")]
         self.as_transfer()
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn pretty_txn(&self) -> Option<String> {
-        match self.data {
-            Some(ref d) => self.as_abi_call(d.to_colored_string()),
-            None => self.as_transfer(),
-        }
     }
 
     #[allow(dead_code)]
@@ -386,7 +364,6 @@ impl ConciseEVMInput {
         ))
     }
 
-    #[cfg(feature = "flashloan_v2")]
     #[inline]
     fn append_liquidation(&self, indent: String, call: String) -> String {
         if self.liquidation_percent == 0 {
@@ -404,12 +381,6 @@ impl ConciseEVMInput {
         liq.push_str(format!("├─[{}] {}", self.layer + 1, liq_call).as_str());
 
         [call, liq].join("\n")
-    }
-
-    #[cfg(not(feature = "flashloan_v2"))]
-    #[inline]
-    fn append_liquidation(&self, _indent: String, call: String) -> String {
-        call
     }
 
     #[inline]
@@ -489,12 +460,10 @@ impl SolutionTx for ConciseEVMInput {
         self.txn_value.unwrap_or_default().to_string()
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn is_borrow(&self) -> bool {
         self.input_type == EVMInputTy::Borrow
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn liq_percent(&self) -> u8 {
         self.liquidation_percent
     }
@@ -562,7 +531,6 @@ impl EVMInputT for EVMInput {
         self.txn_value = Some(v);
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy {
         self.input_type.clone()
     }
@@ -575,12 +543,10 @@ impl EVMInputT for EVMInput {
         self.randomness = v;
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8 {
         self.liquidation_percent
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8) {
         self.liquidation_percent = v;
     }

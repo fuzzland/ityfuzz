@@ -328,7 +328,6 @@ where
                     .insert(contract.deployed_address, build_artifact.clone());
             }
 
-            #[cfg(feature = "flashloan_v2")]
             {
                 handle_contract_insertion!(
                     self.state,
@@ -454,9 +453,7 @@ where
             step: false,
             env: artifacts.initial_env.clone(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             direct_data: Default::default(),
             randomness: vec![0],

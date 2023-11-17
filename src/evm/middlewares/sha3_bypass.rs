@@ -516,10 +516,8 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
             direct_data: bys,
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,

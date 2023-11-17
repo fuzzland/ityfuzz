@@ -14,7 +14,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Mutator for EVM inputs
 use crate::evm::input::EVMInputT;
-#[cfg(feature = "flashloan_v2")]
 use crate::evm::input::EVMInputTy::Borrow;
 use crate::{
     evm::{
@@ -126,19 +125,13 @@ where
         for constraint in &constraints {
             match constraint {
                 Constraint::MustStepNow => {
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        if input.get_input_type() == Borrow {
-                            return false;
-                        }
+                    if input.get_input_type() == Borrow {
+                        return false;
                     }
                 }
                 Constraint::Contract(_) => {
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        if input.get_input_type() == Borrow {
-                            return false;
-                        }
+                    if input.get_input_type() == Borrow {
+                        return false;
                     }
                 }
                 _ => {}
@@ -173,10 +166,7 @@ where
                     input.set_contract_and_abi(target, abi);
                 }
                 Constraint::NoLiquidation => {
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        input.set_liquidation_percent(0);
-                    }
+                    input.set_liquidation_percent(0);
                 }
                 Constraint::MustStepNow => {
                     input.set_step(true);
@@ -227,25 +217,17 @@ where
         // use exploit template
         if state.has_preset() && state.rand_mut().below(100) < 20 {
             // if flashloan_v2, we don't mutate if it's a borrow
-            #[cfg(feature = "flashloan_v2")]
-            {
-                if input.get_input_type() != Borrow {
-                    match state.get_next_call() {
-                        Some((addr, abi)) => {
-                            input.set_contract_and_abi(addr, Some(abi));
-                            input.mutate(state);
-                            return Ok(MutationResult::Mutated);
-                        }
-                        None => {
-                            // debug!("cannot find next call");
-                        }
+            if input.get_input_type() != Borrow {
+                match state.get_next_call() {
+                    Some((addr, abi)) => {
+                        input.set_contract_and_abi(addr, Some(abi));
+                        input.mutate(state);
+                        return Ok(MutationResult::Mutated);
+                    }
+                    None => {
+                        // debug!("cannot find next call");
                     }
                 }
-            }
-
-            #[cfg(not(feature = "flashloan_v2"))]
-            {
-                // todo!("set function")
             }
         }
         // determine whether we should conduct havoc
@@ -296,15 +278,7 @@ where
                         mutated = true;
                     };
                 }
-                #[cfg(feature = "flashloan_v2")]
-                {
-                    if input.get_input_type() != Borrow {
-                        turn_to_step!();
-                    }
-                }
-
-                #[cfg(not(feature = "flashloan_v2"))]
-                {
+                if input.get_input_type() != Borrow {
                     turn_to_step!();
                 }
 
@@ -318,7 +292,6 @@ where
             // we should not mutate the VM state, but only mutate the bytes
             if input.is_step() {
                 let res = match state.rand_mut().below(100) {
-                    #[cfg(feature = "flashloan_v2")]
                     0..=5 => {
                         let prev_percent = input.get_liquidation_percent();
                         input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
@@ -336,7 +309,6 @@ where
 
             // if the input is to borrow token, we should mutate the randomness
             // (use to select the paths to buy token), VM state, and bytes
-            #[cfg(feature = "flashloan_v2")]
             if input.get_input_type() == Borrow {
                 let rand_u8 = state.rand_mut().below(255) as u8;
                 return match state.rand_mut().below(3) {
@@ -353,7 +325,6 @@ where
             // mutate the bytes or VM state or liquidation percent (percentage of token to
             // liquidate) by default
             match state.rand_mut().below(100) {
-                #[cfg(feature = "flashloan_v2")]
                 6..=10 => {
                     let prev_percent = input.get_liquidation_percent();
                     input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
