@@ -101,7 +101,7 @@ impl ContractLoader {
         for (filename_or_address, abi) in mapping {
             let mut addr = None;
             if filename_or_address.starts_with("0x") {
-                addr = EVMAddress::from_str(&filename_or_address).map(|addr| Some(addr)).unwrap_or(None);
+                addr = EVMAddress::from_str(&filename_or_address).map(Some).unwrap_or(None);
             }
 
             for contract in &mut self.contracts {
@@ -150,7 +150,7 @@ impl ContractLoader {
                 return format!("({})", v);
             } else if ty.ends_with("[]") {
                 return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
-            } else if ty.ends_with("]") && ty.contains("[") {
+            } else if ty.ends_with(']') && ty.contains('[') {
                 let split = ty.rsplit_once('[').unwrap();
                 let name = split.0.to_string();
                 let len = split

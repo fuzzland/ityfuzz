@@ -46,7 +46,7 @@ use config::{Config, FuzzerTypes, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
-use itertools::{assert_equal, Itertools};
+use itertools::{Itertools};
 use num_cpus;
 use onchain::{
     endpoints::{Chain, OnChainConfig},
@@ -538,7 +538,7 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     let force_abis = args.force_abi
-        .split(",")
+        .split(',')
         .filter(|s| !s.is_empty())
         .map(|x| {
             let runes = x.split(':').collect_vec();
@@ -690,13 +690,13 @@ pub fn evm_main(args: EvmArgs) {
             .iter()
             .map(|config| {
                 json!({
-                    hex::encode(&config.function): format!("{}{}", &config.function_name, &config.abi)
+                    hex::encode(config.function): format!("{}{}", &config.function_name, &config.abi)
                 })
             })
             .collect();
         abis_map
             .entry(hex::encode(contract_info.deployed_address))
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(abis);
     }
 
