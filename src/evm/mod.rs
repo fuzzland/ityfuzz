@@ -46,6 +46,7 @@ use config::{Config, FuzzerTypes, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
+use itertools::{assert_equal, Itertools};
 use num_cpus;
 use onchain::{
     endpoints::{Chain, OnChainConfig},
@@ -310,6 +311,12 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     setup_file: String,
 
+    /// Forcing a contract to use the given abi. This is useful when the
+    /// contract is a complex proxy or decompiler has trouble to detect the abi.
+    /// Format: address:abi_file,...
+    #[arg(long, default_value = "")]
+    force_abi: String,
+
     /// Preset file. If specified, will load the preset file and match past
     /// exploit template.
     #[cfg(feature = "use_presets")]
@@ -530,65 +537,80 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
+    let force_abis = args.force_abi
+        .split(",")
+        .filter(|s| !s.is_empty())
+        .map(|x| {
+            let runes = x.split(':').collect_vec();
+            assert_eq!(runes.len(), 2, "Invalid force abi format");
+            let abi = std::fs::read_to_string(runes[1]).expect("Failed to read abi file");
+            (runes[0].to_string(), abi)
+        })
+        .collect::<HashMap<_, _>>();
+    
+    let mut contract_loader = match target_type {
+        EVMTargetType::Glob => ContractLoader::from_glob(
+            args.target.as_str(),
+            &mut state,
+            &proxy_deploy_codes,
+            &constructor_args_map,
+        ),
+        EVMTargetType::Config => ContractLoader::from_config(
+            &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+            &offchain_config.expect("offchain config is required for config target type"),
+        ),
+        EVMTargetType::AnvilFork => {
+            let addresses: Vec<EVMAddress> = args
+                .target
+                .split(',')
+                .map(|s| EVMAddress::from_str(s).unwrap())
+                .collect();
+            ContractLoader::from_fork(
+                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                onchain.as_mut().expect("onchain is required to fork anvil"),
+                HashSet::from_iter(addresses),
+            )
+        }
+        EVMTargetType::Setup => ContractLoader::from_setup(
+            &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+            args.setup_file,
+        ),
+        EVMTargetType::Address => {
+            if onchain.is_none() {
+                panic!("Onchain is required for address target type");
+            }
+            let mut args_target = args.target.clone();
+
+            if args.ierc20_oracle || args.flashloan {
+                const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+                const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
+                if "bsc" == onchain.as_ref().unwrap().chain_name {
+                    if !args_target.contains(BSC_ADDRESS) {
+                        args_target.push(',');
+                        args_target.push_str(BSC_ADDRESS);
+                    }
+                } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
+                    args_target.push(',');
+                    args_target.push_str(ETH_ADDRESS);
+                }
+            }
+            let addresses: Vec<EVMAddress> = args_target
+                .split(',')
+                .map(|s| EVMAddress::from_str(s).unwrap())
+                .collect();
+            ContractLoader::from_address(
+                onchain.as_mut().unwrap(),
+                HashSet::from_iter(addresses),
+                builder.clone(),
+            )
+        }
+    };
+
+    contract_loader.force_abi(force_abis);
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
-        contract_loader: match target_type {
-            EVMTargetType::Glob => ContractLoader::from_glob(
-                args.target.as_str(),
-                &mut state,
-                &proxy_deploy_codes,
-                &constructor_args_map,
-            ),
-            EVMTargetType::Config => ContractLoader::from_config(
-                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                &offchain_config.expect("offchain config is required for config target type"),
-            ),
-            EVMTargetType::AnvilFork => {
-                let addresses: Vec<EVMAddress> = args
-                    .target
-                    .split(',')
-                    .map(|s| EVMAddress::from_str(s).unwrap())
-                    .collect();
-                ContractLoader::from_fork(
-                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                    onchain.as_mut().expect("onchain is required to fork anvil"),
-                    HashSet::from_iter(addresses),
-                )
-            }
-            EVMTargetType::Setup => ContractLoader::from_setup(
-                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                args.setup_file,
-            ),
-            EVMTargetType::Address => {
-                if onchain.is_none() {
-                    panic!("Onchain is required for address target type");
-                }
-                let mut args_target = args.target.clone();
-
-                if args.ierc20_oracle || args.flashloan {
-                    const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
-                    const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
-                    if "bsc" == onchain.as_ref().unwrap().chain_name {
-                        if !args_target.contains(BSC_ADDRESS) {
-                            args_target.push(',');
-                            args_target.push_str(BSC_ADDRESS);
-                        }
-                    } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
-                        args_target.push(',');
-                        args_target.push_str(ETH_ADDRESS);
-                    }
-                }
-                let addresses: Vec<EVMAddress> = args_target
-                    .split(',')
-                    .map(|s| EVMAddress::from_str(s).unwrap())
-                    .collect();
-                ContractLoader::from_address(
-                    onchain.as_mut().unwrap(),
-                    HashSet::from_iter(addresses),
-                    builder.clone(),
-                )
-            }
-        },
+        contract_loader,
         only_fuzz: if !args.only_fuzz.is_empty() {
             args.only_fuzz
                 .split(',')

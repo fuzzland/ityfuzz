@@ -1,0 +1,32 @@
+[
+    {
+        "constant": false,
+        "inputs": [
+            {
+                "name": "a1",
+                "type": "address"
+            },
+            {
+                "name": "a2",
+                "type": "address"
+            },
+{
+                "name": "a3",
+                "type": "address"
+            },
+{
+                "name": "a4",
+                "type": "uint256"
+            },
+{
+                "name": "a5",
+                "type": "uint256"
+            }
+        ],
+        "name": "liquidate",
+        "outputs": [],
+        "payable": true,
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
