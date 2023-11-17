@@ -46,7 +46,7 @@ use config::{Config, FuzzerTypes, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
-use itertools::{Itertools};
+use itertools::Itertools;
 use num_cpus;
 use onchain::{
     endpoints::{Chain, OnChainConfig},
@@ -537,7 +537,8 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    let force_abis = args.force_abi
+    let force_abis = args
+        .force_abi
         .split(',')
         .filter(|s| !s.is_empty())
         .map(|x| {
@@ -547,7 +548,7 @@ pub fn evm_main(args: EvmArgs) {
             (runes[0].to_string(), abi)
         })
         .collect::<HashMap<_, _>>();
-    
+
     let mut contract_loader = match target_type {
         EVMTargetType::Glob => ContractLoader::from_glob(
             args.target.as_str(),

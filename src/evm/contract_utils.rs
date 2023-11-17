@@ -105,9 +105,9 @@ impl ContractLoader {
             }
 
             for contract in &mut self.contracts {
-                if contract.name == filename_or_address || (
-                    addr.is_some() && contract.deployed_address == addr.unwrap()
-                ) {
+                if contract.name == filename_or_address ||
+                    (addr.is_some() && contract.deployed_address == addr.unwrap())
+                {
                     debug!("Forcing ABI for {}", contract.name);
                     contract.abi = ContractLoader::parse_abi_str(&abi);
                 }
