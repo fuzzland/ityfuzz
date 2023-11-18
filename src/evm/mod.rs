@@ -132,8 +132,8 @@ pub struct EvmArgs {
     #[arg(long)]
     onchain_block_number: Option<u64>,
 
-    /// Onchain Customize - RPC endpoint URL (Default: inferred from chain-type), 
-    /// Example: https://rpc.ankr.com/eth	
+    /// Onchain Customize - RPC endpoint URL (Default: inferred from
+    /// chain-type), Example: https://rpc.ankr.com/eth
     #[arg(long)]
     onchain_url: Option<String>,
 
