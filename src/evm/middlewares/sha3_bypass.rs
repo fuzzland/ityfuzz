@@ -7,8 +7,7 @@ use std::{
 
 use bytes::Bytes;
 use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
 };
 use revm_interpreter::{opcode::JUMPI, Interpreter};
@@ -17,13 +16,9 @@ use tracing::debug;
 use crate::{
     evm::{
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         types::{as_u64, EVMAddress, EVMFuzzState, EVMU256},
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 const MAX_CALL_DEPTH: u64 = 3;

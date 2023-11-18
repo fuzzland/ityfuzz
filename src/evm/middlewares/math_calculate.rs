@@ -1,8 +1,7 @@
 use std::{collections::HashSet, fmt::Debug, str::FromStr};
 
 use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
 };
 use revm_interpreter::Interpreter;
@@ -13,15 +12,11 @@ use tracing::info;
 use crate::{
     evm::{
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         onchain::endpoints::{Chain, OnChainConfig},
         types::{EVMAddress, EVMFuzzState},
         uniswap::{get_uniswap_info, UniswapProvider},
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 #[derive(Serialize, Debug, Clone, Default)]

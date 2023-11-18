@@ -3,8 +3,7 @@ use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
 };
 use revm_interpreter::Interpreter;
@@ -16,14 +15,10 @@ use crate::{
     evm::{
         blaz::builder::ArtifactInfoMetadata,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         srcmap::parser::SourceMapLocation,
         types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMU256},
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

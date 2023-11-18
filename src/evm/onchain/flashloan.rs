@@ -7,7 +7,6 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    marker::PhantomData,
     ops::Deref,
     rc::Rc,
     str::FromStr,
@@ -20,7 +19,7 @@ use libafl::{
     inputs::Input,
     prelude::{HasCorpus, State, UsesInput},
     schedulers::Scheduler,
-    state::{HasMetadata, HasRand},
+    state::{HasMetadata},
 };
 // impl_serdeany is used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
@@ -168,10 +167,7 @@ impl Flashloan {
     }
 
     fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
-        match &mut self.endpoint {
-            Some(endpoint) => Some(endpoint.fetch_uniswap_path_cached(addr).clone()),
-            None => None,
-        }
+        self.endpoint.as_mut().map(|endpoint| endpoint.fetch_uniswap_path_cached(addr).clone())
     }
 
     pub fn on_contract_insertion(

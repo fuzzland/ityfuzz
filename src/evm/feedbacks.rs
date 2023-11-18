@@ -10,9 +10,8 @@ use libafl::{
     executors::ExitKind,
     feedbacks::Feedback,
     observers::ObserversTuple,
-    prelude::{HasCorpus, HasMetadata, HasRand, State, Testcase, UsesInput},
+    prelude::{Testcase},
     schedulers::Scheduler,
-    state::HasClientPerfMonitor,
     Error,
 };
 use libafl_bolts::Named;
@@ -20,14 +19,12 @@ use libafl_bolts::Named;
 use super::{input::EVMInput, types::EVMFuzzState};
 use crate::{
     evm::{
-        input::{ConciseEVMInput, EVMInputT},
+        input::{ConciseEVMInput},
         middlewares::sha3_bypass::Sha3TaintAnalysis,
-        types::EVMAddress,
         vm::EVMExecutor,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 /// A wrapper around a feedback that also performs sha3 taint analysis

@@ -1,27 +1,16 @@
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc, str::FromStr, sync::Arc};
 
 use alloy_primitives::hex;
-use libafl::{
-    inputs::UsesInput,
-    schedulers::{Scheduler, StdScheduler},
-    state::{HasCorpus, HasMetadata, HasRand, State},
-};
-use serde::{de::DeserializeOwned, Serialize};
 
-use super::{
-    input::{ConciseEVMInput, EVMInput, EVMInputT},
-    types::EVMFuzzState,
-    vm::{EVMExecutor, EVMState},
-};
+
+
+
 use crate::{
     evm::{
         abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
         onchain::endpoints::Chain,
         types::{EVMAddress, EVMU256},
     },
-    generic_vm::vm_state::VMStateT,
-    input::{ConciseSerde, VMInputT},
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 #[derive(Clone, Debug)]
@@ -104,7 +93,7 @@ static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 impl<S> TokenContextT<S> for UniswapTokenContext {
     fn buy(
         &self,
-        state: &mut S,
+        _state: &mut S,
         amount_in: EVMU256,
         to: EVMAddress,
         seed: &[u8],
@@ -193,7 +182,7 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
     // swapExactTokensForETHSupportingFeeOnTransferTokens
     fn sell(
         &self,
-        state: &mut S,
+        _state: &mut S,
         amount_in: EVMU256,
         to: EVMAddress,
         seed: &[u8],

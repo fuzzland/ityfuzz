@@ -2,7 +2,7 @@ pub mod pair;
 
 use std::{fmt::Debug, fs::File};
 
-use libafl::{prelude::State, schedulers::Scheduler, state::HasCorpus};
+use libafl::{schedulers::Scheduler};
 use serde::{Deserialize, Deserializer};
 
 use super::types::EVMFuzzState;
@@ -14,7 +14,6 @@ use crate::{
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::HasCaller,
 };
 
 pub trait Preset<I, VS, SC>

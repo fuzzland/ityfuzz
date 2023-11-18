@@ -16,9 +16,8 @@ use bytes::Bytes;
 /// EVM executor implementation
 use itertools::Itertools;
 use libafl::{
-    prelude::{HasMetadata, HasRand, UsesInput},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
-    state::{HasCorpus, State},
 };
 use revm_interpreter::{
     BytecodeLocked,
@@ -969,7 +968,7 @@ where
                     flashloan_oracle
                         .known_tokens
                         .get(&token)
-                        .expect(format!("unknown token : {:?}", token).as_str())
+                        .unwrap_or_else(|| panic!("unknown token : {:?}", token))
                         .clone()
                 };
 

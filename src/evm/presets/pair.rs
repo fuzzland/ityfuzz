@@ -1,8 +1,7 @@
-use std::fmt::Debug;
+
 
 use libafl::{
     schedulers::Scheduler,
-    state::{HasCorpus, State},
 };
 
 use crate::{
@@ -15,7 +14,6 @@ use crate::{
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::HasCaller,
 };
 
 pub struct PairPreset;

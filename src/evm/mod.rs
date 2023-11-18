@@ -668,13 +668,13 @@ pub fn evm_main(args: EvmArgs) {
             .iter()
             .map(|config| {
                 json!({
-                    hex::encode(&config.function): format!("{}{}", &config.function_name, &config.abi)
+                    hex::encode(config.function): format!("{}{}", &config.function_name, &config.abi)
                 })
             })
             .collect();
         abis_map
             .entry(hex::encode(contract_info.deployed_address))
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(abis);
     }
 

@@ -2,7 +2,6 @@ use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
     fmt::{Debug, Display},
-    marker::PhantomData,
     ops::{Add, Div, Mul, Not, Sub},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
@@ -12,9 +11,8 @@ use bytes::Bytes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use libafl::{
-    prelude::{HasMetadata, Input},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
-    state::{HasCorpus, State},
 };
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
@@ -34,14 +32,12 @@ use crate::{
         concolic::expr::{simplify, ConcolicOp, Expr},
         corpus_initializer::SourceMapMap,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::{EVMInput},
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
         srcmap::parser::SourceMapLocation,
         types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},
     },
-    generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 lazy_static! {

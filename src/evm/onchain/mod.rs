@@ -16,9 +16,8 @@ use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
 use libafl::{
-    prelude::{HasCorpus, HasMetadata, Input, UsesInput},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
-    state::{HasRand, State},
 };
 use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
@@ -40,17 +39,15 @@ use crate::{
         },
         corpus_initializer::{ABIMap, SourceMapMap},
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::IS_FAST_CALL,
     },
-    generic_vm::vm_state::VMStateT,
     handle_contract_insertion,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
+    state::{HasCaller},
     state_input::StagedVMState,
 };
 

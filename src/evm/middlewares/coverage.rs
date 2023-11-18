@@ -10,8 +10,7 @@ use std::{
 
 use itertools::Itertools;
 use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
+    prelude::{HasMetadata},
     schedulers::Scheduler,
 };
 use revm_interpreter::{
@@ -28,7 +27,6 @@ use crate::{
         blaz::builder::ArtifactInfoMetadata,
         bytecode_iterator::all_bytecode,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         srcmap::parser::{
             pretty_print_source_map,
@@ -39,9 +37,6 @@ use crate::{
         types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
         vm::IN_DEPLOY,
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 pub static mut EVAL_COVERAGE: bool = false;

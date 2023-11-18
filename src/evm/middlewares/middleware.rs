@@ -3,10 +3,8 @@ use std::{clone::Clone, fmt::Debug, time::Duration};
 use bytes::Bytes;
 use libafl::{
     corpus::{Corpus, Testcase},
-    inputs::Input,
-    prelude::UsesInput,
     schedulers::Scheduler,
-    state::{HasCorpus, HasMetadata, State},
+    state::{HasCorpus},
 };
 use primitive_types::U512;
 use revm_interpreter::Interpreter;
@@ -16,13 +14,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     evm::{
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::{EVMInput},
         types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::EVMState,
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

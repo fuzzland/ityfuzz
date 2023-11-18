@@ -13,9 +13,8 @@ use alloy_sol_types::{SolInterface, SolValue};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, CallerMode, VmCalls};
 use libafl::{
-    prelude::Input,
     schedulers::Scheduler,
-    state::{HasCorpus, HasMetadata, HasRand, State},
+    state::{HasMetadata},
 };
 use revm_interpreter::{analysis::to_analysed, opcode, BytecodeLocked, InstructionResult, Interpreter};
 use revm_primitives::{Bytecode, Env, SpecId, B160, U256};
@@ -25,13 +24,9 @@ use super::middleware::{Middleware, MiddlewareType};
 use crate::{
     evm::{
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         types::{EVMAddress, EVMFuzzState},
         vm::EVMState,
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
 };
 
 /// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
@@ -71,7 +66,7 @@ pub struct Cheatcode<SC> {
     /// Recorded logs
     recorded_logs: Option<Vec<Vm::Log>>,
 
-    _phantom: PhantomData<(SC)>,
+    _phantom: PhantomData<SC>,
 }
 
 /// Prank information.

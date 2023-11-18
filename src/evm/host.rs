@@ -17,8 +17,7 @@ use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::{
-    prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput},
-    state::State,
+    prelude::{HasMetadata, Scheduler},
 };
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{
@@ -76,7 +75,7 @@ use crate::{
         abi::{get_abi_type_boxed, register_abi_instance},
         contract_utils::extract_sig_from_contract,
         corpus_initializer::ABIMap,
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{
@@ -86,11 +85,10 @@ use crate::{
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
         vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
-    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
+    generic_vm::{vm_executor::MAP_SIZE},
     handle_contract_insertion,
-    input::VMInputT,
     invoke_middlewares,
-    state::{HasCaller, HasHashToAddress, HasItyState},
+    state::{HasCaller, HasHashToAddress},
     state_input::StagedVMState,
 };
 

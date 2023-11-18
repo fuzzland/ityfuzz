@@ -5,8 +5,6 @@ use std::{
 
 use bytes::Bytes;
 use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
     schedulers::Scheduler,
 };
 use revm_interpreter::Interpreter;
@@ -15,14 +13,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     evm::{
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
         types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::EVMState,
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 #[derive(Serialize, Debug, Clone, Default)]

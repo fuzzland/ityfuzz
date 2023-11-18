@@ -10,7 +10,7 @@ use crate::{
         oracles::ERC20_BUG_IDX,
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        uniswap::{TokenContextT, UniswapTokenContext},
+        uniswap::{TokenContextT},
         vm::EVMState,
     },
     oracle::Oracle,
@@ -75,12 +75,12 @@ impl
                 }
             }
 
-            let path_idx = ctx.input.get_randomness()[0] as usize;
+            let _path_idx = ctx.input.get_randomness()[0] as usize;
 
-            let mut liquidation_txs = vec![];
+            let liquidation_txs = vec![];
 
             // debug!("Liquidations earned: {:?}", liquidations_earned);
-            for (caller, token_info, amount) in liquidations_earned {
+            for (_caller, _token_info, _amount) in liquidations_earned {
                 // let txs = generate_uniswap_router_sell(token_info, path_idx, amount,
                 // ctx.fuzz_state.callers_pool[0]); if txs.is_none() {
                 //     continue;

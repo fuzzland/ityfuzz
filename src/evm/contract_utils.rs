@@ -37,7 +37,7 @@ use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
     blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
     host::FuzzHost,
-    input::{ConciseEVMInput, EVMInput},
+    input::{ConciseEVMInput},
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
     types::ProjectSourceMapTy,
     vm::{EVMExecutor, EVMState},
@@ -130,7 +130,7 @@ impl ContractLoader {
                 return format!("({})", v);
             } else if ty.ends_with("[]") {
                 return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
-            } else if ty.ends_with("]") && ty.contains("[") {
+            } else if ty.ends_with(']') && ty.contains('[') {
                 let split = ty.rsplit_once('[').unwrap();
                 let name = split.0.to_string();
                 let len = split
