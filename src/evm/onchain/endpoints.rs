@@ -134,7 +134,7 @@ impl Chain {
             return url;
         }
         match self {
-            Chain::ETH => "https://eth.llamarpc.com",
+            Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
             Chain::BSC => "https://rpc.ankr.com/bsc",
@@ -529,27 +529,13 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, self.chain_id
         );
-
-        match self.post(self.endpoint_url.clone(), data) {
-            Some(resp) => {
-                let json: Result<Value, _> = serde_json::from_str(&resp);
-
-                match json {
-                    Ok(json) => {
-                        return json.get("result").cloned();
-                    }
-                    Err(e) => {
-                        error!("{:?}", e);
-                        None
-                    }
-                }
-            }
-
-            None => {
+        self.post(self.endpoint_url.clone(), data)
+            .and_then(|resp| serde_json::from_str(&resp).ok())
+            .and_then(|json: Value| json.get("result").cloned())
+            .or_else(|| {
                 error!("failed to fetch from {}", self.endpoint_url);
                 None
-            }
-        }
+            })
     }
 
     fn _request_with_id(&self, method: String, params: String, id: u8) -> Option<Value> {
@@ -557,27 +543,13 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, id
         );
-
-        match self.post(self.endpoint_url.clone(), data) {
-            Some(resp) => {
-                let json: Result<Value, _> = serde_json::from_str(&resp);
-
-                match json {
-                    Ok(json) => {
-                        return json.get("result").cloned();
-                    }
-                    Err(e) => {
-                        error!("{:?}", e);
-                        None
-                    }
-                }
-            }
-
-            None => {
+        self.post(self.endpoint_url.clone(), data)
+            .and_then(|resp| serde_json::from_str(&resp).ok())
+            .and_then(|json: Value| json.get("result").cloned())
+            .or_else(|| {
                 error!("failed to fetch from {}", self.endpoint_url);
                 None
-            }
-        }
+            })
     }
 
     pub fn get_balance(&mut self, address: EVMAddress) -> EVMU256 {
