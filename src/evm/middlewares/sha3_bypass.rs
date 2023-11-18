@@ -435,13 +435,12 @@ mod tests {
         opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP},
         BytecodeLocked,
     };
-    use crate::evm::input::ConciseEVMInput;
     use revm_primitives::Bytecode;
 
     use super::*;
     use crate::{
         evm::{
-            input::{EVMInput, EVMInputTy},
+            input::{ConciseEVMInput, EVMInput, EVMInputTy},
             mutator::AccessPattern,
             types::{generate_random_address, EVMFuzzState},
             vm::{EVMExecutor, EVMState},
