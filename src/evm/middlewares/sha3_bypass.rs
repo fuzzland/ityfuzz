@@ -435,6 +435,7 @@ mod tests {
         opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP},
         BytecodeLocked,
     };
+    use crate::evm::input::ConciseEVMInput;
     use revm_primitives::Bytecode;
 
     use super::*;
