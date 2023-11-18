@@ -96,6 +96,26 @@ pub struct ContractLoader {
     pub setup_data: Option<SetupData>,
 }
 
+impl ContractLoader {
+    pub fn force_abi(&mut self, mapping: HashMap<String, String>) {
+        for (filename_or_address, abi) in mapping {
+            let mut addr = None;
+            if filename_or_address.starts_with("0x") {
+                addr = EVMAddress::from_str(&filename_or_address).map(Some).unwrap_or(None);
+            }
+
+            for contract in &mut self.contracts {
+                if contract.name == filename_or_address ||
+                    (addr.is_some() && contract.deployed_address == addr.unwrap())
+                {
+                    debug!("Forcing ABI for {}", contract.name);
+                    contract.abi = ContractLoader::parse_abi_str(&abi);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SetupData {
     pub evmstate: EVMState,
@@ -130,7 +150,7 @@ impl ContractLoader {
                 return format!("({})", v);
             } else if ty.ends_with("[]") {
                 return format!("{}[]", Self::process_input(ty[..ty.len() - 2].to_string(), input));
-            } else if ty.ends_with("]") && ty.contains("[") {
+            } else if ty.ends_with(']') && ty.contains('[') {
                 let split = ty.rsplit_once('[').unwrap();
                 let name = split.0.to_string();
                 let len = split
