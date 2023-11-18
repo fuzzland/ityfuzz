@@ -71,7 +71,7 @@ where
     infant_scheduler: ISC,
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
-    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>>,
+    presets: Vec<&'a dyn Preset<EVMInput, EVMState, SC>>,
     work_dir: String,
 }
 
