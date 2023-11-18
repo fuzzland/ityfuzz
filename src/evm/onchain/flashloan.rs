@@ -29,7 +29,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::evm::uniswap::TokenContext;
+use crate::evm::{types::EVMFuzzState, uniswap::UniswapTokenContext};
 // Some components are used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
 use crate::{
@@ -57,13 +57,7 @@ macro_rules! scale {
         EVMU512::from(1_000_000)
     };
 }
-pub struct Flashloan<VS, I, S>
-where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-{
-    phantom: PhantomData<(VS, I, S)>,
+pub struct Flashloan {
     oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
     known_addresses: HashSet<EVMAddress>,
@@ -74,12 +68,7 @@ where
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
 }
 
-impl<VS, I, S> Debug for Flashloan<VS, I, S>
-where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-{
+impl Debug for Flashloan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Flashloan")
             .field("oracle", &self.oracle)
@@ -141,21 +130,7 @@ where
     scheduler.on_add(state, idx).expect("failed to call scheduler on_add");
 }
 
-impl<VS, I, S> Flashloan<VS, I, S>
-where
-    S: State
-        + HasRand
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + Debug
-        + Clone
-        + HasMetadata
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + UsesInput<Input = I>
-        + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-{
+impl Flashloan {
     pub fn new(
         use_contract_value: bool,
         endpoint: Option<OnChainConfig>,
@@ -163,7 +138,6 @@ where
         flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     ) -> Self {
         Self {
-            phantom: PhantomData,
             oracle: price_oracle,
             use_contract_value,
             known_addresses: Default::default(),
@@ -193,16 +167,19 @@ where
             .map(|price| Self::calculate_usd_value(price, amount))
     }
 
-    fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
+    fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
         match &mut self.endpoint {
-            Some(endpoint) => {
-                Some(endpoint.fetch_uniswap_path_cached(addr).clone())
-            }
+            Some(endpoint) => Some(endpoint.fetch_uniswap_path_cached(addr).clone()),
             None => None,
         }
     }
 
-    pub fn on_contract_insertion(&mut self, addr: &EVMAddress, abi: &[ABIConfig], _state: &mut S) -> (bool, bool) {
+    pub fn on_contract_insertion(
+        &mut self,
+        addr: &EVMAddress,
+        abi: &[ABIConfig],
+        _state: &mut EVMFuzzState,
+    ) -> (bool, bool) {
         // should not happen, just sanity check
         if self.known_addresses.contains(addr) {
             return (false, false);
@@ -230,9 +207,7 @@ where
                         let oracle = self.flashloan_oracle.deref().try_borrow_mut();
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
-                            oracle
-                                .unwrap()
-                                .register_token(*addr, token_ctx);
+                            oracle.unwrap().register_token(*addr, Rc::new(RefCell::new(token_ctx)));
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {
@@ -243,7 +218,6 @@ where
                         debug!("Unable to liquidate token {:?}", addr);
                     }
                 }
-                
             }
         }
 
@@ -257,9 +231,9 @@ where
         (is_erc20, is_pair)
     }
 
-    pub fn on_pair_insertion<SC>(&mut self, host: &FuzzHost<VS, I, S, SC>, state: &mut S, pair: EVMAddress)
+    pub fn on_pair_insertion<SC>(&mut self, host: &FuzzHost<SC>, state: &mut EVMFuzzState, pair: EVMAddress)
     where
-        SC: Scheduler<State = S> + Clone,
+        SC: Scheduler<State = EVMFuzzState> + Clone,
     {
         let slots = host.find_static_call_read_slot(
             pair,
@@ -277,13 +251,8 @@ where
     }
 }
 
-impl<VS, I, S> Flashloan<VS, I, S>
-where
-    S: State + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-{
-    pub fn analyze_call(&self, input: &I, flashloan_data: &mut FlashloanData) {
+impl Flashloan {
+    pub fn analyze_call(&self, input: &EVMInput, flashloan_data: &mut FlashloanData) {
         // if the txn is a transfer op, record it
         if input.get_txn_value().is_some() {
             flashloan_data.owed += EVMU512::from(input.get_txn_value().unwrap()) * scale!();
@@ -304,26 +273,11 @@ where
     }
 }
 
-impl<VS, I, S, SC> Middleware<VS, I, S, SC> for Flashloan<VS, I, S>
+impl<SC> Middleware<SC> for Flashloan
 where
-    S: State
-        + HasRand
-        + HasCaller<EVMAddress>
-        + HasMetadata
-        + HasCorpus
-        + Debug
-        + Clone
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + UsesInput<Input = I>
-        + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, s: &mut S)
-    where
-        S: HasCaller<EVMAddress>,
-    {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, s: &mut EVMFuzzState) {
         // if simply static call, we dont care
         // if unsafe { IS_FAST_CALL_STATIC } {
         //     return;

@@ -14,10 +14,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Mutator for EVM inputs
 use crate::evm::input::EVMInputT;
-use crate::evm::input::EVMInputTy::Borrow;
 use crate::{
     evm::{
         abi::ABIAddressToInstanceMap,
+        input::EVMInputTy::Borrow,
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::{Constraint, EVMStateT},
     },

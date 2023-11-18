@@ -728,7 +728,7 @@ impl ContractLoader {
     fn get_vm_with_cheatcode(
         deployer: EVMAddress,
     ) -> (
-        EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
+        EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
         EVMFuzzState,
     ) {
         let mut state: EVMFuzzState = FuzzState::new(0);

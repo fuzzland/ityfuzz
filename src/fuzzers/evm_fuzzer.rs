@@ -135,7 +135,7 @@ pub fn evm_fuzzer(
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
-                let mid = Rc::new(RefCell::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                let mid = Rc::new(RefCell::new(OnChain::new(
                     // scheduler can be cloned because it never uses &mut self
                     onchain,
                     config.onchain_storage_fetching.unwrap(),
@@ -189,7 +189,7 @@ pub fn evm_fuzzer(
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
         {
-            fuzz_host.add_flashloan_middleware(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
+            fuzz_host.add_flashloan_middleware(Flashloan::new(
                 true,
                 config.onchain.clone(),
                 config.price_oracle,

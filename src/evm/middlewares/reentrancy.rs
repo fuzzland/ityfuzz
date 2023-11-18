@@ -17,7 +17,7 @@ use crate::{
         host::FuzzHost,
         input::{ConciseEVMInput, EVMInputT},
         middlewares::middleware::{Middleware, MiddlewareType},
-        types::{EVMAddress, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
@@ -89,21 +89,11 @@ fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &Vec<u32>) {
 }
 
 // Reentrancy: Read, Read, Write
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for ReentrancyTracer
+impl<SC> Middleware<SC> for ReentrancyTracer
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         match *interp.instruction_pointer {
             0x54 => {
                 let depth = host.evmstate.post_execution.len() as u32;
@@ -182,8 +172,8 @@ where
     unsafe fn before_execute(
         &mut self,
         interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
+        host: &mut FuzzHost<SC>,
+        state: &mut EVMFuzzState,
         is_step: bool,
         data: &mut Bytes,
         evm_state: &mut EVMState,

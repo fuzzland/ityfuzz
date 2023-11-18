@@ -5,6 +5,7 @@ use std::{fmt::Debug, fs::File};
 use libafl::{prelude::State, schedulers::Scheduler, state::HasCorpus};
 use serde::{Deserialize, Deserializer};
 
+use super::types::EVMFuzzState;
 use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput, EVMInputT},
@@ -16,18 +17,17 @@ use crate::{
     state::HasCaller,
 };
 
-pub trait Preset<I, S, VS, SC>
+pub trait Preset<I, VS, SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn presets(
         &self,
         function_sig: [u8; 4],
         input: &EVMInput,
-        evm_executor: &EVMExecutor<I, S, VS, ConciseEVMInput, SC>,
+        evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC>,
     ) -> Vec<EVMInput>;
 }
 

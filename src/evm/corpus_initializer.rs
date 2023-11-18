@@ -66,7 +66,7 @@ where
     SC: ABIScheduler<State = EVMFuzzState> + Clone,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
-    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+    executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
     scheduler: SC,
     infant_scheduler: ISC,
     state: &'a mut EVMFuzzState,
@@ -178,7 +178,7 @@ where
     ISC: Scheduler<State = EVMInfantStateState>,
 {
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+        executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
         scheduler: SC,
         infant_scheduler: ISC,
         state: &'a mut EVMFuzzState,
@@ -196,7 +196,7 @@ where
     }
 
     #[cfg(feature = "use_presets")]
-    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>) {
+    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMState, SC>) {
         self.presets.push(preset);
     }
 
