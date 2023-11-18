@@ -10,10 +10,7 @@ use std::{
 use bytes::Bytes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
@@ -32,7 +29,7 @@ use crate::{
         concolic::expr::{simplify, ConcolicOp, Expr},
         corpus_initializer::SourceMapMap,
         host::FuzzHost,
-        input::{EVMInput},
+        input::EVMInput,
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
         srcmap::parser::SourceMapLocation,
         types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},

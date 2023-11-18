@@ -1,8 +1,4 @@
-
-
-use libafl::{
-    schedulers::Scheduler,
-};
+use libafl::schedulers::Scheduler;
 
 use crate::{
     evm::{

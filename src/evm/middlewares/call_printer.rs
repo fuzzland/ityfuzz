@@ -2,23 +2,18 @@ use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
 
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing::debug;
 
-use crate::{
-    evm::{
-        blaz::builder::ArtifactInfoMetadata,
-        host::FuzzHost,
-        middlewares::middleware::{Middleware, MiddlewareType},
-        srcmap::parser::SourceMapLocation,
-        types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMU256},
-    },
+use crate::evm::{
+    blaz::builder::ArtifactInfoMetadata,
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    srcmap::parser::SourceMapLocation,
+    types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMU256},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

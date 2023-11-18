@@ -2,15 +2,10 @@ use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc, str::FromStr, sync::Arc
 
 use alloy_primitives::hex;
 
-
-
-
-use crate::{
-    evm::{
-        abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
-        onchain::endpoints::Chain,
-        types::{EVMAddress, EVMU256},
-    },
+use crate::evm::{
+    abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
+    onchain::endpoints::Chain,
+    types::{EVMAddress, EVMU256},
 };
 
 #[derive(Clone, Debug)]
@@ -369,7 +364,7 @@ pub const ETH_UNISWAPV2_PAIR_BYTECODE: &str = include_str!("eth_uniswapV2_pair.b
 //             &t1,
 //             0,
 //             EVMU256::from(10000),
-//             
+//
 // EVMAddress::from_str("0x2300000000000000000000000000000000000000").unwrap(),
 //         );
 //         debug!(

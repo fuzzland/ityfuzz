@@ -4,20 +4,18 @@ use bytes::Bytes;
 use libafl::{
     corpus::{Corpus, Testcase},
     schedulers::Scheduler,
-    state::{HasCorpus},
+    state::HasCorpus,
 };
 use primitive_types::U512;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        input::{EVMInput},
-        types::{EVMAddress, EVMFuzzState, EVMU256},
-        vm::EVMState,
-    },
+use crate::evm::{
+    host::FuzzHost,
+    input::EVMInput,
+    types::{EVMAddress, EVMFuzzState, EVMU256},
+    vm::EVMState,
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]

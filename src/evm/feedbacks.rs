@@ -10,7 +10,7 @@ use libafl::{
     executors::ExitKind,
     feedbacks::Feedback,
     observers::ObserversTuple,
-    prelude::{Testcase},
+    prelude::Testcase,
     schedulers::Scheduler,
     Error,
 };
@@ -18,11 +18,7 @@ use libafl_bolts::Named;
 
 use super::{input::EVMInput, types::EVMFuzzState};
 use crate::{
-    evm::{
-        input::{ConciseEVMInput},
-        middlewares::sha3_bypass::Sha3TaintAnalysis,
-        vm::EVMExecutor,
-    },
+    evm::{input::ConciseEVMInput, middlewares::sha3_bypass::Sha3TaintAnalysis, vm::EVMExecutor},
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
 };

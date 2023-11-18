@@ -1,22 +1,17 @@
 use std::{collections::HashSet, fmt::Debug, str::FromStr};
 
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;
 use tracing::info;
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        middlewares::middleware::{Middleware, MiddlewareType},
-        onchain::endpoints::{Chain, OnChainConfig},
-        types::{EVMAddress, EVMFuzzState},
-        uniswap::{get_uniswap_info, UniswapProvider},
-    },
+use crate::evm::{
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    onchain::endpoints::{Chain, OnChainConfig},
+    types::{EVMAddress, EVMFuzzState},
+    uniswap::{get_uniswap_info, UniswapProvider},
 };
 
 #[derive(Serialize, Debug, Clone, Default)]

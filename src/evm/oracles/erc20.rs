@@ -10,7 +10,7 @@ use crate::{
         oracles::ERC20_BUG_IDX,
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        uniswap::{TokenContextT},
+        uniswap::TokenContextT,
         vm::EVMState,
     },
     oracle::Oracle,

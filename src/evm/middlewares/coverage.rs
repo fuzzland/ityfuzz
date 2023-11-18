@@ -9,10 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -22,21 +19,19 @@ use serde::Serialize;
 use serde_json;
 use tracing::info;
 
-use crate::{
-    evm::{
-        blaz::builder::ArtifactInfoMetadata,
-        bytecode_iterator::all_bytecode,
-        host::FuzzHost,
-        middlewares::middleware::{Middleware, MiddlewareType},
-        srcmap::parser::{
-            pretty_print_source_map,
-            pretty_print_source_map_single,
-            SourceMapAvailability,
-            SourceMapWithCode,
-        },
-        types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
-        vm::IN_DEPLOY,
+use crate::evm::{
+    blaz::builder::ArtifactInfoMetadata,
+    bytecode_iterator::all_bytecode,
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    srcmap::parser::{
+        pretty_print_source_map,
+        pretty_print_source_map_single,
+        SourceMapAvailability,
+        SourceMapWithCode,
     },
+    types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
+    vm::IN_DEPLOY,
 };
 
 pub static mut EVAL_COVERAGE: bool = false;

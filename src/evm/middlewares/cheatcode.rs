@@ -12,21 +12,16 @@ use alloy_primitives::{Address, Bytes as AlloyBytes, Log as RawLog, B256};
 use alloy_sol_types::{SolInterface, SolValue};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, CallerMode, VmCalls};
-use libafl::{
-    schedulers::Scheduler,
-    state::{HasMetadata},
-};
+use libafl::{schedulers::Scheduler, state::HasMetadata};
 use revm_interpreter::{analysis::to_analysed, opcode, BytecodeLocked, InstructionResult, Interpreter};
 use revm_primitives::{Bytecode, Env, SpecId, B160, U256};
 use tracing::{debug, error, warn};
 
 use super::middleware::{Middleware, MiddlewareType};
-use crate::{
-    evm::{
-        host::FuzzHost,
-        types::{EVMAddress, EVMFuzzState},
-        vm::EVMState,
-    },
+use crate::evm::{
+    host::FuzzHost,
+    types::{EVMAddress, EVMFuzzState},
+    vm::EVMState,
 };
 
 /// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
@@ -1221,11 +1216,8 @@ mod tests {
             &mut state,
         );
 
-        let mut evm_executor: EVMExecutor<
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        > = EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let mut deploy_state = FuzzState::new(0);
         // Deploy Reverter

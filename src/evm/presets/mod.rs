@@ -2,7 +2,7 @@ pub mod pair;
 
 use std::{fmt::Debug, fs::File};
 
-use libafl::{schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use serde::{Deserialize, Deserializer};
 
 use super::types::EVMFuzzState;

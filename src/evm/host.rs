@@ -16,9 +16,7 @@ use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasMetadata, Scheduler},
-};
+use libafl::prelude::{HasMetadata, Scheduler};
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{
     analysis::to_analysed,
@@ -85,7 +83,7 @@ use crate::{
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
         vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
-    generic_vm::{vm_executor::MAP_SIZE},
+    generic_vm::vm_executor::MAP_SIZE,
     handle_contract_insertion,
     invoke_middlewares,
     state::{HasCaller, HasHashToAddress},

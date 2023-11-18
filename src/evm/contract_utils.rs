@@ -37,7 +37,7 @@ use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
     blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
     host::FuzzHost,
-    input::{ConciseEVMInput},
+    input::ConciseEVMInput,
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
     types::ProjectSourceMapTy,
     vm::{EVMExecutor, EVMState},

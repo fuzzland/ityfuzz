@@ -6,19 +6,14 @@ use std::{
 };
 
 use bytes::Bytes;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{opcode::JUMPI, Interpreter};
 use tracing::debug;
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        middlewares::middleware::{Middleware, MiddlewareType},
-        types::{as_u64, EVMAddress, EVMFuzzState, EVMU256},
-    },
+use crate::evm::{
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    types::{as_u64, EVMAddress, EVMFuzzState, EVMU256},
 };
 
 const MAX_CALL_DEPTH: u64 = 3;
@@ -461,11 +456,7 @@ mod tests {
         if !path.exists() {
             let _ = std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        > = EVMExecutor::new(
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> = EVMExecutor::new(
             FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
             generate_random_address(&mut state),
         );

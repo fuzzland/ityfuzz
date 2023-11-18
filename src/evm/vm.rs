@@ -15,10 +15,7 @@ use std::{
 use bytes::Bytes;
 /// EVM executor implementation
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{
     BytecodeLocked,
     CallContext,
@@ -1134,11 +1131,7 @@ mod tests {
         if !path.exists() {
             std::fs::create_dir(path).unwrap();
         }
-        let mut evm_executor: EVMExecutor<
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        > = EVMExecutor::new(
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> = EVMExecutor::new(
             FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
             generate_random_address(&mut state),
         );

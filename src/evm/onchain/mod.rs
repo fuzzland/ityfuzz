@@ -15,10 +15,7 @@ use std::{
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasMetadata},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
 use tracing::debug;
@@ -47,7 +44,7 @@ use crate::{
         vm::IS_FAST_CALL,
     },
     handle_contract_insertion,
-    state::{HasCaller},
+    state::HasCaller,
     state_input::StagedVMState,
 };
 

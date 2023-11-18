@@ -4,19 +4,15 @@ use std::{
 };
 
 use bytes::Bytes;
-use libafl::{
-    schedulers::Scheduler,
-};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        middlewares::middleware::{Middleware, MiddlewareType},
-        types::{EVMAddress, EVMFuzzState, EVMU256},
-        vm::EVMState,
-    },
+use crate::evm::{
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    types::{EVMAddress, EVMFuzzState, EVMU256},
+    vm::EVMState,
 };
 
 #[derive(Serialize, Debug, Clone, Default)]
