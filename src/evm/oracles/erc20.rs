@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
+use tracing::debug;
 
 use crate::{
     evm::{
@@ -77,22 +78,27 @@ impl
 
             let _path_idx = ctx.input.get_randomness()[0] as usize;
 
-            let liquidation_txs = vec![];
+            let mut liquidation_txs = vec![];
 
             // debug!("Liquidations earned: {:?}", liquidations_earned);
-            for (_caller, _token_info, _amount) in liquidations_earned {
+            for (caller, _token_info, _amount) in liquidations_earned {
+                let txs = _token_info.borrow().sell(
+                    ctx.fuzz_state,
+                    _amount,
+                    ctx.fuzz_state.callers_pool[0],
+                    ctx.input.get_randomness().as_slice()
+                );
+
                 // let txs = generate_uniswap_router_sell(token_info, path_idx, amount,
                 // ctx.fuzz_state.callers_pool[0]); if txs.is_none() {
                 //     continue;
                 // }
 
-                // liquidation_txs.extend(
-                //     txs.unwrap()
-                //         .iter()
-                //         .map(|(abi, _, addr)| (caller, *addr, Bytes::from(abi.get_bytes()))),
-                // );
-
-                continue;
+                liquidation_txs.extend(
+                    txs
+                        .iter()
+                        .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
+                );
             }
             // debug!(
             //     "Liquidation txs: {:?}",
