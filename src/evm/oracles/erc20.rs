@@ -2,7 +2,6 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use tracing::debug;
 
 use crate::{
     evm::{
@@ -86,7 +85,7 @@ impl
                     ctx.fuzz_state,
                     _amount,
                     ctx.fuzz_state.callers_pool[0],
-                    ctx.input.get_randomness().as_slice()
+                    ctx.input.get_randomness().as_slice(),
                 );
 
                 // let txs = generate_uniswap_router_sell(token_info, path_idx, amount,
@@ -95,8 +94,7 @@ impl
                 // }
 
                 liquidation_txs.extend(
-                    txs
-                        .iter()
+                    txs.iter()
                         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
             }
