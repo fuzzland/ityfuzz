@@ -33,6 +33,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
+use crate::evm::uniswap::generate_uniswap_router_buy;
 // Some components are used when `flashloan_v2` feature is disabled
 #[allow(unused_imports)]
 use crate::{
@@ -460,11 +461,7 @@ macro_rules! execute_call_single {
         let call = Contract::new_with_context_analyzed($by.clone(), code, &$ctx);
         let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
         let ret = $host.run_inspect(&mut interp, $state);
-        if is_call_success!(ret) {
-            (interp.return_value().to_vec(), true)
-        } else {
-            (vec![], false)
-        }
+        (interp.return_value().to_vec(), is_call_success!(ret))
     }};
 }
 
@@ -474,6 +471,52 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
     SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
 {
+    fn fast_call(
+        &mut self,
+        address: EVMAddress,
+        data: Bytes,
+        vm_state: &EVMState,
+        state: &mut EVMFuzzState,
+        value: EVMU256,
+        from: EVMAddress,
+    ) -> IntermediateExecutionResult {
+        unsafe {
+            IS_FAST_CALL = true;
+        }
+        // debug!("fast call: {:?} {:?} with {}", address, hex::encode(data.to_vec()),
+        // value);
+        let call = Contract::new_with_context_analyzed(
+            data,
+            self.host
+                .code
+                .get(&address)
+                .unwrap_or_else(|| panic!("no code {:?}", address))
+                .clone(),
+            &CallContext {
+                address,
+                caller: from,
+                code_address: address,
+                apparent_value: value,
+                scheme: CallScheme::Call,
+            },
+        );
+        unsafe {
+            self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
+        }
+        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+        let ret = self.host.run_inspect(&mut interp, state);
+        unsafe {
+            IS_FAST_CALL = false;
+        }
+        IntermediateExecutionResult {
+            output: interp.return_value(),
+            new_state: self.host.evmstate.clone(),
+            pc: interp.program_counter(),
+            ret,
+            stack: Default::default(),
+            memory: Default::default(),
+        }
+    }
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<SC>, deployer: EVMAddress) -> Self {
         Self {
@@ -950,63 +993,52 @@ where
             EVMInputTy::Borrow => {
                 let token = input.get_contract();
 
-                // let path_idx = input.get_randomness()[0] as usize;
+                let path_idx = input.get_randomness()[0] as usize;
                 // generate the call to uniswap router for buying tokens using ETH
-                // let call_info = generate_uniswap_router_buy(
-                //     get_token_ctx!(self.host.flashloan_middleware.as_ref().unwrap().deref().
-                // borrow(), token),     path_idx,
-                //     input.get_txn_value().unwrap(),
-                //     input.get_caller(),
-                // );
-
-                let token_ctx = {
-                    let flashloan_mid = self.host.flashloan_middleware.as_ref().unwrap().deref().borrow();
-                    let flashloan_oracle = flashloan_mid.flashloan_oracle.deref().borrow();
-                    flashloan_oracle
-                        .known_tokens
-                        .get(&token)
-                        .unwrap_or_else(|| panic!("unknown token : {:?}", token))
-                        .clone()
-                };
-
-                let calldata = token_ctx.borrow().buy(
-                    state,
+                let call_info = generate_uniswap_router_buy(
+                    get_token_ctx!(self.host.flashloan_middleware.as_ref().unwrap().deref().borrow(), token),
+                    path_idx,
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
-                    input.get_randomness().as_slice(),
                 );
-
-                if !calldata.is_empty() {
-                    let calldata_fastcall = calldata
-                        .iter()
-                        .map(|(address, by, value)| (input.get_caller(), *address, Bytes::from(by.get_bytes()), *value))
-                        .collect::<Vec<(EVMAddress, EVMAddress, Bytes, EVMU256)>>();
-
-                    let (mut call_results, vm_state) =
-                        self.fast_call_inner(&calldata_fastcall, input.get_state(), state);
-                    let mut vm_state = unsafe { vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone() };
-                    let is_success = call_results.iter().all(|(_, succ)| *succ);
-                    if let Some(ref m) = self.host.flashloan_middleware {
-                        m.deref().borrow_mut().analyze_call(input, &mut vm_state.flashloan_data)
-                    }
-                    unsafe {
-                        ExecutionResult {
-                            output: call_results.pop().unwrap().0,
-                            reverted: !is_success,
-                            new_state: StagedVMState::new_with_state(
-                                VMStateT::as_any(&vm_state).downcast_ref_unchecked::<VS>().clone(),
-                            ),
-                            additional_info: None,
+                match call_info {
+                    Some((abi, value, target)) => {
+                        let bys = abi.get_bytes();
+                        let mut res = self.fast_call(
+                            target,
+                            Bytes::from(bys),
+                            input.get_state(),
+                            state,
+                            value,
+                            input.get_caller(),
+                        );
+                        if let Some(ref m) = self.host.flashloan_middleware {
+                            m.deref()
+                                .borrow_mut()
+                                .analyze_call(input, &mut res.new_state.flashloan_data)
+                        }
+                        unsafe {
+                            ExecutionResult {
+                                output: res.output.to_vec(),
+                                reverted: !is_call_success!(res.ret),
+                                new_state: StagedVMState::new_with_state(
+                                    VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
+                                ),
+                                additional_info: None,
+                            }
                         }
                     }
-                } else {
-                    ExecutionResult {
+                    None => ExecutionResult {
                         // we don't have enough liquidity to buy the token
                         output: vec![],
-                        reverted: true,
-                        new_state: StagedVMState::new_uninitialized(),
+                        reverted: false,
+                        new_state: StagedVMState::new_with_state(unsafe {
+                            VMStateT::as_any(input.get_state())
+                                .downcast_ref_unchecked::<VS>()
+                                .clone()
+                        }),
                         additional_info: None,
-                    }
+                    },
                 }
             }
             EVMInputTy::Liquidate => {
@@ -1070,10 +1102,31 @@ where
         vm_state: &VS,
         state: &mut EVMFuzzState,
     ) -> (Vec<(Vec<u8>, bool)>, VS) {
-        let vm_state = unsafe { vm_state.as_any().downcast_ref_unchecked::<EVMState>() };
-        let (res, vm_state) = self.fast_call_inner_no_value(data, vm_state, state);
+        unsafe {
+            // IS_FAST_CALL = true;
+            self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
+        }
+        init_host!(self.host);
 
-        (res, unsafe { vm_state.as_any().downcast_ref_unchecked::<VS>().clone() })
+        // self.host.add_middlewares(middleware.clone());
+
+        let res = data
+            .iter()
+            .map(|(caller, address, by)| {
+                let ctx = CallContext {
+                    address: *address,
+                    caller: *caller,
+                    code_address: *address,
+                    apparent_value: Default::default(),
+                    scheme: CallScheme::Call,
+                };
+                execute_call_single!(ctx, self.host, state, address, by)
+            })
+            .collect::<Vec<(Vec<u8>, bool)>>();
+
+        (res, unsafe {
+            self.host.evmstate.as_any().downcast_ref_unchecked::<VS>().clone()
+        })
     }
 
     fn get_jmp(&self) -> &'static mut [u8; MAP_SIZE] {

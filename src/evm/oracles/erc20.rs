@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
+use tracing::debug;
 
 use crate::{
     evm::{
@@ -10,7 +11,7 @@ use crate::{
         oracles::ERC20_BUG_IDX,
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        uniswap::TokenContextT,
+        uniswap::{generate_uniswap_router_sell, TokenContext},
         vm::EVMState,
     },
     oracle::Oracle,
@@ -19,7 +20,7 @@ use crate::{
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
-    pub known_tokens: HashMap<EVMAddress, Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>>,
+    pub known_tokens: HashMap<EVMAddress, TokenContext>,
     pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
     pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
@@ -34,7 +35,7 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    pub fn register_token(&mut self, token: EVMAddress, token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>) {
+    pub fn register_token(&mut self, token: EVMAddress, token_ctx: TokenContext) {
         self.known_tokens.insert(token, token_ctx);
     }
 
@@ -53,9 +54,10 @@ impl
 
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
         use crate::evm::input::EVMInputT;
-
+        // println!("Oracle: {:?}", ctx.input.get_randomness());
         let liquidation_percent = ctx.input.get_liquidation_percent();
         if liquidation_percent > 0 {
+            // println!("Liquidation percent: {}", liquidation_percent);
             let liquidation_percent = EVMU256::from(liquidation_percent);
             let mut liquidations_earned = Vec::new();
 
@@ -64,10 +66,7 @@ impl
 
                 // prev_balance is nonexistent
                 // #[cfg(feature = "flashloan_debug")]
-                // debug!(
-                //     "Balance: {} -> {} for {:?} @ {:?}",
-                //     prev_balance, new_balance, caller, token
-                // );
+                debug!("Balance: {} for {:?} @ {:?}", new_balance, caller, token);
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
@@ -79,35 +78,47 @@ impl
 
             let mut liquidation_txs = vec![];
 
-            // debug!("Liquidations earned: {:?}", liquidations_earned);
             for (caller, _token_info, _amount) in liquidations_earned {
-                let txs = _token_info.borrow().sell(
-                    ctx.fuzz_state,
-                    _amount,
-                    ctx.fuzz_state.callers_pool[0],
-                    ctx.input.get_randomness().as_slice(),
-                );
+                // let txs = _token_info.borrow().sell(
+                //     ctx.fuzz_state,
+                //     _amount,
+                //     ctx.fuzz_state.callers_pool[0],
+                //     ctx.input.get_randomness().as_slice(),
+                // );
 
-                // let txs = generate_uniswap_router_sell(token_info, path_idx, amount,
-                // ctx.fuzz_state.callers_pool[0]); if txs.is_none() {
-                //     continue;
-                // }
+                let txs = generate_uniswap_router_sell(_token_info, _path_idx, _amount, ctx.fuzz_state.callers_pool[0]);
+                if txs.is_none() {
+                    continue;
+                }
+
+                // liquidation_txs.extend(
+                //     txs.iter()
+                //         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
+                // );
 
                 liquidation_txs.extend(
-                    txs.iter()
-                        .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
+                    txs.unwrap()
+                        .iter()
+                        .map(|(abi, _, addr)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
             }
-            // debug!(
-            //     "Liquidation txs: {:?}",
-            //     liquidation_txs
-            // );
 
-            // debug!("Earned before liquidation: {:?}",
-            // ctx.fuzz_state.get_execution_result().new_state.state.flashloan_data.earned);
+            liquidation_txs.iter().for_each(|(caller, target, by)| {
+                debug!("Liquidation tx: {:?} -> {:?} ({})", caller, target, hex::encode(by));
+            });
+
+            debug!(
+                "Earned before liquidation: {:?}",
+                ctx.fuzz_state
+                    .get_execution_result()
+                    .new_state
+                    .state
+                    .flashloan_data
+                    .earned
+            );
             let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
-            // debug!("results: {:?}", out);
-            // debug!("result state: {:?}", state.flashloan_data);
+            debug!("results: {:?}", _out);
+            debug!("result state: {:?}", state.flashloan_data);
             ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
         }
 
