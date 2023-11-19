@@ -132,7 +132,8 @@ pub struct EvmArgs {
     #[arg(long)]
     onchain_block_number: Option<u64>,
 
-    /// Onchain Customize - Endpoint URL (Default: inferred from chain-type)
+    /// Onchain Customize - RPC endpoint URL (Default: inferred from
+    /// chain-type), Example: https://rpc.ankr.com/eth
     #[arg(long)]
     onchain_url: Option<String>,
 
@@ -141,7 +142,7 @@ pub struct EvmArgs {
     onchain_chain_id: Option<u32>,
 
     /// Onchain Customize - Block explorer URL (Default: inferred from
-    /// chain-type)
+    /// chain-type), Example: https://api.etherscan.io/api
     #[arg(long)]
     onchain_explorer_url: Option<String>,
 
