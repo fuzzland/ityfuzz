@@ -46,7 +46,7 @@ impl SourceMapProvider {
         address: &EVMAddress,
         bytecode: Vec<u8>,
         map: String,
-        files: &Vec<(String, String)>, // (filename, file_content)
+        files: &[(String, String)], // (filename, file_content)
         replacements: Option<&Vec<(String, String)>>,
     ) {
         let filenames = files.iter().map(|(name, _)| (name.clone())).collect();
@@ -67,7 +67,6 @@ impl SourceMapProvider {
 
             if let Some(info) = raw_info {
                 let source_code = if let Some(file_idx) = info.file_idx {
-                    let filename = files[file_idx].0.clone();
                     let file_content = files[file_idx].1.clone();
                     Some(file_content[info.offset..info.offset + info.length].to_string())
                 } else {
@@ -91,16 +90,16 @@ impl SourceMapProvider {
             raw_info_idx += 1;
         }
 
-        self.source_maps.insert(address.clone(), result);
+        self.source_maps.insert(*address, result);
     }
 
     pub fn has_source_map(&self, address: &EVMAddress) -> bool {
-        self.source_maps.contains_key(&address)
+        self.source_maps.contains_key(address)
     }
 
     pub fn get_source_code(&self, address: &EVMAddress, pc: usize) -> Option<&String> {
         if self.has_source_map(address) {
-            match self.source_maps.get(&address).unwrap().get_source_map_item_by_pc(pc) {
+            match self.source_maps.get(address).unwrap().get_source_map_item_by_pc(pc) {
                 Some(source_map_item) => source_map_item.get_source_code(),
                 None => None,
             }
@@ -111,7 +110,7 @@ impl SourceMapProvider {
 
     pub fn get_pc_has_match(&self, address: &EVMAddress, pc: usize) -> bool {
         if self.has_source_map(address) {
-            match self.source_maps.get(&address).unwrap().get_source_map_item_by_pc(pc) {
+            match self.source_maps.get(address).unwrap().get_source_map_item_by_pc(pc) {
                 Some(source_map_item) => source_map_item.pc_has_match,
                 None => false,
             }

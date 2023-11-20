@@ -315,14 +315,14 @@ impl BuildJobResult {
         None
     }
 
-    pub fn save_source_map(&self, address: &EVMAddress, bytecode: Vec<u8>) {
+    pub fn save_source_map(&self, address: &EVMAddress) {
         if SOURCE_MAP_PROVIDER.lock().unwrap().has_source_map(address) {
             return;
         }
 
         SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions(
             address,
-            bytecode,
+            self.bytecodes.clone().to_vec(),
             self.source_maps.clone(),
             &self.sources,
             Some(&self.source_maps_replacements),
