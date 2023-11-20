@@ -6,24 +6,14 @@ use std::{
 };
 
 use bytes::Bytes;
-use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{opcode::JUMPI, Interpreter};
 use tracing::debug;
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
-        middlewares::middleware::{Middleware, MiddlewareType},
-        types::{as_u64, EVMAddress, EVMU256},
-    },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+use crate::evm::{
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    types::{as_u64, EVMAddress, EVMFuzzState, EVMU256},
 };
 
 const MAX_CALL_DEPTH: u64 = 3;
@@ -114,21 +104,11 @@ impl Sha3TaintAnalysis {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Sha3TaintAnalysis
+impl<SC> Middleware<SC> for Sha3TaintAnalysis
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         // skip taint analysis if call depth is too deep
         if host.call_depth > MAX_CALL_DEPTH {
             return;
@@ -396,8 +376,8 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         _by: &Bytes,
     ) {
         self.pop_ctx();
@@ -419,21 +399,11 @@ impl Sha3Bypass {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Sha3Bypass
+impl<SC> Middleware<SC> for Sha3Bypass
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
             if self
@@ -470,7 +440,7 @@ mod tests {
     use super::*;
     use crate::{
         evm::{
-            input::{EVMInput, EVMInputTy},
+            input::{ConciseEVMInput, EVMInput, EVMInputTy},
             mutator::AccessPattern,
             types::{generate_random_address, EVMFuzzState},
             vm::{EVMExecutor, EVMState},
@@ -486,13 +456,7 @@ mod tests {
         if !path.exists() {
             let _ = std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<
-            EVMInput,
-            EVMFuzzState,
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        > = EVMExecutor::new(
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> = EVMExecutor::new(
             FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
             generate_random_address(&mut state),
         );
@@ -516,10 +480,8 @@ mod tests {
             step: false,
             env: Default::default(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
             direct_data: bys,
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,

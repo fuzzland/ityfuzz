@@ -9,11 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -23,25 +19,19 @@ use serde::Serialize;
 use serde_json;
 use tracing::info;
 
-use crate::{
-    evm::{
-        blaz::builder::ArtifactInfoMetadata,
-        bytecode_iterator::all_bytecode,
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
-        middlewares::middleware::{Middleware, MiddlewareType},
-        srcmap::parser::{
-            pretty_print_source_map,
-            pretty_print_source_map_single,
-            SourceMapAvailability,
-            SourceMapWithCode,
-        },
-        types::{is_zero, EVMAddress, ProjectSourceMapTy},
-        vm::IN_DEPLOY,
+use crate::evm::{
+    blaz::builder::ArtifactInfoMetadata,
+    bytecode_iterator::all_bytecode,
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    srcmap::parser::{
+        pretty_print_source_map,
+        pretty_print_source_map_single,
+        SourceMapAvailability,
+        SourceMapWithCode,
     },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+    types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
+    vm::IN_DEPLOY,
 };
 
 pub static mut EVAL_COVERAGE: bool = false;
@@ -337,21 +327,11 @@ impl Coverage {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Coverage
+impl<SC> Middleware<SC> for Coverage
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
@@ -368,8 +348,8 @@ where
     unsafe fn on_insert(
         &mut self,
         _: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        state: &mut EVMFuzzState,
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {

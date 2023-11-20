@@ -37,7 +37,7 @@ use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
     blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
     host::FuzzHost,
-    input::{ConciseEVMInput, EVMInput},
+    input::ConciseEVMInput,
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
     types::ProjectSourceMapTy,
     vm::{EVMExecutor, EVMState},
@@ -748,7 +748,7 @@ impl ContractLoader {
     fn get_vm_with_cheatcode(
         deployer: EVMAddress,
     ) -> (
-        EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
+        EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
         EVMFuzzState,
     ) {
         let mut state: EVMFuzzState = FuzzState::new(0);

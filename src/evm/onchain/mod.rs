@@ -15,15 +15,12 @@ use std::{
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasCorpus, HasMetadata, Input, UsesInput},
-    schedulers::Scheduler,
-    state::{HasRand, State},
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
 use tracing::debug;
 
+use super::types::EVMFuzzState;
 use crate::{
     evm::{
         abi::{get_abi_type_boxed, register_abi_instance},
@@ -39,17 +36,15 @@ use crate::{
         },
         corpus_initializer::{ABIMap, SourceMapMap},
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::IS_FAST_CALL,
     },
-    generic_vm::vm_state::VMStateT,
     handle_contract_insertion,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
+    state::HasCaller,
     state_input::StagedVMState,
 };
 
@@ -58,12 +53,7 @@ pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
-pub struct OnChain<VS, I, S>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
-    S: State,
-    VS: VMStateT + Default,
-{
+pub struct OnChain {
     pub loaded_data: HashSet<(EVMAddress, EVMU256)>,
     pub loaded_code: HashSet<EVMAddress>,
     pub loaded_abi: HashSet<EVMAddress>,
@@ -76,15 +66,9 @@ where
     pub storage_dump: HashMap<EVMAddress, Arc<HashMap<EVMU256, EVMU256>>>,
     pub builder: Option<BuildJob>,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
-    pub phantom: std::marker::PhantomData<(I, S, VS)>,
 }
 
-impl<VS, I, S> Debug for OnChain<VS, I, S>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
-    S: State,
-    VS: VMStateT + Default,
-{
+impl Debug for OnChain {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OnChain")
             .field("loaded_data", &self.loaded_data)
@@ -94,12 +78,7 @@ where
     }
 }
 
-impl<VS, I, S> OnChain<VS, I, S>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput>,
-    S: State,
-    VS: VMStateT + Default,
-{
+impl OnChain {
     pub fn new(endpoint: OnChainConfig, storage_fetching: StorageFetchingMode) -> Self {
         unsafe {
             BLACKLIST_ADDR = Some(HashSet::from([
@@ -139,7 +118,6 @@ where
             storage_all: Default::default(),
             storage_dump: Default::default(),
             builder: None,
-            phantom: Default::default(),
             address_to_abi: Default::default(),
             storage_fetching,
         }
@@ -169,23 +147,11 @@ pub fn keccak_hex(data: EVMU256) -> String {
     hex::encode(output)
 }
 
-impl<VS, I, S, SC> Middleware<VS, I, S, SC> for OnChain<VS, I, S>
+impl<SC> Middleware<SC> for OnChain
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasRand
-        + Debug
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + Clone
-        + UsesInput<Input = I>
-        + 'static,
-    VS: VMStateT + Default + 'static,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {{
@@ -340,33 +306,19 @@ where
     }
 }
 
-impl<VS, I, S> OnChain<VS, I, S>
-where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasRand
-        + Debug
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + Clone
-        + UsesInput<Input = I>
-        + 'static,
-    VS: VMStateT + Default + 'static,
-{
+impl OnChain {
     #[allow(clippy::too_many_arguments)]
     pub fn load_code<SC>(
         &mut self,
         address_h160: EVMAddress,
-        host: &mut FuzzHost<VS, I, S, SC>,
+        host: &mut FuzzHost<SC>,
         force_cache: bool,
         should_setup_abi: bool,
         is_proxy_call: bool,
         caller: EVMAddress,
-        state: &mut S,
+        state: &mut EVMFuzzState,
     ) where
-        SC: Scheduler<State = S> + Clone,
+        SC: Scheduler<State = EVMFuzzState> + Clone,
     {
         let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
         let code = hex::decode(contract_code).unwrap();
@@ -492,7 +444,6 @@ where
         state.add_address(&target);
 
         // notify flashloan and blacklisting flashloan addresses
-        #[cfg(feature = "flashloan_v2")]
         {
             handle_contract_insertion!(
                 state,
@@ -537,9 +488,7 @@ where
 
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
-                    #[cfg(feature = "flashloan_v2")]
                     input_type: EVMInputTy::ABI,
                     direct_data: Default::default(),
                     randomness: vec![0],

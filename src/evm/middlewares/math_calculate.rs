@@ -1,27 +1,17 @@
 use std::{collections::HashSet, fmt::Debug, str::FromStr};
 
-use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;
 use tracing::info;
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
-        middlewares::middleware::{Middleware, MiddlewareType},
-        onchain::endpoints::{Chain, OnChainConfig},
-        types::EVMAddress,
-        uniswap::{get_uniswap_info, UniswapProvider},
-    },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+use crate::evm::{
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    onchain::endpoints::{Chain, OnChainConfig},
+    types::{EVMAddress, EVMFuzzState},
+    uniswap::{get_uniswap_info, UniswapProvider},
 };
 
 #[derive(Serialize, Debug, Clone, Default)]
@@ -49,21 +39,11 @@ impl MathCalculateMiddleware {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for MathCalculateMiddleware
+impl<SC> Middleware<SC> for MathCalculateMiddleware
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         let addr = interp.contract.code_address;
         let pc = interp.program_counter();
         macro_rules! check {

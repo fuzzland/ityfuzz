@@ -2,28 +2,18 @@ use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
 
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::{
-    inputs::Input,
-    prelude::{HasCorpus, HasMetadata, State},
-    schedulers::Scheduler,
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing::debug;
 
-use crate::{
-    evm::{
-        blaz::builder::ArtifactInfoMetadata,
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
-        middlewares::middleware::{Middleware, MiddlewareType},
-        srcmap::parser::SourceMapLocation,
-        types::{as_u64, convert_u256_to_h160, EVMAddress, ProjectSourceMapTy, EVMU256},
-    },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
+use crate::evm::{
+    blaz::builder::ArtifactInfoMetadata,
+    host::FuzzHost,
+    middlewares::middleware::{Middleware, MiddlewareType},
+    srcmap::parser::SourceMapLocation,
+    types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMU256},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -130,21 +120,11 @@ impl CallPrinter {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for CallPrinter
+impl<SC> Middleware<SC> for CallPrinter
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
         if self.entry {
             self.entry = false;
             let code_address = interp.contract.address;
@@ -305,8 +285,8 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         by: &Bytes,
     ) {
         self.offsets += 1;

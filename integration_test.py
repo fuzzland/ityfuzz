@@ -56,7 +56,7 @@ def test_one(path):
     start_time = time.time()
     cmd = [
         TIMEOUT_BIN,
-        "3m",
+        "5s",
         "./target/release/ityfuzz",
         "evm",
         "-t",
@@ -64,11 +64,16 @@ def test_one(path):
         "-f",
         "--panic-on-bug",
     ]
-    print(" ".join(cmd))
     # exit(0)
 
     if "concolic" in path:
         cmd.append("--concolic --concolic-caller")
+
+    if "taint" in path:
+        cmd.append("--sha3-bypass")
+
+
+    print(" ".join(cmd))
 
     p = subprocess.run(
         " ".join(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True

@@ -2,7 +2,6 @@ use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
     fmt::{Debug, Display},
-    marker::PhantomData,
     ops::{Add, Div, Mul, Not, Sub},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
@@ -11,11 +10,7 @@ use std::{
 use bytes::Bytes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use libafl::{
-    prelude::{HasMetadata, Input},
-    schedulers::Scheduler,
-    state::{HasCorpus, State},
-};
+use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
@@ -34,14 +29,12 @@ use crate::{
         concolic::expr::{simplify, ConcolicOp, Expr},
         corpus_initializer::SourceMapMap,
         host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
+        input::EVMInput,
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
         srcmap::parser::SourceMapLocation,
-        types::{as_u64, is_zero, EVMAddress, EVMU256},
+        types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},
     },
-    generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 lazy_static! {
@@ -566,7 +559,7 @@ pub struct ConcolicCallCtx {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConcolicHost<I, VS> {
+pub struct ConcolicHost {
     pub symbolic_stack: Vec<Option<Box<Expr>>>,
     pub symbolic_memory: SymbolicMemory,
     pub symbolic_state: HashMap<EVMU256, Option<Box<Expr>>>,
@@ -576,14 +569,12 @@ pub struct ConcolicHost<I, VS> {
 
     pub ctxs: Vec<ConcolicCallCtx>,
     // For current PC, the number of times it has been visited
-    pub phantom: PhantomData<(I, VS)>,
-
     pub num_threads: usize,
     pub call_depth: usize,
 }
 
 #[allow(clippy::vec_box)]
-impl<I, VS> ConcolicHost<I, VS> {
+impl ConcolicHost {
     pub fn new(testcase_ref: Rc<EVMInput>, num_threads: usize) -> Self {
         Self {
             symbolic_stack: Vec::new(),
@@ -592,7 +583,6 @@ impl<I, VS> ConcolicHost<I, VS> {
             input_bytes: Self::construct_input_from_abi(testcase_ref.get_data_abi().expect("data abi not found")),
             constraints: vec![],
             testcase_ref,
-            phantom: Default::default(),
             ctxs: vec![],
             num_threads,
             call_depth: 0,
@@ -710,21 +700,11 @@ impl<I, VS> ConcolicHost<I, VS> {
     }
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for ConcolicHost<I, VS>
+impl<SC> Middleware<SC> for ConcolicHost
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    S: State
-        + HasCaller<EVMAddress>
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCurrentInputIdx
-        + Debug
-        + Clone,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<VS, I, S, SC>, state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.data()[interp.stack.len() - 1 - $idx]
@@ -1389,8 +1369,8 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         _by: &Bytes,
     ) {
         self.pop_ctx();

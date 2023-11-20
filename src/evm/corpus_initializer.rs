@@ -66,12 +66,12 @@ where
     SC: ABIScheduler<State = EVMFuzzState> + Clone,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
-    executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+    executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
     scheduler: SC,
     infant_scheduler: ISC,
     state: &'a mut EVMFuzzState,
     #[cfg(feature = "use_presets")]
-    presets: Vec<&'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>>,
+    presets: Vec<&'a dyn Preset<EVMInput, EVMState, SC>>,
     work_dir: String,
 }
 
@@ -178,7 +178,7 @@ where
     ISC: Scheduler<State = EVMInfantStateState>,
 {
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, SC>,
+        executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
         scheduler: SC,
         infant_scheduler: ISC,
         state: &'a mut EVMFuzzState,
@@ -196,7 +196,7 @@ where
     }
 
     #[cfg(feature = "use_presets")]
-    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMFuzzState, EVMState, SC>) {
+    pub fn register_preset(&mut self, preset: &'a dyn Preset<EVMInput, EVMState, SC>) {
         self.presets.push(preset);
     }
 
@@ -328,7 +328,6 @@ where
                     .insert(contract.deployed_address, build_artifact.clone());
             }
 
-            #[cfg(feature = "flashloan_v2")]
             {
                 handle_contract_insertion!(
                     self.state,
@@ -454,9 +453,7 @@ where
             step: false,
             env: artifacts.initial_env.clone(),
             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: 0,
-            #[cfg(feature = "flashloan_v2")]
             input_type: EVMInputTy::ABI,
             direct_data: Default::default(),
             randomness: vec![0],

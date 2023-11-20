@@ -57,7 +57,6 @@ impl
         _stage: u64,
     ) -> Vec<u64> {
         let mut violations = vec![];
-        #[cfg(feature = "flashloan_v2")]
         {
             let to_check = ctx
                 .fuzz_state
@@ -110,10 +109,6 @@ impl
                     violations.push(bug_idx);
                 }
             }
-        }
-        #[cfg(not(feature = "flashloan_v2"))]
-        {
-            panic!("Flashloan v2 required to use pair (-p).")
         }
         violations
     }

@@ -62,7 +62,6 @@ impl
             ConciseEVMInput,
         >,
     ) {
-        #[cfg(feature = "flashloan_v2")]
         {
             let reserves = ctx
                 .fuzz_state

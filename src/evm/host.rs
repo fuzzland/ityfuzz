@@ -16,10 +16,7 @@ use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::{
-    prelude::{HasCorpus, HasMetadata, HasRand, Scheduler, UsesInput},
-    state::State,
-};
+use libafl::prelude::{HasMetadata, Scheduler};
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{
     analysis::to_analysed,
@@ -68,6 +65,7 @@ use super::{
         ERROR_PREFIX,
         REVERT_PREFIX,
     },
+    types::EVMFuzzState,
     vm::{IS_FAST_CALL, MEM_LIMIT, SETCODE_ONLY},
 };
 use crate::{
@@ -75,7 +73,7 @@ use crate::{
         abi::{get_abi_type_boxed, register_abi_instance},
         contract_utils::extract_sig_from_contract,
         corpus_initializer::ABIMap,
-        input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
+        input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{
@@ -85,11 +83,10 @@ use crate::{
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
         vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
-    generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
+    generic_vm::vm_executor::MAP_SIZE,
     handle_contract_insertion,
-    input::VMInputT,
     invoke_middlewares,
-    state::{HasCaller, HasHashToAddress, HasItyState},
+    state::{HasCaller, HasHashToAddress},
     state_input::StagedVMState,
 };
 
@@ -162,12 +159,9 @@ pub fn is_precompile(address: EVMAddress, num_of_precompiles: usize) -> bool {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct FuzzHost<VS, I, S, SC>
+pub struct FuzzHost<SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     pub evmstate: EVMState,
     // these are internal to the host
@@ -180,11 +174,11 @@ where
     pub pc_to_create: HashMap<(EVMAddress, usize), usize>,
     pub pc_to_call_hash: HashMap<(EVMAddress, usize, usize), HashSet<Vec<u8>>>,
     pub middlewares_enabled: bool,
-    pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<VS, I, S, SC>>>>>>,
+    pub middlewares: Rc<RefCell<Vec<Rc<RefCell<dyn Middleware<SC>>>>>>,
 
     pub coverage_changed: bool,
 
-    pub flashloan_middleware: Option<Rc<RefCell<Flashloan<VS, I, S>>>>,
+    pub flashloan_middleware: Option<Rc<RefCell<Flashloan>>>,
 
     pub middlewares_latent_call_actions: Vec<CallMiddlewareReturn>,
 
@@ -244,12 +238,9 @@ where
     pub expected_calls: ExpectedCallTracker,
 }
 
-impl<VS, I, S, SC> Debug for FuzzHost<VS, I, S, SC>
+impl<SC> Debug for FuzzHost<SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzHost")
@@ -268,12 +259,9 @@ where
 }
 
 // all clones would not include middlewares and states
-impl<VS, I, S, SC> Clone for FuzzHost<VS, I, S, SC>
+impl<SC> Clone for FuzzHost<SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -331,21 +319,9 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 // unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 10;
 
-impl<VS, I, S, SC> FuzzHost<VS, I, S, SC>
+impl<SC> FuzzHost<SC>
 where
-    S: State
-        + HasRand
-        + HasCaller<EVMAddress>
-        + Debug
-        + Clone
-        + HasCorpus
-        + HasMetadata
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + UsesInput<Input = I>
-        + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     pub fn new(scheduler: SC, workdir: String) -> Self {
         Self {
@@ -398,25 +374,27 @@ where
     }
 
     /// custom spec id run_inspect
-    pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
+    pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
-            SpecId::FRONTIER => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, FrontierSpec>(self, state),
-            SpecId::HOMESTEAD => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, HomesteadSpec>(self, state),
-            SpecId::TANGERINE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, TangerineSpec>(self, state),
-            SpecId::SPURIOUS_DRAGON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, SpuriousDragonSpec>(self, state),
-            SpecId::BYZANTIUM => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ByzantiumSpec>(self, state),
+            SpecId::LATEST => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LatestSpec>(self, state),
+            SpecId::FRONTIER => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, FrontierSpec>(self, state),
+            SpecId::HOMESTEAD => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, HomesteadSpec>(self, state),
+            SpecId::TANGERINE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, TangerineSpec>(self, state),
+            SpecId::SPURIOUS_DRAGON => {
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, SpuriousDragonSpec>(self, state)
+            }
+            SpecId::BYZANTIUM => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ByzantiumSpec>(self, state),
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, PetersburgSpec>(self, state)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, PetersburgSpec>(self, state)
             }
-            SpecId::ISTANBUL => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, IstanbulSpec>(self, state),
+            SpecId::ISTANBUL => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, IstanbulSpec>(self, state),
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-                interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, BerlinSpec>(self, state)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, BerlinSpec>(self, state)
             }
-            SpecId::LONDON => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LondonSpec>(self, state),
-            SpecId::MERGE => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, MergeSpec>(self, state),
-            SpecId::SHANGHAI => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, ShanghaiSpec>(self, state),
-            _ => interp.run_inspect::<S, FuzzHost<VS, I, S, SC>, LatestSpec>(self, state),
+            SpecId::LONDON => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LondonSpec>(self, state),
+            SpecId::MERGE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, MergeSpec>(self, state),
+            SpecId::SHANGHAI => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ShanghaiSpec>(self, state),
+            _ => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LatestSpec>(self, state),
         }
     }
 
@@ -425,13 +403,13 @@ where
         self.middlewares.deref().borrow_mut().clear();
     }
 
-    pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>) {
+    pub fn add_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<SC>>>) {
         self.middlewares_enabled = true;
         // let ty = middlewares.deref().borrow().get_type();
         self.middlewares.deref().borrow_mut().push(middlewares);
     }
 
-    pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<VS, I, S, SC>>>) {
+    pub fn remove_middlewares(&mut self, middlewares: Rc<RefCell<dyn Middleware<SC>>>) {
         let ty = middlewares.deref().borrow().get_type();
         self.middlewares
             .deref()
@@ -446,14 +424,11 @@ where
             .retain(|x| x.deref().borrow().get_type() != *ty);
     }
 
-    pub fn add_flashloan_middleware(&mut self, middlware: Flashloan<VS, I, S>) {
+    pub fn add_flashloan_middleware(&mut self, middlware: Flashloan) {
         self.flashloan_middleware = Some(Rc::new(RefCell::new(middlware)));
     }
 
-    pub fn initialize(&mut self, state: &S)
-    where
-        S: HasHashToAddress,
-    {
+    pub fn initialize(&mut self, state: &EVMFuzzState) {
         self.hash_to_address = state.get_hash_to_address().clone();
         for key in self.hash_to_address.keys() {
             let addresses = self.hash_to_address.get(key).unwrap();
@@ -514,7 +489,7 @@ where
         self.setcode_data.clear();
     }
 
-    pub fn set_code(&mut self, address: EVMAddress, mut code: Bytecode, state: &mut S) {
+    pub fn set_code(&mut self, address: EVMAddress, mut code: Bytecode, state: &mut EVMFuzzState) {
         unsafe {
             invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
@@ -522,7 +497,12 @@ where
             .insert(address, Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap()));
     }
 
-    pub fn find_static_call_read_slot(&self, _address: EVMAddress, _data: Bytes, _state: &mut S) -> Vec<EVMU256> {
+    pub fn find_static_call_read_slot(
+        &self,
+        _address: EVMAddress,
+        _data: Bytes,
+        _state: &mut EVMFuzzState,
+    ) -> Vec<EVMU256> {
         vec![]
         // let call = Contract::new_with_context_not_cloned::<LatestSpec>(
         //     data,
@@ -574,7 +554,7 @@ where
         input: &mut CallInputs,
         interp: &mut Interpreter,
         (out_offset, out_len): (usize, usize),
-        state: &mut S,
+        state: &mut EVMFuzzState,
     ) -> (InstructionResult, Gas, Bytes) {
         macro_rules! push_interp {
             () => {{
@@ -737,7 +717,11 @@ where
         res
     }
 
-    fn call_forbid_control_leak(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
+    fn call_forbid_control_leak(
+        &mut self,
+        input: &mut CallInputs,
+        state: &mut EVMFuzzState,
+    ) -> (InstructionResult, Gas, Bytes) {
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
         // if there is code, then call the code
@@ -760,7 +744,11 @@ where
         (Revert, Gas::new(0), Bytes::new())
     }
 
-    fn call_precompile(&mut self, input: &mut CallInputs, _state: &mut S) -> (InstructionResult, Gas, Bytes) {
+    fn call_precompile(
+        &mut self,
+        input: &mut CallInputs,
+        _state: &mut EVMFuzzState,
+    ) -> (InstructionResult, Gas, Bytes) {
         let precompile = self
             .precompiles
             .get(&input.contract)
@@ -980,23 +968,11 @@ macro_rules! invoke_middlewares {
     };
 }
 
-impl<VS, I, S, SC> Host<S> for FuzzHost<VS, I, S, SC>
+impl<SC> Host<EVMFuzzState> for FuzzHost<SC>
 where
-    S: State
-        + HasRand
-        + HasCaller<EVMAddress>
-        + Debug
-        + Clone
-        + HasCorpus
-        + HasMetadata
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + UsesInput<Input = I>
-        + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    fn step(&mut self, interp: &mut Interpreter, state: &mut S) -> InstructionResult {
+    fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         unsafe {
             // debug!("pc: {}", interp.program_counter());
             // debug!("{:?}", *interp.instruction_pointer);
@@ -1061,7 +1037,7 @@ where
                         WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
                         let res =
-                            <FuzzHost<VS, I, S, SC> as Host<S>>::sload(self, interp.contract.address, fast_peek!(0));
+                            <FuzzHost<SC> as Host<EVMFuzzState>>::sload(self, interp.contract.address, fast_peek!(0));
                         let value_changed = res.expect("sload failed").0 != value;
 
                         let idx = interp.program_counter() % MAP_SIZE;
@@ -1160,7 +1136,12 @@ where
         Continue
     }
 
-    fn step_end(&mut self, _interp: &mut Interpreter, _ret: InstructionResult, _: &mut S) -> InstructionResult {
+    fn step_end(
+        &mut self,
+        _interp: &mut Interpreter,
+        _ret: InstructionResult,
+        _: &mut EVMFuzzState,
+    ) -> InstructionResult {
         Continue
     }
 
@@ -1295,7 +1276,7 @@ where
     fn create(
         &mut self,
         inputs: &mut CreateInputs,
-        state: &mut S,
+        state: &mut EVMFuzzState,
     ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
@@ -1353,10 +1334,7 @@ where
                         parsed_abi = abis;
                     }
                     // notify flashloan and blacklisting flashloan addresses
-                    #[cfg(feature = "flashloan_v2")]
-                    {
-                        handle_contract_insertion!(state, self, r_addr, parsed_abi);
-                    }
+                    handle_contract_insertion!(state, self, r_addr, parsed_abi);
 
                     parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
                         #[cfg(not(feature = "fuzz_static"))]
@@ -1379,9 +1357,7 @@ where
 
                             env: Default::default(),
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                            #[cfg(feature = "flashloan_v2")]
                             liquidation_percent: 0,
-                            #[cfg(feature = "flashloan_v2")]
                             input_type: EVMInputTy::ABI,
                             direct_data: Default::default(),
                             randomness: vec![0],
@@ -1404,7 +1380,7 @@ where
         input: &mut CallInputs,
         interp: &mut Interpreter,
         output_info: (usize, usize),
-        state: &mut S,
+        state: &mut EVMFuzzState,
     ) -> (InstructionResult, Gas, Bytes) {
         self.apply_prank(&interp.contract().caller, input);
         self.call_depth += 1;

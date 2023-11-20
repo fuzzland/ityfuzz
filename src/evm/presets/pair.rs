@@ -1,37 +1,30 @@
-use std::fmt::Debug;
-
-use libafl::{
-    schedulers::Scheduler,
-    state::{HasCorpus, State},
-};
+use libafl::schedulers::Scheduler;
 
 use crate::{
     evm::{
         abi::{A256InnerType, BoxedABI, A256},
         input::{ConciseEVMInput, EVMInput, EVMInputT},
         presets::Preset,
-        types::EVMAddress,
+        types::{EVMAddress, EVMFuzzState},
         vm::EVMExecutor,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::HasCaller,
 };
 
 pub struct PairPreset;
 
-impl<I, S, VS, SC> Preset<I, S, VS, SC> for PairPreset
+impl<I, VS, SC> Preset<I, VS, SC> for PairPreset
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn presets(
         &self,
         function_sig: [u8; 4],
         input: &EVMInput,
-        _evm_executor: &EVMExecutor<I, S, VS, ConciseEVMInput, SC>,
+        _evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC>,
     ) -> Vec<EVMInput> {
         let mut res = vec![];
         if let [0xbc, 0x25, 0xcf, 0x77] = function_sig {
