@@ -11,7 +11,8 @@ use crate::{
         oracles::ERC20_BUG_IDX,
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        vm::EVMState, uniswap::TokenContextT,
+        uniswap::TokenContextT,
+        vm::EVMState,
     },
     oracle::Oracle,
     state::HasExecutionResult,
@@ -84,7 +85,6 @@ impl
                     ctx.fuzz_state.callers_pool[0],
                     ctx.input.get_randomness().as_slice(),
                 );
-
 
                 liquidation_txs.extend(
                     txs.iter()

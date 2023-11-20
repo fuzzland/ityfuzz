@@ -1034,7 +1034,6 @@ where
                             additional_info: None,
                         }
                     }
-                    
                 } else {
                     ExecutionResult {
                         // we don't have enough liquidity to buy the token
@@ -1062,14 +1061,16 @@ where
                 //         if let Some(ref m) = self.host.flashloan_middleware {
                 //             m.deref()
                 //                 .borrow_mut()
-                //                 .analyze_call(input, &mut res.new_state.flashloan_data)
-                //         }
+                //                 .analyze_call(input, &mut
+                // res.new_state.flashloan_data)         }
                 //         unsafe {
                 //             ExecutionResult {
                 //                 output: res.output.to_vec(),
                 //                 reverted: !is_call_success!(res.ret),
                 //                 new_state: StagedVMState::new_with_state(
-                //                     VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
+                //                     
+                // VMStateT::as_any(&res.new_state).
+                // downcast_ref_unchecked::<VS>().clone(),
                 //                 ),
                 //                 additional_info: None,
                 //             }

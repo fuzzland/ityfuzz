@@ -23,7 +23,7 @@ use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
         types::{EVMAddress, EVMU256},
-        uniswap::{get_uniswap_info, PairContext, PathContext, UniswapTokenContext, UniswapProvider},
+        uniswap::{get_uniswap_info, PairContext, PathContext, UniswapProvider, UniswapTokenContext},
     },
 };
 
