@@ -23,9 +23,11 @@ use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
         blaz::get_client,
-        srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation},
+        srcmap::{
+            parser::{decode_instructions_with_replacement, SourceMapLocation},
+            SOURCE_MAP_PROVIDER,
+        },
         types::{EVMAddress, EVMQueueExecutor, ProjectSourceMapTy},
-        srcmap::SOURCE_MAP_PROVIDER,
     },
     generic_vm::vm_executor::GenericVM,
 };
@@ -323,7 +325,7 @@ impl BuildJobResult {
             bytecode,
             self.source_maps.clone(),
             &self.sources.iter().map(|(name, _)| (name)).cloned().collect(),
-            Some(&self.source_maps_replacements)
+            Some(&self.source_maps_replacements),
         );
     }
 }
