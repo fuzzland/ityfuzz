@@ -1,20 +1,23 @@
 pub mod parser;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 use lazy_static::lazy_static;
 
 use crate::evm::EVMAddress;
 
 lazy_static! {
-    pub static ref SOURCE_MAP_PROVIDER: SourceMapProvider = SourceMapProvider::default();
+    pub static ref SOURCE_MAP_PROVIDER: Mutex<SourceMapProvider> = Mutex::new(SourceMapProvider::default());
 }
 
 // Identical to SourceMapLocation
 #[derive(Default, Clone, Debug)]
 struct RawSourceMapInfo {
-    file: Option<String>,
-    file_idx: Option<usize>,
+    file: Option<String>,    // File name
+    file_idx: Option<usize>, // File index in files
     offset: usize,
     length: usize,
 }
@@ -40,14 +43,14 @@ pub struct SourceMapProvider {
 impl SourceMapProvider {
     pub fn decode_instructions(
         &mut self,
-        address: EVMAddress,
+        address: &EVMAddress,
         bytecode: Vec<u8>,
         map: String,
-        files: &Vec<String, String>,
+        files: &Vec<(String, String)>, // (filename, file_content)
         replacements: Option<&Vec<(String, String)>>,
     ) {
-        let filenames = files.iter().map(|(name, _)| (name)).cloned().collect();
-        let list_raw_infos = self.uncompress_srcmap_single(map, filenames, replacements);
+        let filenames = files.iter().map(|(name, _)| (name.clone())).collect();
+        let list_raw_infos = self.uncompress_srcmap_single(map, &filenames, replacements);
         let bytecode_len = bytecode.len();
 
         let mut result = SourceMap::new();
@@ -63,13 +66,16 @@ impl SourceMapProvider {
             let raw_info = list_raw_infos.get(raw_info_idx);
 
             if let Some(info) = raw_info {
-                let (file_name, file_content) = files.get(info.file_idx);
+                let source_code = if let Some(file_idx) = info.file_idx {
+                    let filename = files[file_idx].0.clone();
+                    let file_content = files[file_idx].1.clone();
+                    Some(file_content[info.offset..info.offset + info.length].to_string())
+                } else {
+                    None
+                };
 
-                let source_map_item = SourceMapItem::new(
-                    info.clone(),
-                    file_content[info.offset..info.offset + info.length].to_string(),
-                );
-                result.insert_source_map_item(pc, source_map_item)
+                let source_map_item = SourceMapItem::new(info.clone(), source_code);
+                result.insert_source_map_item(pc, source_map_item);
             }
 
             match opcode {
@@ -85,14 +91,14 @@ impl SourceMapProvider {
             raw_info_idx += 1;
         }
 
-        self.source_maps.insert(address, result);
+        self.source_maps.insert(address.clone(), result);
     }
 
-    pub fn has_source_map(&self, address: EVMAddress) -> bool {
+    pub fn has_source_map(&self, address: &EVMAddress) -> bool {
         self.source_maps.contains_key(&address)
     }
 
-    pub fn get_source_code(&self, address: EVMAddress, pc: usize) -> Option<&String> {
+    pub fn get_source_code(&self, address: &EVMAddress, pc: usize) -> Option<&String> {
         if self.has_source_map(address) {
             match self.source_maps.get(&address).unwrap().get_source_map_item_by_pc(pc) {
                 Some(source_map_item) => source_map_item.get_source_code(),
@@ -103,7 +109,7 @@ impl SourceMapProvider {
         }
     }
 
-    pub fn get_pc_has_match(&self, address: EVMAddress, pc: usize) -> bool {
+    pub fn get_pc_has_match(&self, address: &EVMAddress, pc: usize) -> bool {
         if self.has_source_map(address) {
             match self.source_maps.get(&address).unwrap().get_source_map_item_by_pc(pc) {
                 Some(source_map_item) => source_map_item.pc_has_match,
