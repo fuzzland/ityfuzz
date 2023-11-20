@@ -11,15 +11,13 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::{delay::Fixed, retry_with_index, OperationResult};
-use revm_interpreter::analysis::to_analysed;
-use revm_primitives::Bytecode;
+use revm_primitives::B160;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     cache::{Cache, FileSystemCache},
@@ -136,7 +134,7 @@ impl Chain {
             return url;
         }
         match self {
-            Chain::ETH => "https://eth.llamarpc.com",
+            Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
             Chain::BSC => "https://rpc.ankr.com/bsc",
@@ -246,7 +244,7 @@ pub struct OnChainConfig {
     balance_cache: HashMap<EVMAddress, EVMU256>,
     pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
-    code_cache: HashMap<EVMAddress, Bytecode>,
+    code_cache: HashMap<EVMAddress, String>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
@@ -531,27 +529,13 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, self.chain_id
         );
-
-        match self.post(self.endpoint_url.clone(), data) {
-            Some(resp) => {
-                let json: Result<Value, _> = serde_json::from_str(&resp);
-
-                match json {
-                    Ok(json) => {
-                        return json.get("result").cloned();
-                    }
-                    Err(e) => {
-                        error!("{:?}", e);
-                        None
-                    }
-                }
-            }
-
-            None => {
+        self.post(self.endpoint_url.clone(), data)
+            .and_then(|resp| serde_json::from_str(&resp).ok())
+            .and_then(|json: Value| json.get("result").cloned())
+            .or_else(|| {
                 error!("failed to fetch from {}", self.endpoint_url);
                 None
-            }
-        }
+            })
     }
 
     fn _request_with_id(&self, method: String, params: String, id: u8) -> Option<Value> {
@@ -559,27 +543,13 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, id
         );
-
-        match self.post(self.endpoint_url.clone(), data) {
-            Some(resp) => {
-                let json: Result<Value, _> = serde_json::from_str(&resp);
-
-                match json {
-                    Ok(json) => {
-                        return json.get("result").cloned();
-                    }
-                    Err(e) => {
-                        error!("{:?}", e);
-                        None
-                    }
-                }
-            }
-
-            None => {
+        self.post(self.endpoint_url.clone(), data)
+            .and_then(|resp| serde_json::from_str(&resp).ok())
+            .and_then(|json: Value| json.get("result").cloned())
+            .or_else(|| {
                 error!("failed to fetch from {}", self.endpoint_url);
                 None
-            }
-        }
+            })
     }
 
     pub fn get_balance(&mut self, address: EVMAddress) -> EVMU256 {
@@ -673,12 +643,12 @@ impl OnChainConfig {
         gaslimit
     }
 
-    pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
+    pub fn get_contract_code(&mut self, address: EVMAddress, force_cache: bool) -> String {
         if self.code_cache.contains_key(&address) {
             return self.code_cache[&address].clone();
         }
         if force_cache {
-            return Bytecode::default();
+            return "".to_string();
         }
 
         info!("fetching code from {}", hex::encode(address));
@@ -696,17 +666,11 @@ impl OnChainConfig {
                 }
                 None => "".to_string(),
             }
-        };
-        let code = resp_string.trim_start_matches("0x");
-        if code.is_empty() {
-            debug!("{address} empty code");
-            self.code_cache.insert(address, Bytecode::new());
-            return Bytecode::new();
         }
-        let code = hex::decode(code).unwrap();
-        let bytes = to_analysed(Bytecode::new_raw(Bytes::from(code)));
-        self.code_cache.insert(address, bytes.clone());
-        bytes
+        .trim_start_matches("0x")
+        .to_string();
+        self.code_cache.insert(address, resp_string.clone());
+        resp_string
     }
 
     pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
@@ -947,7 +911,7 @@ impl OnChainConfig {
             "data": "0x0902f1ac",
             "id": 1
         }, self.block_number]);
-            info!("fetching reserve for {pair} {} {params}", self.block_number);
+            debug!("fetching reserve for {pair} {}", self.block_number);
             let resp = self._request_with_id("eth_call".to_string(), params.to_string(), 1);
             match resp {
                 Some(resp) => resp.to_string(),
@@ -955,10 +919,12 @@ impl OnChainConfig {
             }
         };
 
-        assert!(
-            result.len() == 196,
-            "Unexpected RPC error, consider setting env <ETH_RPC_URL> "
-        );
+        if result.len() != 196 {
+            let rpc = &self.endpoint_url;
+            let pair_code = self.clone().get_contract_code(B160::from_str(pair).unwrap(), true);
+            warn!("rpc: {rpc}, result: {result}, pair: {pair}, pair code: {pair_code}");
+            panic!("Unexpected RPC error, consider setting env <ETH_RPC_URL> ");
+        }
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
@@ -1171,16 +1137,6 @@ mod tests {
         let v = config._request(
             "eth_getCode".to_string(),
             "[\"0x0000000000000000000000000000000000000000\", \"latest\"]".to_string(),
-        );
-        debug!("{:?}", v)
-    }
-
-    #[test]
-    fn test_get_contract_code() {
-        let mut config = OnChainConfig::new(BSC, 0);
-        let v = config.get_contract_code(
-            EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            false,
         );
         debug!("{:?}", v)
     }

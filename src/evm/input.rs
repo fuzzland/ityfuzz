@@ -1,6 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
+use colored::{ColoredString, Colorize};
 use libafl::{
     inputs::Input,
     mutators::MutationResult,
@@ -10,6 +11,7 @@ use libafl_bolts::{prelude::Rand, HasLen};
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use super::utils::{colored_address, colored_sender, prettify_value};
 use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
@@ -66,7 +68,6 @@ pub trait EVMInputT {
     fn set_txn_value(&mut self, v: EVMU256);
 
     /// Get input type
-    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy;
 
     /// Get additional random bytes for mutator
@@ -77,12 +78,10 @@ pub trait EVMInputT {
 
     /// Get the percentage of the token amount in all callers' account to
     /// liquidate
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8;
 
     /// Set the percentage of the token amount in all callers' account to
     /// liquidate
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8);
 
     fn get_repeat(&self) -> usize;
@@ -92,7 +91,6 @@ pub trait EVMInputT {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EVMInput {
     /// Input type
-    #[cfg(feature = "flashloan_v2")]
     pub input_type: EVMInputTy,
 
     /// Caller address
@@ -126,7 +124,6 @@ pub struct EVMInput {
     pub access_pattern: Rc<RefCell<AccessPattern>>,
 
     /// Percentage of the token amount in all callers' account to liquidate
-    #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
 
     /// If ABI is empty, use direct data, which is the raw input data
@@ -143,7 +140,6 @@ pub struct EVMInput {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ConciseEVMInput {
     /// Input type
-    #[cfg(feature = "flashloan_v2")]
     pub input_type: EVMInputTy,
 
     /// Caller address
@@ -168,7 +164,6 @@ pub struct ConciseEVMInput {
     pub env: Env,
 
     /// Percentage of the token amount in all callers' account to liquidate
-    #[cfg(feature = "flashloan_v2")]
     pub liquidation_percent: u8,
 
     /// Additional random bytes for mutator
@@ -202,7 +197,6 @@ impl ConciseEVMInput {
         };
 
         Self {
-            #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
             caller: input.get_caller(),
             contract: input.get_contract(),
@@ -216,7 +210,6 @@ impl ConciseEVMInput {
             txn_value: input.get_txn_value(),
             step: input.is_step(),
             env: input.get_vm_env().clone(),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: input.get_liquidation_percent(),
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
@@ -234,7 +227,6 @@ impl ConciseEVMInput {
         I: VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     {
         Self {
-            #[cfg(feature = "flashloan_v2")]
             input_type: input.get_input_type(),
             caller: input.get_caller(),
             contract: input.get_contract(),
@@ -248,7 +240,6 @@ impl ConciseEVMInput {
             txn_value: input.get_txn_value(),
             step: input.is_step(),
             env: input.get_vm_env().clone(),
-            #[cfg(feature = "flashloan_v2")]
             liquidation_percent: input.get_liquidation_percent(),
             randomness: input.get_randomness(),
             repeat: input.get_repeat(),
@@ -261,7 +252,6 @@ impl ConciseEVMInput {
     pub fn to_input(&self, sstate: EVMStagedVMState) -> (EVMInput, u32) {
         (
             EVMInput {
-                #[cfg(feature = "flashloan_v2")]
                 input_type: self.input_type.clone(),
                 caller: self.caller,
                 contract: self.contract,
@@ -275,7 +265,6 @@ impl ConciseEVMInput {
                 step: self.step,
                 env: self.env.clone(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                #[cfg(feature = "flashloan_v2")]
                 liquidation_percent: self.liquidation_percent,
                 #[cfg(not(feature = "debug"))]
                 direct_data: Bytes::new(),
@@ -290,85 +279,141 @@ impl ConciseEVMInput {
 
     // Variable `liq` is used when `debug` feature is disabled
     #[allow(unused_variables)]
-    #[cfg(feature = "flashloan_v2")]
     fn pretty_txn(&self) -> Option<String> {
-        let liq: u8 = self.liquidation_percent;
-
         #[cfg(not(feature = "debug"))]
-        let mut output = match self.data {
-            Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH ({}), liq percent: {}",
-                self.caller,
-                self.contract,
-                d,
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-                hex::encode(d.get_bytes()),
-                liq
-            ),
+        match self.data {
+            Some(ref d) => self.as_abi_call(d.to_colored_string()),
             None => match self.input_type {
-                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => format!(
-                    "{:?} => {:?} with {} ETH, liq percent: {}",
-                    self.caller,
-                    self.contract,
-                    self.txn_value.unwrap_or(EVMU256::ZERO),
-                    liq
-                ),
-                EVMInputTy::Borrow => format!(
-                    "{:?} borrow token {:?} with {} ETH, liq percent: {}",
-                    self.caller,
-                    self.contract,
-                    self.txn_value.unwrap_or(EVMU256::ZERO),
-                    liq
-                ),
-                EVMInputTy::Liquidate => "".to_string(),
+                EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => self.as_transfer(),
+                EVMInputTy::Borrow => self.as_borrow(),
+                EVMInputTy::Liquidate => None,
             },
-        };
+        }
 
         #[cfg(feature = "debug")]
-        let mut output = format!(
-            "{:?} => {:?} with {:?} ETH, {}",
-            self.caller,
-            self.contract,
-            self.txn_value,
-            hex::encode(self.direct_data.clone())
-        );
-
-        if !output.is_empty() && self.return_data.is_some() {
-            let return_data = hex::encode(self.return_data.as_ref().unwrap());
-            output.push_str(format!(", return data: 0x{}", return_data).as_str());
-        }
-
-        if output.is_empty() {
-            None
-        } else {
-            Some(output)
-        }
+        self.as_transfer()
     }
 
-    #[cfg(not(feature = "flashloan_v2"))]
-    fn pretty_txn(&self) -> Option<String> {
-        let mut output = match self.data {
-            Some(ref d) => format!(
-                "{:?} => {:?} {} with {} ETH ({})",
-                self.caller,
-                self.contract,
-                d.to_string(),
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-                hex::encode(d.get_bytes())
-            ),
-            None => format!(
-                "{:?} => {:?} transfer {} ETH",
-                self.caller,
-                self.contract,
-                self.txn_value.unwrap_or(EVMU256::ZERO),
-            ),
+    #[allow(dead_code)]
+    #[inline]
+    fn as_abi_call(&self, call_str: String) -> Option<String> {
+        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
+        if parts.len() < 2 && call_str.len() == 8 {
+            return self.as_fn_selector_call();
+        }
+
+        let mut fn_call = self.colored_fn_name(parts[0]).to_string();
+        let value = self.txn_value.unwrap_or_default();
+        if value != EVMU256::ZERO {
+            fn_call.push_str(&self.colored_value());
+        }
+
+        if parts.len() < 2 {
+            fn_call.push_str("()");
+        } else {
+            fn_call.push_str(format!("({}", parts[1]).as_str());
+        }
+
+        Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
+    }
+
+    #[inline]
+    fn as_fn_selector_call(&self) -> Option<String> {
+        let mut call = format!("{}.{}", colored_address(&self.contract()), self.colored_fn_name("call"));
+        let value = self.txn_value.unwrap_or_default();
+        if value != EVMU256::ZERO {
+            call.push_str(&self.colored_value());
+        }
+
+        if self.fn_args().is_empty() {
+            call.push_str(format!("({})", self.fn_selector().purple()).as_str());
+        } else {
+            call.push_str(
+                format!(
+                    "({}({}, {}))",
+                    self.colored_fn_name("abi.encodeWithSelector"),
+                    self.fn_selector().purple(),
+                    self.fn_args()
+                )
+                .as_str(),
+            );
+        }
+
+        Some(call)
+    }
+
+    #[inline]
+    fn as_transfer(&self) -> Option<String> {
+        Some(format!(
+            "{}.{}{}()",
+            colored_address(&self.contract()),
+            self.colored_fn_name("call"),
+            self.colored_value()
+        ))
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    fn as_borrow(&self) -> Option<String> {
+        Some(format!(
+            "{}.{}{}(0, path:(WETH → {}), address(this), block.timestamp);",
+            colored_address("Router"),
+            self.colored_fn_name("swapExactETHForTokens"),
+            self.colored_value(),
+            colored_address(&self.contract())
+        ))
+    }
+
+    #[inline]
+    fn append_liquidation(&self, indent: String, call: String) -> String {
+        if self.liquidation_percent == 0 {
+            return call;
+        }
+
+        let liq_call = format!(
+            "{}.{}(100% Balance, 0, path:({} → WETH), address(this), block.timestamp);",
+            colored_address("Router"),
+            self.colored_fn_name("swapExactTokensForETH"),
+            colored_address(&self.contract())
+        );
+
+        let mut liq = indent.clone();
+        liq.push_str(format!("├─[{}] {}", self.layer + 1, liq_call).as_str());
+
+        [call, liq].join("\n")
+    }
+
+    #[inline]
+    fn colored_value(&self) -> String {
+        let value = self.txn_value.unwrap_or_default();
+        format!("{{value: {}}}", prettify_value(value).truecolor(0x99, 0x00, 0xcc))
+    }
+
+    #[inline]
+    fn colored_fn_name(&self, fn_name: &str) -> ColoredString {
+        fn_name.truecolor(0xff, 0x7b, 0x72)
+    }
+
+    #[inline]
+    fn pretty_return(&self, ret: &[u8]) -> String {
+        if ret.len() != 32 {
+            return format!("0x{}", hex::encode(ret));
+        }
+
+        // Try to encode it as an address
+        if ret.len() == 32 && ret[..12] == [0; 12] && (ret[12] != 0 || ret[13] != 0) {
+            let addr = EVMAddress::from_slice(&ret[12..]);
+            return colored_address(&checksum(&addr));
+        }
+
+        // Remove leading zeros
+        let res = match hex::encode(ret).trim_start_matches('0') {
+            "" => "00".to_string(),
+            v if v.len() % 2 != 0 => format!("0{}", v),
+            v => v.to_string(),
         };
 
-        if self.return_data.is_some() {
-            let return_data = hex::encode(self.return_data.as_ref().unwrap());
-            output.push_str(format!(", return data: 0x{}", return_data).as_str());
-        }
-        Some(output)
+        format!("0x{}", res)
     }
 }
 
@@ -384,7 +429,7 @@ impl SolutionTx for ConciseEVMInput {
     #[cfg(not(feature = "debug"))]
     fn fn_signature(&self) -> String {
         match self.data {
-            Some(ref d) => d.get_func_signature().unwrap_or("".to_string()),
+            Some(ref d) => d.get_func_signature().unwrap_or_default(),
             None => "".to_string(),
         }
     }
@@ -412,15 +457,13 @@ impl SolutionTx for ConciseEVMInput {
     }
 
     fn value(&self) -> String {
-        self.txn_value.unwrap_or(EVMU256::ZERO).to_string()
+        self.txn_value.unwrap_or_default().to_string()
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn is_borrow(&self) -> bool {
         self.input_type == EVMInputTy::Borrow
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn liq_percent(&self) -> u8 {
         self.liquidation_percent
     }
@@ -488,7 +531,6 @@ impl EVMInputT for EVMInput {
         self.txn_value = Some(v);
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_input_type(&self) -> EVMInputTy {
         self.input_type.clone()
     }
@@ -501,12 +543,10 @@ impl EVMInputT for EVMInput {
         self.randomness = v;
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn get_liquidation_percent(&self) -> u8 {
         self.liquidation_percent
     }
 
-    #[cfg(feature = "flashloan_v2")]
     fn set_liquidation_percent(&mut self, v: u8) {
         self.liquidation_percent = v;
     }
@@ -662,7 +702,7 @@ impl EVMInput {
         S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
     {
         let vm_slots = input.get_state().get(&input.get_contract()).cloned();
-        let input_by: [u8; 32] = input.get_txn_value().unwrap_or(EVMU256::ZERO).to_be_bytes();
+        let input_by: [u8; 32] = input.get_txn_value().unwrap_or_default().to_be_bytes();
         let mut input_vec = input_by.to_vec();
         let mut wrapper = MutatorInput::new(&mut input_vec);
         let res = byte_mutator(state_, &mut wrapper, vm_slots);
@@ -729,16 +769,68 @@ impl ConciseSerde for ConciseEVMInput {
     }
 
     fn serialize_string(&self) -> String {
-        let mut s = String::new();
+        let mut indent = String::from("   ");
+        let mut tree_level = 1;
         for _ in 0..self.layer {
-            s.push_str("==");
-        }
-        if self.layer > 0 {
-            s.push(' ');
+            indent.push_str("│  │  ");
+            tree_level += 2;
         }
 
-        s.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
-        s
+        // Stepping with return
+        if self.step {
+            let res = format!("{}└─ ← ()", indent.clone());
+            return self.append_liquidation(indent, res);
+        }
+
+        let mut call = indent.clone();
+        call.push_str(format!("├─[{}] ", tree_level).as_str());
+        call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());
+
+        // Control leak
+        if self.call_leak != u32::MAX {
+            let mut fallback = indent.clone();
+            fallback.push_str(
+                format!(
+                    "│  ├─[{}] {}.fallback()",
+                    tree_level + 1,
+                    colored_sender(&self.sender())
+                )
+                .as_str(),
+            );
+            call.push('\n');
+            call.push_str(fallback.as_str());
+        }
+
+        if self.return_data.is_some() {
+            let mut ret = indent.clone();
+            let v = self.return_data.as_ref().unwrap();
+            ret.push_str(format!("│  └─ ← {}", self.pretty_return(v)).as_str());
+            call.push('\n');
+            call.push_str(ret.as_str());
+        }
+
+        self.append_liquidation(indent, call)
+    }
+
+    fn sender(&self) -> String {
+        checksum(&self.caller)
+    }
+
+    fn indent(&self) -> String {
+        if self.layer == 0 {
+            return "".to_string();
+        }
+
+        let mut indent = String::from("   │  ");
+        for _ in 1..self.layer {
+            indent.push_str("│  │  ");
+        }
+
+        indent
+    }
+
+    fn is_step(&self) -> bool {
+        self.step
     }
 }
 

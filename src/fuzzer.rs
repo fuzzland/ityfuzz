@@ -42,19 +42,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::info;
 
 use crate::{
-    evm::host::JMP_MAP,
+    evm::{host::JMP_MAP, solution, utils::prettify_concise_inputs},
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
-    input::{ConciseSerde, SolutionTx},
+    input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
     oracle::BugMetadata,
     scheduler::HasReportCorpus,
-    state::HasExecutionResult,
-};
-/// Implements fuzzing logic for ItyFuzz
-use crate::{
-    evm::solution,
-    input::VMInputT,
-    state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
+    state::{HasCurrentInputIdx, HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState},
 };
 
 pub static mut RUN_FOREVER: bool = false;
@@ -299,7 +293,7 @@ macro_rules! dump_file {
             let txn_text_replayable = tx_trace.to_file_str($state);
 
             let data = format!(
-                "Reverted? {} \n Txn: {}",
+                "Reverted? {} \n Txn:\n{}",
                 $state.get_execution_result().reverted,
                 txn_text
             );
@@ -553,20 +547,20 @@ where
                         &mut self.objective,
                         corpus_idx.into(),
                     );
-                    let txn_text = minimized.iter().map(|ci| ci.serialize_string()).join("\n");
+                    let txn_text = prettify_concise_inputs(&minimized);
                     let txn_json = minimized
                         .iter()
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
                         .join("\n");
 
-                    info!("\n\n\n😊😊 Found violations! \n\n");
+                    println!("\n\n\n😊😊 Found violations! \n\n");
                     let cur_report =
                         format!(
                     "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
                     unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
                     txn_text
                 );
-                    info!("{}", cur_report);
+                    println!("{}", cur_report);
 
                     solution::generate_test(cur_report.clone(), minimized);
 

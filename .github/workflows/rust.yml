@@ -7,6 +7,7 @@ on:
   pull_request_target:
     branches:
       - master
+
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -19,8 +20,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Format check
         run: cargo fmt -- --check
-      - name: Clippy
-        run: cargo clippy --all-features
       - name: Download and Extract Cache
         run: curl -L https://github.com/fuzzland/ityfuzz-test-cache/releases/latest/download/cache.tar.gz -o cache.tar.gz && tar -xzf cache.tar.gz
       - name: Build

@@ -38,7 +38,6 @@ pub struct BuildJob {
     cache: FileSystemCache,
 }
 
-pub static mut BUILD_SERVER: &str = "https://solc-builder.fuzz.land/";
 const NEEDS: &str = "runtimeBytecode,abi,sourcemap,sources,ast,compiler_args";
 
 impl BuildJob {
@@ -78,9 +77,10 @@ impl BuildJob {
                 .append(true)
                 .open(builder_file)
                 .expect("Failed to open or create builder_id.txt");
-            writeln!(file, "{}", task_id).expect("Failed to write task_id to builder_id.txt");
+            writeln!(file, "0x{}:{}", hex::encode(addr), task_id)
+                .expect("Failed to write addr:task_id to builder_id.txt");
 
-            Some(JobContext::new(task_id.to_string()))
+            Some(JobContext::new(task_id.to_string(), self.build_server.clone()))
         } else {
             error!("submit onchain job failed for {:?}", addr);
             None
@@ -118,16 +118,17 @@ impl BuildJob {
 
 pub struct JobContext {
     id: String,
+    build_server: String,
 }
 
 impl JobContext {
-    pub fn new(id: String) -> Self {
-        Self { id }
+    pub fn new(id: String, build_server: String) -> Self {
+        Self { id, build_server }
     }
 
     pub fn wait_build_job(&self) -> Option<BuildJobResult> {
         let client = get_client();
-        let url = format!("{}task/{}/", unsafe { BUILD_SERVER }, self.id);
+        let url = format!("{}task/{}/", self.build_server, self.id);
         loop {
             debug!("Retrieving artifact build job from {}", url);
             let resp = client.get(&url).send().expect("retrieve onchain job failed");

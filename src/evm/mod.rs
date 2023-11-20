@@ -23,11 +23,15 @@ pub mod solution;
 pub mod srcmap;
 pub mod types;
 pub mod uniswap;
+pub mod utils;
 pub mod vm;
 
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fs::OpenOptions,
+    io::Write,
+    path::Path,
     rc::Rc,
     str::FromStr,
 };
@@ -42,6 +46,7 @@ use config::{Config, FuzzerTypes, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
+use itertools::Itertools;
 use num_cpus;
 use onchain::{
     endpoints::{Chain, OnChainConfig},
@@ -50,6 +55,7 @@ use onchain::{
 use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
 use serde::Deserialize;
+use serde_json::json;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
 
@@ -126,7 +132,8 @@ pub struct EvmArgs {
     #[arg(long)]
     onchain_block_number: Option<u64>,
 
-    /// Onchain Customize - Endpoint URL (Default: inferred from chain-type)
+    /// Onchain Customize - RPC endpoint URL (Default: inferred from
+    /// chain-type), Example: https://rpc.ankr.com/eth
     #[arg(long)]
     onchain_url: Option<String>,
 
@@ -135,7 +142,7 @@ pub struct EvmArgs {
     onchain_chain_id: Option<u32>,
 
     /// Onchain Customize - Block explorer URL (Default: inferred from
-    /// chain-type)
+    /// chain-type), Example: https://api.etherscan.io/api
     #[arg(long)]
     onchain_explorer_url: Option<String>,
 
@@ -205,7 +212,7 @@ pub struct EvmArgs {
     arbitrary_external_call_oracle: bool,
 
     #[arg(long, default_value = "false")]
-    integer_overflow_oracle: bool,
+    math_calculate_oracle: bool,
 
     #[arg(long, default_value = "true")]
     echidna_oracle: bool,
@@ -300,6 +307,17 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     load_corpus: String,
 
+    /// Specify the setup file that deploys all the contract. Fuzzer invokes
+    /// setUp() to deploy.
+    #[arg(long, default_value = "")]
+    setup_file: String,
+
+    /// Forcing a contract to use the given abi. This is useful when the
+    /// contract is a complex proxy or decompiler has trouble to detect the abi.
+    /// Format: address:abi_file,...
+    #[arg(long, default_value = "")]
+    force_abi: String,
+
     /// Preset file. If specified, will load the preset file and match past
     /// exploit template.
     #[cfg(feature = "use_presets")]
@@ -312,6 +330,7 @@ enum EVMTargetType {
     Address,
     AnvilFork,
     Config,
+    Setup,
 }
 
 #[allow(clippy::type_complexity)]
@@ -492,80 +511,108 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
+    if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() {
+        if onchain.is_some() {
+            target_type = EVMTargetType::AnvilFork;
+        } else if !args.setup_file.is_empty() {
+            target_type = EVMTargetType::Setup;
+        } else if !args.offchain_config_url.is_empty() || !args.offchain_config_file.is_empty() {
+            target_type = EVMTargetType::Config;
+        } else {
+            panic!("Builder artifacts is provided, but missing offchain_config_*, Anvil config, or setup_file");
+        }
+    }
+
     let offchain_artifacts = if !args.builder_artifacts_url.is_empty() {
-        target_type = EVMTargetType::AnvilFork;
         Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
     } else if !args.builder_artifacts_file.is_empty() {
-        target_type = EVMTargetType::AnvilFork;
         Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
     } else {
         None
     };
     let offchain_config = if !args.offchain_config_url.is_empty() {
-        target_type = EVMTargetType::Config;
         Some(OffchainConfig::from_json_url(args.offchain_config_url).expect("failed to parse offchain config"))
     } else if !args.offchain_config_file.is_empty() {
-        target_type = EVMTargetType::Config;
         Some(OffchainConfig::from_file(args.offchain_config_file).expect("failed to parse offchain config"))
     } else {
         None
     };
 
+    let force_abis = args
+        .force_abi
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|x| {
+            let runes = x.split(':').collect_vec();
+            assert_eq!(runes.len(), 2, "Invalid force abi format");
+            let abi = std::fs::read_to_string(runes[1]).expect("Failed to read abi file");
+            (runes[0].to_string(), abi)
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut contract_loader = match target_type {
+        EVMTargetType::Glob => ContractLoader::from_glob(
+            args.target.as_str(),
+            &mut state,
+            &proxy_deploy_codes,
+            &constructor_args_map,
+        ),
+        EVMTargetType::Config => ContractLoader::from_config(
+            &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+            &offchain_config.expect("offchain config is required for config target type"),
+        ),
+        EVMTargetType::AnvilFork => {
+            let addresses: Vec<EVMAddress> = args
+                .target
+                .split(',')
+                .map(|s| EVMAddress::from_str(s).unwrap())
+                .collect();
+            ContractLoader::from_fork(
+                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+                onchain.as_mut().expect("onchain is required to fork anvil"),
+                HashSet::from_iter(addresses),
+            )
+        }
+        EVMTargetType::Setup => ContractLoader::from_setup(
+            &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+            args.setup_file,
+        ),
+        EVMTargetType::Address => {
+            if onchain.is_none() {
+                panic!("Onchain is required for address target type");
+            }
+            let mut args_target = args.target.clone();
+
+            if args.ierc20_oracle || args.flashloan {
+                const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+                const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
+                if "bsc" == onchain.as_ref().unwrap().chain_name {
+                    if !args_target.contains(BSC_ADDRESS) {
+                        args_target.push(',');
+                        args_target.push_str(BSC_ADDRESS);
+                    }
+                } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
+                    args_target.push(',');
+                    args_target.push_str(ETH_ADDRESS);
+                }
+            }
+            let addresses: Vec<EVMAddress> = args_target
+                .split(',')
+                .map(|s| EVMAddress::from_str(s).unwrap())
+                .collect();
+            ContractLoader::from_address(
+                onchain.as_mut().unwrap(),
+                HashSet::from_iter(addresses),
+                builder.clone(),
+            )
+        }
+    };
+
+    contract_loader.force_abi(force_abis);
+
     let config = Config {
         fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
-        contract_loader: match target_type {
-            EVMTargetType::Glob => ContractLoader::from_glob(
-                args.target.as_str(),
-                &mut state,
-                &proxy_deploy_codes,
-                &constructor_args_map,
-            ),
-            EVMTargetType::Config => ContractLoader::from_config(
-                &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                &offchain_config.expect("offchain config is required for config target type"),
-            ),
-            EVMTargetType::AnvilFork => {
-                let addresses: Vec<EVMAddress> = args
-                    .target
-                    .split(',')
-                    .map(|s| EVMAddress::from_str(s).unwrap())
-                    .collect();
-                ContractLoader::from_fork(
-                    &offchain_artifacts.expect("offchain artifacts is required for config target type"),
-                    onchain.as_mut().expect("onchain is required to fork anvil"),
-                    HashSet::from_iter(addresses),
-                )
-            }
-            EVMTargetType::Address => {
-                if onchain.is_none() {
-                    panic!("Onchain is required for address target type");
-                }
-                let mut args_target = args.target.clone();
-
-                if args.ierc20_oracle || args.flashloan {
-                    const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
-                    const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
-                    if "bsc" == onchain.as_ref().unwrap().chain_name {
-                        if !args_target.contains(BSC_ADDRESS) {
-                            args_target.push(',');
-                            args_target.push_str(BSC_ADDRESS);
-                        }
-                    } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
-                        args_target.push(',');
-                        args_target.push_str(ETH_ADDRESS);
-                    }
-                }
-                let addresses: Vec<EVMAddress> = args_target
-                    .split(',')
-                    .map(|s| EVMAddress::from_str(s).unwrap())
-                    .collect();
-                ContractLoader::from_address(
-                    onchain.as_mut().unwrap(),
-                    HashSet::from_iter(addresses),
-                    builder.clone(),
-                )
-            }
-        },
+        contract_loader,
         only_fuzz: if !args.only_fuzz.is_empty() {
             args.only_fuzz
                 .split(',')
@@ -614,7 +661,7 @@ pub fn evm_main(args: EvmArgs) {
         } else {
             None
         },
-        work_dir: args.work_dir,
+        work_dir: args.work_dir.clone(),
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
@@ -626,7 +673,7 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: args.typed_bug_oracle,
         selfdestruct_bug: args.selfdestruct_oracle,
         arbitrary_external_call: args.arbitrary_external_call_oracle,
-        integer_overflow_oracle: args.integer_overflow_oracle,
+        math_calculate_oracle: args.math_calculate_oracle,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
@@ -636,6 +683,42 @@ pub fn evm_main(args: EvmArgs) {
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
     };
+
+    let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
+
+    for contract_info in config.contract_loader.contracts.clone() {
+        let abis: Vec<serde_json::Value> = contract_info
+            .abi
+            .iter()
+            .map(|config| {
+                json!({
+                    hex::encode(config.function): format!("{}{}", &config.function_name, &config.abi)
+                })
+            })
+            .collect();
+        abis_map
+            .entry(hex::encode(contract_info.deployed_address))
+            .or_default()
+            .push(abis);
+    }
+
+    let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
+
+    let work_dir = args.work_dir.clone();
+
+    let path = Path::new(work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let abis_json = format!("{}/abis.json", work_dir.as_str());
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(abis_json)
+        .expect("Failed to open or create abis.json");
+
+    writeln!(file, "{}", json_str).expect("Failed to write abis to abis.json");
 
     if let FuzzerTypes::CMP = config.fuzzer_type {
         evm_fuzzer(config, &mut state)

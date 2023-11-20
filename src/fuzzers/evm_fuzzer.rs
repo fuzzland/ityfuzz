@@ -48,7 +48,7 @@ use crate::{
             call_printer::CallPrinter,
             cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
-            integer_overflow::IntegerOverflowMiddleware,
+            math_calculate::MathCalculateMiddleware,
             middleware::Middleware,
             reentrancy::ReentrancyTracer,
             sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis},
@@ -59,8 +59,8 @@ use crate::{
         oracles::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
-            integer_overflow::IntegerOverflowOracle,
             invariant::InvariantOracle,
+            math_calculate::MathCalculateOracle,
             reentrancy::ReentrancyOracle,
             selfdestruct::SelfdestructOracle,
             state_comp::StateCompOracle,
@@ -135,7 +135,7 @@ pub fn evm_fuzzer(
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
             Some({
-                let mid = Rc::new(RefCell::new(OnChain::<EVMState, EVMInput, EVMFuzzState>::new(
+                let mid = Rc::new(RefCell::new(OnChain::new(
                     // scheduler can be cloned because it never uses &mut self
                     onchain,
                     config.onchain_storage_fetching.unwrap(),
@@ -153,7 +153,7 @@ pub fn evm_fuzzer(
         None => {
             // enable active match for offchain fuzzing (todo: handle this more elegantly)
             unsafe {
-                ACTIVE_MATCH_EXT_CALL = true;
+                ACTIVE_MATCH_EXT_CALL = false;
             }
             None
         }
@@ -188,19 +188,11 @@ pub fn evm_fuzzer(
     if config.flashloan {
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
-        #[cfg(not(feature = "flashloan_v2"))]
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(
-            Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(config.onchain.is_some()),
-        )));
-
-        #[cfg(feature = "flashloan_v2")]
         {
-            assert!(onchain_middleware.is_some(), "Flashloan v2 requires onchain env");
-            fuzz_host.add_flashloan_middleware(Flashloan::<EVMState, EVMInput, EVMFuzzState>::new(
+            fuzz_host.add_flashloan_middleware(Flashloan::new(
                 true,
-                config.onchain.clone().unwrap(),
+                config.onchain.clone(),
                 config.price_oracle,
-                onchain_middleware.clone().unwrap(),
                 config.flashloan_oracle,
             ));
         }
@@ -217,8 +209,9 @@ pub fn evm_fuzzer(
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
     }
 
-    if config.integer_overflow_oracle {
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(IntegerOverflowMiddleware::new())));
+    if config.math_calculate_oracle {
+        let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(config.onchain)));
+        fuzz_host.add_middlewares(integer_overflow_middleware);
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -501,8 +494,8 @@ pub fn evm_fuzzer(
         ))));
     }
 
-    if config.integer_overflow_oracle {
-        oracles.push(Rc::new(RefCell::new(IntegerOverflowOracle::new(
+    if config.math_calculate_oracle {
+        oracles.push(Rc::new(RefCell::new(MathCalculateOracle::new(
             artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));

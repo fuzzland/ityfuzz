@@ -12,26 +12,16 @@ use alloy_primitives::{Address, Bytes as AlloyBytes, Log as RawLog, B256};
 use alloy_sol_types::{SolInterface, SolValue};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, CallerMode, VmCalls};
-use libafl::{
-    prelude::Input,
-    schedulers::Scheduler,
-    state::{HasCorpus, HasMetadata, HasRand, State},
-};
+use libafl::{schedulers::Scheduler, state::HasMetadata};
 use revm_interpreter::{analysis::to_analysed, opcode, BytecodeLocked, InstructionResult, Interpreter};
 use revm_primitives::{Bytecode, Env, SpecId, B160, U256};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use super::middleware::{Middleware, MiddlewareType};
-use crate::{
-    evm::{
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInputT},
-        types::EVMAddress,
-        vm::EVMState,
-    },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
+use crate::evm::{
+    host::FuzzHost,
+    types::{EVMAddress, EVMFuzzState},
+    vm::EVMState,
 };
 
 /// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
@@ -65,13 +55,13 @@ pub const ERROR_PREFIX: [u8; 4] = [11, 196, 69, 3];
 pub type ExpectedCallTracker = HashMap<Address, HashMap<Vec<u8>, (ExpectedCallData, u64)>>;
 
 #[derive(Clone, Debug, Default)]
-pub struct Cheatcode<I, VS, S, SC> {
+pub struct Cheatcode<SC> {
     /// Recorded storage reads and writes
     accesses: Option<RecordAccess>,
     /// Recorded logs
     recorded_logs: Option<Vec<Vm::Log>>,
 
-    _phantom: PhantomData<(I, VS, S, SC)>,
+    _phantom: PhantomData<SC>,
 }
 
 /// Prank information.
@@ -187,21 +177,11 @@ macro_rules! cheat_call_error {
     }};
 }
 
-impl<I, VS, S, SC> Middleware<VS, I, S, SC> for Cheatcode<I, VS, S, SC>
+impl<SC> Middleware<SC> for Cheatcode<SC>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone + Debug,
+    SC: Scheduler<State = EVMFuzzState> + Clone + Debug,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, _state: &mut S) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         let op = interp.current_opcode();
         match get_opcode_type(op, interp) {
             OpcodeType::CheatCall => self.cheat_call(interp, host),
@@ -217,19 +197,9 @@ where
     }
 }
 
-impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
+impl<SC> Cheatcode<SC>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     pub fn new() -> Self {
         Self {
@@ -240,7 +210,7 @@ where
     }
 
     /// Call cheatcode address
-    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>) {
+    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>) {
         let op = interp.current_opcode();
         let calldata = unsafe { pop_cheatcall_stack(interp, op) };
         if let Err(err) = calldata {
@@ -295,7 +265,10 @@ where
             VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(&mut host.expected_calls, args),
             VmCalls::addr(args) => self.addr(args),
-            _ => None,
+            _ => {
+                warn!("[cheatcode] unknown VmCall: {:?}", vm_call);
+                None
+            }
         };
         debug!("[cheatcode] VmCall result: {:?}", res);
 
@@ -415,19 +388,9 @@ where
 }
 
 /// Cheat VmCalls
-impl<I, VS, S, SC> Cheatcode<I, VS, S, SC>
+impl<SC> Cheatcode<SC>
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus<Input = I>
-        + HasCaller<EVMAddress>
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasRand
-        + Clone
-        + Debug,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     /// Sets `block.timestamp`.
     #[inline]
@@ -517,7 +480,7 @@ where
 
     /// Sets an address' code.
     #[inline]
-    fn etch(&self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::etchCall) -> Option<Vec<u8>> {
+    fn etch(&self, host: &mut FuzzHost<SC>, args: Vm::etchCall) -> Option<Vec<u8>> {
         let Vm::etchCall {
             target,
             newRuntimeBytecode,
@@ -609,12 +572,7 @@ where
 
     /// Sets the *next* call's `msg.sender` to be the input address.
     #[inline]
-    fn prank0(
-        &mut self,
-        host: &mut FuzzHost<VS, I, S, SC>,
-        old_caller: &EVMAddress,
-        args: Vm::prank_0Call,
-    ) -> Option<Vec<u8>> {
+    fn prank0(&mut self, host: &mut FuzzHost<SC>, old_caller: &EVMAddress, args: Vm::prank_0Call) -> Option<Vec<u8>> {
         let Vm::prank_0Call { msgSender } = args;
         host.prank = Some(Prank::new(
             *old_caller,
@@ -633,7 +591,7 @@ where
     #[inline]
     fn prank1(
         &mut self,
-        host: &mut FuzzHost<VS, I, S, SC>,
+        host: &mut FuzzHost<SC>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::prank_1Call,
@@ -656,7 +614,7 @@ where
     #[inline]
     fn start_prank0(
         &mut self,
-        host: &mut FuzzHost<VS, I, S, SC>,
+        host: &mut FuzzHost<SC>,
         old_caller: &EVMAddress,
         args: Vm::startPrank_0Call,
     ) -> Option<Vec<u8>> {
@@ -678,7 +636,7 @@ where
     #[inline]
     fn start_prank1(
         &mut self,
-        host: &mut FuzzHost<VS, I, S, SC>,
+        host: &mut FuzzHost<SC>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::startPrank_1Call,
@@ -698,14 +656,14 @@ where
 
     /// Resets subsequent calls' `msg.sender` to be `address(this)`.
     #[inline]
-    fn stop_prank(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
+    fn stop_prank(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
         let _ = host.prank.take();
         None
     }
 
     /// Expects an error on next call with any revert data.
     #[inline]
-    fn expect_revert0(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
+    fn expect_revert0(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
         host.expected_revert = Some(ExpectedRevert {
             reason: None,
             depth: host.call_depth,
@@ -715,7 +673,7 @@ where
 
     /// Expects an error on next call that starts with the revert data.
     #[inline]
-    fn expect_revert1(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+    fn expect_revert1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call { revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
         host.expected_revert = Some(ExpectedRevert {
@@ -727,7 +685,7 @@ where
 
     /// Expects an error on next call that exactly matches the revert data.
     #[inline]
-    fn expect_revert2(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+    fn expect_revert2(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call { revertData } = args;
         let reason = Some(Bytes::from(revertData));
         host.expected_revert = Some(ExpectedRevert {
@@ -743,7 +701,7 @@ where
     /// logs were emitted in the expected order with the expected topics and
     /// data (as specified by the booleans).
     #[inline]
-    fn expect_emit0(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+    fn expect_emit0(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_0Call {
             checkTopic1,
             checkTopic2,
@@ -762,7 +720,7 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    fn expect_emit1(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+    fn expect_emit1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_1Call {
             checkTopic1,
             checkTopic2,
@@ -785,7 +743,7 @@ where
     /// after the call, we check if logs were emitted in the expected order
     /// with the expected topics and data.
     #[inline]
-    fn expect_emit2(&mut self, host: &mut FuzzHost<VS, I, S, SC>) -> Option<Vec<u8>> {
+    fn expect_emit2(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
         let expected = ExpectedEmit {
             depth: host.call_depth,
             checks: [true, true, true, true],
@@ -798,7 +756,7 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    fn expect_emit3(&mut self, host: &mut FuzzHost<VS, I, S, SC>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+    fn expect_emit3(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_3Call { emitter } = args;
         let expected = ExpectedEmit {
             depth: host.call_depth,
@@ -1258,13 +1216,8 @@ mod tests {
             &mut state,
         );
 
-        let mut evm_executor: EVMExecutor<
-            EVMInput,
-            EVMFuzzState,
-            EVMState,
-            ConciseEVMInput,
-            StdScheduler<EVMFuzzState>,
-        > = EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let mut deploy_state = FuzzState::new(0);
         // Deploy Reverter
@@ -1297,7 +1250,6 @@ mod tests {
                     step: false,
                     env: Default::default(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                    #[cfg(feature = "flashloan_v2")]
                     liquidation_percent: 0,
                     direct_data: Bytes::from(
                         [
@@ -1306,7 +1258,6 @@ mod tests {
                         ]
                         .concat(),
                     ),
-                    #[cfg(feature = "flashloan_v2")]
                     input_type: EVMInputTy::ABI,
                     randomness: vec![],
                     repeat: 1,

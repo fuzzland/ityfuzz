@@ -3,26 +3,19 @@ use std::{clone::Clone, fmt::Debug, time::Duration};
 use bytes::Bytes;
 use libafl::{
     corpus::{Corpus, Testcase},
-    inputs::Input,
-    prelude::UsesInput,
     schedulers::Scheduler,
-    state::{HasCorpus, HasMetadata, State},
+    state::HasCorpus,
 };
 use primitive_types::U512;
 use revm_interpreter::Interpreter;
 use revm_primitives::Bytecode;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    evm::{
-        host::FuzzHost,
-        input::{ConciseEVMInput, EVMInput, EVMInputT},
-        types::{EVMAddress, EVMU256},
-        vm::EVMState,
-    },
-    generic_vm::vm_state::VMStateT,
-    input::VMInputT,
-    state::{HasCaller, HasItyState},
+use crate::evm::{
+    host::FuzzHost,
+    input::EVMInput,
+    types::{EVMAddress, EVMFuzzState, EVMU256},
+    vm::EVMState,
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Copy)]
@@ -68,22 +61,11 @@ pub enum MiddlewareOp {
     MakeSubsequentCallSuccess(Bytes),
 }
 
-pub fn add_corpus<VS, I, S, SC>(host: &mut FuzzHost<VS, I, S, SC>, state: &mut S, input: &EVMInput)
+pub fn add_corpus<SC>(host: &mut FuzzHost<SC>, state: &mut EVMFuzzState, input: &EVMInput)
 where
-    I: Input + VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
-    S: State
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCaller<EVMAddress>
-        + Clone
-        + Debug
-        + UsesInput<Input = I>
-        + 'static,
-    VS: VMStateT + Default,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    let mut tc = Testcase::new(input.as_any().downcast_ref::<I>().unwrap().clone()) as Testcase<I>;
+    let mut tc = Testcase::new(input.clone()) as Testcase<EVMInput>;
     tc.set_exec_time(Duration::from_secs(0));
     let idx = state.corpus_mut().add(tc).expect("failed to add");
     host.scheduler
@@ -91,22 +73,19 @@ where
         .expect("failed to call scheduler on_add");
 }
 
-pub trait Middleware<VS, I, S, SC>: Debug
+pub trait Middleware<SC>: Debug
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Clone + Debug,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
-    VS: VMStateT,
-    SC: Scheduler<State = S> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     #[allow(clippy::missing_safety_doc)]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<VS, I, S, SC>, state: &mut S);
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState);
 
     #[allow(clippy::missing_safety_doc)]
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         _ret: &Bytes,
     ) {
     }
@@ -115,8 +94,8 @@ where
     unsafe fn before_execute(
         &mut self,
         _interp: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         _is_step: bool,
         _data: &mut Bytes,
         _evm_state: &mut EVMState,
@@ -127,8 +106,8 @@ where
     unsafe fn on_insert(
         &mut self,
         _interp: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<VS, I, S, SC>,
-        _state: &mut S,
+        _host: &mut FuzzHost<SC>,
+        _state: &mut EVMFuzzState,
         _bytecode: &mut Bytecode,
         _address: EVMAddress,
     ) {

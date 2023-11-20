@@ -98,6 +98,17 @@ pub trait ConciseSerde {
     fn serialize_concise(&self) -> Vec<u8>;
     fn deserialize_concise(data: &[u8]) -> Self;
     fn serialize_string(&self) -> String;
+
+    fn sender(&self) -> String {
+        String::from("")
+    }
+    // Get the indentation of the input
+    fn indent(&self) -> String {
+        String::from("")
+    }
+    fn is_step(&self) -> bool {
+        false
+    }
 }
 
 /// SolutionTx for generating a test file.

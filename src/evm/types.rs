@@ -71,8 +71,7 @@ pub type EVMFuzzExecutor<OT> = FuzzExecutor<
     ConciseEVMInput,
 >;
 
-pub type EVMQueueExecutor =
-    EVMExecutor<EVMInput, EVMFuzzState, EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>>;
+pub type EVMQueueExecutor = EVMExecutor<EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_h160(v: [u8; 20]) -> H160 {

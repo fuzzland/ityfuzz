@@ -10,73 +10,51 @@ use libafl::{
     executors::ExitKind,
     feedbacks::Feedback,
     observers::ObserversTuple,
-    prelude::{HasCorpus, HasMetadata, HasRand, State, Testcase, UsesInput},
+    prelude::Testcase,
     schedulers::Scheduler,
-    state::HasClientPerfMonitor,
     Error,
 };
 use libafl_bolts::Named;
 
+use super::{input::EVMInput, types::EVMFuzzState};
 use crate::{
-    evm::{
-        input::{ConciseEVMInput, EVMInputT},
-        middlewares::sha3_bypass::Sha3TaintAnalysis,
-        types::EVMAddress,
-        vm::EVMExecutor,
-    },
+    evm::{input::ConciseEVMInput, middlewares::sha3_bypass::Sha3TaintAnalysis, vm::EVMExecutor},
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
 };
 
 /// A wrapper around a feedback that also performs sha3 taint analysis
 /// when the feedback is interesting.
 #[allow(clippy::type_complexity)]
-pub struct Sha3WrappedFeedback<I, S, VS, F, SC>
+pub struct Sha3WrappedFeedback<VS, F, SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    F: Feedback<S>,
-    SC: Scheduler<State = S> + Clone,
+    F: Feedback<EVMFuzzState>,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     pub inner_feedback: Box<F>,
     pub sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-    pub evm_executor: Rc<RefCell<EVMExecutor<I, S, VS, ConciseEVMInput, SC>>>,
+    pub evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC>>>,
     pub enabled: bool,
 }
 
-impl<I, S, VS, F, SC> Feedback<S> for Sha3WrappedFeedback<I, S, VS, F, SC>
+impl<VS, F, SC> Feedback<EVMFuzzState> for Sha3WrappedFeedback<VS, F, SC>
 where
-    S: State
-        + HasRand
-        + HasCorpus
-        + HasItyState<EVMAddress, EVMAddress, VS, ConciseEVMInput>
-        + HasMetadata
-        + HasCaller<EVMAddress>
-        + HasCurrentInputIdx
-        + HasClientPerfMonitor
-        + Default
-        + Clone
-        + Debug
-        + UsesInput<Input = I>
-        + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT + 'static,
     VS: VMStateT + 'static,
-    F: Feedback<S>,
-    SC: Scheduler<State = S> + Clone + 'static,
+    F: Feedback<EVMFuzzState>,
+    SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
 {
     fn is_interesting<EM, OT>(
         &mut self,
-        state: &mut S,
+        state: &mut EVMFuzzState,
         manager: &mut EM,
-        input: &S::Input,
+        input: &EVMInput,
         observers: &OT,
         exit_kind: &ExitKind,
     ) -> Result<bool, Error>
     where
-        EM: EventFirer<State = S>,
-        OT: ObserversTuple<S>,
+        EM: EventFirer<State = EVMFuzzState>,
+        OT: ObserversTuple<EVMFuzzState>,
     {
         // checks if the inner feedback is interesting
         if self.enabled {
@@ -110,30 +88,28 @@ where
     #[allow(unused_variables)]
     fn append_metadata<OT>(
         &mut self,
-        state: &mut S,
+        state: &mut EVMFuzzState,
         observers: &OT,
-        testcase: &mut Testcase<S::Input>,
+        testcase: &mut Testcase<EVMInput>,
     ) -> Result<(), Error>
     where
-        OT: ObserversTuple<S>,
+        OT: ObserversTuple<EVMFuzzState>,
     {
         self.inner_feedback.as_mut().append_metadata(state, observers, testcase)
     }
 }
 
-impl<I, S, VS, F, SC> Sha3WrappedFeedback<I, S, VS, F, SC>
+impl<VS, F, SC> Sha3WrappedFeedback<VS, F, SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    F: Feedback<S>,
-    SC: Scheduler<State = S> + Clone,
+    F: Feedback<EVMFuzzState>,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     #[allow(clippy::type_complexity)]
     pub(crate) fn new(
         inner_feedback: F,
         sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-        evm_executor: Rc<RefCell<EVMExecutor<I, S, VS, ConciseEVMInput, SC>>>,
+        evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC>>>,
         enabled: bool,
     ) -> Self {
         Self {
@@ -145,26 +121,22 @@ where
     }
 }
 
-impl<I, S, VS, F, SC> Named for Sha3WrappedFeedback<I, S, VS, F, SC>
+impl<VS, F, SC> Named for Sha3WrappedFeedback<VS, F, SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    F: Feedback<S>,
-    SC: Scheduler<State = S> + Clone,
+    F: Feedback<EVMFuzzState>,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn name(&self) -> &str {
         todo!()
     }
 }
 
-impl<I, S, VS, F, SC> Debug for Sha3WrappedFeedback<I, S, VS, F, SC>
+impl<VS, F, SC> Debug for Sha3WrappedFeedback<VS, F, SC>
 where
-    S: State + HasCorpus + HasCaller<EVMAddress> + Debug + Clone + HasClientPerfMonitor + 'static,
-    I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
-    F: Feedback<S>,
-    SC: Scheduler<State = S> + Clone,
+    F: Feedback<EVMFuzzState>,
+    SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         todo!()
