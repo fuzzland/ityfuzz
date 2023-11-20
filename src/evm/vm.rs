@@ -33,7 +33,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
-use crate::evm::uniswap::generate_uniswap_router_buy;
 // Some components are used when `flashloan_v2` feature is disabled
 #[allow(unused_imports)]
 use crate::{
@@ -992,43 +991,52 @@ where
             // buy (borrow because we have infinite ETH) tokens with ETH using uniswap
             EVMInputTy::Borrow => {
                 let token = input.get_contract();
+                let token_ctx = {
+                    let flashloan_mid = self.host.flashloan_middleware.as_ref().unwrap().deref().borrow();
+                    let flashloan_oracle = flashloan_mid.flashloan_oracle.deref().borrow();
+                    flashloan_oracle
+                        .known_tokens
+                        .get(&token)
+                        .unwrap_or_else(|| panic!("unknown token : {:?}", token))
+                        .clone()
+                };
 
-                let path_idx = input.get_randomness()[0] as usize;
-                // generate the call to uniswap router for buying tokens using ETH
-                let call_info = generate_uniswap_router_buy(
-                    get_token_ctx!(self.host.flashloan_middleware.as_ref().unwrap().deref().borrow(), token),
-                    path_idx,
+                let calldata = token_ctx.borrow().buy(
+                    state,
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
+                    input.get_randomness().as_slice(),
                 );
-                match call_info {
-                    Some((abi, value, target)) => {
-                        let bys = abi.get_bytes();
-                        let mut res = self.fast_call(
-                            target,
-                            Bytes::from(bys),
-                            input.get_state(),
-                            state,
-                            value,
-                            input.get_caller(),
-                        );
-                        if let Some(ref m) = self.host.flashloan_middleware {
-                            m.deref()
-                                .borrow_mut()
-                                .analyze_call(input, &mut res.new_state.flashloan_data)
-                        }
-                        unsafe {
-                            ExecutionResult {
-                                output: res.output.to_vec(),
-                                reverted: !is_call_success!(res.ret),
-                                new_state: StagedVMState::new_with_state(
-                                    VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
-                                ),
-                                additional_info: None,
-                            }
+                if !calldata.is_empty() {
+                    assert_eq!(calldata.len(), 1);
+                    let (target, abi, value) = &calldata[0];
+                    let bys = abi.get_bytes();
+                    let mut res = self.fast_call(
+                        *target,
+                        Bytes::from(bys),
+                        input.get_state(),
+                        state,
+                        *value,
+                        input.get_caller(),
+                    );
+                    if let Some(ref m) = self.host.flashloan_middleware {
+                        m.deref()
+                            .borrow_mut()
+                            .analyze_call(input, &mut res.new_state.flashloan_data)
+                    }
+                    unsafe {
+                        ExecutionResult {
+                            output: res.output.to_vec(),
+                            reverted: !is_call_success!(res.ret),
+                            new_state: StagedVMState::new_with_state(
+                                VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
+                            ),
+                            additional_info: None,
                         }
                     }
-                    None => ExecutionResult {
+                    
+                } else {
+                    ExecutionResult {
                         // we don't have enough liquidity to buy the token
                         output: vec![],
                         reverted: false,
@@ -1038,8 +1046,47 @@ where
                                 .clone()
                         }),
                         additional_info: None,
-                    },
+                    }
                 }
+                // match call_info {
+                //     Some((abi, value, target)) => {
+                //         let bys = abi.get_bytes();
+                //         let mut res = self.fast_call(
+                //             target,
+                //             Bytes::from(bys),
+                //             input.get_state(),
+                //             state,
+                //             value,
+                //             input.get_caller(),
+                //         );
+                //         if let Some(ref m) = self.host.flashloan_middleware {
+                //             m.deref()
+                //                 .borrow_mut()
+                //                 .analyze_call(input, &mut res.new_state.flashloan_data)
+                //         }
+                //         unsafe {
+                //             ExecutionResult {
+                //                 output: res.output.to_vec(),
+                //                 reverted: !is_call_success!(res.ret),
+                //                 new_state: StagedVMState::new_with_state(
+                //                     VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
+                //                 ),
+                //                 additional_info: None,
+                //             }
+                //         }
+                //     }
+                //     None => ExecutionResult {
+                //         // we don't have enough liquidity to buy the token
+                //         output: vec![],
+                //         reverted: false,
+                //         new_state: StagedVMState::new_with_state(unsafe {
+                //             VMStateT::as_any(input.get_state())
+                //                 .downcast_ref_unchecked::<VS>()
+                //                 .clone()
+                //         }),
+                //         additional_info: None,
+                //     },
+                // }
             }
             EVMInputTy::Liquidate => {
                 unreachable!("liquidate should be handled by middleware");

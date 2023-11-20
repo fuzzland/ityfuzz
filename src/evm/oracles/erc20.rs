@@ -11,8 +11,7 @@ use crate::{
         oracles::ERC20_BUG_IDX,
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        uniswap::{generate_uniswap_router_sell, TokenContext},
-        vm::EVMState,
+        vm::EVMState, uniswap::TokenContextT,
     },
     oracle::Oracle,
     state::HasExecutionResult,
@@ -20,7 +19,7 @@ use crate::{
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
-    pub known_tokens: HashMap<EVMAddress, TokenContext>,
+    pub known_tokens: HashMap<EVMAddress, Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>>,
     pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
     pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
@@ -35,7 +34,7 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    pub fn register_token(&mut self, token: EVMAddress, token_ctx: TokenContext) {
+    pub fn register_token(&mut self, token: EVMAddress, token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>) {
         self.known_tokens.insert(token, token_ctx);
     }
 
@@ -79,27 +78,17 @@ impl
             let mut liquidation_txs = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
-                // let txs = _token_info.borrow().sell(
-                //     ctx.fuzz_state,
-                //     _amount,
-                //     ctx.fuzz_state.callers_pool[0],
-                //     ctx.input.get_randomness().as_slice(),
-                // );
+                let txs = _token_info.borrow().sell(
+                    ctx.fuzz_state,
+                    _amount,
+                    ctx.fuzz_state.callers_pool[0],
+                    ctx.input.get_randomness().as_slice(),
+                );
 
-                let txs = generate_uniswap_router_sell(_token_info, _path_idx, _amount, ctx.fuzz_state.callers_pool[0]);
-                if txs.is_none() {
-                    continue;
-                }
-
-                // liquidation_txs.extend(
-                //     txs.iter()
-                //         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
-                // );
 
                 liquidation_txs.extend(
-                    txs.unwrap()
-                        .iter()
-                        .map(|(abi, _, addr)| (caller, *addr, Bytes::from(abi.get_bytes()))),
+                    txs.iter()
+                        .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
             }
 
