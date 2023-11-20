@@ -1047,47 +1047,6 @@ where
                         additional_info: None,
                     }
                 }
-                // match call_info {
-                //     Some((abi, value, target)) => {
-                //         let bys = abi.get_bytes();
-                //         let mut res = self.fast_call(
-                //             target,
-                //             Bytes::from(bys),
-                //             input.get_state(),
-                //             state,
-                //             value,
-                //             input.get_caller(),
-                //         );
-                //         if let Some(ref m) = self.host.flashloan_middleware {
-                //             m.deref()
-                //                 .borrow_mut()
-                //                 .analyze_call(input, &mut
-                // res.new_state.flashloan_data)         }
-                //         unsafe {
-                //             ExecutionResult {
-                //                 output: res.output.to_vec(),
-                //                 reverted: !is_call_success!(res.ret),
-                //                 new_state: StagedVMState::new_with_state(
-                //                     
-                // VMStateT::as_any(&res.new_state).
-                // downcast_ref_unchecked::<VS>().clone(),
-                //                 ),
-                //                 additional_info: None,
-                //             }
-                //         }
-                //     }
-                //     None => ExecutionResult {
-                //         // we don't have enough liquidity to buy the token
-                //         output: vec![],
-                //         reverted: false,
-                //         new_state: StagedVMState::new_with_state(unsafe {
-                //             VMStateT::as_any(input.get_state())
-                //                 .downcast_ref_unchecked::<VS>()
-                //                 .clone()
-                //         }),
-                //         additional_info: None,
-                //     },
-                // }
             }
             EVMInputTy::Liquidate => {
                 unreachable!("liquidate should be handled by middleware");
