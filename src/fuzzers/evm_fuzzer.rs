@@ -13,9 +13,11 @@ use libafl_bolts::tuples::tuple_list;
 use revm_primitives::Bytecode;
 use tracing::{debug, error, info};
 
+#[cfg(feature = "deployer_is_attacker")]
+use crate::state::HasCaller;
 use crate::{
     evm::{
-        abi::ABIAddressToInstanceMap,
+        abi::{ABIAddressToInstanceMap, BoxedABI},
         blaz::builder::ArtifactInfoMetadata,
         concolic::{
             concolic_host::CONCOLIC_TIMEOUT,
@@ -66,6 +68,7 @@ use crate::{
             state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
+        presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         srcmap::parser::BASE_PATH,
         types::{
@@ -84,7 +87,7 @@ use crate::{
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
     oracle::BugMetadata,
     scheduler::SortedDroppingScheduler,
-    state::{FuzzState, HasExecutionResult},
+    state::{FuzzState, HasExecutionResult, HasPresets},
 };
 
 #[allow(clippy::type_complexity)]

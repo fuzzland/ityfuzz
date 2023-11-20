@@ -79,23 +79,10 @@ impl
             let mut liquidation_txs = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
-                // let txs = _token_info.borrow().sell(
-                //     ctx.fuzz_state,
-                //     _amount,
-                //     ctx.fuzz_state.callers_pool[0],
-                //     ctx.input.get_randomness().as_slice(),
-                // );
-
                 let txs = generate_uniswap_router_sell(_token_info, _path_idx, _amount, ctx.fuzz_state.callers_pool[0]);
                 if txs.is_none() {
                     continue;
                 }
-
-                // liquidation_txs.extend(
-                //     txs.iter()
-                //         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
-                // );
-
                 liquidation_txs.extend(
                     txs.unwrap()
                         .iter()

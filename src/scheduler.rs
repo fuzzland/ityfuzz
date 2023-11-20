@@ -298,11 +298,12 @@ where
         // Debugging prints
         #[cfg(feature = "print_infant_corpus")]
         {
+            use rand::random;
             let corpus_size = state.corpus().count();
             let data = state.metadata_map().get::<VoteData>().unwrap();
             use crate::r#const::DEBUG_PRINT_PERCENT;
             if random::<usize>() % DEBUG_PRINT_PERCENT == 0 {
-                info!(
+                tracing::info!(
                     "======================= corpus size: {} =======================",
                     corpus_size
                 );
@@ -310,10 +311,10 @@ where
                     let (votes, visits) = data.votes_and_visits.get(idx).unwrap();
                     let inp = state.corpus().get((*idx).into()).unwrap().clone();
                     if let Some(x) = inp.into_inner().input() {
-                        info!("idx: {}, votes: {}, visits: {}: {:?}", idx, votes, visits, x);
+                        tracing::info!("idx: {}, votes: {}, visits: {}: {:?}", idx, votes, visits, x);
                     }
                 }
-                info!("======================= corpus  =======================");
+                tracing::info!("======================= corpus  =======================");
             }
         }
 
