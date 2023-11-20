@@ -713,7 +713,11 @@ impl OnChainConfig {
         let info: Info = self.find_path_subgraph(network, &token);
 
         let basic_info = info.basic_info;
-        let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
+        if basic_info.weth.is_empty() {
+            warn!("failed to find weth address");
+            return TokenContext::default();
+        }
+        let weth = EVMAddress::from_str(&basic_info.weth).unwrap();
         let is_weth = basic_info.is_weth;
 
         let routes = info.routes;
@@ -854,8 +858,11 @@ impl OnChainConfig {
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
-            "mumbai" => panic!("Not supported"),
-            _ => panic!("Unknown network"),
+            // "mumbai" => panic!("Not supported"),
+            _ => {
+                warn!("Unknown network");
+                "".to_string()
+            }
         }
     }
 
@@ -900,7 +907,10 @@ impl OnChainConfig {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
-            _ => panic!("[Flashloan] Network is not supported"),
+            _ => {
+                warn!("[Flashloan] Network is not supported");
+                HashMap::new()
+            }
         }
     }
 
