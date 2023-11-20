@@ -11,9 +11,8 @@ use libafl::{
     Error,
 };
 use libafl_bolts::{impl_serdeany, prelude::Rand};
-use rand::random;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::state::HasParent;
 

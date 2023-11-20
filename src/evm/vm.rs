@@ -15,7 +15,7 @@ use std::{
 use bytes::Bytes;
 /// EVM executor implementation
 use itertools::Itertools;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{
     BytecodeLocked,
     CallContext,
@@ -33,17 +33,15 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
-use crate::evm::uniswap::generate_uniswap_router_buy;
-// Some components are used when `flashloan_v2` feature is disabled
-#[allow(unused_imports)]
 use crate::{
     evm::{
         bytecode_analyzer,
         host::{FuzzHost, CMP_MAP, COVERAGE_NOT_CHANGED, JMP_MAP, READ_MAP, STATE_CHANGE, WRITE_MAP},
-        input::{ConciseEVMInput, EVMInputT, EVMInputTy},
+        input::{EVMInputT, EVMInputTy},
         middlewares::middleware::Middleware,
         onchain::flashloan::FlashloanData,
-        types::{float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
+        types::{EVMAddress, EVMU256},
+        uniswap::generate_uniswap_router_buy,
         vm::Constraint::{NoLiquidation, Value},
     },
     generic_vm::{
@@ -52,7 +50,6 @@ use crate::{
     },
     input::{ConciseSerde, VMInputT},
     invoke_middlewares,
-    state::{HasCaller, HasCurrentInputIdx, HasItyState},
     state_input::StagedVMState,
 };
 
@@ -865,13 +862,14 @@ where
         self.host.remove_middlewares(middleware);
     }
 
+    #[allow(dead_code)]
     fn fast_call_inner(
         &mut self,
         data: &[(EVMAddress, EVMAddress, Bytes, EVMU256)],
         vm_state: &EVMState,
         state: &mut EVMFuzzState,
     ) -> (Vec<(Vec<u8>, bool)>, EVMState) {
-        unsafe {
+        {
             self.host.evmstate = vm_state.clone();
         }
         init_host!(self.host);
@@ -891,13 +889,14 @@ where
         (res, self.host.evmstate.clone())
     }
 
+    #[allow(dead_code)]
     fn fast_call_inner_no_value(
         &mut self,
         data: &[(EVMAddress, EVMAddress, Bytes)],
         vm_state: &EVMState,
         state: &mut EVMFuzzState,
     ) -> (Vec<(Vec<u8>, bool)>, EVMState) {
-        unsafe {
+        {
             self.host.evmstate = vm_state.clone();
         }
         init_host!(self.host);

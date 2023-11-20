@@ -15,7 +15,7 @@ use tracing::{debug, error, info};
 
 use crate::{
     evm::{
-        abi::{ABIAddressToInstanceMap, BoxedABI},
+        abi::ABIAddressToInstanceMap,
         blaz::builder::ArtifactInfoMetadata,
         concolic::{
             concolic_host::CONCOLIC_TIMEOUT,
@@ -66,7 +66,6 @@ use crate::{
             state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
-        presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         srcmap::parser::BASE_PATH,
         types::{
@@ -85,7 +84,7 @@ use crate::{
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
     oracle::BugMetadata,
     scheduler::SortedDroppingScheduler,
-    state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
+    state::{FuzzState, HasExecutionResult},
 };
 
 #[allow(clippy::type_complexity)]

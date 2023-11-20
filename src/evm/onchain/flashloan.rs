@@ -21,33 +21,24 @@ use libafl::{
     schedulers::Scheduler,
     state::HasMetadata,
 };
-// impl_serdeany is used when `flashloan_v2` feature is not enabled
-#[allow(unused_imports)]
-use libafl_bolts::impl_serdeany;
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::evm::{types::EVMFuzzState, uniswap::TokenContext};
-// Some components are used when `flashloan_v2` feature is not enabled
-#[allow(unused_imports)]
 use crate::{
     evm::{
         contract_utils::ABIConfig,
         host::FuzzHost,
         input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
-        middlewares::middleware::{CallMiddlewareReturn::ReturnSuccess, Middleware, MiddlewareOp, MiddlewareType},
+        middlewares::middleware::{Middleware, MiddlewareType},
         mutator::AccessPattern,
-        onchain::{
-            endpoints::{OnChainConfig, PriceOracle},
-            OnChain,
-        },
+        onchain::endpoints::{OnChainConfig, PriceOracle},
         oracles::erc20::IERC20OracleFlashloan,
-        types::{as_u64, convert_u256_to_h160, float_scale_to_u512, EVMAddress, EVMU256, EVMU512},
+        types::{convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256, EVMU512},
+        uniswap::TokenContext,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    oracle::Oracle,
     state::{HasCaller, HasItyState},
 };
 

@@ -215,18 +215,15 @@ where
         }
 
         // use exploit template
-        if state.has_preset() && state.rand_mut().below(100) < 20 {
-            // if flashloan_v2, we don't mutate if it's a borrow
-            if input.get_input_type() != Borrow {
-                match state.get_next_call() {
-                    Some((addr, abi)) => {
-                        input.set_contract_and_abi(addr, Some(abi));
-                        input.mutate(state);
-                        return Ok(MutationResult::Mutated);
-                    }
-                    None => {
-                        // debug!("cannot find next call");
-                    }
+        if state.has_preset() && state.rand_mut().below(100) < 20 && input.get_input_type() != Borrow {
+            match state.get_next_call() {
+                Some((addr, abi)) => {
+                    input.set_contract_and_abi(addr, Some(abi));
+                    input.mutate(state);
+                    return Ok(MutationResult::Mutated);
+                }
+                None => {
+                    // debug!("cannot find next call");
                 }
             }
         }
