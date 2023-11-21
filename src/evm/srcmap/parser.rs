@@ -144,27 +144,6 @@ pub fn read_source_code(
     }
 }
 
-pub fn pretty_print_source_map(pc: usize, addr: &EVMAddress, data: &ProjectSourceMapTy) -> SourceMapAvailability {
-    match data.get(addr) {
-        Some(Some(contract_data)) => pretty_print_source_map_single(pc, contract_data, &vec![]),
-        _ => SourceMapAvailability::Unavailable,
-    }
-}
-
-pub fn pretty_print_source_map_single(
-    pc: usize,
-    data: &HashMap<usize, SourceMapLocation>,
-    file_blob: &Vec<(String, String)>,
-) -> SourceMapAvailability {
-    match data.get(&pc) {
-        Some(info) => match info.file {
-            Some(ref _file) => SourceMapAvailability::Available(read_source_code(info, file_blob, true)),
-            None => SourceMapAvailability::Unknown,
-        },
-        None => SourceMapAvailability::Unknown,
-    }
-}
-
 pub fn uncompress_srcmap_single(
     map: String,
     files: &Vec<String>,
