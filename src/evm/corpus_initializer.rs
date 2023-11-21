@@ -264,9 +264,7 @@ where
             }
 
             if let Some(build_job_result) = &contract.build_artifact {
-                build_job_result.save_source_map(
-                    &contract.deployed_address
-                );
+                build_job_result.save_source_map(&contract.deployed_address);
                 continue;
             }
 

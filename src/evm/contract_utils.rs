@@ -299,7 +299,7 @@ impl ContractLoader {
             build_artifact: None,
             files: vec![],                 // TODO publici: fill this
             source_map_replacements: None, // TODO publicqi: fill this
-            raw_source_map: None,        // TODO publicqi: fill this
+            raw_source_map: None,          // TODO publicqi: fill this
         };
         let mut abi_result = ABIInfo {
             source: prefix.to_string(),
@@ -518,7 +518,7 @@ impl ContractLoader {
                 build_artifact,
                 files: vec![],                 // TODO publicqi: fill this
                 source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,        // TODO publicqi: fill this
+                raw_source_map: None,          // TODO publicqi: fill this
             });
             abis.push(ABIInfo {
                 source: addr.to_string(),
@@ -577,7 +577,7 @@ impl ContractLoader {
                 )),
                 files: vec![],                 // TODO publicqi: fill this
                 source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,        // TODO publicqi: fill this
+                raw_source_map: None,          // TODO publicqi: fill this
             });
         }
 
@@ -680,7 +680,7 @@ impl ContractLoader {
                 )),
                 files: vec![],                 // TODO publicqi: fill this
                 source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,        // TODO publicqi: fill this
+                raw_source_map: None,          // TODO publicqi: fill this
             });
         }
         Self {
@@ -753,7 +753,7 @@ impl ContractLoader {
                 )),
                 files: vec![],                 // TODO publicqi: fill this
                 source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,        // TODO publicqi: fill this
+                raw_source_map: None,          // TODO publicqi: fill this
             });
         }
         Self {
