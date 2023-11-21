@@ -10,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
@@ -27,11 +27,10 @@ use crate::{
     evm::{
         abi::BoxedABI,
         concolic::expr::{simplify, ConcolicOp, Expr},
-        corpus_initializer::SourceMapMap,
         host::FuzzHost,
         input::EVMInput,
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
-        srcmap::{parser::SourceMapLocation, SOURCE_MAP_PROVIDER},
+        srcmap::SOURCE_MAP_PROVIDER,
         types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},
     },
     input::VMInputT,
@@ -704,7 +703,7 @@ impl<SC> Middleware<SC> for ConcolicHost
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.data()[interp.stack.len() - 1 - $idx]

@@ -40,7 +40,6 @@ use crate::{
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
-        srcmap::SOURCE_MAP_PROVIDER,
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::IS_FAST_CALL,
     },
