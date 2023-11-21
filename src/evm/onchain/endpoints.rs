@@ -23,7 +23,7 @@ use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
         types::{EVMAddress, EVMU256},
-        uniswap::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider},
+        uniswap::{get_uniswap_info, PairContext, PathContext, UniswapProvider, UniswapTokenContext},
     },
 };
 
@@ -248,7 +248,7 @@ pub struct OnChainConfig {
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
-    uniswap_path_cache: HashMap<EVMAddress, TokenContext>,
+    uniswap_path_cache: HashMap<EVMAddress, UniswapTokenContext>,
     rpc_cache: FileSystemCache,
 }
 
@@ -708,12 +708,16 @@ impl OnChainConfig {
         slot_value
     }
 
-    pub fn fetch_uniswap_path(&mut self, network: &str, token_address: EVMAddress) -> TokenContext {
+    pub fn fetch_uniswap_path(&mut self, network: &str, token_address: EVMAddress) -> UniswapTokenContext {
         let token = format!("{:?}", token_address);
         let info: Info = self.find_path_subgraph(network, &token);
 
         let basic_info = info.basic_info;
-        let weth = EVMAddress::from_str(&basic_info.weth).expect("failed to parse weth");
+        if basic_info.weth.is_empty() {
+            warn!("failed to find weth address");
+            return UniswapTokenContext::default();
+        }
+        let weth = EVMAddress::from_str(&basic_info.weth).unwrap();
         let is_weth = basic_info.is_weth;
 
         let routes = info.routes;
@@ -777,7 +781,7 @@ impl OnChainConfig {
             })
             .collect();
 
-        TokenContext {
+        UniswapTokenContext {
             swaps: paths_parsed,
             is_weth,
             weth_address: weth,
@@ -785,7 +789,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_uniswap_path_cached(&mut self, token: EVMAddress) -> &TokenContext {
+    pub fn fetch_uniswap_path_cached(&mut self, token: EVMAddress) -> &UniswapTokenContext {
         if self.uniswap_path_cache.contains_key(&token) {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
@@ -854,8 +858,11 @@ impl OnChainConfig {
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
-            "mumbai" => panic!("Not supported"),
-            _ => panic!("Unknown network"),
+            // "mumbai" => panic!("Not supported"),
+            _ => {
+                warn!("Unknown network");
+                "".to_string()
+            }
         }
     }
 
@@ -900,7 +907,10 @@ impl OnChainConfig {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
-            _ => panic!("[Flashloan] Network is not supported"),
+            _ => {
+                warn!("[Flashloan] Network is not supported");
+                HashMap::new()
+            }
         }
     }
 
