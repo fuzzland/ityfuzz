@@ -81,6 +81,9 @@ pub struct ContractInfo {
     pub deployed_address: EVMAddress,
     pub source_map: Option<HashMap<usize, SourceMapLocation>>,
     pub build_artifact: Option<BuildJobResult>,
+    pub files: Vec<(String, String)>, // (filename, content)
+    pub source_map_replacements: Option<Vec<(String, String)>>,
+    pub raw_source_map: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -294,6 +297,9 @@ impl ContractLoader {
                     .clone()
             }),
             build_artifact: None,
+            files: vec![],                 // TODO publici: fill this
+            source_map_replacements: None, // TODO publicqi: fill this
+            raw_source_map: None,        // TODO publicqi: fill this
         };
         let mut abi_result = ABIInfo {
             source: prefix.to_string(),
@@ -510,6 +516,9 @@ impl ContractLoader {
                 deployed_address: addr,
                 source_map: None,
                 build_artifact,
+                files: vec![],                 // TODO publicqi: fill this
+                source_map_replacements: None, // TODO publicqi: fill this
+                raw_source_map: None,        // TODO publicqi: fill this
             });
             abis.push(ABIInfo {
                 source: addr.to_string(),
@@ -566,6 +575,9 @@ impl ContractLoader {
                     // TODO: offchain ast
                     Vec::new(),
                 )),
+                files: vec![],                 // TODO publicqi: fill this
+                source_map_replacements: None, // TODO publicqi: fill this
+                raw_source_map: None,        // TODO publicqi: fill this
             });
         }
 
@@ -666,6 +678,9 @@ impl ContractLoader {
                     // TODO: offchain ast
                     Vec::new(),
                 )),
+                files: vec![],                 // TODO publicqi: fill this
+                source_map_replacements: None, // TODO publicqi: fill this
+                raw_source_map: None,        // TODO publicqi: fill this
             });
         }
         Self {
@@ -736,6 +751,9 @@ impl ContractLoader {
                     // TODO: offchain ast
                     Vec::new(),
                 )),
+                files: vec![],                 // TODO publicqi: fill this
+                source_map_replacements: None, // TODO publicqi: fill this
+                raw_source_map: None,        // TODO publicqi: fill this
             });
         }
         Self {

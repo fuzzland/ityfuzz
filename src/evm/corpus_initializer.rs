@@ -23,7 +23,10 @@ use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
-use super::{scheduler::ABIScheduler, srcmap::parser::SourceMapLocation};
+use super::{
+    scheduler::ABIScheduler,
+    srcmap::{parser::SourceMapLocation, SOURCE_MAP_PROVIDER},
+};
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
 use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
@@ -206,6 +209,7 @@ where
         self.setup_contract_callers();
         self.init_cheatcode_contract();
         self.initialize_contract(loader);
+        self.initialize_source_map(loader);
         self.initialize_corpus(loader)
     }
 
@@ -245,6 +249,35 @@ where
             self.state.add_address(&deployed_address);
         }
         info!("Deployed all contracts\n");
+    }
+
+    // New interface.
+    // TODO publicqi: Move this part in initialize_contract and remove old srcmap.
+    fn initialize_source_map(&self, loader: &ContractLoader) {
+        for contract in &loader.contracts {
+            if SOURCE_MAP_PROVIDER
+                .lock()
+                .unwrap()
+                .has_source_map(&contract.deployed_address)
+            {
+                continue;
+            }
+
+            if let Some(build_job_result) = &contract.build_artifact {
+                build_job_result.save_source_map(
+                    &contract.deployed_address
+                );
+                continue;
+            }
+
+            SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
+                &contract.deployed_address,
+                contract.code.clone(),
+                contract.raw_source_map.clone().expect("no source map"),
+                &contract.files,
+                contract.source_map_replacements.as_ref(),
+            );
+        }
     }
 
     pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {

@@ -334,11 +334,6 @@ pub fn evm_fuzzer(
             let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
             remote_addr_sourcemaps.insert(*addr, Some(sourcemap));
         }
-
-        // New source map insertion
-        {
-            build_job_result.save_source_map(addr);
-        }
     }
 
     // check if we use the remote or local
