@@ -40,8 +40,9 @@ use crate::{
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
+        srcmap::SOURCE_MAP_PROVIDER,
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
-        vm::IS_FAST_CALL, srcmap::SOURCE_MAP_PROVIDER,
+        vm::IS_FAST_CALL,
     },
     handle_contract_insertion,
     state::HasCaller,
@@ -374,9 +375,7 @@ impl OnChain {
 
                     // New source map interface
                     {
-                        job.save_source_map(
-                            &address_h160,
-                        );
+                        job.save_source_map(&address_h160);
                     }
                 }
             }

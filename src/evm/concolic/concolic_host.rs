@@ -31,7 +31,7 @@ use crate::{
         host::FuzzHost,
         input::EVMInput,
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
-        srcmap::parser::SourceMapLocation,
+        srcmap::{parser::SourceMapLocation, SOURCE_MAP_PROVIDER},
         types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},
     },
     input::VMInputT,
@@ -1177,36 +1177,11 @@ where
                     need_solve = false;
                 } else {
                     let pc = interp.program_counter();
-                    let address = interp.contract.address;
-                    // debug!("[concolic] address: {:?} pc: {:x}", address, pc);
-                    // debug!("input: {:?}", self.input_bytes);
+                    let address = &interp.contract.address;
 
-                    // get the map from state
-                    if let Some(Some(srcmap)) = state.metadata_map().get::<SourceMapMap>().unwrap().get(&address) {
-                        // debug!("source line: {:?}", srcmap.get(&pc).unwrap());
-                        let source_map_loc = if srcmap.get(&pc).is_some() {
-                            srcmap.get(&pc).unwrap()
-                        } else {
-                            &SourceMapLocation {
-                                file: None,
-                                file_idx: None,
-                                offset: 0,
-                                length: 0,
-                                pc_has_source_match: false,
-                            }
-                        };
-                        if let Some(_file) = &source_map_loc.file {
-                            if source_map_loc.pc_has_source_match {
-                                need_solve = false;
-                            }
-                        } else {
-                            // FIXME: This might not hold true for all cases
-                            debug!("[concolic] skip solve for None file");
-                            need_solve = false;
-                        }
-                    } else {
-                        // Is this possible?
-                        // panic!("source line: None");
+                    if !SOURCE_MAP_PROVIDER.lock().unwrap().get_pc_has_match(address, pc) {
+                        debug!("[concolic] skip solving due to no source map match");
+                        need_solve = false;
                     }
                 }
 
