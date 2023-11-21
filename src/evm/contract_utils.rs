@@ -675,7 +675,7 @@ impl ContractLoader {
         }
     }
 
-    pub fn from_setup(offchain_artifacts: &Vec<OffChainArtifact>, setup_file: String) -> Self {
+    pub fn from_setup(offchain_artifacts: &Vec<OffChainArtifact>, setup_file: String, work_dir: String) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
 
@@ -698,7 +698,7 @@ impl ContractLoader {
                 all_slugs.push(slug.clone());
                 if slug == setup_file {
                     found = true;
-                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone()));
+                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone(), work_dir));
 
                     break 'artifacts;
                 }
@@ -747,13 +747,14 @@ impl ContractLoader {
 
     fn get_vm_with_cheatcode(
         deployer: EVMAddress,
+        work_dir: String,
     ) -> (
         EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
         EVMFuzzState,
     ) {
         let mut state: EVMFuzzState = FuzzState::new(0);
         let mut executor = EVMExecutor::new(
-            FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
+            FuzzHost::new(StdScheduler::new(), work_dir),
             deployer, // todo: change to foundry default address
         );
         executor.host.set_code(
@@ -768,11 +769,11 @@ impl ContractLoader {
     /// Deploy the contract and invoke "setUp()", returns the code, state, and
     /// environment after deployment. Foundry VM Cheatcodes and Hardhat
     /// consoles are enabled here.
-    fn call_setup(deploy_code: Bytes) -> SetupData {
+    fn call_setup(deploy_code: Bytes, work_dir: String) -> SetupData {
         let deployer = EVMAddress::from_str(FOUNDRY_DEPLOYER).unwrap();
         let deployed_addr = EVMAddress::from_str(FOUNDRY_SETUP_ADDR).unwrap();
 
-        let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer);
+        let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer, work_dir);
 
         // deploy contract
 
