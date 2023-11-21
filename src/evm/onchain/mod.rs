@@ -41,7 +41,7 @@ use crate::{
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
-        vm::IS_FAST_CALL,
+        vm::IS_FAST_CALL, srcmap::SOURCE_MAP_PROVIDER,
     },
     handle_contract_insertion,
     state::HasCaller,
@@ -360,14 +360,24 @@ impl OnChain {
                         .expect("artifact info metadata")
                         .add(address_h160, job.clone());
 
-                    let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
+                    // Old source map. Will be deleted.
+                    {
+                        let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
 
-                    debug!("start save_builder_addr_source_code");
-                    save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
-                    debug!("end save_builder_addr_source_code");
+                        debug!("start save_builder_addr_source_code");
+                        save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
+                        debug!("end save_builder_addr_source_code");
 
-                    let global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
-                    modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
+                        let global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
+                        modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
+                    }
+
+                    // New source map interface
+                    {
+                        job.save_source_map(
+                            &address_h160,
+                        );
+                    }
                 }
             }
 
