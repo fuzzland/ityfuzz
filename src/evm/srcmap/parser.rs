@@ -8,8 +8,6 @@ use std::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::evm::types::{EVMAddress, ProjectSourceMapTy};
-
 pub static mut BASE_PATH: String = String::new();
 
 #[derive(Debug, Clone, Serialize, Hash, PartialEq, Eq)]

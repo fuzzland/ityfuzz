@@ -9,7 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -20,14 +20,10 @@ use serde_json;
 use tracing::info;
 
 use crate::evm::{
-    blaz::builder::ArtifactInfoMetadata,
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::{
-        parser::{SourceMapAvailability, SourceMapWithCode},
-        SOURCE_MAP_PROVIDER,
-    },
+    srcmap::SOURCE_MAP_PROVIDER,
     types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
     vm::IN_DEPLOY,
 };
@@ -348,7 +344,7 @@ where
         &mut self,
         _: Option<&mut Interpreter>,
         _host: &mut FuzzHost<SC>,
-        state: &mut EVMFuzzState,
+        _state: &mut EVMFuzzState,
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {
