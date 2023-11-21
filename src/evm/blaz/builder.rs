@@ -320,7 +320,7 @@ impl BuildJobResult {
             return;
         }
 
-        SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions(
+        SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
             address,
             self.bytecodes.clone().to_vec(),
             self.source_maps.clone(),

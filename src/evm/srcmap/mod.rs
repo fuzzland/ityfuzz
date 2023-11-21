@@ -1,9 +1,6 @@
 pub mod parser;
 
-use std::{
-    collections::HashMap,
-    sync::Mutex,
-};
+use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -43,7 +40,7 @@ pub struct SourceMapProvider {
 }
 
 impl SourceMapProvider {
-    pub fn decode_instructions(
+    pub fn decode_instructions_for_address(
         &mut self,
         address: &EVMAddress,
         bytecode: Vec<u8>,
