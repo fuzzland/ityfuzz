@@ -133,6 +133,10 @@ impl
             let file_blob = &build_job_result.unwrap().sources;
 
             let binding = src_map.unwrap().clone().unwrap();
+            if binding.get(&pc).is_none() {
+                debug!("new FP: binding.get(&pc).is_none()");
+                continue;
+            }
             let loc = binding.get(&pc).unwrap();
             if loc.file.is_none() {
                 // case 3, fp
