@@ -42,13 +42,12 @@ def parse_res(file):
             if "run time: " in i:
                 _ts = i.split("run time: ")[1].split(",")[0]
                 last_ts = _ts
-            if "more than owed" in i:
+            if "Anyone can earn" in i:
                 ts = last_ts
                 violation = "Fund Loss"
-            if "Reserves changed from" in i:
+            if "reserves has changed from " in i:
                 ts = last_ts
                 violation = "Price Manipulation"
-
             if "Arbitrary call " in i:
                 ts = last_ts
                 violation = "Arbitrary Call"
