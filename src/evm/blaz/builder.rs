@@ -19,14 +19,7 @@ use tracing::{debug, error};
 
 use crate::{
     cache::{Cache, FileSystemCache},
-    evm::{
-        blaz::get_client,
-        srcmap::{
-            parser::{decode_instructions_with_replacement, SourceMapLocation},
-            SOURCE_MAP_PROVIDER,
-        },
-        types::EVMAddress,
-    },
+    evm::{blaz::get_client, srcmap::SOURCE_MAP_PROVIDER, types::EVMAddress},
 };
 
 #[derive(Clone)]

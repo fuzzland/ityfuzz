@@ -42,7 +42,6 @@ use crate::{
             call_printer::CallPrinter,
             cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
-            math_calculate::MathCalculateMiddleware,
             middleware::Middleware,
             reentrancy::ReentrancyTracer,
             sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis},
@@ -54,7 +53,6 @@ use crate::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
             invariant::InvariantOracle,
-            math_calculate::MathCalculateOracle,
             reentrancy::ReentrancyOracle,
             selfdestruct::SelfdestructOracle,
             state_comp::StateCompOracle,
@@ -193,11 +191,6 @@ pub fn evm_fuzzer(
     if config.reentrancy_oracle {
         debug!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
-    }
-
-    if config.math_calculate_oracle {
-        let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(config.onchain)));
-        fuzz_host.add_middlewares(integer_overflow_middleware);
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -438,13 +431,6 @@ pub fn evm_fuzzer(
 
     if config.reentrancy_oracle {
         oracles.push(Rc::new(RefCell::new(ReentrancyOracle::new(
-            artifacts.address_to_name.clone(),
-        ))));
-    }
-
-    if config.math_calculate_oracle {
-        oracles.push(Rc::new(RefCell::new(MathCalculateOracle::new(
-            HashMap::new(), // TODO: upgrade this
             artifacts.address_to_name.clone(),
         ))));
     }
