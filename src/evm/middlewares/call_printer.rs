@@ -2,14 +2,13 @@ use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
 
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing::debug;
 
 use crate::evm::{
-    blaz::builder::ArtifactInfoMetadata,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
     srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
@@ -122,15 +121,10 @@ impl<SC> Middleware<SC> for CallPrinter
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         if self.entry {
             self.entry = false;
             let code_address = interp.contract.address;
-            let caller_code = host
-                .code
-                .get(&interp.contract.code_address)
-                .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or_default();
             self.results.data.push((
                 self.current_layer,
                 SingleCall {
@@ -235,11 +229,6 @@ where
             let target = convert_u256_to_h160(address);
 
             let caller_code_address = interp.contract.code_address;
-            let caller_code = host
-                .code
-                .get(&interp.contract.code_address)
-                .map(|code| Vec::from(code.bytecode()))
-                .unwrap_or_default();
 
             self.offsets = 0;
             self.results.data.push((

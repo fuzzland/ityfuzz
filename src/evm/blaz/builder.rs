@@ -1,12 +1,10 @@
 use std::{
-    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
     fs,
     fs::OpenOptions,
     hash::{Hash, Hasher},
     io::Write,
     path::Path,
-    rc::Rc,
     str::FromStr,
     thread::sleep,
     time::Duration,
@@ -27,9 +25,8 @@ use crate::{
             parser::{decode_instructions_with_replacement, SourceMapLocation},
             SOURCE_MAP_PROVIDER,
         },
-        types::{EVMAddress, EVMQueueExecutor, ProjectSourceMapTy},
+        types::EVMAddress,
     },
-    generic_vm::vm_executor::GenericVM,
 };
 
 #[derive(Clone)]

@@ -15,7 +15,7 @@ use std::{
 use bytes::Bytes;
 /// EVM executor implementation
 use itertools::Itertools;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{
     BytecodeLocked,
     CallContext,
@@ -870,9 +870,8 @@ where
         vm_state: &EVMState,
         state: &mut EVMFuzzState,
     ) -> (Vec<(Vec<u8>, bool)>, EVMState) {
-        unsafe {
-            self.host.evmstate = vm_state.clone();
-        }
+        self.host.evmstate = vm_state.clone();
+
         init_host!(self.host);
         let res = data
             .iter()
@@ -896,9 +895,8 @@ where
         vm_state: &EVMState,
         state: &mut EVMFuzzState,
     ) -> (Vec<(Vec<u8>, bool)>, EVMState) {
-        unsafe {
-            self.host.evmstate = vm_state.clone();
-        }
+        self.host.evmstate = vm_state.clone();
+
         init_host!(self.host);
         let res = data
             .iter()

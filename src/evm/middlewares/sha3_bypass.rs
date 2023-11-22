@@ -6,7 +6,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{opcode::JUMPI, Interpreter};
 use tracing::debug;
 

@@ -27,14 +27,8 @@ use crate::{
         blaz::builder::{ArtifactInfoMetadata, BuildJob},
         bytecode_analyzer,
         config::StorageFetchingMode,
-        contract_utils::{
-            extract_sig_from_contract,
-            modify_concolic_skip,
-            save_builder_addr_source_code,
-            ABIConfig,
-            ContractLoader,
-        },
-        corpus_initializer::{ABIMap, SourceMapMap},
+        contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader},
+        corpus_initializer::ABIMap,
         host::FuzzHost,
         input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
@@ -349,7 +343,7 @@ impl OnChain {
                 debug!("onchain job {:?}", address_h160);
                 let build_job = builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
 
-                if let Some(mut job) = build_job {
+                if let Some(job) = build_job {
                     abi = Some(job.abi.clone());
                     // replace the code with the one from builder
                     // debug!("replace code for {:?} with builder's", address_h160);
