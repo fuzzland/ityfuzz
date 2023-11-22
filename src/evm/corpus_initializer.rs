@@ -80,7 +80,6 @@ where
 
 #[derive(Default)]
 pub struct EVMInitializationArtifacts {
-    pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_bytecode: HashMap<EVMAddress, Bytecode>,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
     pub address_to_abi_object: HashMap<EVMAddress, Vec<BoxedABI>>,
@@ -279,7 +278,6 @@ where
     pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_bytecode: HashMap::new(),
-            address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
             address_to_abi_object: Default::default(),
             address_to_name: Default::default(),
@@ -331,9 +329,6 @@ where
                 }
             }
 
-            artifacts
-                .address_to_sourcemap
-                .insert(contract.deployed_address, contract.source_map.clone());
             artifacts
                 .address_to_abi
                 .insert(contract.deployed_address, contract.abi.clone());

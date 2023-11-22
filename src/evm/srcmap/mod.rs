@@ -223,18 +223,6 @@ impl SourceMapProvider {
         }
         results
     }
-
-    /*
-    fn save_source_code(&mut self, filename: String, source_code: String) {
-        // refer to contract_utils.rs save_builder_addr_source_code
-        todo!("save source code to file")
-        // 1. check if filename exists in saved_filenames
-        // 2. check if filename exists in work directory (we might need to pass
-        //    in work_dir when initializing SourceMapProvider)
-        // 3. if not, save the source code to corresponding file (work_dir/)
-        // 4. add filename to saved_filenames
-    }
-    */
 }
 
 impl SourceMap {

@@ -22,13 +22,7 @@ use crate::{
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
         },
         config::Config,
-        contract_utils::{
-            copy_local_source_code,
-            modify_concolic_skip,
-            parse_buildjob_result_sourcemap,
-            save_builder_source_code,
-            FIX_DEPLOYER,
-        },
+        contract_utils::{parse_buildjob_result_sourcemap, FIX_DEPLOYER},
         corpus_initializer::{EVMCorpusInitializer, SourceMapMap},
         cov_stage::CoverageStage,
         feedbacks::Sha3WrappedFeedback,
@@ -335,32 +329,8 @@ pub fn evm_fuzzer(
         }
     }
 
-    // check if we use the remote or local
-    let mut srcmap = if !remote_addr_sourcemaps.is_empty() {
-        save_builder_source_code(&artifacts.build_artifacts, &config.work_dir);
-        remote_addr_sourcemaps
-    } else {
-        match config.local_files_basedir_pattern {
-            Some(pattern) => {
-                // we copy the source files to the work dir
-                copy_local_source_code(
-                    &pattern,
-                    &config.work_dir,
-                    &artifacts.address_to_sourcemap,
-                    &config.base_path,
-                );
-            }
-            None => {
-                // no local files, so we won't skip any concolic
-            }
-        }
-        artifacts.address_to_sourcemap.clone()
-    };
-
-    modify_concolic_skip(&mut srcmap, &config.work_dir);
-
     let srcmap = SourceMapMap {
-        address_to_sourcemap: srcmap,
+        address_to_sourcemap: HashMap::new(), // TODO: upgrade this
     };
 
     state.metadata_map_mut().insert(srcmap);
@@ -491,7 +461,7 @@ pub fn evm_fuzzer(
 
     if config.math_calculate_oracle {
         oracles.push(Rc::new(RefCell::new(MathCalculateOracle::new(
-            artifacts.address_to_sourcemap.clone(),
+            HashMap::new(), // TODO: upgrade this
             artifacts.address_to_name.clone(),
         ))));
     }

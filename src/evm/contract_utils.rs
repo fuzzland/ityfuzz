@@ -79,7 +79,6 @@ pub struct ContractInfo {
     pub is_code_deployed: bool,
     pub constructor_args: Vec<u8>,
     pub deployed_address: EVMAddress,
-    pub source_map: Option<HashMap<usize, SourceMapLocation>>,
     pub build_artifact: Option<BuildJobResult>,
     pub files: Vec<(String, String)>, // (filename, content)
     pub source_map_replacements: Option<Vec<(String, String)>>,
@@ -291,11 +290,13 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
+            /*
             source_map: source_map_info.map(|info| {
                 info.get(contract_name.as_str())
                     .unwrap_or_else(|| panic!("combined.json provided but contract ({:?}) not found", contract_name))
                     .clone()
             }),
+            */
             build_artifact: None,
             files: vec![],                 // TODO publicqi: fill this
             source_map_replacements: None, // TODO publicqi: fill this
@@ -526,7 +527,6 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![], // todo: fill this
                 deployed_address: addr,
-                source_map: None,
                 build_artifact,
                 files,
                 source_map_replacements,
@@ -577,7 +577,6 @@ impl ContractLoader {
                 is_code_deployed: false,
                 constructor_args,
                 deployed_address: contract_info.address,
-                source_map: None,
                 build_artifact: Some(BuildJobResult::new(
                     sources.clone(),
                     more_info.source_map.clone(),
@@ -680,7 +679,6 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![],
                 deployed_address: addr,
-                source_map: None,
                 build_artifact: Some(BuildJobResult::new(
                     artifact.sources.clone(),
                     more_info.source_map.clone(),
@@ -753,7 +751,6 @@ impl ContractLoader {
                 is_code_deployed: true,
                 constructor_args: vec![],
                 deployed_address: addr,
-                source_map: None,
                 build_artifact: Some(BuildJobResult::new(
                     artifact.sources.clone(),
                     more_info.source_map.clone(),
