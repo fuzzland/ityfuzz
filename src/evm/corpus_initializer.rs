@@ -241,9 +241,17 @@ where
             }
 
             if let Some(srcmap) = &contract.raw_source_map {
+                let runtime_bytecode = self
+                    .executor
+                    .host
+                    .code
+                    .get(&contract.deployed_address)
+                    .expect("get runtime bytecode failed")
+                    .bytecode()
+                    .to_vec();
                 SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
                     &contract.deployed_address,
-                    contract.code.clone(),
+                    runtime_bytecode,
                     srcmap.clone(),
                     &contract.files,
                     contract.source_map_replacements.as_ref(),
