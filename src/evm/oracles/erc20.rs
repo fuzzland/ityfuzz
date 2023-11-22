@@ -8,7 +8,7 @@ use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
-        oracles::{ERC20_BUG_IDX, u512_div_float},
+        oracles::{u512_div_float, ERC20_BUG_IDX},
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
         uniswap::{generate_uniswap_router_sell, TokenContext},

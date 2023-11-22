@@ -24,9 +24,9 @@ pub static REENTRANCY_BUG_IDX: u64 = 9;
 pub static INVARIANT_BUG_IDX: u64 = 10;
 pub static INTEGER_OVERFLOW_BUG_IDX: u64 = 11;
 
-
-/// Divide a U512 by another U512 and return a string with the decimal point at the correct position
-/// For example, 1000 / 3 = 333.333, then a = 1000e6, b = 3, fp = 6
+/// Divide a U512 by another U512 and return a string with the decimal point at
+/// the correct position For example, 1000 / 3 = 333.333, then a = 1000e6, b =
+/// 3, fp = 6
 pub fn u512_div_float(a: EVMU512, b: EVMU512, fp: usize) -> String {
     let mut res = format!("{}", a / b);
     res.insert(res.len() - fp, '.');

@@ -481,143 +481,140 @@ where
             self.on_add_corpus(&input, unsafe { &JMP_MAP }, corpus_idx.into());
         }
 
-        let final_res =
-            match res {
-                // not interesting input, just check whether we should replace it due to better fav factor
-                ExecuteInputResult::None => {
-                    self.objective.discard_metadata(state, &input)?;
-                    match self.should_replace(&input, unsafe { &JMP_MAP }) {
-                        Some((hash, new_fav_factor, old_testcase_idx)) => {
-                            let testcase = Testcase::new(input.clone());
-                            let prev = state.corpus_mut().replace(old_testcase_idx.into(), testcase)?;
-                            self.infant_scheduler
-                                .report_corpus(state.get_infant_state_state(), state_idx);
-                            self.scheduler.on_replace(state, old_testcase_idx.into(), &prev)?;
-                            self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), old_testcase_idx);
+        let final_res = match res {
+            // not interesting input, just check whether we should replace it due to better fav factor
+            ExecuteInputResult::None => {
+                self.objective.discard_metadata(state, &input)?;
+                match self.should_replace(&input, unsafe { &JMP_MAP }) {
+                    Some((hash, new_fav_factor, old_testcase_idx)) => {
+                        let testcase = Testcase::new(input.clone());
+                        let prev = state.corpus_mut().replace(old_testcase_idx.into(), testcase)?;
+                        self.infant_scheduler
+                            .report_corpus(state.get_infant_state_state(), state_idx);
+                        self.scheduler.on_replace(state, old_testcase_idx.into(), &prev)?;
+                        self.on_replace_corpus((hash, new_fav_factor, old_testcase_idx), old_testcase_idx);
 
-                            Ok((res, Some(old_testcase_idx.into())))
-                        }
-                        None => {
-                            self.feedback.discard_metadata(state, &input)?;
-                            Ok((res, None))
-                        }
+                        Ok((res, Some(old_testcase_idx.into())))
+                    }
+                    None => {
+                        self.feedback.discard_metadata(state, &input)?;
+                        Ok((res, None))
                     }
                 }
-                // if the input is interesting, we need to add it to the input corpus
-                ExecuteInputResult::Corpus => {
-                    // Not a solution
-                    self.objective.discard_metadata(state, &input)?;
+            }
+            // if the input is interesting, we need to add it to the input corpus
+            ExecuteInputResult::Corpus => {
+                // Not a solution
+                self.objective.discard_metadata(state, &input)?;
 
-                    // Fire the event for CLI
-                    if send_events {
-                        // TODO set None for fast targets
-                        let observers_buf = if manager.configuration() == EventConfig::AlwaysUnique {
-                            None
-                        } else {
-                            manager.serialize_observers(observers)?
-                        };
-                        manager.fire(
-                            state,
-                            Event::NewTestcase {
-                                input,
-                                observers_buf,
-                                exit_kind: exitkind,
-                                corpus_size: state.corpus().count(),
-                                client_config: manager.configuration(),
-                                time: current_time(),
-                                executions: *state.executions(),
-                                forward_id: None,
-                            },
-                        )?;
-                    }
-                    Ok((res, Some(corpus_idx)))
-                }
-                // find the solution
-                ExecuteInputResult::Solution => {
-                    state
-                        .metadata_map_mut()
-                        .get_mut::<BugMetadata>()
-                        .unwrap()
-                        .register_corpus_idx(corpus_idx.into());
-
-                    let minimized = self.sequential_minimizer.minimize(
+                // Fire the event for CLI
+                if send_events {
+                    // TODO set None for fast targets
+                    let observers_buf = if manager.configuration() == EventConfig::AlwaysUnique {
+                        None
+                    } else {
+                        manager.serialize_observers(observers)?
+                    };
+                    manager.fire(
                         state,
-                        executor,
-                        &state.get_execution_result().new_state.trace.clone(),
-                        &mut self.objective,
-                        corpus_idx.into(),
-                    );
-                    let txn_text = prettify_concise_inputs(&minimized);
-                    let txn_json = minimized
-                        .iter()
-                        .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
-                        .join("\n");
+                        Event::NewTestcase {
+                            input,
+                            observers_buf,
+                            exit_kind: exitkind,
+                            corpus_size: state.corpus().count(),
+                            client_config: manager.configuration(),
+                            time: current_time(),
+                            executions: *state.executions(),
+                            forward_id: None,
+                        },
+                    )?;
+                }
+                Ok((res, Some(corpus_idx)))
+            }
+            // find the solution
+            ExecuteInputResult::Solution => {
+                state
+                    .metadata_map_mut()
+                    .get_mut::<BugMetadata>()
+                    .unwrap()
+                    .register_corpus_idx(corpus_idx.into());
 
-                    println!("\n\n\n😊😊 Found vulnerabilities! \n\n");
-                    let cur_report =
-                        format!(
+                let minimized = self.sequential_minimizer.minimize(
+                    state,
+                    executor,
+                    &state.get_execution_result().new_state.trace.clone(),
+                    &mut self.objective,
+                    corpus_idx.into(),
+                );
+                let txn_text = prettify_concise_inputs(&minimized);
+                let txn_json = minimized
+                    .iter()
+                    .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
+                    .join("\n");
+
+                println!("\n\n\n😊😊 Found vulnerabilities! \n\n");
+                let cur_report =
+                    format!(
                     "================ Description ================\n{}\n================ Trace ================\n{}\n",
-                    unsafe { ORACLE_OUTPUT.iter().map(|v| { 
+                    unsafe { ORACLE_OUTPUT.iter().map(|v| {
                         format!("[{}]: {}", v["bug_type"].as_str().unwrap(), v["bug_info"].as_str().unwrap())
                      }).join("\n") },
                     txn_text
                 );
-                    println!("{}", cur_report);
+                println!("{}", cur_report);
 
-                    solution::generate_test(cur_report.clone(), minimized);
+                solution::generate_test(cur_report.clone(), minimized);
 
-                    let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
-                    let mut f = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(vuln_file)
-                        .expect("Unable to open file");
-                    f.write_all(unsafe {
-                        ORACLE_OUTPUT
-                            .iter()
-                            .map(|v| serde_json::to_string(v).expect("failed to json"))
-                            .join("\n")
-                            .as_bytes()
-                    })
-                    .expect("Unable to write data");
-                    f.write_all(b"\n").expect("Unable to write data");
+                let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
+                let mut f = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(vuln_file)
+                    .expect("Unable to open file");
+                f.write_all(unsafe {
+                    ORACLE_OUTPUT
+                        .iter()
+                        .map(|v| serde_json::to_string(v).expect("failed to json"))
+                        .join("\n")
+                        .as_bytes()
+                })
+                .expect("Unable to write data");
+                f.write_all(b"\n").expect("Unable to write data");
 
-                    #[cfg(feature = "print_txn_corpus")]
-                    {
-                        let vulns_dir = format!("{}/vulnerabilities", self.work_dir.as_str());
+                #[cfg(feature = "print_txn_corpus")]
+                {
+                    let vulns_dir = format!("{}/vulnerabilities", self.work_dir.as_str());
 
-                        if !unsafe { REPLAY } {
-                            unsafe {
-                                DUMP_FILE_COUNT += 1;
-                            }
-                            let data = format!(
-                                "Reverted? {} \n Txn: {}",
-                                state.get_execution_result().reverted,
-                                txn_text
-                            );
-                            // write to file
-                            let path = Path::new(vulns_dir.as_str());
-                            if !path.exists() {
-                                std::fs::create_dir_all(path).unwrap();
-                            }
-                            let mut file =
-                                File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
-                            file.write_all(data.as_bytes()).unwrap();
-                            let mut replayable_file =
-                                File::create(format!("{}/{}_replayable", vulns_dir, unsafe { DUMP_FILE_COUNT }))
-                                    .unwrap();
-                            replayable_file.write_all(txn_json.as_bytes()).unwrap();
+                    if !unsafe { REPLAY } {
+                        unsafe {
+                            DUMP_FILE_COUNT += 1;
                         }
-                        // dump_file!(state, vulns_dir, false);
+                        let data = format!(
+                            "Reverted? {} \n Txn: {}",
+                            state.get_execution_result().reverted,
+                            txn_text
+                        );
+                        // write to file
+                        let path = Path::new(vulns_dir.as_str());
+                        if !path.exists() {
+                            std::fs::create_dir_all(path).unwrap();
+                        }
+                        let mut file = File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                        file.write_all(data.as_bytes()).unwrap();
+                        let mut replayable_file =
+                            File::create(format!("{}/{}_replayable", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                        replayable_file.write_all(txn_json.as_bytes()).unwrap();
                     }
-
-                    if !unsafe { RUN_FOREVER } {
-                        exit(0);
-                    }
-
-                    return Ok((res, None));
+                    // dump_file!(state, vulns_dir, false);
                 }
-            };
+
+                if !unsafe { RUN_FOREVER } {
+                    exit(0);
+                }
+
+                return Ok((res, None));
+            }
+        };
         unsafe {
             ORACLE_OUTPUT.clear();
         }
