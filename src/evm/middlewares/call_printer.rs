@@ -12,8 +12,8 @@ use crate::evm::{
     blaz::builder::ArtifactInfoMetadata,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::parser::SourceMapLocation,
-    types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, ProjectSourceMapTy, EVMU256},
+    srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
+    types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -34,7 +34,7 @@ pub struct SingleCall {
     pub contract: String,
     pub input: String,
     pub value: String,
-    pub source: Option<SourceMapLocation>,
+    pub source: Option<RawSourceMapInfo>,
     pub results: String,
 }
 
@@ -46,7 +46,6 @@ pub struct CallPrinterResult {
 #[derive(Clone, Debug)]
 pub struct CallPrinter {
     pub address_to_name: HashMap<EVMAddress, String>,
-    pub sourcemaps: ProjectSourceMapTy,
     pub current_layer: usize,
     pub results: CallPrinterResult,
     pub offsets: usize,
@@ -55,10 +54,9 @@ pub struct CallPrinter {
 }
 
 impl CallPrinter {
-    pub fn new(address_to_name: HashMap<EVMAddress, String>, sourcemaps: ProjectSourceMapTy) -> Self {
+    pub fn new(address_to_name: HashMap<EVMAddress, String>) -> Self {
         Self {
             address_to_name,
-            sourcemaps,
             current_layer: 0,
             results: Default::default(),
             entry: true,
@@ -141,20 +139,10 @@ where
                     contract: self.translate_address(interp.contract.address),
                     input: hex::encode(interp.contract.input.clone()),
                     value: format!("{}", interp.contract.value),
-                    source: if let Some(Some(source)) = self.sourcemaps.get(&code_address) &&
-                        let Some(source) = source.get(&interp.program_counter())
-                    {
-                        Some(source.clone())
-                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
-                        let Some(build_result) = artifact.get_mut(&code_address)
-                    {
-                        build_result
-                            .get_sourcemap(caller_code)
-                            .get(&interp.program_counter())
-                            .cloned()
-                    } else {
-                        None
-                    },
+                    source: SOURCE_MAP_PROVIDER
+                        .lock()
+                        .unwrap()
+                        .get_raw_source_map_info(&code_address, interp.program_counter()),
                     results: "".to_string(),
                 },
             ));
@@ -262,20 +250,10 @@ where
                     contract: self.translate_address(target),
                     input: arg,
                     value: format!("{}", value),
-                    source: if let Some(Some(source)) = self.sourcemaps.get(&caller_code_address) &&
-                        let Some(source) = source.get(&interp.program_counter())
-                    {
-                        Some(source.clone())
-                    } else if let Some(artifact) = state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>() &&
-                        let Some(build_result) = artifact.get_mut(&caller_code_address)
-                    {
-                        build_result
-                            .get_sourcemap(caller_code)
-                            .get(&interp.program_counter())
-                            .cloned()
-                    } else {
-                        None
-                    },
+                    source: SOURCE_MAP_PROVIDER
+                        .lock()
+                        .unwrap()
+                        .get_raw_source_map_info(&caller_code_address, interp.program_counter()),
                     results: "".to_string(),
                 },
             ));

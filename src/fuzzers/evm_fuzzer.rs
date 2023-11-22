@@ -377,10 +377,7 @@ pub fn evm_fuzzer(
     state.metadata_map_mut().insert(UncoveredBranchesMetadata::new());
     let std_stage = PowerABIMutationalStage::new(mutator);
 
-    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(
-        artifacts.address_to_name.clone(),
-        artifacts.address_to_sourcemap.clone(),
-    )));
+    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(artifacts.address_to_name.clone())));
 
     let coverage_obs_stage = CoverageStage::new(
         evm_executor_ref.clone(),
@@ -610,10 +607,7 @@ pub fn evm_fuzzer(
                 EVAL_COVERAGE = true;
             }
 
-            let printer = Rc::new(RefCell::new(CallPrinter::new(
-                artifacts.address_to_name.clone(),
-                artifacts.address_to_sourcemap.clone(),
-            )));
+            let printer = Rc::new(RefCell::new(CallPrinter::new(artifacts.address_to_name.clone())));
             evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
 
             for testcase in testcases {
