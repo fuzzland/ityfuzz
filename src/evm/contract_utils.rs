@@ -297,7 +297,7 @@ impl ContractLoader {
                     .clone()
             }),
             build_artifact: None,
-            files: vec![],                 // TODO publici: fill this
+            files: vec![],                 // TODO publicqi: fill this
             source_map_replacements: None, // TODO publicqi: fill this
             raw_source_map: None,          // TODO publicqi: fill this
         };

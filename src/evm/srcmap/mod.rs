@@ -14,7 +14,7 @@ lazy_static! {
 
 // Identical to SourceMapLocation
 #[derive(Default, Clone, Debug)]
-struct RawSourceMapInfo {
+pub struct RawSourceMapInfo {
     file: Option<String>,    // File name
     file_idx: Option<usize>, // File index in files
     offset: usize,
@@ -118,6 +118,18 @@ impl SourceMapProvider {
             }
         } else {
             false
+        }
+    }
+
+    // This function should only be called to construct EVMBugResult
+    pub fn get_raw_source_map_info(&self, address: &EVMAddress, pc: usize) -> Option<RawSourceMapInfo> {
+        if self.has_source_map(address) {
+            match self.source_maps.get(address).unwrap().get_source_map_item_by_pc(pc) {
+                Some(source_map_item) => Some(source_map_item.raw_info.clone()),
+                None => None,
+            }
+        } else {
+            None
         }
     }
 
