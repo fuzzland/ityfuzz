@@ -251,8 +251,6 @@ where
         info!("Deployed all contracts\n");
     }
 
-    // New interface.
-    // TODO publicqi: Move this part in initialize_contract and remove old srcmap.
     fn initialize_source_map(&self, loader: &ContractLoader) {
         for contract in &loader.contracts {
             if SOURCE_MAP_PROVIDER

@@ -288,7 +288,6 @@ pub fn evm_fuzzer(
         state.init_presets(has_preset_match, matched_templates.clone(), sig_to_addr_abi_map);
     }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
-        artifacts.address_to_sourcemap.clone(),
         artifacts.address_to_name.clone(),
         config.work_dir.clone(),
     )));

@@ -507,6 +507,18 @@ impl ContractLoader {
                 debug!("ABI not found for {}, we'll decompile", addr);
                 vec![]
             };
+
+            let (files, source_map_replacements, raw_source_map) = if let Some(build_artifact) = build_artifact.clone()
+            {
+                (
+                    build_artifact.sources.clone(),
+                    Some(build_artifact.source_maps_replacements.clone()),
+                    Some(build_artifact.source_maps.clone()),
+                )
+            } else {
+                (vec![], None, None)
+            };
+
             contracts.push(ContractInfo {
                 name: format!("{:?}", addr),
                 code: hex::decode(&contract_code).unwrap(),
@@ -516,9 +528,9 @@ impl ContractLoader {
                 deployed_address: addr,
                 source_map: None,
                 build_artifact,
-                files: vec![],                 // TODO publicqi: fill this
-                source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,          // TODO publicqi: fill this
+                files,
+                source_map_replacements,
+                raw_source_map,
             });
             abis.push(ABIInfo {
                 source: addr.to_string(),
@@ -567,17 +579,17 @@ impl ContractLoader {
                 deployed_address: contract_info.address,
                 source_map: None,
                 build_artifact: Some(BuildJobResult::new(
-                    sources,
-                    more_info.source_map,
+                    sources.clone(),
+                    more_info.source_map.clone(),
                     more_info.deploy_bytecode,
                     more_info.abi.clone(),
                     more_info.source_map_replacements.clone(),
                     // TODO: offchain ast
                     Vec::new(),
                 )),
-                files: vec![],                 // TODO publicqi: fill this
-                source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,          // TODO publicqi: fill this
+                files: sources,
+                source_map_replacements: Some(more_info.source_map_replacements),
+                raw_source_map: Some(more_info.source_map.clone()),
             });
         }
 
@@ -678,9 +690,9 @@ impl ContractLoader {
                     // TODO: offchain ast
                     Vec::new(),
                 )),
-                files: vec![],                 // TODO publicqi: fill this
-                source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,          // TODO publicqi: fill this
+                files: artifact.sources.clone(),
+                source_map_replacements: Some(more_info.source_map_replacements.clone()),
+                raw_source_map: Some(more_info.source_map.clone()),
             });
         }
         Self {
@@ -751,9 +763,9 @@ impl ContractLoader {
                     // TODO: offchain ast
                     Vec::new(),
                 )),
-                files: vec![],                 // TODO publicqi: fill this
-                source_map_replacements: None, // TODO publicqi: fill this
-                raw_source_map: None,          // TODO publicqi: fill this
+                files: artifact.sources.clone(),
+                source_map_replacements: Some(more_info.source_map_replacements.clone()),
+                raw_source_map: Some(more_info.source_map.clone()),
             });
         }
         Self {

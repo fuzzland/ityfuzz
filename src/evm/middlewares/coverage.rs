@@ -24,7 +24,7 @@ use crate::evm::{
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
     srcmap::SOURCE_MAP_PROVIDER,
-    types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
+    types::{is_zero, EVMAddress, EVMFuzzState},
     vm::IN_DEPLOY,
 };
 
@@ -57,7 +57,6 @@ pub struct Coverage {
     pub skip_pcs: HashMap<EVMAddress, HashSet<usize>>,
     pub work_dir: String,
 
-    pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
     pub pc_info: HashMap<(EVMAddress, usize), String>, // (address, pc) -> source code
 
@@ -250,7 +249,7 @@ impl Display for CoverageReport {
 }
 
 impl Coverage {
-    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>, work_dir: String) -> Self {
+    pub fn new(address_to_name: HashMap<EVMAddress, String>, work_dir: String) -> Self {
         Self {
             pc_coverage: HashMap::new(),
             total_instr_set: HashMap::new(),
@@ -258,7 +257,6 @@ impl Coverage {
             jumpi_coverage: Default::default(),
             skip_pcs: Default::default(),
             work_dir,
-            sourcemap,
             address_to_name,
             pc_info: Default::default(),
             sources: Default::default(),
