@@ -100,7 +100,7 @@ impl
                     real_bug_idx,
                     format!("Arbitrary call from {:?} to {:?}", name, target),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-                    SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(caller, pc),
+                    SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(caller, *pc),
                     Some(name.clone()),
                 )
                 .push_to_output();

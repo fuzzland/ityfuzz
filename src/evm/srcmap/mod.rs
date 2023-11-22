@@ -4,6 +4,8 @@ use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use serde_json;
 
 use crate::evm::EVMAddress;
 
@@ -13,7 +15,7 @@ lazy_static! {
 }
 
 // Identical to SourceMapLocation
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct RawSourceMapInfo {
     file: Option<String>,    // File name
     file_idx: Option<usize>, // File index in files

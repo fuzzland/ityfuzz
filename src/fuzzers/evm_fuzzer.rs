@@ -475,7 +475,6 @@ pub fn evm_fuzzer(
 
     if config.typed_bug {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
@@ -484,14 +483,12 @@ pub fn evm_fuzzer(
 
     if config.selfdestruct_oracle {
         oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
 
     if config.reentrancy_oracle {
         oracles.push(Rc::new(RefCell::new(ReentrancyOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
