@@ -22,7 +22,7 @@ use crate::{
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
         },
         config::Config,
-        contract_utils::{parse_buildjob_result_sourcemap, FIX_DEPLOYER},
+        contract_utils::FIX_DEPLOYER,
         corpus_initializer::{EVMCorpusInitializer, SourceMapMap},
         cov_stage::CoverageStage,
         feedbacks::Sha3WrappedFeedback,
@@ -63,15 +63,7 @@ use crate::{
         presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         srcmap::parser::BASE_PATH,
-        types::{
-            fixed_address,
-            EVMAddress,
-            EVMFuzzMutator,
-            EVMFuzzState,
-            EVMQueueExecutor,
-            ProjectSourceMapTy,
-            EVMU256,
-        },
+        types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
         vm::{EVMExecutor, EVMState},
     },
     executor::FuzzExecutor,
@@ -318,15 +310,6 @@ pub fn evm_fuzzer(
     // let calibration = CalibrationStage::new(&feedback);
     if config.concolic {
         unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
-    }
-
-    let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
-    for (addr, build_job_result) in &artifacts.build_artifacts {
-        // Old source map insertion. Will be deleted
-        {
-            let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
-            remote_addr_sourcemaps.insert(*addr, Some(sourcemap));
-        }
     }
 
     let srcmap = SourceMapMap {

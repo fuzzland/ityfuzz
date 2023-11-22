@@ -28,7 +28,6 @@ use crate::{
 
 extern crate crypto;
 
-use regex::Regex;
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
@@ -917,58 +916,6 @@ pub fn parse_buildjob_result_sourcemap(build_job_result: &BuildJobResult) -> Con
         build_job_result.source_maps.clone(),
         &build_job_result.sources.iter().map(|(k, _)| k.clone()).collect_vec(),
     )
-}
-
-pub fn modify_concolic_skip(orginal: &mut ProjectSourceMapTy, work_dir: &String) {
-    // key: full_path, value: file_content
-    let mut file_contents = HashMap::<String, String>::new();
-    // panic!("{:?}", orginal);
-    for (addr, source_map) in orginal {
-        // debug!("{:?}", addr);
-        if source_map.is_none() {
-            continue;
-        }
-        let srcmap = source_map.clone().unwrap();
-        for (pc, loc) in srcmap {
-            // debug!("\t{:?}", loc);
-            if loc.file.is_none() {
-                continue;
-            }
-            let filename = loc.file.clone().unwrap();
-            // source file is at work_dir/sources/addr/file
-            let file_path = format!("{}/sources/{:?}/{}", work_dir, addr, filename);
-            if !Path::new(&file_path).exists() {
-                continue;
-            }
-            let file_content = file_contents.entry(file_path.clone()).or_insert_with(|| {
-                let mut file = File::open(file_path.clone()).unwrap();
-                let mut buf = String::new();
-                file.read_to_string(&mut buf).unwrap();
-                buf
-            });
-
-            // debug!("file_content: {}", file_content);
-            let mapped_source = file_content[loc.offset..loc.offset + loc.length].to_string();
-            // if starts with "library, contract, function" and ends with "}" then skip
-            let re = Regex::new(r"^(library|contract|function)(.|\n)*\}$").unwrap();
-            // debug!("mapped_source: \n\x1b[31m{}\x1b[0m", mapped_source);
-            if re.is_match(&mapped_source) {
-                // update loc's pc_has_source_match to true
-                source_map.as_mut().unwrap().insert(
-                    pc,
-                    SourceMapLocation {
-                        offset: loc.offset,
-                        length: loc.length,
-                        file: loc.file,
-                        file_idx: loc.file_idx,
-                        pc_has_source_match: true,
-                    },
-                );
-                // debug!("skipped source code: \n\x1b[31m{}\x1b[0m",
-                // mapped_source);
-            }
-        }
-    }
 }
 
 pub fn save_builder_source_code(build_artifact: &HashMap<EVMAddress, BuildJobResult>, work_dir: &String) {
