@@ -280,41 +280,6 @@ impl BuildJobResult {
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn get_sourcemap_executor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>(
-        _self: Option<&mut Self>,
-        executor: &mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
-        addr: &EVMAddress,
-        additional_sourcemap: &ProjectSourceMapTy,
-        pc: usize,
-    ) -> Option<SourceMapLocation> {
-        if let Some(_self) = _self {
-            if _self._cached {
-                return _self._cache_src_map.get(&pc).cloned();
-            }
-
-            let bytecode = Vec::from(
-                (**executor)
-                    .borrow_mut()
-                    .as_any()
-                    .downcast_ref::<EVMQueueExecutor>()
-                    .unwrap()
-                    .host
-                    .code
-                    .get(addr)
-                    .unwrap()
-                    .clone()
-                    .bytecode(),
-            );
-            return _self.get_sourcemap(bytecode).get(&pc).cloned();
-        }
-
-        if let Some(Some(srcmap)) = additional_sourcemap.get(addr) {
-            return srcmap.get(&pc).cloned();
-        }
-        None
-    }
-
     pub fn save_source_map(&self, address: &EVMAddress) {
         if SOURCE_MAP_PROVIDER.lock().unwrap().has_source_map(address) {
             return;
