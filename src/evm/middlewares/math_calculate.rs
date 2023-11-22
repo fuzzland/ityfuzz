@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, str::FromStr};
 
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;

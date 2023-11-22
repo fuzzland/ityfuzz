@@ -5,7 +5,6 @@ use std::{collections::HashMap, sync::Mutex};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use crate::evm::EVMAddress;
 
@@ -126,10 +125,11 @@ impl SourceMapProvider {
     // This function should only be called to construct EVMBugResult
     pub fn get_raw_source_map_info(&self, address: &EVMAddress, pc: usize) -> Option<RawSourceMapInfo> {
         if self.has_source_map(address) {
-            match self.source_maps.get(address).unwrap().get_source_map_item_by_pc(pc) {
-                Some(source_map_item) => Some(source_map_item.raw_info.clone()),
-                None => None,
-            }
+            self.source_maps
+                .get(address)
+                .unwrap()
+                .get_source_map_item_by_pc(pc)
+                .map(|source_map_item| source_map_item.raw_info.clone())
         } else {
             None
         }

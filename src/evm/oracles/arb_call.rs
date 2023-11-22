@@ -11,12 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     evm::{
-        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
         oracles::ARB_CALL_BUG_IDX,
         srcmap::SOURCE_MAP_PROVIDER,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
     oracle::{Oracle, OracleCtx},

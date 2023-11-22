@@ -5,12 +5,10 @@ use std::{
 
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::HasMetadata;
 use revm_primitives::Bytecode;
 
 use crate::{
     evm::{
-        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
         oracles::SELFDESTRUCT_BUG_IDX,
