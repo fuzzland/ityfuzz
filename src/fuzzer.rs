@@ -553,11 +553,13 @@ where
                         .map(|ci| String::from_utf8(ci.serialize_concise()).expect("utf-8 failed"))
                         .join("\n");
 
-                    println!("\n\n\n😊😊 Found violations! \n\n");
+                    println!("\n\n\n😊😊 Found vulnerabilities! \n\n");
                     let cur_report =
                         format!(
-                    "================ Oracle ================\n{}\n================ Trace ================\n{}\n",
-                    unsafe { ORACLE_OUTPUT.iter().map(|v| { v["bug_info"].as_str().expect("") }).join("\n") },
+                    "================ Description ================\n{}\n================ Trace ================\n{}\n",
+                    unsafe { ORACLE_OUTPUT.iter().map(|v| { 
+                        format!("[{}]: {}", v["bug_type"].as_str().unwrap(), v["bug_info"].as_str().unwrap())
+                     }).join("\n") },
                     txn_text
                 );
                     println!("{}", cur_report);

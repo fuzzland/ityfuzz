@@ -77,7 +77,7 @@ impl
 
                 let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
                 EVMBugResult::new(
-                    "reentrancy".to_string(),
+                    "Reentrancy".to_string(),
                     real_bug_idx,
                     format!("Reentrancy on {:?} at slot {:?}", name, slot),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),

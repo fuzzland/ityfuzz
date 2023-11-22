@@ -83,9 +83,9 @@ impl
                         *pc,
                     );
                     EVMBugResult::new(
-                        "selfdestruct".to_string(),
+                        "Selfdestruct".to_string(),
                         real_bug_idx,
-                        "Destructed".to_string(),
+                        format!("Destructed contract {:?}", name),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         srcmap,
                         Some(name.clone()),

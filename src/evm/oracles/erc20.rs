@@ -8,7 +8,7 @@ use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
-        oracles::ERC20_BUG_IDX,
+        oracles::{ERC20_BUG_IDX, u512_div_float},
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
         uniswap::{generate_uniswap_router_sell, TokenContext},
@@ -128,20 +128,18 @@ impl
 
         if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed &&
             exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed >
-                EVMU512::from(100_000_000_000_000_000_000_000_u128)
-        // > 0.1ETH
+                EVMU512::from(10_000_000_000_000_000_000_000_u128)
+        // > 0.01ETH
         {
             let net = exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed;
             // we scaled by 1e24, so divide by 1e24 to get ETH
-            let net_eth = net / EVMU512::from(1_000_000_000_000_000_000_000_000_u128);
+            let net_eth = u512_div_float(net, EVMU512::from(1_000_000_000_000_000_000_000_u128), 3);
+
             EVMBugResult::new_simple(
-                "erc20".to_string(),
+                "Fund Loss".to_string(),
                 ERC20_BUG_IDX,
                 format!(
-                    "Earned {} more than owed {}, net earned = {}wei ({}ETH)\n",
-                    exec_res.new_state.state.flashloan_data.earned,
-                    exec_res.new_state.state.flashloan_data.owed,
-                    net,
+                    "Anyone can earn {} ETH by interacting with the provided contracts\n",
                     net_eth,
                 ),
                 ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
