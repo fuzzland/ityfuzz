@@ -29,6 +29,9 @@ pub static INTEGER_OVERFLOW_BUG_IDX: u64 = 11;
 /// 3, fp = 6
 pub fn u512_div_float(a: EVMU512, b: EVMU512, fp: usize) -> String {
     let mut res = format!("{}", a / b);
+    if res.len() <= fp {
+        res.insert_str(0, &"0".repeat(fp - res.len() + 1));
+    }
     res.insert(res.len() - fp, '.');
     res
 }

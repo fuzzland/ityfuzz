@@ -14,6 +14,7 @@ use crate::{
         uniswap::{generate_uniswap_router_sell, TokenContext},
         vm::EVMState,
     },
+    generic_vm::vm_state::VMStateT,
     oracle::Oracle,
     state::HasExecutionResult,
 };
@@ -125,6 +126,10 @@ impl
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
         exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();
         exec_res.new_state.state.flashloan_data.oracle_recheck_reserve.clear();
+
+        if exec_res.new_state.state.has_post_execution() {
+            return vec![];
+        }
 
         if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed &&
             exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed >
