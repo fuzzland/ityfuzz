@@ -140,6 +140,7 @@ main() {
       ensure unzip "$tmp" -d "$ITYFUZZ_BIN_DIR"
       rm -f "$tmp"
     else
+      mkdir -p "$ITYFUZZ_BIN_DIR"
       ensure download "$BIN_ARCHIVE_URL" | ensure tar -xzC "$ITYFUZZ_BIN_DIR"
     fi
 
@@ -204,6 +205,11 @@ EOF
 
     say "done"
   fi
+
+  $ITYFUZZ_BIN_DIR/ityfuzz_ --help > /dev/null || {
+    warn "failed to run ityfuzz"
+    err "please consider installing 'libssl-dev' or other missing dependencies"
+  }
 }
 
 usage() {
