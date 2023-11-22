@@ -49,7 +49,6 @@ use crate::evm::{
     },
     bytecode_iterator::all_bytecode,
     onchain::endpoints::OnChainConfig,
-    srcmap::parser::{decode_instructions, SourceMapLocation},
 };
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)

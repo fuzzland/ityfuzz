@@ -23,7 +23,7 @@ use crate::{
         },
         config::Config,
         contract_utils::FIX_DEPLOYER,
-        corpus_initializer::{EVMCorpusInitializer, SourceMapMap},
+        corpus_initializer::EVMCorpusInitializer,
         cov_stage::CoverageStage,
         feedbacks::Sha3WrappedFeedback,
         host::{
@@ -60,7 +60,6 @@ use crate::{
         },
         presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
-        srcmap::parser::BASE_PATH,
         types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
         vm::{EVMExecutor, EVMState},
     },
@@ -147,10 +146,6 @@ pub fn evm_fuzzer(
         unsafe {
             WRITE_RELATIONSHIPS = true;
         }
-    }
-
-    unsafe {
-        BASE_PATH = config.base_path.clone();
     }
 
     if config.run_forever {
@@ -304,12 +299,6 @@ pub fn evm_fuzzer(
     if config.concolic {
         unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
     }
-
-    let srcmap = SourceMapMap {
-        address_to_sourcemap: HashMap::new(), // TODO: upgrade this
-    };
-
-    state.metadata_map_mut().insert(srcmap);
 
     let concolic_stage = ConcolicStage::new(
         config.concolic,

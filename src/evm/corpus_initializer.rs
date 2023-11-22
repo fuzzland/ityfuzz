@@ -23,10 +23,7 @@ use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
-use super::{
-    scheduler::ABIScheduler,
-    srcmap::{parser::SourceMapLocation, SOURCE_MAP_PROVIDER},
-};
+use super::{scheduler::ABIScheduler, srcmap::SOURCE_MAP_PROVIDER};
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
 use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
@@ -50,7 +47,6 @@ use crate::{
             EVMFuzzState,
             EVMInfantStateState,
             EVMStagedVMState,
-            ProjectSourceMapTy,
             EVMU256,
         },
         vm::{EVMExecutor, EVMState},
@@ -107,27 +103,6 @@ impl ABIMap {
 
     pub fn get(&self, signature: &[u8; 4]) -> Option<&ABIConfig> {
         self.signature_to_abi.get(signature)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct SourceMapMap {
-    pub address_to_sourcemap: ProjectSourceMapTy,
-}
-
-impl_serdeany!(SourceMapMap);
-
-impl SourceMapMap {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&mut self, address: EVMAddress, sourcemap: Option<HashMap<usize, SourceMapLocation>>) {
-        self.address_to_sourcemap.insert(address, sourcemap);
-    }
-
-    pub fn get(&self, address: &EVMAddress) -> Option<&Option<HashMap<usize, SourceMapLocation>>> {
-        self.address_to_sourcemap.get(address)
     }
 }
 
