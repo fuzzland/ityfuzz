@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::evm::EVMAddress;
 
@@ -47,6 +48,7 @@ impl SourceMapProvider {
         files: &[(String, String)], // (filename, file_content)
         replacements: Option<&Vec<(String, String)>>,
     ) {
+        debug!("adding source map for address: {}", address);
         let filenames = files.iter().map(|(name, _)| (name.clone())).collect();
         let list_raw_infos = self.uncompress_srcmap_single(map, &filenames, replacements);
         let bytecode_len = bytecode.len();

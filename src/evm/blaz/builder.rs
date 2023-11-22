@@ -22,7 +22,7 @@ use crate::{
     evm::{blaz::get_client, srcmap::SOURCE_MAP_PROVIDER, types::EVMAddress},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BuildJob {
     pub build_server: String,
     pub replacements: HashMap<EVMAddress, Option<BuildJobResult>>,

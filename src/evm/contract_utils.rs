@@ -289,13 +289,6 @@ impl ContractLoader {
             is_code_deployed: false,
             constructor_args: constructor_args_in_bytes,
             deployed_address: generate_random_address(state),
-            /*
-            source_map: source_map_info.map(|info| {
-                info.get(contract_name.as_str())
-                    .unwrap_or_else(|| panic!("combined.json provided but contract ({:?}) not found", contract_name))
-                    .clone()
-            }),
-            */
             build_artifact: None,
             files,
             source_map_replacements,
@@ -513,12 +506,11 @@ impl ContractLoader {
                 vec![]
             };
 
-            let (files, source_map_replacements, raw_source_map) = if let Some(build_artifact) = build_artifact.clone()
-            {
+            let (files, source_map_replacements, raw_source_map) = if let Some(job_result) = build_artifact.clone() {
                 (
-                    build_artifact.sources.clone(),
-                    Some(build_artifact.source_maps_replacements.clone()),
-                    Some(build_artifact.source_maps.clone()),
+                    job_result.sources.clone(),
+                    Some(job_result.source_maps_replacements.clone()),
+                    Some(job_result.source_maps.clone()),
                 )
             } else {
                 (vec![], None, None)

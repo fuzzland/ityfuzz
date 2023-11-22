@@ -240,13 +240,15 @@ where
                 continue;
             }
 
-            SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
-                &contract.deployed_address,
-                contract.code.clone(),
-                contract.raw_source_map.clone().expect("no source map"),
-                &contract.files,
-                contract.source_map_replacements.as_ref(),
-            );
+            if let Some(srcmap) = &contract.raw_source_map {
+                SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
+                    &contract.deployed_address,
+                    contract.code.clone(),
+                    srcmap.clone(),
+                    &contract.files,
+                    contract.source_map_replacements.as_ref(),
+                );
+            }
         }
     }
 
