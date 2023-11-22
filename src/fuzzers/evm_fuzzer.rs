@@ -469,7 +469,6 @@ pub fn evm_fuzzer(
 
     if config.arbitrary_external_call {
         oracles.push(Rc::new(RefCell::new(ArbitraryCallOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
