@@ -13,14 +13,14 @@ ItyFuzz is a blazing-fast EVM and MoveVM smart contract hybrid fuzzer that combi
 
 ## Example
 
-Generating full exploit to steal funds from a contract with read-only reentrancy vulnerability on Polygon.
+Generating full exploit to steal funds from a [contract](https://polygonscan.com/address/0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb) with read-only reentrancy vulnerability on Polygon.
 
 ```bash
 # Install ItyFuzz
 curl -L https://ity.fuzz.land/ | bash
 ityfuzzup
 
-# Fork Polygon at block 35718198 and fuzz contract at given address
+# Fork Polygon at block 35718198 and fuzz the contract
 ETH_RPC_URL=https://polygon-rpc.com ityfuzz evm\
     -t 0xbcf6e9d27bf95f3f5eddb93c38656d684317d5b4,0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb\
     -c polygon -i -p -o\
@@ -33,7 +33,7 @@ For other examples and usages, check out the [docs](https://docs.ityfuzz.rs).
 ## Performance
 On large real-world smart contract projects, ItyFuzz finds 126 vulnerabilities while Echidna finds 0 and Mythril finds 9. For details, refer to [backtesting](https://docs.ityfuzz.rs/tutorials/exp-known-working-hacks), [research paper](https://dl.acm.org/doi/pdf/10.1145/3597926.3598059), and [new bugs discovered](#bugs-found).
 
-On small real-world smart contracts (ERC20, lottery, etc.), ItyFuzz gains 10% more test coverage compared to academia state-of-the-art fuzzer SMARTIAN using 1/30 of the time.
+On small real-world smart contracts (ERC20, lottery, etc.), ItyFuzz gains 10% more test coverage than academia state-of-the-art fuzzer SMARTIAN using 1/30 of the time.
 <p align="middle">
     <img src="https://ityfuzz.assets.fuzz.land/ityfuzz3.png" width="49%">
     <img src="https://ityfuzz.assets.fuzz.land/ityfuzz1.png" width="49%">
