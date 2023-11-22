@@ -164,9 +164,6 @@ pub struct BuildJobResult {
     pub source_maps_replacements: Vec<(String, String)>,
     /// (file name, AST object)
     pub asts: Vec<(String, Value)>,
-
-    _cache_src_map: HashMap<usize, SourceMapLocation>,
-    _cached: bool,
 }
 
 impl BuildJobResult {
@@ -185,8 +182,6 @@ impl BuildJobResult {
             abi,
             source_maps_replacements: replacements,
             asts,
-            _cache_src_map: Default::default(),
-            _cached: false,
         }
     }
 
@@ -243,8 +238,6 @@ impl BuildJobResult {
             abi: abi.to_string(),
             source_maps_replacements: sourcemap_replacements,
             asts,
-            _cache_src_map: Default::default(),
-            _cached: false,
         })
     }
 
@@ -259,22 +252,6 @@ impl BuildJobResult {
             results.insert(addr, result);
         }
         results
-    }
-
-    pub fn get_sourcemap(&mut self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
-        if self._cached {
-            self._cache_src_map.clone()
-        } else {
-            let result = decode_instructions_with_replacement(
-                bytecode,
-                &self.source_maps_replacements,
-                self.source_maps.clone(),
-                &self.sources.iter().map(|(name, _)| (name)).cloned().collect(),
-            );
-            self._cache_src_map = result.clone();
-            self._cached = true;
-            result
-        }
     }
 
     pub fn save_source_map(&self, address: &EVMAddress) {
