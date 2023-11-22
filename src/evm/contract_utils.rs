@@ -862,7 +862,7 @@ pub fn extract_combined_json(json: String, target_path: String, base_path: Optio
     // the base_path can be either absolute or relative
     // if absolute, then we use it as is
     // if relative, then we concat it with target_path
-    let root_path = match base_path {
+    let root_path = match base_path.clone() {
         Some(base_path) => {
             let base_pathbuf = PathBuf::from(base_path.clone());
             if !base_pathbuf.is_absolute() {
@@ -882,7 +882,14 @@ pub fn extract_combined_json(json: String, target_path: String, base_path: Optio
         let mut pathbuf = root_path.clone();
         pathbuf.push(filename);
         // read the file
-        let mut file = File::open(pathbuf).unwrap();
+        let mut file = match File::open(&pathbuf) {
+            Ok(file) => file,
+            Err(_) => {
+                let mut pathbuf = PathBuf::from(base_path.clone().unwrap_or(".".to_string()));
+                pathbuf.push(filename);
+                File::open(&pathbuf).expect(format!("cannot open file {}", pathbuf.display()).as_str())
+            }
+        };
         let mut buf = String::new();
         file.read_to_string(&mut buf).unwrap();
         // push to vec_filenames
