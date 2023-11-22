@@ -556,6 +556,8 @@ pub fn evm_main(args: EvmArgs) {
             &mut state,
             &proxy_deploy_codes,
             &constructor_args_map,
+            args.target.clone(),
+            Some(args.base_path.clone()),
         ),
         EVMTargetType::Config => ContractLoader::from_config(
             &offchain_artifacts.expect("offchain artifacts is required for config target type"),
