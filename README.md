@@ -13,7 +13,7 @@ ItyFuzz is a blazing-fast EVM and MoveVM smart contract hybrid fuzzer that combi
 
 ## Example
 
-Generating full exploit to steal funds from a [contract](https://polygonscan.com/address/0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb) with read-only reentrancy vulnerability on Polygon.
+Generating full exploit to steal funds from a [contract](https://polygonscan.com/address/0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb) with flashloan + read-only reentrancy vulnerability on Polygon.
 
 ```bash
 # Install ItyFuzz
@@ -23,7 +23,8 @@ ityfuzzup
 # Fork Polygon at block 35718198 and fuzz the contract
 ETH_RPC_URL=https://polygon-rpc.com ityfuzz evm\
     -t 0xbcf6e9d27bf95f3f5eddb93c38656d684317d5b4,0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb\
-    -c polygon -i -p -o -f\
+    -c polygon\
+    --flashloan\
     --onchain-block-number 35718198\
     --onchain-etherscan-api-key TR24XDQF35QCNK9PZBV8XEH2XRSWTPWFWT # <-- Get your own API key at https://polygonscan.com/apis if this one is rate limited 
 ```

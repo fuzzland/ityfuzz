@@ -50,7 +50,6 @@ use itertools::Itertools;
 use num_cpus;
 use onchain::{
     endpoints::{Chain, OnChainConfig},
-    flashloan::DummyPriceOracle,
 };
 use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
@@ -116,48 +115,36 @@ pub struct EvmArgs {
     #[arg(long)]
     target_type: Option<String>,
 
-    /// Fuzzer type
-    #[arg(long, default_value = "cmp")]
-    fuzzer_type: String,
-
-    /// Enable onchain
-    #[arg(short, long, default_value = "false")]
-    onchain: bool,
-
     /// Onchain - Chain type (ETH, BSC, POLYGON, MUMBAI)
     #[arg(short, long)]
     chain_type: Option<String>,
 
     /// Onchain - Block number (Default: 0 / latest)
-    #[arg(long)]
+    #[arg(long, short='b')]
     onchain_block_number: Option<u64>,
 
     /// Onchain Customize - RPC endpoint URL (Default: inferred from
     /// chain-type), Example: https://rpc.ankr.com/eth
-    #[arg(long)]
+    #[arg(long, short='u')]
     onchain_url: Option<String>,
 
     /// Onchain Customize - Chain ID (Default: inferred from chain-type)
-    #[arg(long)]
+    #[arg(long, short='i')]
     onchain_chain_id: Option<u32>,
 
     /// Onchain Customize - Block explorer URL (Default: inferred from
     /// chain-type), Example: https://api.etherscan.io/api
-    #[arg(long)]
+    #[arg(long, short='e')]
     onchain_explorer_url: Option<String>,
 
     /// Onchain Customize - Chain name (used as Moralis handle of chain)
     /// (Default: inferred from chain-type)
-    #[arg(long)]
+    #[arg(long, short='n')]
     onchain_chain_name: Option<String>,
 
     /// Onchain Etherscan API Key (Default: None)
-    #[arg(long)]
+    #[arg(long, short='k')]
     onchain_etherscan_api_key: Option<String>,
-
-    /// Onchain Local Proxy Address (Default: None)
-    #[arg(long)]
-    onchain_local_proxy_addr: Option<String>,
 
     /// Onchain which fetching method to use (All, Dump, OneByOne) (Default:
     /// OneByOne)
@@ -184,63 +171,26 @@ pub struct EvmArgs {
     #[arg(short, long, default_value = "false")]
     flashloan: bool,
 
-    /// Flashloan price oracle (onchain/dummy) (Default: DummyPriceOracle)
-    #[arg(long, default_value = "dummy")]
-    flashloan_price_oracle: String,
-
-    /// Enable ierc20 oracle
-    #[arg(short, long, default_value = "false")]
-    ierc20_oracle: bool,
-
-    /// Enable pair oracle
-    #[arg(short, long, default_value = "false")]
-    pair_oracle: bool,
-
     /// Panic when a typed_bug() is called (Default: false)
     #[arg(long, default_value = "false")]
     panic_on_bug: bool,
 
-    /// Detect selfdestruct (Default: true)
-    #[arg(long, default_value = "true")]
-    selfdestruct_oracle: bool,
+    /// Detectors enabled (all, high_confidence, ...). Refer to https://docs.ityfuzz.rs/docs-evm-contract/detecting-common-vulns
+    /// (Default: high_confidence)
+    #[arg(long, short, default_value = "high_confidence")]
+    detectors: String, // <- internally this is known as oracles
 
-    /// Detect pontential reentrancy vulnerability (Default: false)
-    #[arg(long, default_value = "false")]
-    reentrancy_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    arbitrary_external_call_oracle: bool,
-
-    #[arg(long, default_value = "false")]
-    math_calculate_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    echidna_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    invariant_oracle: bool,
-
-    ///Enable oracle for detecting whether bug() / typed_bug() is called
-    #[arg(long, default_value = "true")]
-    typed_bug_oracle: bool,
-
-    /// Setting any string here will enable state comparison oracle.
-    /// This arg holds file path pointing to state comparison oracle's desired
-    /// state
-    #[arg(long, default_value = "")]
-    state_comp_oracle: String,
-
-    /// Matching style for state comparison oracle (Select from "Exact",
-    /// "DesiredContain", "StateContain")
-    #[arg(long, default_value = "Exact")]
-    state_comp_matching: String,
+    // /// Matching style for state comparison oracle (Select from "Exact",
+    // /// "DesiredContain", "StateContain")
+    // #[arg(long, default_value = "Exact")]
+    // state_comp_matching: String,
 
     /// Replay?
-    #[arg(long)]
+    #[arg(long, short)]
     replay_file: Option<String>,
 
     /// Path of work dir, saves corpus, logs, and other stuffs
-    #[arg(long, default_value = "work_dir")]
+    #[arg(long, short, default_value = "work_dir")]
     work_dir: String,
 
     /// Write contract relationship to files
@@ -248,7 +198,7 @@ pub struct EvmArgs {
     write_relationship: bool,
 
     /// Do not quit when a bug is found, continue find new bugs
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "false", short = 'f')]
     run_forever: bool,
 
     /// random seed
@@ -276,7 +226,7 @@ pub struct EvmArgs {
 
     /// Builder URL. If specified, will use this builder to build contracts
     /// instead of using bins and abis.
-    #[arg(long, default_value = "")]
+    #[arg(long, default_value = "", short = 'r')]
     onchain_builder: String,
 
     /// Replacement config (replacing bytecode) for onchain campaign
@@ -333,20 +283,124 @@ enum EVMTargetType {
     Setup,
 }
 
+impl EVMTargetType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            EVMTargetType::Glob => "glob",
+            EVMTargetType::Address => "address",
+            EVMTargetType::AnvilFork => "anvil_fork",
+            EVMTargetType::Config => "config",
+            EVMTargetType::Setup => "setup",
+        }
+    }
+
+    fn from_str(s: &str) -> Self {
+        match s {
+            "glob" => EVMTargetType::Glob,
+            "address" => EVMTargetType::Address,
+            "anvil_fork" => EVMTargetType::AnvilFork,
+            "config" => EVMTargetType::Config,
+            "setup" => EVMTargetType::Setup,
+            _ => panic!("Invalid target type"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OracleType {
+    ERC20,
+    Pair,
+    Reentrancy,
+    ArbitraryCall,
+    MathCalculate,
+    Echidna,
+    StateComparison,
+    TypedBug,
+    SelfDestruct,
+    Invariant,
+}
+
+impl OracleType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            OracleType::ERC20 => "erc20",
+            OracleType::Pair => "pair",
+            OracleType::Reentrancy => "reentrancy",
+            OracleType::ArbitraryCall => "arbitrary_call",
+            OracleType::MathCalculate => "math_calculate",
+            OracleType::Echidna => "echidna",
+            OracleType::StateComparison => "state_comparison",
+            OracleType::TypedBug => "typed_bug",
+            OracleType::SelfDestruct => "selfdestruct",
+            OracleType::Invariant => "invariant",
+        }
+    }
+
+    fn from_str(s: &str) -> Self {
+        match s {
+            "erc20" => OracleType::ERC20,
+            "pair" => OracleType::Pair,
+            "reentrancy" => OracleType::Reentrancy,
+            "arbitrary_call" => OracleType::ArbitraryCall,
+            "math_calculate" => OracleType::MathCalculate,
+            "echidna" => OracleType::Echidna,
+            "state_comparison" => OracleType::StateComparison,
+            "typed_bug" => OracleType::TypedBug,
+            "selfdestruct" => OracleType::SelfDestruct,
+            "invariant" => OracleType::Invariant,
+            _ => panic!("Invalid detector type: {}", s),
+        }
+    }
+
+    fn from_strs(s: &str) -> Vec<Self> {
+        let mut results = Vec::new();
+
+        for detector in s.split(',') {
+            let detector = detector.trim();
+            if detector.is_empty() {
+                continue;
+            }
+
+            if detector == "all" {
+                return vec![
+                    OracleType::ERC20,
+                    OracleType::Pair,
+                    OracleType::Reentrancy,
+                    OracleType::ArbitraryCall,
+                    OracleType::MathCalculate,
+                    OracleType::Echidna,
+                    OracleType::StateComparison,
+                    OracleType::TypedBug,
+                    OracleType::SelfDestruct,
+                ];
+            }
+            if detector == "high_confidence" {
+                return vec![
+                    OracleType::ERC20,
+                    OracleType::Pair,
+                    OracleType::ArbitraryCall,
+                    OracleType::Echidna,
+                    OracleType::TypedBug,
+                    OracleType::SelfDestruct,
+                    OracleType::Invariant,
+                ];
+            }
+
+            results.push(OracleType::from_str(detector));
+        }
+        results
+    }
+}
+
 #[allow(clippy::type_complexity)]
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();
 
     let mut target_type: EVMTargetType = match args.target_type {
-        Some(v) => match v.as_str() {
-            "glob" => EVMTargetType::Glob,
-            "address" => EVMTargetType::Address,
-            _ => {
-                panic!("Invalid target type")
-            }
-        },
+        Some(v) => EVMTargetType::from_str(v.as_str()),
         None => {
+            // infer target type from args
             if args.target.starts_with("0x") {
                 EVMTargetType::Address
             } else {
@@ -355,7 +409,9 @@ pub fn evm_main(args: EvmArgs) {
         }
     };
 
-    let mut onchain = if args.onchain {
+    let is_onchain = args.chain_type.is_some() || !args.onchain_url.is_none();
+
+    let mut onchain = if is_onchain {
         match args.chain_type {
             Some(chain_str) => {
                 let chain = Chain::from_str(&chain_str).expect("Invalid chain type");
@@ -445,15 +501,14 @@ pub fn evm_main(args: EvmArgs) {
         >,
     > = vec![];
 
-    if args.pair_oracle {
+    let mut oracle_types = OracleType::from_strs(args.detectors.as_str());
+
+    if oracle_types.contains(&OracleType::Pair) {
         oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));
     }
 
-    if args.ierc20_oracle {
+    if oracle_types.contains(&OracleType::ERC20) {
         oracles.push(flashloan_oracle.clone());
-    }
-
-    if args.ierc20_oracle {
         producers.push(erc20_producer);
     }
 
@@ -586,7 +641,7 @@ pub fn evm_main(args: EvmArgs) {
             }
             let mut args_target = args.target.clone();
 
-            if args.ierc20_oracle || args.flashloan {
+            if oracle_types.contains(&OracleType::ERC20) || args.flashloan {
                 const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
                 const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
                 if "bsc" == onchain.as_ref().unwrap().chain_name {
@@ -614,7 +669,6 @@ pub fn evm_main(args: EvmArgs) {
     contract_loader.force_abi(force_abis);
 
     let config = Config {
-        fuzzer_type: FuzzerTypes::from_str(args.fuzzer_type.as_str()).expect("unknown fuzzer"),
         contract_loader,
         only_fuzz: if !args.only_fuzz.is_empty() {
             args.only_fuzz
@@ -638,10 +692,6 @@ pub fn evm_main(args: EvmArgs) {
         oracle: oracles,
         producers,
         flashloan: args.flashloan,
-        price_oracle: match args.flashloan_price_oracle.as_str() {
-            "onchain" => Box::new(onchain_clone.expect("onchain unavailable but used for flashloan")),
-            _ => Box::new(DummyPriceOracle {}),
-        },
         onchain_storage_fetching: if is_onchain {
             Some(
                 StorageFetchingMode::from_str(args.onchain_storage_fetching.as_str())
@@ -652,31 +702,20 @@ pub fn evm_main(args: EvmArgs) {
         },
         replay_file: args.replay_file,
         flashloan_oracle,
-        selfdestruct_oracle: args.selfdestruct_oracle,
-        reentrancy_oracle: args.reentrancy_oracle,
-        state_comp_matching: if !args.state_comp_oracle.is_empty() {
-            Some(args.state_comp_matching)
-        } else {
-            None
-        },
-        state_comp_oracle: if !args.state_comp_oracle.is_empty() {
-            Some(args.state_comp_oracle)
-        } else {
-            None
-        },
+        selfdestruct_oracle: oracle_types.contains(&OracleType::SelfDestruct),
+        reentrancy_oracle: oracle_types.contains(&OracleType::Reentrancy),
         work_dir: args.work_dir.clone(),
         write_relationship: args.write_relationship,
         run_forever: args.run_forever,
         sha3_bypass: args.sha3_bypass,
         base_path: args.base_path,
-        echidna_oracle: args.echidna_oracle,
-        invariant_oracle: args.invariant_oracle,
+        echidna_oracle: oracle_types.contains(&OracleType::Echidna),
+        invariant_oracle: oracle_types.contains(&OracleType::Invariant),
         panic_on_bug: args.panic_on_bug,
         spec_id: args.spec_id,
-        typed_bug: args.typed_bug_oracle,
-        selfdestruct_bug: args.selfdestruct_oracle,
-        arbitrary_external_call: args.arbitrary_external_call_oracle,
-        math_calculate_oracle: args.math_calculate_oracle,
+        typed_bug: oracle_types.contains(&OracleType::TypedBug),
+        arbitrary_external_call: oracle_types.contains(&OracleType::ArbitraryCall),
+        math_calculate_oracle: oracle_types.contains(&OracleType::MathCalculate),
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
@@ -722,8 +761,5 @@ pub fn evm_main(args: EvmArgs) {
         .expect("Failed to open or create abis.json");
 
     writeln!(file, "{}", json_str).expect("Failed to write abis to abis.json");
-
-    if let FuzzerTypes::CMP = config.fuzzer_type {
-        evm_fuzzer(config, &mut state)
-    }
+    evm_fuzzer(config, &mut state)
 }

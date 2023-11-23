@@ -168,12 +168,7 @@ pub fn evm_fuzzer(
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
         {
-            fuzz_host.add_flashloan_middleware(Flashloan::new(
-                true,
-                config.onchain.clone(),
-                config.price_oracle,
-                config.flashloan_oracle,
-            ));
+            fuzz_host.add_flashloan_middleware(Flashloan::new(true, config.onchain.clone(), config.flashloan_oracle));
         }
     }
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
@@ -383,20 +378,22 @@ pub fn evm_fuzzer(
         oracles.push(Rc::new(RefCell::new(invariant_oracle)));
     }
 
-    if let Some(path) = config.state_comp_oracle {
-        let mut file = File::open(path.clone()).expect("Failed to open state comp oracle file");
-        let mut buf = String::new();
-        file.read_to_string(&mut buf)
-            .expect("Failed to read state comp oracle file");
+    // if let Some(path) = config.state_comp_oracle {
+    //     let mut file = File::open(path.clone()).expect("Failed to open state comp
+    // oracle file");     let mut buf = String::new();
+    //     file.read_to_string(&mut buf)
+    //         .expect("Failed to read state comp oracle file");
 
-        let evm_state = serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state comp oracle file");
+    //     let evm_state =
+    // serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state
+    // comp oracle file");
 
-        let oracle = Rc::new(RefCell::new(StateCompOracle::new(
-            evm_state,
-            config.state_comp_matching.unwrap(),
-        )));
-        oracles.push(oracle);
-    }
+    //     let oracle = Rc::new(RefCell::new(StateCompOracle::new(
+    //         evm_state,
+    //         config.state_comp_matching.unwrap(),
+    //     )));
+    //     oracles.push(oracle);
+    // }
 
     if config.arbitrary_external_call {
         oracles.push(Rc::new(RefCell::new(ArbitraryCallOracle::new(
