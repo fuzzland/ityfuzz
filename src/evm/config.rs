@@ -11,7 +11,7 @@ use crate::evm::contract_utils::ContractLoader;
 use crate::{
     evm::{
         blaz::builder::BuildJob,
-        onchain::endpoints::{OnChainConfig, PriceOracle},
+        onchain::endpoints::OnChainConfig,
         oracles::erc20::IERC20OracleFlashloan,
         types::EVMAddress,
     },

@@ -42,7 +42,7 @@ use blaz::{
     offchain_config::OffchainConfig,
 };
 use clap::Parser;
-use config::{Config, FuzzerTypes, StorageFetchingMode};
+use config::{Config, StorageFetchingMode};
 use contract_utils::ContractLoader;
 use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
@@ -406,7 +406,7 @@ pub fn evm_main(args: EvmArgs) {
         }
     };
 
-    let is_onchain = args.chain_type.is_some() || !args.onchain_url.is_none();
+    let is_onchain = args.chain_type.is_some() || args.onchain_url.is_some();
 
     let mut onchain = if is_onchain {
         match args.chain_type {
@@ -432,7 +432,7 @@ pub fn evm_main(args: EvmArgs) {
     };
 
     solution::init_cli_args(target, work_dir, &onchain);
-    let onchain_clone = onchain.clone();
+    let _onchain_clone = onchain.clone();
 
     let etherscan_api_key = match args.onchain_etherscan_api_key {
         Some(v) => v,
@@ -498,7 +498,7 @@ pub fn evm_main(args: EvmArgs) {
         >,
     > = vec![];
 
-    let mut oracle_types = OracleType::from_strs(args.detectors.as_str());
+    let oracle_types = OracleType::from_strs(args.detectors.as_str());
 
     if oracle_types.contains(&OracleType::Pair) {
         oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));

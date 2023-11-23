@@ -55,7 +55,6 @@ use crate::{
             invariant::InvariantOracle,
             reentrancy::ReentrancyOracle,
             selfdestruct::SelfdestructOracle,
-            state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
         presets::ExploitTemplate,
