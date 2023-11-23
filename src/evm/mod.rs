@@ -48,9 +48,7 @@ use ethers::types::Transaction;
 use input::{ConciseEVMInput, EVMInput};
 use itertools::Itertools;
 use num_cpus;
-use onchain::{
-    endpoints::{Chain, OnChainConfig},
-};
+use onchain::endpoints::{Chain, OnChainConfig};
 use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
 use serde::Deserialize;
@@ -120,30 +118,30 @@ pub struct EvmArgs {
     chain_type: Option<String>,
 
     /// Onchain - Block number (Default: 0 / latest)
-    #[arg(long, short='b')]
+    #[arg(long, short = 'b')]
     onchain_block_number: Option<u64>,
 
     /// Onchain Customize - RPC endpoint URL (Default: inferred from
     /// chain-type), Example: https://rpc.ankr.com/eth
-    #[arg(long, short='u')]
+    #[arg(long, short = 'u')]
     onchain_url: Option<String>,
 
     /// Onchain Customize - Chain ID (Default: inferred from chain-type)
-    #[arg(long, short='i')]
+    #[arg(long, short = 'i')]
     onchain_chain_id: Option<u32>,
 
     /// Onchain Customize - Block explorer URL (Default: inferred from
     /// chain-type), Example: https://api.etherscan.io/api
-    #[arg(long, short='e')]
+    #[arg(long, short = 'e')]
     onchain_explorer_url: Option<String>,
 
     /// Onchain Customize - Chain name (used as Moralis handle of chain)
     /// (Default: inferred from chain-type)
-    #[arg(long, short='n')]
+    #[arg(long, short = 'n')]
     onchain_chain_name: Option<String>,
 
     /// Onchain Etherscan API Key (Default: None)
-    #[arg(long, short='k')]
+    #[arg(long, short = 'k')]
     onchain_etherscan_api_key: Option<String>,
 
     /// Onchain which fetching method to use (All, Dump, OneByOne) (Default:
@@ -184,7 +182,6 @@ pub struct EvmArgs {
     // /// "DesiredContain", "StateContain")
     // #[arg(long, default_value = "Exact")]
     // state_comp_matching: String,
-
     /// Replay?
     #[arg(long, short)]
     replay_file: Option<String>,
