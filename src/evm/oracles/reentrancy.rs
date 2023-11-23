@@ -69,7 +69,7 @@ impl
             .map(|(addr, slot)| {
                 let mut hasher = DefaultHasher::new();
                 addr.hash(&mut hasher);
-                let real_bug_idx = (hasher.finish() << 8) as u64 + REENTRANCY_BUG_IDX;
+                let real_bug_idx = (hasher.finish() << 8) + REENTRANCY_BUG_IDX;
 
                 let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
                 EVMBugResult::new(

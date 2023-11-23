@@ -91,7 +91,7 @@ impl
                     let mut hasher = DefaultHasher::new();
                     addr.hash(&mut hasher);
                     let hash = hasher.finish();
-                    let bug_idx = (hash << 8) as u64 + V2_PAIR_BUG_IDX;
+                    let bug_idx = (hash << 8) + V2_PAIR_BUG_IDX;
 
                     EVMBugResult::new_simple(
                         "Imbalanced Uniswap Pair".to_string(),

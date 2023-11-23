@@ -15,7 +15,6 @@ use crate::{
         middlewares::cheatcode::CHEATCODE_ADDRESS,
         oracle::EVMBugResult,
         oracles::INVARIANT_BUG_IDX,
-        srcmap::SOURCE_MAP_PROVIDER,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
@@ -96,7 +95,7 @@ impl
             if oracle_should_skip!(ctx, bug_idx) {
                 continue;
             }
-            let (call_res, new_state) = ctx.call_post_batch_dyn(&vec![tx.clone()]);
+            let (call_res, new_state) = ctx.call_post_batch_dyn(&[tx.clone()]);
             let (_, succ) = &call_res[0];
             if *succ &&
                 !{

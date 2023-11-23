@@ -62,7 +62,7 @@ impl
                     let mut hasher = DefaultHasher::new();
                     addr.hash(&mut hasher);
                     pc.hash(&mut hasher);
-                    let real_bug_idx = (hasher.finish() << 8) as u64 + SELFDESTRUCT_BUG_IDX;
+                    let real_bug_idx = (hasher.finish() << 8) + SELFDESTRUCT_BUG_IDX;
 
                     let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
