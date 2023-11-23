@@ -99,7 +99,8 @@ impl
             let (_, succ) = &call_res[0];
             if *succ &&
                 !{
-                    // assertTrue in Foundry writes to slot 0x6661696c65640000000000000000000000000000000000000000000000000000
+                    // assertTrue in Foundry writes to slot
+                    // 0x6661696c65640000000000000000000000000000000000000000000000000000
                     // if the invariant is violated in cheatcode cotract.
                     // @shou: tbh, i feel its dumb and wasteful
                     new_state
