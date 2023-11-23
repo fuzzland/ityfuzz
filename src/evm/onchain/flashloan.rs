@@ -207,7 +207,7 @@ impl Flashloan {
                         let oracle = self.flashloan_oracle.deref().try_borrow_mut();
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
-                            let can_liquidate = token_ctx.swaps.len() > 0; // if there is more than one liquidation path, we can liquidate
+                            let can_liquidate = !token_ctx.swaps.is_empty(); // if there is more than one liquidation path, we can liquidate
                             oracle
                                 .unwrap()
                                 .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);

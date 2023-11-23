@@ -949,7 +949,7 @@ impl ContractLoader {
         let target_selectors = {
             let mut map = HashMap::new();
             target_selectors_vec.iter().for_each(|(addr, selectors)| {
-                map.entry(*addr).or_insert_with(|| vec![]).extend(selectors.clone());
+                map.entry(*addr).or_insert_with(std::vec::Vec::new).extend(selectors.clone());
             });
             map
         };
