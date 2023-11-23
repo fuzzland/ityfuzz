@@ -24,7 +24,7 @@ use crate::evm::{
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::SOURCE_MAP_PROVIDER,
+    srcmap::{SOURCE_MAP_PROVIDER, RawSourceMapInfo},
     types::{is_zero, EVMAddress, EVMFuzzState},
     vm::IN_DEPLOY,
 };
@@ -70,7 +70,7 @@ pub struct CoverageResult {
     pub total_instructions: usize,
     pub branch_coverage: usize,
     pub total_branches: usize,
-    pub uncovered_pc: Vec<usize>,
+    pub covered_code: Vec<Option<RawSourceMapInfo>>,
     pub address: EVMAddress,
 }
 
@@ -87,7 +87,7 @@ impl CoverageResult {
             total_instructions: 0,
             branch_coverage: 0,
             total_branches: 0,
-            uncovered_pc: vec![],
+            covered_code: vec![],
             address: Default::default(),
         }
     }
@@ -228,21 +228,7 @@ impl Display for CoverageReport {
                 (cov.branch_coverage * 100) as f64 / cov.total_branches as f64
             ));
 
-            if !cov.uncovered_pc.is_empty() {
-                s.push_str("Uncovered Code:\n");
-                for uncovered in &cov.uncovered_pc {
-                    s.push_str(&format!(
-                        "{}\n\n",
-                        SOURCE_MAP_PROVIDER
-                            .lock()
-                            .unwrap()
-                            .get_source_code(&cov.address, *uncovered)
-                            .unwrap()
-                    ));
-                }
-            }
-
-            s.push_str(&format!("Uncovered PCs: {:?}\n", cov.uncovered_pc));
+            // todo: @jacob, dump a html file instead
             s.push_str("--------------------------------\n");
         }
         write!(f, "{}", s)
@@ -281,7 +267,7 @@ impl Coverage {
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
                     // Handle Instruction Coverage
                     let real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
-                    let uncovered_pc = all_pcs.difference(&real_covered).cloned().collect_vec();
+                    // let uncovered: Vec<usize> = all_pcs.difference(&real_covered).cloned().collect_vec();
                     report.coverage.insert(
                         name.clone(),
                         CoverageResult {
@@ -289,7 +275,15 @@ impl Coverage {
                             total_instructions: all_pcs.len(),
                             branch_coverage: 0,
                             total_branches: 0,
-                            uncovered_pc: uncovered_pc.clone(),
+                            covered_code: real_covered
+                                .iter()
+                                .map(|pc| {
+                                    SOURCE_MAP_PROVIDER
+                                        .lock()
+                                        .unwrap()
+                                        .get_raw_source_map_info(addr, *pc)
+                                })
+                                .collect(),
                             address: *addr,
                         },
                     );
