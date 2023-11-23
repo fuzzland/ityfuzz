@@ -356,11 +356,15 @@ where
 
             if let Some(setup_data) = &loader.setup_data {
                 // Check if this contract is included by Foundry targetContracts
-                if !setup_data.target_contracts.is_empty() && !setup_data.target_contracts.contains(&contract.deployed_address) {
+                if !setup_data.target_contracts.is_empty() &&
+                    !setup_data.target_contracts.contains(&contract.deployed_address)
+                {
                     continue;
                 }
                 // Check if this contract is excluded by Foundry excludeContracts
-                if !setup_data.excluded_contracts.is_empty() && setup_data.excluded_contracts.contains(&contract.deployed_address) {
+                if !setup_data.excluded_contracts.is_empty() &&
+                    setup_data.excluded_contracts.contains(&contract.deployed_address)
+                {
                     continue;
                 }
 
