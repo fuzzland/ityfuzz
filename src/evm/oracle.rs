@@ -5,7 +5,7 @@ use revm_primitives::Bytecode;
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::{
     evm::{
-        srcmap::parser::SourceMapLocation,
+        srcmap::RawSourceMapInfo,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
@@ -37,7 +37,7 @@ pub struct EVMBugResult {
     pub bug_info: String,
     pub input: ConciseEVMInput,
     pub issue_source: Option<String>,
-    pub sourcemap: Option<SourceMapLocation>,
+    pub sourcemap: Option<RawSourceMapInfo>,
     pub bug_idx: u64,
 }
 
@@ -58,7 +58,7 @@ impl EVMBugResult {
         bug_idx: u64,
         bug_info: String,
         input: ConciseEVMInput,
-        sourcemap: Option<SourceMapLocation>,
+        sourcemap: Option<RawSourceMapInfo>,
         issue_source: Option<String>,
     ) -> Self {
         Self {

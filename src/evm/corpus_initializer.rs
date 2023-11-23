@@ -23,7 +23,7 @@ use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
-use super::{scheduler::ABIScheduler, srcmap::parser::SourceMapLocation};
+use super::{scheduler::ABIScheduler, srcmap::SOURCE_MAP_PROVIDER};
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
 use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
@@ -47,7 +47,6 @@ use crate::{
             EVMFuzzState,
             EVMInfantStateState,
             EVMStagedVMState,
-            ProjectSourceMapTy,
             EVMU256,
         },
         vm::{EVMExecutor, EVMState},
@@ -77,7 +76,6 @@ where
 
 #[derive(Default)]
 pub struct EVMInitializationArtifacts {
-    pub address_to_sourcemap: ProjectSourceMapTy,
     pub address_to_bytecode: HashMap<EVMAddress, Bytecode>,
     pub address_to_abi: HashMap<EVMAddress, Vec<ABIConfig>>,
     pub address_to_abi_object: HashMap<EVMAddress, Vec<BoxedABI>>,
@@ -105,27 +103,6 @@ impl ABIMap {
 
     pub fn get(&self, signature: &[u8; 4]) -> Option<&ABIConfig> {
         self.signature_to_abi.get(signature)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct SourceMapMap {
-    pub address_to_sourcemap: ProjectSourceMapTy,
-}
-
-impl_serdeany!(SourceMapMap);
-
-impl SourceMapMap {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&mut self, address: EVMAddress, sourcemap: Option<HashMap<usize, SourceMapLocation>>) {
-        self.address_to_sourcemap.insert(address, sourcemap);
-    }
-
-    pub fn get(&self, address: &EVMAddress) -> Option<&Option<HashMap<usize, SourceMapLocation>>> {
-        self.address_to_sourcemap.get(address)
     }
 }
 
@@ -206,6 +183,7 @@ where
         self.setup_contract_callers();
         self.init_cheatcode_contract();
         self.initialize_contract(loader);
+        self.initialize_source_map(loader);
         self.initialize_corpus(loader)
     }
 
@@ -247,10 +225,44 @@ where
         info!("Deployed all contracts\n");
     }
 
+    fn initialize_source_map(&self, loader: &ContractLoader) {
+        for contract in &loader.contracts {
+            if SOURCE_MAP_PROVIDER
+                .lock()
+                .unwrap()
+                .has_source_map(&contract.deployed_address)
+            {
+                continue;
+            }
+
+            if let Some(build_job_result) = &contract.build_artifact {
+                build_job_result.save_source_map(&contract.deployed_address);
+                continue;
+            }
+
+            if let Some(srcmap) = &contract.raw_source_map {
+                let runtime_bytecode = self
+                    .executor
+                    .host
+                    .code
+                    .get(&contract.deployed_address)
+                    .expect("get runtime bytecode failed")
+                    .bytecode()
+                    .to_vec();
+                SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
+                    &contract.deployed_address,
+                    runtime_bytecode,
+                    srcmap.clone(),
+                    &contract.files,
+                    contract.source_map_replacements.as_ref(),
+                );
+            }
+        }
+    }
+
     pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_bytecode: HashMap::new(),
-            address_to_sourcemap: HashMap::new(),
             address_to_abi: HashMap::new(),
             address_to_abi_object: Default::default(),
             address_to_name: Default::default(),
@@ -302,9 +314,6 @@ where
                 }
             }
 
-            artifacts
-                .address_to_sourcemap
-                .insert(contract.deployed_address, contract.source_map.clone());
             artifacts
                 .address_to_abi
                 .insert(contract.deployed_address, contract.abi.clone());

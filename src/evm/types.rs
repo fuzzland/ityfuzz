@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use libafl::prelude::HasRand;
@@ -13,7 +11,6 @@ use crate::{
     evm::{
         mutator::FuzzMutator,
         scheduler::PowerABIScheduler,
-        srcmap::parser::SourceMapLocation,
         vm::{EVMExecutor, EVMState},
     },
     executor::FuzzExecutor,
@@ -54,8 +51,6 @@ pub type EVMInfantStateState = InfantStateState<EVMAddress, EVMAddress, EVMState
 pub type EVMStagedVMState = StagedVMState<EVMAddress, EVMAddress, EVMState, ConciseEVMInput>;
 
 pub type EVMExecutionResult = ExecutionResult<EVMAddress, EVMAddress, EVMState, Vec<u8>, ConciseEVMInput>;
-
-pub type ProjectSourceMapTy = HashMap<EVMAddress, Option<HashMap<usize, SourceMapLocation>>>;
 
 pub type EVMFuzzExecutor<OT> = FuzzExecutor<
     EVMState,

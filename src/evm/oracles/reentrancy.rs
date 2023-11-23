@@ -12,7 +12,7 @@ use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
@@ -21,16 +21,12 @@ use crate::{
 };
 
 pub struct ReentrancyOracle {
-    pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
 }
 
 impl ReentrancyOracle {
-    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>) -> Self {
-        Self {
-            sourcemap,
-            address_to_name,
-        }
+    pub fn new(address_to_name: HashMap<EVMAddress, String>) -> Self {
+        Self { address_to_name }
     }
 }
 
