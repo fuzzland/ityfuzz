@@ -24,7 +24,7 @@ use crate::evm::{
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::{SOURCE_MAP_PROVIDER, RawSourceMapInfo},
+    srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
     types::{is_zero, EVMAddress, EVMFuzzState},
     vm::IN_DEPLOY,
 };
@@ -267,7 +267,8 @@ impl Coverage {
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
                     // Handle Instruction Coverage
                     let real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
-                    // let uncovered: Vec<usize> = all_pcs.difference(&real_covered).cloned().collect_vec();
+                    // let uncovered: Vec<usize> =
+                    // all_pcs.difference(&real_covered).cloned().collect_vec();
                     report.coverage.insert(
                         name.clone(),
                         CoverageResult {
@@ -277,12 +278,7 @@ impl Coverage {
                             total_branches: 0,
                             covered_code: real_covered
                                 .iter()
-                                .map(|pc| {
-                                    SOURCE_MAP_PROVIDER
-                                        .lock()
-                                        .unwrap()
-                                        .get_raw_source_map_info(addr, *pc)
-                                })
+                                .map(|pc| SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(addr, *pc))
                                 .collect(),
                             address: *addr,
                         },
