@@ -12,7 +12,7 @@ use crate::{
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
         uniswap::TokenContextT,
-        vm::EVMState,
+        vm::EVMState, onchain::flashloan::CAN_LIQUIDATE,
     },
     generic_vm::vm_state::VMStateT,
     oracle::Oracle,
@@ -36,7 +36,9 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    pub fn register_token(&mut self, token: EVMAddress, token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>) {
+    pub fn register_token(&mut self, token: EVMAddress, token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>, can_liquidate: bool) {
+        // setting can_liquidate to true to turn on liquidation
+        unsafe { CAN_LIQUIDATE |= can_liquidate; }
         self.known_tokens.insert(token, token_ctx);
     }
 
