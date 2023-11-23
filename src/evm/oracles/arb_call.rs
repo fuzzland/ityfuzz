@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     evm::{
-        blaz::builder::{ArtifactInfoMetadata, BuildJobResult},
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
         oracles::ARB_CALL_BUG_IDX,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, ProjectSourceMapTy, EVMU256},
+        srcmap::SOURCE_MAP_PROVIDER,
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
         vm::EVMState,
     },
     oracle::{Oracle, OracleCtx},
@@ -23,16 +23,12 @@ use crate::{
 };
 
 pub struct ArbitraryCallOracle {
-    pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
 }
 
 impl ArbitraryCallOracle {
-    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>) -> Self {
-        Self {
-            sourcemap,
-            address_to_name,
-        }
+    pub fn new(address_to_name: HashMap<EVMAddress, String>) -> Self {
+        Self { address_to_name }
     }
 }
 
@@ -98,23 +94,12 @@ impl
                     .unwrap_or(&format!("{:?}", caller))
                     .clone();
 
-                let srcmap = BuildJobResult::get_sourcemap_executor(
-                    ctx.fuzz_state
-                        .metadata_map_mut()
-                        .get_mut::<ArtifactInfoMetadata>()
-                        .expect("get metadata failed")
-                        .get_mut(caller),
-                    ctx.executor,
-                    caller,
-                    &self.sourcemap,
-                    *pc,
-                );
                 EVMBugResult::new(
                     "Arbitrary Call".to_string(),
                     real_bug_idx,
                     format!("Arbitrary call from {:?} to {:?}", name, target),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-                    srcmap,
+                    SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(caller, *pc),
                     Some(name.clone()),
                 )
                 .push_to_output();

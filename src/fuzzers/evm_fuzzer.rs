@@ -22,14 +22,8 @@ use crate::{
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
         },
         config::Config,
-        contract_utils::{
-            copy_local_source_code,
-            modify_concolic_skip,
-            parse_buildjob_result_sourcemap,
-            save_builder_source_code,
-            FIX_DEPLOYER,
-        },
-        corpus_initializer::{EVMCorpusInitializer, SourceMapMap},
+        contract_utils::FIX_DEPLOYER,
+        corpus_initializer::EVMCorpusInitializer,
         cov_stage::CoverageStage,
         feedbacks::Sha3WrappedFeedback,
         host::{
@@ -48,7 +42,6 @@ use crate::{
             call_printer::CallPrinter,
             cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
-            math_calculate::MathCalculateMiddleware,
             middleware::Middleware,
             reentrancy::ReentrancyTracer,
             sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis},
@@ -60,7 +53,6 @@ use crate::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
             invariant::InvariantOracle,
-            math_calculate::MathCalculateOracle,
             reentrancy::ReentrancyOracle,
             selfdestruct::SelfdestructOracle,
             state_comp::StateCompOracle,
@@ -68,16 +60,7 @@ use crate::{
         },
         presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
-        srcmap::parser::BASE_PATH,
-        types::{
-            fixed_address,
-            EVMAddress,
-            EVMFuzzMutator,
-            EVMFuzzState,
-            EVMQueueExecutor,
-            ProjectSourceMapTy,
-            EVMU256,
-        },
+        types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
         vm::{EVMExecutor, EVMState},
     },
     executor::FuzzExecutor,
@@ -165,10 +148,6 @@ pub fn evm_fuzzer(
         }
     }
 
-    unsafe {
-        BASE_PATH = config.base_path.clone();
-    }
-
     if config.run_forever {
         unsafe {
             RUN_FOREVER = true;
@@ -207,11 +186,6 @@ pub fn evm_fuzzer(
     if config.reentrancy_oracle {
         debug!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
-    }
-
-    if config.math_calculate_oracle {
-        let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(config.onchain)));
-        fuzz_host.add_middlewares(integer_overflow_middleware);
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -288,7 +262,6 @@ pub fn evm_fuzzer(
         state.init_presets(has_preset_match, matched_templates.clone(), sig_to_addr_abi_map);
     }
     let cov_middleware = Rc::new(RefCell::new(Coverage::new(
-        artifacts.address_to_sourcemap.clone(),
         artifacts.address_to_name.clone(),
         config.work_dir.clone(),
     )));
@@ -327,42 +300,6 @@ pub fn evm_fuzzer(
         unsafe { CONCOLIC_TIMEOUT = config.concolic_timeout };
     }
 
-    let mut remote_addr_sourcemaps = ProjectSourceMapTy::new();
-    for (addr, build_job_result) in &artifacts.build_artifacts {
-        let sourcemap = parse_buildjob_result_sourcemap(build_job_result);
-        remote_addr_sourcemaps.insert(*addr, Some(sourcemap));
-    }
-
-    // check if we use the remote or local
-    let mut srcmap = if !remote_addr_sourcemaps.is_empty() {
-        save_builder_source_code(&artifacts.build_artifacts, &config.work_dir);
-        remote_addr_sourcemaps
-    } else {
-        match config.local_files_basedir_pattern {
-            Some(pattern) => {
-                // we copy the source files to the work dir
-                copy_local_source_code(
-                    &pattern,
-                    &config.work_dir,
-                    &artifacts.address_to_sourcemap,
-                    &config.base_path,
-                );
-            }
-            None => {
-                // no local files, so we won't skip any concolic
-            }
-        }
-        artifacts.address_to_sourcemap.clone()
-    };
-
-    modify_concolic_skip(&mut srcmap, &config.work_dir);
-
-    let srcmap = SourceMapMap {
-        address_to_sourcemap: srcmap,
-    };
-
-    state.metadata_map_mut().insert(srcmap);
-
     let concolic_stage = ConcolicStage::new(
         config.concolic,
         config.concolic_caller,
@@ -374,10 +311,7 @@ pub fn evm_fuzzer(
     state.metadata_map_mut().insert(UncoveredBranchesMetadata::new());
     let std_stage = PowerABIMutationalStage::new(mutator);
 
-    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(
-        artifacts.address_to_name.clone(),
-        artifacts.address_to_sourcemap.clone(),
-    )));
+    let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(artifacts.address_to_name.clone())));
 
     let coverage_obs_stage = CoverageStage::new(
         evm_executor_ref.clone(),
@@ -466,14 +400,12 @@ pub fn evm_fuzzer(
 
     if config.arbitrary_external_call {
         oracles.push(Rc::new(RefCell::new(ArbitraryCallOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
 
     if config.typed_bug {
         oracles.push(Rc::new(RefCell::new(TypedBugOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
@@ -482,21 +414,12 @@ pub fn evm_fuzzer(
 
     if config.selfdestruct_oracle {
         oracles.push(Rc::new(RefCell::new(SelfdestructOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
 
     if config.reentrancy_oracle {
         oracles.push(Rc::new(RefCell::new(ReentrancyOracle::new(
-            artifacts.address_to_sourcemap.clone(),
-            artifacts.address_to_name.clone(),
-        ))));
-    }
-
-    if config.math_calculate_oracle {
-        oracles.push(Rc::new(RefCell::new(MathCalculateOracle::new(
-            artifacts.address_to_sourcemap.clone(),
             artifacts.address_to_name.clone(),
         ))));
     }
@@ -611,10 +534,7 @@ pub fn evm_fuzzer(
                 EVAL_COVERAGE = true;
             }
 
-            let printer = Rc::new(RefCell::new(CallPrinter::new(
-                artifacts.address_to_name.clone(),
-                artifacts.address_to_sourcemap.clone(),
-            )));
+            let printer = Rc::new(RefCell::new(CallPrinter::new(artifacts.address_to_name.clone())));
             evm_executor_ref.borrow_mut().host.add_middlewares(printer.clone());
 
             for testcase in testcases {

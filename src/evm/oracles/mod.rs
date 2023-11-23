@@ -5,7 +5,6 @@ pub mod echidna;
 pub mod erc20;
 pub mod function;
 pub mod invariant;
-pub mod math_calculate;
 pub mod reentrancy;
 pub mod selfdestruct;
 pub mod state_comp;

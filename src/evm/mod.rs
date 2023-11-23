@@ -556,6 +556,8 @@ pub fn evm_main(args: EvmArgs) {
             &mut state,
             &proxy_deploy_codes,
             &constructor_args_map,
+            args.target.clone(),
+            Some(args.base_path.clone()),
         ),
         EVMTargetType::Config => ContractLoader::from_config(
             &offchain_artifacts.expect("offchain artifacts is required for config target type"),
@@ -576,6 +578,7 @@ pub fn evm_main(args: EvmArgs) {
         EVMTargetType::Setup => ContractLoader::from_setup(
             &offchain_artifacts.expect("offchain artifacts is required for config target type"),
             args.setup_file,
+            args.work_dir.clone(),
         ),
         EVMTargetType::Address => {
             if onchain.is_none() {

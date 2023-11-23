@@ -28,7 +28,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::evm::{types::EVMFuzzState, uniswap::TokenContext};
+use crate::evm::{types::EVMFuzzState, uniswap::UniswapTokenContext};
 // Some components are used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
 use crate::{
@@ -166,7 +166,7 @@ impl Flashloan {
             .map(|price| Self::calculate_usd_value(price, amount))
     }
 
-    fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
+    fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
         self.endpoint
             .as_mut()
             .map(|endpoint| endpoint.fetch_uniswap_path_cached(addr).clone())
@@ -205,7 +205,7 @@ impl Flashloan {
                         let oracle = self.flashloan_oracle.deref().try_borrow_mut();
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
-                            oracle.unwrap().register_token(*addr, token_ctx);
+                            oracle.unwrap().register_token(*addr, Rc::new(RefCell::new(token_ctx)));
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {

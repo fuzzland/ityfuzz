@@ -27,14 +27,8 @@ use crate::{
         blaz::builder::{ArtifactInfoMetadata, BuildJob},
         bytecode_analyzer,
         config::StorageFetchingMode,
-        contract_utils::{
-            extract_sig_from_contract,
-            modify_concolic_skip,
-            save_builder_addr_source_code,
-            ABIConfig,
-            ContractLoader,
-        },
-        corpus_initializer::{ABIMap, SourceMapMap},
+        contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader},
+        corpus_initializer::ABIMap,
         host::FuzzHost,
         input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
@@ -349,7 +343,7 @@ impl OnChain {
                 debug!("onchain job {:?}", address_h160);
                 let build_job = builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
 
-                if let Some(mut job) = build_job {
+                if let Some(job) = build_job {
                     abi = Some(job.abi.clone());
                     // replace the code with the one from builder
                     // debug!("replace code for {:?} with builder's", address_h160);
@@ -360,14 +354,7 @@ impl OnChain {
                         .expect("artifact info metadata")
                         .add(address_h160, job.clone());
 
-                    let srcmap = job.get_sourcemap(contract_code.bytecode.to_vec());
-
-                    debug!("start save_builder_addr_source_code");
-                    save_builder_addr_source_code(&job, &address_h160, &host.work_dir, &srcmap);
-                    debug!("end save_builder_addr_source_code");
-
-                    let global_srcmap = state.metadata_map_mut().get_mut::<SourceMapMap>().unwrap();
-                    modify_concolic_skip(&mut global_srcmap.address_to_sourcemap, &host.work_dir);
+                    job.save_source_map(&address_h160);
                 }
             }
 

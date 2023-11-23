@@ -9,7 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use libafl::{prelude::HasMetadata, schedulers::Scheduler};
+use libafl::{schedulers::Scheduler, state::HasMetadata};
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -24,13 +24,8 @@ use crate::evm::{
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::parser::{
-        pretty_print_source_map,
-        pretty_print_source_map_single,
-        SourceMapAvailability,
-        SourceMapWithCode,
-    },
-    types::{is_zero, EVMAddress, EVMFuzzState, ProjectSourceMapTy},
+    srcmap::SOURCE_MAP_PROVIDER,
+    types::{is_zero, EVMAddress, EVMFuzzState},
     vm::IN_DEPLOY,
 };
 
@@ -63,11 +58,10 @@ pub struct Coverage {
     pub skip_pcs: HashMap<EVMAddress, HashSet<usize>>,
     pub work_dir: String,
 
-    pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
-    pub pc_info: HashMap<(EVMAddress, usize), SourceMapWithCode>,
+    pub pc_info: HashMap<(EVMAddress, usize), String>, // (address, pc) -> source code
 
-    pub sources: HashMap<EVMAddress, Vec<(String, String)>>,
+    pub sources: HashMap<EVMAddress, Vec<(String, String)>>, // address -> (filename, content)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -76,7 +70,6 @@ pub struct CoverageResult {
     pub total_instructions: usize,
     pub branch_coverage: usize,
     pub total_branches: usize,
-    pub uncovered: HashSet<SourceMapWithCode>,
     pub uncovered_pc: Vec<usize>,
     pub address: EVMAddress,
 }
@@ -94,7 +87,6 @@ impl CoverageResult {
             total_instructions: 0,
             branch_coverage: 0,
             total_branches: 0,
-            uncovered: HashSet::new(),
             uncovered_pc: vec![],
             address: Default::default(),
         }
@@ -236,10 +228,17 @@ impl Display for CoverageReport {
                 (cov.branch_coverage * 100) as f64 / cov.total_branches as f64
             ));
 
-            if !cov.uncovered.is_empty() {
+            if !cov.uncovered_pc.is_empty() {
                 s.push_str("Uncovered Code:\n");
-                for uncovered in &cov.uncovered {
-                    s.push_str(&format!("{}\n\n", uncovered));
+                for uncovered in &cov.uncovered_pc {
+                    s.push_str(&format!(
+                        "{}\n\n",
+                        SOURCE_MAP_PROVIDER
+                            .lock()
+                            .unwrap()
+                            .get_source_code(&cov.address, *uncovered)
+                            .unwrap()
+                    ));
                 }
             }
 
@@ -251,7 +250,7 @@ impl Display for CoverageReport {
 }
 
 impl Coverage {
-    pub fn new(sourcemap: ProjectSourceMapTy, address_to_name: HashMap<EVMAddress, String>, work_dir: String) -> Self {
+    pub fn new(address_to_name: HashMap<EVMAddress, String>, work_dir: String) -> Self {
         Self {
             pc_coverage: HashMap::new(),
             total_instr_set: HashMap::new(),
@@ -259,7 +258,6 @@ impl Coverage {
             jumpi_coverage: Default::default(),
             skip_pcs: Default::default(),
             work_dir,
-            sourcemap,
             address_to_name,
             pc_info: Default::default(),
             sources: Default::default(),
@@ -291,18 +289,12 @@ impl Coverage {
                             total_instructions: all_pcs.len(),
                             branch_coverage: 0,
                             total_branches: 0,
-                            uncovered: HashSet::new(),
                             uncovered_pc: uncovered_pc.clone(),
                             address: *addr,
                         },
                     );
 
                     let result_ref = report.coverage.get_mut(&name).unwrap();
-                    for pc in uncovered_pc {
-                        if let Some(source_map) = self.pc_info.get(&(*addr, pc)).cloned() {
-                            result_ref.uncovered.insert(source_map.clone());
-                        }
-                    }
 
                     // Handle Branch Coverage
                     let all_branch_pcs = self.total_jumpi_set.get(addr).unwrap_or(&default_skipper);
@@ -345,6 +337,8 @@ where
         }
     }
 
+    // This will be called when new bytecode is inserted
+    // e.g. meeting a new address/contract
     unsafe fn on_insert(
         &mut self,
         _: Option<&mut Interpreter>,
@@ -353,42 +347,29 @@ where
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {
-        let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
-
-        // find all skipping PCs
         let meta = state
             .metadata_map_mut()
             .get_mut::<ArtifactInfoMetadata>()
             .expect("ArtifactInfoMetadata not found");
+
         if let Some(build_artifact) = meta.get_mut(&address) {
             self.sources.insert(address, build_artifact.sources.clone());
-
-            let sourcemap = build_artifact.get_sourcemap(bytecode.clone().bytecode.to_vec());
-
-            pcs.iter().for_each(|pc| {
-                match pretty_print_source_map_single(*pc, &sourcemap, &build_artifact.sources) {
-                    SourceMapAvailability::Available(s) => {
-                        self.pc_info.insert((address, *pc), s);
-                    }
-                    SourceMapAvailability::Unknown => {
-                        skip_pcs.insert(*pc);
-                    }
-                    SourceMapAvailability::Unavailable => {}
-                };
-            });
-        } else {
-            pcs.iter().for_each(|pc| {
-                match pretty_print_source_map(*pc, &address, &self.sourcemap) {
-                    SourceMapAvailability::Available(s) => {
-                        self.pc_info.insert((address, *pc), s);
-                    }
-                    SourceMapAvailability::Unknown => {
-                        skip_pcs.insert(*pc);
-                    }
-                    SourceMapAvailability::Unavailable => {}
-                };
-            });
         }
+
+        let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
+
+        // find all skipping PCs
+        pcs.iter().for_each(|pc| {
+            if SOURCE_MAP_PROVIDER.lock().unwrap().get_pc_has_match(&address, *pc) {
+                if let Some(source_code) = SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(&address, *pc) {
+                    self.pc_info.insert((address, *pc), source_code.clone());
+                } else {
+                    skip_pcs.insert(*pc);
+                }
+            } else {
+                skip_pcs.insert(*pc);
+            }
+        });
 
         // total instr minus skipped pcs
         let total_instr = pcs.iter().filter(|pc| !skip_pcs.contains(*pc)).cloned().collect();

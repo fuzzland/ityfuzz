@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use crate::evm::input::{ConciseEVMInput, EVMInput};
 use crate::evm::oracles::{ARB_CALL_BUG_IDX, ARB_TRANSFER_BUG_IDX};
-use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, ProjectSourceMapTy};
+use crate::evm::types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256};
 use crate::evm::vm::EVMState;
 use crate::oracle::{Oracle, OracleCtx};
 use bytes::Bytes;
@@ -18,17 +18,14 @@ use crate::fuzzer::ORACLE_OUTPUT;
 use crate::state::HasExecutionResult;
 
 pub struct ArbitraryERC20TransferOracle {
-    pub sourcemap: ProjectSourceMapTy,
     pub address_to_name: HashMap<EVMAddress, String>,
 }
 
 impl ArbitraryERC20TransferOracle {
     pub fn new(
-        sourcemap: ProjectSourceMapTy,
         address_to_name: HashMap<EVMAddress, String>,
     ) -> Self {
         Self {
-            sourcemap,
             address_to_name,
         }
     }
@@ -81,14 +78,6 @@ Oracle<
                     .unwrap_or(&format!("{:?}", caller))
                     .clone();
 
-                let srcmap = BuildJobResult::get_sourcemap_executor(
-                    ctx.fuzz_state.metadata_map_mut().get_mut::<ArtifactInfoMetadata>().expect("get metadata failed")
-                        .get_mut(caller),
-                    ctx.executor,
-                    caller,
-                    &self.sourcemap,
-                    *pc
-                );
                 EVMBugResult::new(
                     "Arbitrary Transfer".to_string(),
                     real_bug_idx,
@@ -97,7 +86,7 @@ Oracle<
                         name
                     ),
                     ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
-                    srcmap,
+                    SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(caller, *pc),
                     Some(name.clone())
                 ).push_to_output();
                 res.push(real_bug_idx);

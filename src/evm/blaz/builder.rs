@@ -1,12 +1,10 @@
 use std::{
-    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
     fs,
     fs::OpenOptions,
     hash::{Hash, Hasher},
     io::Write,
     path::Path,
-    rc::Rc,
     str::FromStr,
     thread::sleep,
     time::Duration,
@@ -21,15 +19,10 @@ use tracing::{debug, error};
 
 use crate::{
     cache::{Cache, FileSystemCache},
-    evm::{
-        blaz::get_client,
-        srcmap::parser::{decode_instructions_with_replacement, SourceMapLocation},
-        types::{EVMAddress, EVMQueueExecutor, ProjectSourceMapTy},
-    },
-    generic_vm::vm_executor::GenericVM,
+    evm::{blaz::get_client, srcmap::SOURCE_MAP_PROVIDER, types::EVMAddress},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BuildJob {
     pub build_server: String,
     pub replacements: HashMap<EVMAddress, Option<BuildJobResult>>,
@@ -164,9 +157,6 @@ pub struct BuildJobResult {
     pub source_maps_replacements: Vec<(String, String)>,
     /// (file name, AST object)
     pub asts: Vec<(String, Value)>,
-
-    _cache_src_map: HashMap<usize, SourceMapLocation>,
-    _cached: bool,
 }
 
 impl BuildJobResult {
@@ -185,8 +175,6 @@ impl BuildJobResult {
             abi,
             source_maps_replacements: replacements,
             asts,
-            _cache_src_map: Default::default(),
-            _cached: false,
         }
     }
 
@@ -243,8 +231,6 @@ impl BuildJobResult {
             abi: abi.to_string(),
             source_maps_replacements: sourcemap_replacements,
             asts,
-            _cache_src_map: Default::default(),
-            _cached: false,
         })
     }
 
@@ -261,55 +247,18 @@ impl BuildJobResult {
         results
     }
 
-    pub fn get_sourcemap(&mut self, bytecode: Vec<u8>) -> HashMap<usize, SourceMapLocation> {
-        if self._cached {
-            self._cache_src_map.clone()
-        } else {
-            let result = decode_instructions_with_replacement(
-                bytecode,
-                &self.source_maps_replacements,
-                self.source_maps.clone(),
-                &self.sources.iter().map(|(name, _)| (name)).cloned().collect(),
-            );
-            self._cache_src_map = result.clone();
-            self._cached = true;
-            result
-        }
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub fn get_sourcemap_executor<VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>(
-        _self: Option<&mut Self>,
-        executor: &mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
-        addr: &EVMAddress,
-        additional_sourcemap: &ProjectSourceMapTy,
-        pc: usize,
-    ) -> Option<SourceMapLocation> {
-        if let Some(_self) = _self {
-            if _self._cached {
-                return _self._cache_src_map.get(&pc).cloned();
-            }
-
-            let bytecode = Vec::from(
-                (**executor)
-                    .borrow_mut()
-                    .as_any()
-                    .downcast_ref::<EVMQueueExecutor>()
-                    .unwrap()
-                    .host
-                    .code
-                    .get(addr)
-                    .unwrap()
-                    .clone()
-                    .bytecode(),
-            );
-            return _self.get_sourcemap(bytecode).get(&pc).cloned();
+    pub fn save_source_map(&self, address: &EVMAddress) {
+        if SOURCE_MAP_PROVIDER.lock().unwrap().has_source_map(address) {
+            return;
         }
 
-        if let Some(Some(srcmap)) = additional_sourcemap.get(addr) {
-            return srcmap.get(&pc).cloned();
-        }
-        None
+        SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
+            address,
+            self.bytecodes.clone().to_vec(),
+            self.source_maps.clone(),
+            &self.sources,
+            Some(&self.source_maps_replacements),
+        );
     }
 }
 
