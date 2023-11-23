@@ -1,3 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
+use libafl_bolts::impl_serdeany;
+use serde::{Deserialize, Serialize};
+
 use super::types::EVMU512;
 
 pub mod arb_call;
@@ -33,4 +38,15 @@ pub fn u512_div_float(a: EVMU512, b: EVMU512, fp: usize) -> String {
     }
     res.insert(res.len() - fp, '.');
     res
+}
+
+#[macro_export]
+macro_rules! oracle_should_skip {
+    ($ctx: expr, $key: expr) => {{
+        let mut res = false;
+        if let Some(meta) = $ctx.fuzz_state.metadata_map().get::<BugMetadata>() {
+            res = meta.known_bugs.contains(&$key);
+        }
+        res
+    }};
 }
