@@ -10,6 +10,7 @@ use std::{
 
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;
+use libafl::state::HasMetadata;
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -25,7 +26,7 @@ use crate::evm::{
     middlewares::middleware::{Middleware, MiddlewareType},
     srcmap::SOURCE_MAP_PROVIDER,
     types::{is_zero, EVMAddress, EVMFuzzState},
-    vm::IN_DEPLOY,
+    vm::IN_DEPLOY, blaz::builder::ArtifactInfoMetadata,
 };
 
 pub static mut EVAL_COVERAGE: bool = false;
@@ -60,7 +61,7 @@ pub struct Coverage {
     pub address_to_name: HashMap<EVMAddress, String>,
     pub pc_info: HashMap<(EVMAddress, usize), String>, // (address, pc) -> source code
 
-    pub sources: HashMap<EVMAddress, Vec<(String, String)>>,
+    pub sources: HashMap<EVMAddress, Vec<(String, String)>>,  // address -> (filename, content)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -342,10 +343,19 @@ where
         &mut self,
         _: Option<&mut Interpreter>,
         _host: &mut FuzzHost<SC>,
-        _state: &mut EVMFuzzState,
+        state: &mut EVMFuzzState,
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {
+        let meta = state
+        .metadata_map_mut()
+        .get_mut::<ArtifactInfoMetadata>()
+        .expect("ArtifactInfoMetadata not found");
+
+        if let Some(build_artifact) = meta.get_mut(&address) {
+            self.sources.insert(address, build_artifact.sources.clone());
+        }
+
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
