@@ -847,99 +847,98 @@ impl ContractLoader {
         }
 
         let calls = vec![
-            (
-                deployer,
-                deployed_addr,
-                abi_sig!("excludeContracts"),
-            ),
-            (
-                deployer,
-                deployed_addr,
-                abi_sig!("excludeSenders"),
-            ),
-            (
-                deployer,
-                deployed_addr,
-                abi_sig!("targetContracts"),
-            ),
-            (
-                deployer,
-                deployed_addr,
-                abi_sig!("targetSenders"),
-            ),
-            (
-                deployer,
-                deployed_addr,
-                abi_sig!("targetSelectors"),
-            ),
+            (deployer, deployed_addr, abi_sig!("excludeContracts")),
+            (deployer, deployed_addr, abi_sig!("excludeSenders")),
+            (deployer, deployed_addr, abi_sig!("targetContracts")),
+            (deployer, deployed_addr, abi_sig!("targetSenders")),
+            (deployer, deployed_addr, abi_sig!("targetSelectors")),
         ];
 
         let (res, _) = evm_executor.fast_call(&calls, &new_vm_state, &mut state);
-        
+
         macro_rules! parse_nth_result_addr {
-            ($nth: expr) => {
-                {
-                    let (res_bys, succ) = res[$nth].clone();
-                    let mut addrs = vec![];
-                    if succ {
-                        let contracts = ethers::abi::decode(&[ethers::abi::ParamType::Array(Box::new(ethers::abi::ParamType::Address))], &res_bys).unwrap();
-                        addrs = if let ethers::abi::Token::Array(contracts) = contracts[0].clone() {
-                            contracts.iter().map(|x| {
+            ($nth: expr) => {{
+                let (res_bys, succ) = res[$nth].clone();
+                let mut addrs = vec![];
+                if succ {
+                    let contracts = ethers::abi::decode(
+                        &[ethers::abi::ParamType::Array(Box::new(
+                            ethers::abi::ParamType::Address,
+                        ))],
+                        &res_bys,
+                    )
+                    .unwrap();
+                    addrs = if let ethers::abi::Token::Array(contracts) = contracts[0].clone() {
+                        contracts
+                            .iter()
+                            .map(|x| {
                                 if let ethers::abi::Token::Address(addr) = x {
                                     EVMAddress::from_slice(addr.as_bytes())
                                 } else {
                                     panic!("invalid address")
                                 }
-                            }).collect::<Vec<_>>()
-                        } else {
-                            panic!("invalid array")
-                        };
-                    }
-                    addrs
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        panic!("invalid array")
+                    };
                 }
-            };
+                addrs
+            }};
         }
 
         // (address addr, bytes4[] selectors)[]
         macro_rules! parse_nth_result_selector {
-            ($nth: expr) => {
-                {
-                    let (res_bys, succ) = res[$nth].clone();
-                    let mut sigs = vec![];
-                    if succ {
-                        let sigs_parsed = ethers::abi::decode(&[ethers::abi::ParamType::Array(Box::new(ethers::abi::ParamType::Tuple(vec![ethers::abi::ParamType::Address, ethers::abi::ParamType::Array(Box::new(ethers::abi::ParamType::FixedBytes(4)))])))], &res_bys).unwrap();
+            ($nth: expr) => {{
+                let (res_bys, succ) = res[$nth].clone();
+                let mut sigs = vec![];
+                if succ {
+                    let sigs_parsed = ethers::abi::decode(
+                        &[ethers::abi::ParamType::Array(Box::new(
+                            ethers::abi::ParamType::Tuple(vec![
+                                ethers::abi::ParamType::Address,
+                                ethers::abi::ParamType::Array(Box::new(ethers::abi::ParamType::FixedBytes(4))),
+                            ]),
+                        ))],
+                        &res_bys,
+                    )
+                    .unwrap();
 
-                        let sigs_parsed = if let ethers::abi::Token::Array(sigs_parsed) = sigs_parsed[0].clone() {
-                            sigs_parsed
-                        } else {
-                            panic!("invalid array")
-                        };
+                    let sigs_parsed = if let ethers::abi::Token::Array(sigs_parsed) = sigs_parsed[0].clone() {
+                        sigs_parsed
+                    } else {
+                        panic!("invalid array")
+                    };
 
-                        sigs_parsed.iter().for_each(|x| {
-                            if let ethers::abi::Token::Tuple(tuple) = x {
-                                let addr = tuple[0].clone();
-                                let selectors = tuple[1].clone();
-                                if let (ethers::abi::Token::Address(addr), ethers::abi::Token::Array(selectors)) = (addr, selectors) {
-                                    let addr = EVMAddress::from_slice(addr.as_bytes());
-                                    let selectors = selectors.iter().map(|x| {
+                    sigs_parsed.iter().for_each(|x| {
+                        if let ethers::abi::Token::Tuple(tuple) = x {
+                            let addr = tuple[0].clone();
+                            let selectors = tuple[1].clone();
+                            if let (ethers::abi::Token::Address(addr), ethers::abi::Token::Array(selectors)) =
+                                (addr, selectors)
+                            {
+                                let addr = EVMAddress::from_slice(addr.as_bytes());
+                                let selectors = selectors
+                                    .iter()
+                                    .map(|x| {
                                         if let ethers::abi::Token::FixedBytes(bytes) = x {
                                             bytes.clone()
                                         } else {
                                             panic!("invalid bytes")
                                         }
-                                    }).collect::<Vec<_>>();
-                                    sigs.push((addr, selectors));
-                                } else {
-                                    panic!("invalid tuple: {:?}", tuple)
-                                }
+                                    })
+                                    .collect::<Vec<_>>();
+                                sigs.push((addr, selectors));
                             } else {
-                                panic!("invalid tuple")
+                                panic!("invalid tuple: {:?}", tuple)
                             }
-                        });
-                    }
-                    sigs
+                        } else {
+                            panic!("invalid tuple")
+                        }
+                    });
                 }
-            };
+                sigs
+            }};
         }
 
         let excluded_contracts = parse_nth_result_addr!(0);

@@ -7,12 +7,13 @@ use tracing::debug;
 use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
+        onchain::flashloan::CAN_LIQUIDATE,
         oracle::EVMBugResult,
         oracles::{u512_div_float, ERC20_BUG_IDX},
         producers::erc20::ERC20Producer,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
         uniswap::TokenContextT,
-        vm::EVMState, onchain::flashloan::CAN_LIQUIDATE,
+        vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
     oracle::Oracle,
@@ -36,9 +37,16 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    pub fn register_token(&mut self, token: EVMAddress, token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>, can_liquidate: bool) {
+    pub fn register_token(
+        &mut self,
+        token: EVMAddress,
+        token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>,
+        can_liquidate: bool,
+    ) {
         // setting can_liquidate to true to turn on liquidation
-        unsafe { CAN_LIQUIDATE |= can_liquidate; }
+        unsafe {
+            CAN_LIQUIDATE |= can_liquidate;
+        }
         self.known_tokens.insert(token, token_ctx);
     }
 

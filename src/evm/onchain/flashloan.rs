@@ -208,11 +208,9 @@ impl Flashloan {
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
                             let can_liquidate = token_ctx.swaps.len() > 0; // if there is more than one liquidation path, we can liquidate
-                            oracle.unwrap().register_token(
-                                *addr, 
-                                Rc::new(RefCell::new(token_ctx)),
-                                can_liquidate
-                            );
+                            oracle
+                                .unwrap()
+                                .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {

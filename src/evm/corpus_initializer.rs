@@ -367,17 +367,20 @@ where
                         continue;
                     }
                 }
-                
+
                 // Check if this contract and sig is included by Foundry targetSelectors
                 if !setup_data.target_selectors.is_empty() {
                     target_sig = Some(
-                        setup_data.target_selectors.get(&contract.deployed_address).cloned().unwrap_or(
-                            vec![] // empty vec means none of the selectors are targeted
-                        )
+                        setup_data
+                            .target_selectors
+                            .get(&contract.deployed_address)
+                            .cloned()
+                            .unwrap_or(
+                                vec![], // empty vec means none of the selectors are targeted
+                            ),
                     );
                 }
             }
-            
 
             for abi in contract.abi.clone() {
                 let name = &abi.function_name;
@@ -445,7 +448,7 @@ where
 
     pub fn setup_contract_callers(&mut self, loader: &mut ContractLoader) {
         // We no longer need to setup contract callers when target senders are specified
-        // The target senders are already setup in setup_default_callers. Existence 
+        // The target senders are already setup in setup_default_callers. Existence
         // of the code in those addresses depends on setUp function of the contract.
         if let Some(setup_data) = &loader.setup_data {
             if !setup_data.target_senders.is_empty() {

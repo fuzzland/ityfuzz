@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, rc::Rc, process::exit};
+use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
 
 use bytes::Bytes;
 use glob::glob;
@@ -525,8 +525,7 @@ pub fn evm_fuzzer(
                     vm_state = state.get_execution_result().new_state.clone();
                 }
             }
-            let res = fuzzer
-                .fuzz_loop(&mut stages, &mut executor, state, &mut mgr);
+            let res = fuzzer.fuzz_loop(&mut stages, &mut executor, state, &mut mgr);
 
             // it is not possible to reach here unless an exception is thrown
             let rv = res.err().unwrap().to_string();
