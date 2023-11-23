@@ -887,7 +887,7 @@ pub fn extract_combined_json(json: String, target_path: String, base_path: Optio
             Err(_) => {
                 let mut pathbuf = PathBuf::from(base_path.clone().unwrap_or(".".to_string()));
                 pathbuf.push(filename);
-                File::open(&pathbuf).expect(format!("cannot open file {}", pathbuf.display()).as_str())
+                File::open(&pathbuf).unwrap_or_else(|_| panic!("cannot open file {}", pathbuf.display()))
             }
         };
         let mut buf = String::new();

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use libafl::prelude::HasRand;
