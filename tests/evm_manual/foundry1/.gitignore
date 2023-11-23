@@ -12,3 +12,7 @@ docs/
 
 # Dotenv file
 .env
+
+.tmp/
+build-info/
+results.json
