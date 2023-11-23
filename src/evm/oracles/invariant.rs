@@ -75,9 +75,9 @@ impl
                 } else {
                     let bug_idx = (idx << 8) as u64 + INVARIANT_BUG_IDX;
                     EVMBugResult::new(
-                        "invariant".to_string(),
+                        "Invariant".to_string(),
                         bug_idx,
-                        format!("{:?} violated", name),
+                        format!("Invariant {:?} violated", name),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         None,
                         Some(name.clone()),

@@ -67,9 +67,9 @@ impl
                     let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
                     EVMBugResult::new(
-                        "selfdestruct".to_string(),
+                        "Selfdestruct".to_string(),
                         real_bug_idx,
-                        "Destructed".to_string(),
+                        format!("Destructed contract {:?}", name),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(addr, *pc),
                         Some(name.clone()),

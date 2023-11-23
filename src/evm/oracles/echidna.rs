@@ -69,9 +69,9 @@ impl
                     let name = self.names.get(&self.batch_call_txs[idx].1.to_vec()).unwrap();
                     let bug_idx = (idx << 8) as u64 + ECHIDNA_BUG_IDX;
                     EVMBugResult::new(
-                        "echidna".to_string(),
+                        "Echidna".to_string(),
                         bug_idx,
-                        format!("{:?} violated", name),
+                        format!("Invariant {:?} violated", name),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         None,
                         Some(name.clone()),

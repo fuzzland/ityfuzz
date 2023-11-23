@@ -94,10 +94,10 @@ impl
                     let bug_idx = hash << (8 + V2_PAIR_BUG_IDX);
 
                     EVMBugResult::new_simple(
-                        "imbalanced_pair".to_string(),
+                        "Imbalanced Uniswap Pair".to_string(),
                         bug_idx,
                         format!(
-                            "{:?}, Reserves changed from {:?} to {:?}\n",
+                            "In Uniswap pair {:?}, reserves has changed from {:?} to {:?}. It is likely the token contract has incorrectly burned that token in the pair.\n",
                             addr,
                             (r0, r1),
                             (pre_r0, pre_r1)

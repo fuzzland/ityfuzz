@@ -67,9 +67,9 @@ impl
                     let real_bug_idx = hasher.finish() << (8 + TYPED_BUG_BUG_IDX);
 
                     EVMBugResult::new(
-                        "typed_bug".to_string(),
+                        "Bug".to_string(),
                         real_bug_idx,
-                        format!("{:?} violated", bug_id,),
+                        format!("Invariant {:?} violated", bug_id,),
                         ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                         SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(addr, *pc),
                         Some(name.clone()),
