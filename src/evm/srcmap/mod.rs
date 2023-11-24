@@ -124,10 +124,8 @@ impl SourceMapProvider {
                         }
                     }
                 }
-                None => unreachable!("{}", format!("pc {} is invalid @ {}", pc, address)), /* No source code for pc.
-                                                                                            * Should not happen if pc
-                                                                                            * is
-                                                                                            * valid */
+                None => SourceCodeResult::NoSourceCode, /* No source code for pc.
+                                                         * usually occurs in the unavailable opcode before metadata */
             }
         } else {
             SourceCodeResult::NoSourceMap // No source map
