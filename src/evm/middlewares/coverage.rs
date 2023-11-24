@@ -24,7 +24,7 @@ use crate::evm::{
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
+    srcmap::{RawSourceMapInfo, SourceCodeResult, SOURCE_MAP_PROVIDER},
     types::{is_zero, EVMAddress, EVMFuzzState},
     vm::IN_DEPLOY,
 };
@@ -349,17 +349,16 @@ where
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
-        pcs.iter().for_each(|pc| {
-            if SOURCE_MAP_PROVIDER.lock().unwrap().get_pc_has_match(&address, *pc) {
-                if let Some(source_code) = SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(&address, *pc) {
+        pcs.iter().for_each(
+            |pc| match SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(&address, *pc) {
+                SourceCodeResult::SourceCode(source_code) => {
                     self.pc_info.insert((address, *pc), source_code.clone());
-                } else {
+                }
+                _ => {
                     skip_pcs.insert(*pc);
                 }
-            } else {
-                skip_pcs.insert(*pc);
-            }
-        });
+            },
+        );
 
         // total instr minus skipped pcs
         let total_instr = pcs.iter().filter(|pc| !skip_pcs.contains(*pc)).cloned().collect();
