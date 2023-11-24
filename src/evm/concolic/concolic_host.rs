@@ -30,7 +30,7 @@ use crate::{
         host::FuzzHost,
         input::EVMInput,
         middlewares::middleware::{Middleware, MiddlewareType, MiddlewareType::Concolic},
-        srcmap::SOURCE_MAP_PROVIDER,
+        srcmap::{SourceCodeResult, SOURCE_MAP_PROVIDER},
         types::{as_u64, is_zero, EVMAddress, EVMFuzzState, EVMU256},
     },
     input::VMInputT,
@@ -1178,9 +1178,15 @@ where
                     let pc = interp.program_counter();
                     let address = &interp.contract.address;
 
-                    if !SOURCE_MAP_PROVIDER.lock().unwrap().get_pc_has_match(address, pc) {
-                        debug!("[concolic] skip solving due to no source map match");
-                        need_solve = false;
+                    match SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(address, pc) {
+                        SourceCodeResult::SourceCode(_) => {
+                            // Solve normal pc with source code
+                        }
+                        _ => {
+                            // Don't solve if no source code
+                            debug!("[concolic] skip solving due to no source map match");
+                            need_solve = false;
+                        }
                     }
                 }
 

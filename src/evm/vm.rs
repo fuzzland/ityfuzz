@@ -864,7 +864,7 @@ where
         self.host.remove_middlewares(middleware);
     }
 
-    fn fast_call_inner(
+    fn _fast_call_inner(
         &mut self,
         data: &[(EVMAddress, EVMAddress, Bytes, EVMU256)],
         vm_state: &EVMState,
@@ -889,7 +889,7 @@ where
         (res, self.host.evmstate.clone())
     }
 
-    fn fast_call_inner_no_value(
+    fn _fast_call_inner_no_value(
         &mut self,
         data: &[(EVMAddress, EVMAddress, Bytes)],
         vm_state: &EVMState,
