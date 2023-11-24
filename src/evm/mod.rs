@@ -337,6 +337,10 @@ enum EVMTargetType {
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();
+    let work_path = Path::new(work_dir.as_str());
+    if !work_path.exists() {
+        std::fs::create_dir(work_path).unwrap();
+    }
 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => match v.as_str() {
@@ -709,11 +713,7 @@ pub fn evm_main(args: EvmArgs) {
 
     let work_dir = args.work_dir.clone();
 
-    let path = Path::new(work_dir.as_str());
-    if !path.exists() {
-        std::fs::create_dir_all(path).unwrap();
-    }
-    let abis_json = format!("{}/abis.json", work_dir.as_str());
+    let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     let mut file = OpenOptions::new()
         .create(true)
