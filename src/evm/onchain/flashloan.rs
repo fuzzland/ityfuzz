@@ -51,6 +51,8 @@ use crate::{
     state::{HasCaller, HasItyState},
 };
 
+pub static mut CAN_LIQUIDATE: bool = false;
+
 macro_rules! scale {
     () => {
         EVMU512::from(1_000_000)
@@ -205,7 +207,10 @@ impl Flashloan {
                         let oracle = self.flashloan_oracle.deref().try_borrow_mut();
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
-                            oracle.unwrap().register_token(*addr, Rc::new(RefCell::new(token_ctx)));
+                            let can_liquidate = !token_ctx.swaps.is_empty(); // if there is more than one liquidation path, we can liquidate
+                            oracle
+                                .unwrap()
+                                .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {

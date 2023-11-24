@@ -11,7 +11,10 @@ use libafl_bolts::{prelude::Rand, HasLen};
 use revm_primitives::Env;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::utils::{colored_address, colored_sender, prettify_value};
+use super::{
+    onchain::flashloan::CAN_LIQUIDATE,
+    utils::{colored_address, colored_sender, prettify_value},
+};
 use crate::{
     evm::{
         abi::{AEmpty, AUnknown, BoxedABI},
@@ -366,15 +369,14 @@ impl ConciseEVMInput {
 
     #[inline]
     fn append_liquidation(&self, indent: String, call: String) -> String {
-        if self.liquidation_percent == 0 {
+        if self.liquidation_percent == 0 || unsafe { !CAN_LIQUIDATE } {
             return call;
         }
 
         let liq_call = format!(
-            "{}.{}(100% Balance, 0, path:({} → WETH), address(this), block.timestamp);",
+            "{}.{}(100% Balance, 0, path:(* → WETH), address(this), block.timestamp);",
             colored_address("Router"),
             self.colored_fn_name("swapExactTokensForETH"),
-            colored_address(&self.contract())
         );
 
         let mut liq = indent.clone();

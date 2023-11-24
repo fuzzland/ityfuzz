@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
 
 use bytes::Bytes;
 use glob::glob;
@@ -522,9 +522,18 @@ pub fn evm_fuzzer(
                     vm_state = state.get_execution_result().new_state.clone();
                 }
             }
-            fuzzer
-                .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
-                .expect("Fuzzing failed");
+            let res = fuzzer.fuzz_loop(&mut stages, &mut executor, state, &mut mgr);
+
+            // it is not possible to reach here unless an exception is thrown
+            let rv = res.err().unwrap().to_string();
+            if rv == "No items in No entries in corpus" {
+                error!("There is nothing to fuzz. Please check the target you provided.");
+                return;
+            } else {
+                error!("{}", rv);
+            }
+
+            exit(1);
         }
         Some(_) => {
             unsafe {

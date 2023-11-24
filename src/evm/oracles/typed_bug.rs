@@ -64,7 +64,7 @@ impl
                     pc.hash(&mut hasher);
                     let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
 
-                    let real_bug_idx = hasher.finish() << (8 + TYPED_BUG_BUG_IDX);
+                    let real_bug_idx = (hasher.finish() << 8) + TYPED_BUG_BUG_IDX;
 
                     EVMBugResult::new(
                         "Bug".to_string(),

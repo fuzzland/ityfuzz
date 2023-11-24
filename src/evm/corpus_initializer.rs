@@ -179,8 +179,8 @@ where
 
     pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         self.state.metadata_map_mut().insert(ABIMap::new());
-        self.setup_default_callers();
-        self.setup_contract_callers();
+        self.setup_default_callers(loader);
+        self.setup_contract_callers(loader);
         self.init_cheatcode_contract();
         self.initialize_contract(loader);
         self.initialize_source_map(loader);
@@ -352,6 +352,36 @@ where
                 continue;
             }
 
+            let mut target_sig = None; // none means all selectors are targeted
+
+            if let Some(setup_data) = &loader.setup_data {
+                // Check if this contract is included by Foundry targetContracts
+                if !setup_data.target_contracts.is_empty() &&
+                    !setup_data.target_contracts.contains(&contract.deployed_address)
+                {
+                    continue;
+                }
+                // Check if this contract is excluded by Foundry excludeContracts
+                if !setup_data.excluded_contracts.is_empty() &&
+                    setup_data.excluded_contracts.contains(&contract.deployed_address)
+                {
+                    continue;
+                }
+
+                // Check if this contract and sig is included by Foundry targetSelectors
+                if !setup_data.target_selectors.is_empty() {
+                    target_sig = Some(
+                        setup_data
+                            .target_selectors
+                            .get(&contract.deployed_address)
+                            .cloned()
+                            .unwrap_or(
+                                vec![], // empty vec means none of the selectors are targeted
+                            ),
+                    );
+                }
+            }
+
             for abi in contract.abi.clone() {
                 let name = &abi.function_name;
 
@@ -359,6 +389,13 @@ where
                 {
                     debug!("Skipping function: {}", name);
                     continue;
+                }
+
+                if let Some(target_sig) = target_sig.clone() {
+                    if !target_sig.contains(&Vec::from_iter(abi.function.iter().cloned())) {
+                        debug!("Skipping function because of targetSelectors: {}", name);
+                        continue;
+                    }
                 }
 
                 self.add_abi(&abi, contract.deployed_address, &mut artifacts);
@@ -379,7 +416,21 @@ where
         artifacts
     }
 
-    pub fn setup_default_callers(&mut self) {
+    pub fn setup_default_callers(&mut self, loader: &mut ContractLoader) {
+        // We override default callers when target senders are specified
+        if let Some(setup_data) = &loader.setup_data {
+            if !setup_data.target_senders.is_empty() {
+                for caller in setup_data.target_senders.iter() {
+                    self.state.add_caller(caller);
+                    self.executor
+                        .host
+                        .evmstate
+                        .set_balance(*caller, EVMU256::from(INITIAL_BALANCE));
+                }
+                return;
+            }
+        }
+
         let default_callers = HashSet::from([
             fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
             fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
@@ -395,7 +446,16 @@ where
         }
     }
 
-    pub fn setup_contract_callers(&mut self) {
+    pub fn setup_contract_callers(&mut self, loader: &mut ContractLoader) {
+        // We no longer need to setup contract callers when target senders are specified
+        // The target senders are already setup in setup_default_callers. Existence
+        // of the code in those addresses depends on setUp function of the contract.
+        if let Some(setup_data) = &loader.setup_data {
+            if !setup_data.target_senders.is_empty() {
+                return;
+            }
+        }
+
         let contract_callers = HashSet::from([
             fixed_address("e1A425f1AC34A8a441566f93c82dD730639c8510"),
             fixed_address("68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024"),
