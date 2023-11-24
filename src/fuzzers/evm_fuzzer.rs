@@ -91,9 +91,6 @@ pub fn evm_fuzzer(
 
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
-    if !path.exists() {
-        std::fs::create_dir(path).unwrap();
-    }
 
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
