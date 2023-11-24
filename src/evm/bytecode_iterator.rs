@@ -47,7 +47,7 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
     }
 
     let mut i = 0;
-    let last_op = *bytes.last().unwrap_or_default();
+    let last_op = *bytes.last().unwrap_or(RETURN);
     let has_cbor = last_op != JUMP &&
         last_op != JUMPI &&
         last_op != STOP &&
