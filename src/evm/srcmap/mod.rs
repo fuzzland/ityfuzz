@@ -119,7 +119,8 @@ impl SourceMapProvider {
                             }
                         }
                         None => {
-                            SourceCodeResult::NoSourceCode // No source code for pc.
+                            SourceCodeResult::NoSourceCode // No source code for
+                                                           // pc.
                         }
                     }
                 }
