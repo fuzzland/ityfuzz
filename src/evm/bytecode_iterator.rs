@@ -42,12 +42,12 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
 
     // remove ending 00
     let mut bytes = bytes.clone();
-    while *bytes.last().unwrap_or(1) == 0 {
+    while bytes.last().unwrap_or(&1) == &0 {
         bytes.pop();
     }
 
     let mut i = 0;
-    let last_op = *bytes.last().unwrap_or(RETURN);
+    let last_op = *bytes.last().unwrap_or(&RETURN);
     let has_cbor = last_op != JUMP &&
         last_op != JUMPI &&
         last_op != STOP &&
