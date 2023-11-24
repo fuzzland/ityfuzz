@@ -39,8 +39,15 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
     if bytes.is_empty() {
         return vec![];
     }
+
+    // remove ending 00
+    let mut bytes = bytes.clone();
+    while bytes.last().unwrap_or(&1) == &0 {
+        bytes.pop();
+    }
+
     let mut i = 0;
-    let last_op = *bytes.last().unwrap();
+    let last_op = *bytes.last().unwrap_or(&RETURN);
     let has_cbor = last_op != JUMP &&
         last_op != JUMPI &&
         last_op != STOP &&
@@ -57,6 +64,7 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
     } else {
         0
     };
+    // println!("cbor_len: {} lastop: {}", cbor_len, last_op);
 
     let mut res = Vec::new();
 
@@ -68,6 +76,7 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
             i += op as usize - 0x5f;
         }
     }
+    // println!("res: {:?}", res.len());
     res
 }
 
