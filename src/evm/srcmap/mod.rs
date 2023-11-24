@@ -108,15 +108,24 @@ impl SourceMapProvider {
         if self.has_source_map(address) {
             match self.source_maps.get(address).unwrap().get_source_map_item_by_pc(pc) {
                 Some(source_map_item) => {
-                    if source_map_item.pc_has_match {
-                        // Normal source code
-                        SourceCodeResult::SourceCode(source_map_item.source_code.clone().unwrap())
-                    } else {
-                        // e.g. Multiline source code "library L { ... }"
-                        SourceCodeResult::SourceCodeNoPcMatch(source_map_item.source_code.clone().unwrap())
+                    match source_map_item.source_code.as_ref() {
+                        Some(source_code) => {
+                            return if source_map_item.pc_has_match {
+                                // Normal source code
+                                SourceCodeResult::SourceCode(source_code.clone())
+                            } else {
+                                // e.g. Multiline source code "library L { ... }"
+                                SourceCodeResult::SourceCodeNoPcMatch(source_code.clone())
+                            };
+                        }
+                        None => {
+                            return SourceCodeResult::NoSourceCode; // No source code for pc.
+                        }
                     }
                 }
-                None => SourceCodeResult::NoSourceCode, // No source code for pc
+                None => unreachable!(format!("pc {} is invalid @ {}", pc, address)), /* No source code for pc.
+                                                                                        * Should not happen if pc is
+                                                                                        * valid */
             }
         } else {
             SourceCodeResult::NoSourceMap // No source map
