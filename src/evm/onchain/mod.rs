@@ -222,38 +222,27 @@ where
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
-            #[cfg(feature = "real_block_env")]
             // COINBASE
             0x41 => {
-                if host.env().block.coinbase == EVMAddress::zero() {
-                    host.env().block.coinbase = self.endpoint.fetch_blk_coinbase();
+                if host.env.block.coinbase == EVMAddress::zero() {
+                    host.env.block.coinbase = self.endpoint.fetch_blk_coinbase();
                 }
             }
-            #[cfg(feature = "real_block_env")]
             // TIMESTAMP
             0x42 => {
-                if host.env().block.timestamp == EVMU256::from(1) {
-                    host.env().block.timestamp = self.endpoint.fetch_blk_timestamp();
+                if host.env.block.timestamp == EVMU256::from(1) {
+                    host.env.block.timestamp = self.endpoint.fetch_blk_timestamp();
                 }
             }
-            #[cfg(feature = "real_block_env")]
-            // NUMBER
-            0x43 => {
-                if host.env().block.number == EVMU256::ZERO {
-                    host.env().block.number = EVMU256::from_str(&self.endpoint.block_number).unwrap();
-                }
-            }
-            #[cfg(feature = "real_block_env")]
             // GASLIMIT
             0x45 => {
-                if host.env().block.gas_limit == U256::MAX {
-                    host.env().block.gas_limit = self.endpoint.fetch_blk_gaslimit();
+                if host.env.block.gas_limit == EVMU256::MAX {
+                    host.env.block.gas_limit = self.endpoint.fetch_blk_gaslimit();
                 }
             }
-            #[cfg(feature = "real_block_env")]
             // CHAINID
             0x46 => {
-                host.env().tx.chain_id = Some(self.endpoint.chain_id as u64);
+                host.env.tx.chain_id = Some(self.endpoint.chain_id as u64);
             }
             // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
