@@ -85,6 +85,13 @@ pub struct EVMInitializationArtifacts {
     pub build_artifacts: HashMap<EVMAddress, BuildJobResult>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EnvMetadata {
+    pub env: Env,
+}
+
+impl_serdeany!(EnvMetadata);
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct ABIMap {
     pub signature_to_abi: HashMap<[u8; 4], ABIConfig>,
@@ -276,6 +283,11 @@ where
                 None => Default::default(),
             },
         };
+
+        self.state.metadata_map_mut().insert(EnvMetadata {
+            env: artifacts.initial_env.clone(),
+        });
+
         for contract in &mut loader.contracts {
             if contract.abi.is_empty() {
                 // this contract's abi is not available, we will use 3 layers to handle this

@@ -20,7 +20,7 @@ use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
 use tracing::debug;
 
-use super::types::EVMFuzzState;
+use super::{corpus_initializer::EnvMetadata, types::EVMFuzzState};
 use crate::{
     evm::{
         abi::{get_abi_type_boxed, register_abi_instance},
@@ -461,8 +461,7 @@ impl OnChain {
                     sstate_idx: 0,
                     txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
                     step: false,
-
-                    env: Default::default(),
+                    env: state.metadata_map().get::<EnvMetadata>().unwrap().env.clone(),
                     access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                     liquidation_percent: 0,
                     input_type: EVMInputTy::ABI,

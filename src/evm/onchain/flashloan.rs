@@ -28,7 +28,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::evm::{types::EVMFuzzState, uniswap::UniswapTokenContext};
+use crate::evm::{corpus_initializer::EnvMetadata, types::EVMFuzzState, uniswap::UniswapTokenContext};
 // Some components are used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
 use crate::{
@@ -113,7 +113,7 @@ where
                 sstate_idx: 0,
                 txn_value: Some(EVMU256::from_str("10000000000000000000").unwrap()),
                 step: false,
-                env: Default::default(),
+                env: state.metadata_map().get::<EnvMetadata>().unwrap().env.clone(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                 liquidation_percent: 0,
                 direct_data: Default::default(),

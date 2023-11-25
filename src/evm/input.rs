@@ -560,7 +560,7 @@ impl EVMInputT for EVMInput {
 
 ///
 macro_rules! impl_env_mutator_u256 {
-    ($item: ident, $loc: ident) => {
+    ($item: ident, $loc: ident, $increasing_only: expr) => {
         pub fn $item<S>(input: &mut EVMInput, state_: &mut S) -> MutationResult
         where
             S: State + HasCaller<EVMAddress> + HasRand + HasMetadata,
@@ -577,7 +577,14 @@ macro_rules! impl_env_mutator_u256 {
             if res == MutationResult::Skipped {
                 return res;
             }
-            input.get_vm_env_mut().$loc.$item = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
+            let result_val = EVMU256::try_from_be_slice(&input_vec.as_slice()).unwrap();
+            if $increasing_only {
+                if result_val < input.get_vm_env().$loc.$item {
+                    return MutationResult::Skipped;
+                }
+            }
+
+            input.get_vm_env_mut().$loc.$item = result_val;
             res
         }
     };
@@ -651,12 +658,12 @@ impl<'a> HasBytesVec for MutatorInput<'a> {
 }
 
 impl EVMInput {
-    impl_env_mutator_u256!(basefee, block);
-    impl_env_mutator_u256!(timestamp, block);
+    impl_env_mutator_u256!(basefee, block, false);
+    impl_env_mutator_u256!(timestamp, block, true);
     impl_env_mutator_h160!(coinbase, block);
-    impl_env_mutator_u256!(gas_limit, block);
-    impl_env_mutator_u256!(number, block);
-    impl_env_mutator_u256!(chain_id, cfg);
+    impl_env_mutator_u256!(gas_limit, block, false);
+    impl_env_mutator_u256!(number, block, true);
+    // impl_env_mutator_u256!(chain_id, cfg, false);
 
     pub fn prevrandao<S>(_input: &mut EVMInput, _state_: &mut S) -> MutationResult
     where
@@ -749,7 +756,7 @@ impl EVMInput {
         add_mutator!(coinbase);
         add_mutator!(gas_limit);
         add_mutator!(number);
-        add_mutator!(chain_id);
+        // add_mutator!(chain_id);
         add_mutator!(prevrandao);
 
         if mutators.is_empty() {
