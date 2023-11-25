@@ -806,32 +806,31 @@ impl ContractLoader {
         let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer, work_dir);
 
         // deploy contract
-
+        unsafe {
+            SETCODE_ONLY = true;
+        }
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
             None,
             deployed_addr, // todo: change to foundry default address
             &mut state,
         );
+        unsafe {
+            IN_DEPLOY = true;
+        }
         assert!(addr.is_some(), "failed to deploy contract");
         let state_after_deployment = evm_executor.host.evmstate.clone();
 
         // invoke setUp() and fails imeediately if setUp() reverts
         let mut calldata = [0; 4];
         set_hash("setUp()", &mut calldata);
-        unsafe {
-            IN_DEPLOY = true;
-            SETCODE_ONLY = true;
-        }
+
         let (res, new_vm_state) = evm_executor.fast_call(
             &[(deployer, deployed_addr, Bytes::from_iter(calldata.iter().cloned()))],
             &state_after_deployment,
             &mut state,
         );
-        unsafe {
-            IN_DEPLOY = false;
-            SETCODE_ONLY = false;
-        }
+
         assert!(res[0].1, "setUp() failed");
 
         // now get Foundry invariant test config by calling
@@ -855,6 +854,11 @@ impl ContractLoader {
         ];
 
         let (res, _) = evm_executor.fast_call(&calls, &new_vm_state, &mut state);
+
+        unsafe {
+            IN_DEPLOY = false;
+            SETCODE_ONLY = false;
+        }
 
         macro_rules! parse_nth_result_addr {
             ($nth: expr) => {{
