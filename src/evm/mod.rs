@@ -195,7 +195,7 @@ pub struct EvmArgs {
     write_relationship: bool,
 
     /// Do not quit when a bug is found, continue find new bugs
-    #[arg(long, default_value = "false", short = 'f')]
+    #[arg(long, default_value = "false")]
     run_forever: bool,
 
     /// random seed
