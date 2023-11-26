@@ -8,7 +8,7 @@ This will attempt to see whether the fuzzer can hit `bug()` in all projects in t
 
 
 ## On-chain Changes
-Ensure you build with `flashloan_v2` and have a local proxy running at `http://localhost:5003`.
+Ensure you have a local proxy running at `http://localhost:5003`.
 
 Following command shall find bugs:
 ```bash

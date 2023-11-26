@@ -33,7 +33,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
-// Some components are used when `flashloan_v2` feature is disabled
 #[allow(unused_imports)]
 use crate::{
     evm::{
