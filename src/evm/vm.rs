@@ -261,7 +261,7 @@ pub struct EVMState {
     pub arbitrary_calls: HashSet<(EVMAddress, EVMAddress, usize)>,
     // integer overflow in sol
     #[serde(skip)]
-    pub integer_overflow: HashSet<(EVMAddress, usize, &'static str)>,
+    pub math_error: HashSet<(EVMAddress, usize, &'static str)>,
     #[serde(skip)]
     pub reentrancy_metadata: ReentrancyData,
 }
@@ -821,12 +821,12 @@ where
                 .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
-        r.new_state.integer_overflow = HashSet::from_iter(
+        r.new_state.math_error = HashSet::from_iter(
             vm_state
-                .integer_overflow
+                .math_error
                 .iter()
                 .cloned()
-                .chain(self.host.current_integer_overflow.iter().cloned()),
+                .chain(self.host.current_math_error.iter().cloned()),
         );
 
         unsafe {

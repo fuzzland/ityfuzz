@@ -72,7 +72,6 @@ def test_one(path):
     if "taint" in path:
         cmd.append("--sha3-bypass")
 
-
     print(" ".join(cmd))
 
     p = subprocess.run(
@@ -145,6 +144,8 @@ def test_onchain(test):
         etherscan_key,
         "--work-dir",
         f"w_{name}",
+        "--onchain-builder",
+        "https://solc-builder.dev.infra.fuzz.land/"
         # "--run-forever"
     ]
 
@@ -152,6 +153,8 @@ def test_onchain(test):
 
     # try 3 times in case of rpc failure
     for i in range(3):
+        print(f"=== Testing onchain for contracts: {name}, try {i}")
+        print(" ".join(cmd))
         p = subprocess.run(
             " ".join(cmd),
             stdout=subprocess.PIPE,
@@ -235,7 +238,7 @@ if __name__ == "__main__":
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
         tests = read_onchain_tests()
-        with multiprocessing.Pool(10) as p:
+        with multiprocessing.Pool(1) as p:
             p.map(test_onchain, tests)
 
     if crashed_any:

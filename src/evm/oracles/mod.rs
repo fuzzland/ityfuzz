@@ -5,6 +5,7 @@ pub mod echidna;
 pub mod erc20;
 pub mod function;
 pub mod invariant;
+pub mod math_calculate;
 pub mod reentrancy;
 pub mod selfdestruct;
 pub mod state_comp;
@@ -21,7 +22,7 @@ pub static STATE_COMP_BUG_IDX: u64 = 7;
 pub static ARB_CALL_BUG_IDX: u64 = 8;
 pub static REENTRANCY_BUG_IDX: u64 = 9;
 pub static INVARIANT_BUG_IDX: u64 = 10;
-pub static INTEGER_OVERFLOW_BUG_IDX: u64 = 11;
+pub static MATH_CALCULATE_BUG_IDX: u64 = 11;
 
 /// Divide a U512 by another U512 and return a string with the decimal point at
 /// the correct position For example, 1000 / 3 = 333.333, then a = 1000e6, b =

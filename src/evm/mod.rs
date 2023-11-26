@@ -177,6 +177,40 @@ pub struct EvmArgs {
     /// (Default: high_confidence)
     #[arg(long, short, default_value = "high_confidence")]
     detectors: String, // <- internally this is known as oracles
+    /// Detect selfdestruct (Default: true)
+    #[arg(long, default_value = "true")]
+    selfdestruct_oracle: bool,
+
+    /// Detect pontential reentrancy vulnerability (Default: false)
+    #[arg(long, default_value = "false")]
+    reentrancy_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    arbitrary_external_call_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    math_calculate_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    echidna_oracle: bool,
+
+    #[arg(long, default_value = "true")]
+    invariant_oracle: bool,
+
+    ///Enable oracle for detecting whether bug() / typed_bug() is called
+    #[arg(long, default_value = "true")]
+    typed_bug_oracle: bool,
+
+    /// Setting any string here will enable state comparison oracle.
+    /// This arg holds file path pointing to state comparison oracle's desired
+    /// state
+    #[arg(long, default_value = "")]
+    state_comp_oracle: String,
+
+    /// Matching style for state comparison oracle (Select from "Exact",
+    /// "DesiredContain", "StateContain")
+    #[arg(long, default_value = "Exact")]
+    state_comp_matching: String,
 
     // /// Matching style for state comparison oracle (Select from "Exact",
     // /// "DesiredContain", "StateContain")

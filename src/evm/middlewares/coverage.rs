@@ -8,6 +8,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use bytes::Bytes;
 use itertools::Itertools;
 use libafl::{schedulers::Scheduler, state::HasMetadata};
 use revm_interpreter::{
@@ -33,11 +34,11 @@ pub static mut EVAL_COVERAGE: bool = false;
 
 /// Finds all PCs (offsets of bytecode) that are instructions / JUMPDEST
 /// Returns a tuple of (instruction PCs, JUMPI PCs, Skip PCs)
-pub fn instructions_pc(bytecode: &Bytecode) -> (HashSet<usize>, HashSet<usize>, HashSet<usize>) {
+pub fn instructions_pc(bytecode: &Bytes) -> (HashSet<usize>, HashSet<usize>, HashSet<usize>) {
     let mut complete_bytes = vec![];
     let mut skip_instructions = HashSet::new();
     let mut total_jumpi_set = HashSet::new();
-    all_bytecode(&bytecode.bytes().to_vec()).iter().for_each(|(pc, op)| {
+    all_bytecode(&bytecode.to_vec()).iter().for_each(|(pc, op)| {
         if *op == JUMPDEST || *op == STOP || *op == INVALID {
             skip_instructions.insert(*pc);
         }
@@ -346,7 +347,7 @@ where
             self.sources.insert(address, build_artifact.sources.clone());
         }
 
-        let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
+        let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.bytecode);
 
         // find all skipping PCs
         pcs.iter().for_each(
