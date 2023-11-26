@@ -238,7 +238,7 @@ if __name__ == "__main__":
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
         tests = read_onchain_tests()
-        with multiprocessing.Pool(1) as p:
+        with multiprocessing.Pool(10) as p:
             p.map(test_onchain, tests)
 
     if crashed_any:
