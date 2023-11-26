@@ -71,7 +71,7 @@ Oracle<
                 let mut hasher = DefaultHasher::new();
                 caller.hash(&mut hasher);
                 pc.hash(&mut hasher);
-                let real_bug_idx = (hasher.finish() as u64) << 8 + ARB_TRANSFER_BUG_IDX;
+                let real_bug_idx = (hasher.finish() << 8 as u64) + ARB_TRANSFER_BUG_IDX;
 
                 let mut name = self.address_to_name
                     .get(caller)

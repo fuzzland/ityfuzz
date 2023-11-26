@@ -38,6 +38,7 @@ use super::{
     host::FuzzHost,
     input::ConciseEVMInput,
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
+    types::EVMU256,
     vm::{EVMExecutor, EVMState},
 };
 use crate::evm::{
@@ -115,11 +116,18 @@ impl ContractLoader {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SetupData {
     pub evmstate: EVMState,
     pub env: Env,
     pub code: HashMap<EVMAddress, Bytes>,
+
+    // Foundry specific
+    pub excluded_contracts: Vec<EVMAddress>,
+    pub excluded_senders: Vec<EVMAddress>,
+    pub target_contracts: Vec<EVMAddress>,
+    pub target_senders: Vec<EVMAddress>,
+    pub target_selectors: HashMap<EVMAddress, Vec<Vec<u8>>>,
 }
 
 pub fn set_hash(name: &str, out: &mut [u8]) {
@@ -478,6 +486,18 @@ impl ContractLoader {
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>, builder: Option<BuildJob>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
+        let mut setup_data: SetupData = Default::default();
+
+        {
+            // get block number and timestamp
+            let block_number = EVMU256::from_str_radix(onchain.block_number.trim_start_matches("0x"), 16).unwrap();
+            let timestamp = onchain.fetch_blk_timestamp();
+            let mut env = Env::default();
+            env.block.number = block_number;
+            env.block.timestamp = timestamp;
+            setup_data.env = env;
+        }
+
         for addr in address {
             let mut abi = None;
             let mut bytecode = None;
@@ -537,7 +557,7 @@ impl ContractLoader {
         Self {
             contracts,
             abis,
-            setup_data: None,
+            setup_data: Some(setup_data),
         }
     }
 
@@ -799,33 +819,159 @@ impl ContractLoader {
         let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer, work_dir);
 
         // deploy contract
-
+        unsafe {
+            SETCODE_ONLY = true;
+        }
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
             None,
             deployed_addr, // todo: change to foundry default address
             &mut state,
         );
+        unsafe {
+            IN_DEPLOY = true;
+        }
         assert!(addr.is_some(), "failed to deploy contract");
         let state_after_deployment = evm_executor.host.evmstate.clone();
 
         // invoke setUp() and fails imeediately if setUp() reverts
         let mut calldata = [0; 4];
         set_hash("setUp()", &mut calldata);
-        unsafe {
-            IN_DEPLOY = true;
-            SETCODE_ONLY = true;
-        }
+
         let (res, new_vm_state) = evm_executor.fast_call(
             &[(deployer, deployed_addr, Bytes::from_iter(calldata.iter().cloned()))],
             &state_after_deployment,
             &mut state,
         );
+
+        assert!(res[0].1, "setUp() failed");
+
+        // now get Foundry invariant test config by calling
+        // * excludeContracts() => array of addresses
+        // * excludeSenders() => array of sender
+        // * targetContracts() => array of addresses
+        // * targetSenders() => array of sender
+        // * targetSelectors() => array of selectors
+        macro_rules! abi_sig {
+            ($name: expr) => {
+                Bytes::from_iter(ethers::abi::short_signature($name, &[]).iter().cloned())
+            };
+        }
+
+        let calls = vec![
+            (deployer, deployed_addr, abi_sig!("excludeContracts")),
+            (deployer, deployed_addr, abi_sig!("excludeSenders")),
+            (deployer, deployed_addr, abi_sig!("targetContracts")),
+            (deployer, deployed_addr, abi_sig!("targetSenders")),
+            (deployer, deployed_addr, abi_sig!("targetSelectors")),
+        ];
+
+        let (res, _) = evm_executor.fast_call(&calls, &new_vm_state, &mut state);
+
         unsafe {
             IN_DEPLOY = false;
             SETCODE_ONLY = false;
         }
-        assert!(res[0].1, "setUp() failed");
+
+        macro_rules! parse_nth_result_addr {
+            ($nth: expr) => {{
+                let (res_bys, succ) = res[$nth].clone();
+                let mut addrs = vec![];
+                if succ {
+                    let contracts = ethers::abi::decode(
+                        &[ethers::abi::ParamType::Array(Box::new(
+                            ethers::abi::ParamType::Address,
+                        ))],
+                        &res_bys,
+                    )
+                    .unwrap();
+                    addrs = if let ethers::abi::Token::Array(contracts) = contracts[0].clone() {
+                        contracts
+                            .iter()
+                            .map(|x| {
+                                if let ethers::abi::Token::Address(addr) = x {
+                                    EVMAddress::from_slice(addr.as_bytes())
+                                } else {
+                                    panic!("invalid address")
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        panic!("invalid array")
+                    };
+                }
+                addrs
+            }};
+        }
+
+        // (address addr, bytes4[] selectors)[]
+        macro_rules! parse_nth_result_selector {
+            ($nth: expr) => {{
+                let (res_bys, succ) = res[$nth].clone();
+                let mut sigs = vec![];
+                if succ {
+                    let sigs_parsed = ethers::abi::decode(
+                        &[ethers::abi::ParamType::Array(Box::new(
+                            ethers::abi::ParamType::Tuple(vec![
+                                ethers::abi::ParamType::Address,
+                                ethers::abi::ParamType::Array(Box::new(ethers::abi::ParamType::FixedBytes(4))),
+                            ]),
+                        ))],
+                        &res_bys,
+                    )
+                    .unwrap();
+
+                    let sigs_parsed = if let ethers::abi::Token::Array(sigs_parsed) = sigs_parsed[0].clone() {
+                        sigs_parsed
+                    } else {
+                        panic!("invalid array")
+                    };
+
+                    sigs_parsed.iter().for_each(|x| {
+                        if let ethers::abi::Token::Tuple(tuple) = x {
+                            let addr = tuple[0].clone();
+                            let selectors = tuple[1].clone();
+                            if let (ethers::abi::Token::Address(addr), ethers::abi::Token::Array(selectors)) =
+                                (addr, selectors)
+                            {
+                                let addr = EVMAddress::from_slice(addr.as_bytes());
+                                let selectors = selectors
+                                    .iter()
+                                    .map(|x| {
+                                        if let ethers::abi::Token::FixedBytes(bytes) = x {
+                                            bytes.clone()
+                                        } else {
+                                            panic!("invalid bytes")
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                                sigs.push((addr, selectors));
+                            } else {
+                                panic!("invalid tuple: {:?}", tuple)
+                            }
+                        } else {
+                            panic!("invalid tuple")
+                        }
+                    });
+                }
+                sigs
+            }};
+        }
+
+        let excluded_contracts = parse_nth_result_addr!(0);
+        let excluded_senders = parse_nth_result_addr!(1);
+        let target_contracts = parse_nth_result_addr!(2);
+        let target_senders = parse_nth_result_addr!(3);
+        let target_selectors_vec = parse_nth_result_selector!(4);
+        let target_selectors = {
+            let mut map = HashMap::new();
+            target_selectors_vec.iter().for_each(|(addr, selectors)| {
+                map.entry(*addr)
+                    .or_insert_with(std::vec::Vec::new)
+                    .extend(selectors.clone());
+            });
+            map
+        };
 
         // get the newly deployed code by setUp()
         let code: HashMap<EVMAddress, Bytes> = evm_executor
@@ -839,6 +985,11 @@ impl ContractLoader {
             evmstate: new_vm_state,
             env: evm_executor.host.env.clone(),
             code,
+            excluded_contracts,
+            excluded_senders,
+            target_contracts,
+            target_senders,
+            target_selectors,
         }
     }
 }

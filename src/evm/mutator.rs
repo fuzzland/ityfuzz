@@ -12,6 +12,7 @@ use libafl_bolts::{prelude::Rand, Named};
 use revm_interpreter::Interpreter;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use super::onchain::flashloan::CAN_LIQUIDATE;
 /// Mutator for EVM inputs
 use crate::evm::input::EVMInputT;
 use crate::{
@@ -293,10 +294,15 @@ where
             if input.is_step() {
                 let res = match state.rand_mut().below(100) {
                     0..=5 => {
-                        let prev_percent = input.get_liquidation_percent();
-                        input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
-                        if prev_percent != input.get_liquidation_percent() {
-                            MutationResult::Mutated
+                        // only when there are more than one liquidation path, we attempt to liquidate
+                        if unsafe { CAN_LIQUIDATE } {
+                            let prev_percent = input.get_liquidation_percent();
+                            input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
+                            if prev_percent != input.get_liquidation_percent() {
+                                MutationResult::Mutated
+                            } else {
+                                MutationResult::Skipped
+                            }
                         } else {
                             MutationResult::Skipped
                         }

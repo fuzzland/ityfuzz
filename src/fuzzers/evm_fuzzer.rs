@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
 
 use bytes::Bytes;
 use glob::glob;
@@ -55,7 +55,6 @@ use crate::{
             invariant::InvariantOracle,
             reentrancy::ReentrancyOracle,
             selfdestruct::SelfdestructOracle,
-            state_comp::StateCompOracle,
             typed_bug::TypedBugOracle,
         },
         presets::ExploitTemplate,
@@ -91,9 +90,6 @@ pub fn evm_fuzzer(
 
     // create work dir if not exists
     let path = Path::new(config.work_dir.as_str());
-    if !path.exists() {
-        std::fs::create_dir(path).unwrap();
-    }
 
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
@@ -168,12 +164,7 @@ pub fn evm_fuzzer(
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
         {
-            fuzz_host.add_flashloan_middleware(Flashloan::new(
-                true,
-                config.onchain.clone(),
-                config.price_oracle,
-                config.flashloan_oracle,
-            ));
+            fuzz_host.add_flashloan_middleware(Flashloan::new(true, config.onchain.clone(), config.flashloan_oracle));
         }
     }
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
@@ -383,20 +374,22 @@ pub fn evm_fuzzer(
         oracles.push(Rc::new(RefCell::new(invariant_oracle)));
     }
 
-    if let Some(path) = config.state_comp_oracle {
-        let mut file = File::open(path.clone()).expect("Failed to open state comp oracle file");
-        let mut buf = String::new();
-        file.read_to_string(&mut buf)
-            .expect("Failed to read state comp oracle file");
+    // if let Some(path) = config.state_comp_oracle {
+    //     let mut file = File::open(path.clone()).expect("Failed to open state comp
+    // oracle file");     let mut buf = String::new();
+    //     file.read_to_string(&mut buf)
+    //         .expect("Failed to read state comp oracle file");
 
-        let evm_state = serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state comp oracle file");
+    //     let evm_state =
+    // serde_json::from_str::<EVMState>(buf.as_str()).expect("Failed to parse state
+    // comp oracle file");
 
-        let oracle = Rc::new(RefCell::new(StateCompOracle::new(
-            evm_state,
-            config.state_comp_matching.unwrap(),
-        )));
-        oracles.push(oracle);
-    }
+    //     let oracle = Rc::new(RefCell::new(StateCompOracle::new(
+    //         evm_state,
+    //         config.state_comp_matching.unwrap(),
+    //     )));
+    //     oracles.push(oracle);
+    // }
 
     if config.arbitrary_external_call {
         oracles.push(Rc::new(RefCell::new(ArbitraryCallOracle::new(
@@ -525,9 +518,18 @@ pub fn evm_fuzzer(
                     vm_state = state.get_execution_result().new_state.clone();
                 }
             }
-            fuzzer
-                .fuzz_loop(&mut stages, &mut executor, state, &mut mgr)
-                .expect("Fuzzing failed");
+            let res = fuzzer.fuzz_loop(&mut stages, &mut executor, state, &mut mgr);
+
+            // it is not possible to reach here unless an exception is thrown
+            let rv = res.err().unwrap().to_string();
+            if rv == "No items in No entries in corpus" {
+                error!("There is nothing to fuzz. Please check the target you provided.");
+                return;
+            } else {
+                error!("{}", rv);
+            }
+
+            exit(1);
         }
         Some(_) => {
             unsafe {

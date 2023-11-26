@@ -28,7 +28,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::evm::{types::EVMFuzzState, uniswap::UniswapTokenContext};
+use crate::evm::{corpus_initializer::EnvMetadata, types::EVMFuzzState, uniswap::UniswapTokenContext};
 // Some components are used when `flashloan_v2` feature is not enabled
 #[allow(unused_imports)]
 use crate::{
@@ -51,13 +51,14 @@ use crate::{
     state::{HasCaller, HasItyState},
 };
 
+pub static mut CAN_LIQUIDATE: bool = false;
+
 macro_rules! scale {
     () => {
         EVMU512::from(1_000_000)
     };
 }
 pub struct Flashloan {
-    oracle: Box<dyn PriceOracle>,
     use_contract_value: bool,
     known_addresses: HashSet<EVMAddress>,
     endpoint: Option<OnChainConfig>,
@@ -70,18 +71,8 @@ pub struct Flashloan {
 impl Debug for Flashloan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Flashloan")
-            .field("oracle", &self.oracle)
             .field("use_contract_value", &self.use_contract_value)
             .finish()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DummyPriceOracle;
-
-impl PriceOracle for DummyPriceOracle {
-    fn fetch_token_price(&mut self, _token_address: EVMAddress) -> Option<(u32, u32)> {
-        Some((10000, 18))
     }
 }
 
@@ -111,7 +102,7 @@ where
                 sstate_idx: 0,
                 txn_value: Some(EVMU256::from_str("10000000000000000000").unwrap()),
                 step: false,
-                env: Default::default(),
+                env: state.metadata_map().get::<EnvMetadata>().unwrap().env.clone(),
                 access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                 liquidation_percent: 0,
                 direct_data: Default::default(),
@@ -133,11 +124,9 @@ impl Flashloan {
     pub fn new(
         use_contract_value: bool,
         endpoint: Option<OnChainConfig>,
-        price_oracle: Box<dyn PriceOracle>,
         flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     ) -> Self {
         Self {
-            oracle: price_oracle,
             use_contract_value,
             known_addresses: Default::default(),
             endpoint,
@@ -146,24 +135,6 @@ impl Flashloan {
             unbound_tracker: Default::default(),
             flashloan_oracle,
         }
-    }
-
-    #[allow(dead_code)]
-    fn calculate_usd_value((eth_price, decimals): (u32, u32), amount: EVMU256) -> EVMU512 {
-        let amount = if decimals > 18 {
-            EVMU512::from(amount) / EVMU512::from(10u64.pow(decimals - 18))
-        } else {
-            EVMU512::from(amount) * EVMU512::from(10u64.pow(18 - decimals))
-        };
-        // it should work for now as price of token is always less than 1e5
-        amount * EVMU512::from(eth_price)
-    }
-
-    #[allow(dead_code)]
-    fn calculate_usd_value_from_addr(&mut self, addr: EVMAddress, amount: EVMU256) -> Option<EVMU512> {
-        self.oracle
-            .fetch_token_price(addr)
-            .map(|price| Self::calculate_usd_value(price, amount))
     }
 
     fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
@@ -205,7 +176,10 @@ impl Flashloan {
                         let oracle = self.flashloan_oracle.deref().try_borrow_mut();
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
-                            oracle.unwrap().register_token(*addr, Rc::new(RefCell::new(token_ctx)));
+                            let can_liquidate = !token_ctx.swaps.is_empty(); // if there is more than one liquidation path, we can liquidate
+                            oracle
+                                .unwrap()
+                                .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {

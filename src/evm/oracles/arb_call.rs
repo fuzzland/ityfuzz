@@ -86,7 +86,7 @@ impl
                 caller.hash(&mut hasher);
                 target.hash(&mut hasher);
                 pc.hash(&mut hasher);
-                let real_bug_idx = hasher.finish() << (8 + ARB_CALL_BUG_IDX);
+                let real_bug_idx = (hasher.finish() << 8) + ARB_CALL_BUG_IDX;
 
                 let name = self
                     .address_to_name
