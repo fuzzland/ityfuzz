@@ -1354,7 +1354,6 @@ where
                             sstate_idx: 0,
                             txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
                             step: false,
-
                             env: Default::default(),
                             access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
                             liquidation_percent: 0,

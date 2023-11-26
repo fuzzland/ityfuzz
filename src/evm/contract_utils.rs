@@ -38,6 +38,7 @@ use super::{
     host::FuzzHost,
     input::ConciseEVMInput,
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
+    types::EVMU256,
     vm::{EVMExecutor, EVMState},
 };
 use crate::evm::{
@@ -115,7 +116,7 @@ impl ContractLoader {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SetupData {
     pub evmstate: EVMState,
     pub env: Env,
@@ -485,6 +486,18 @@ impl ContractLoader {
     pub fn from_address(onchain: &mut OnChainConfig, address: HashSet<EVMAddress>, builder: Option<BuildJob>) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
+        let mut setup_data: SetupData = Default::default();
+
+        {
+            // get block number and timestamp
+            let block_number = EVMU256::from_str_radix(onchain.block_number.trim_start_matches("0x"), 16).unwrap();
+            let timestamp = onchain.fetch_blk_timestamp();
+            let mut env = Env::default();
+            env.block.number = block_number;
+            env.block.timestamp = timestamp;
+            setup_data.env = env;
+        }
+
         for addr in address {
             let mut abi = None;
             let mut bytecode = None;
@@ -544,7 +557,7 @@ impl ContractLoader {
         Self {
             contracts,
             abis,
-            setup_data: None,
+            setup_data: Some(setup_data),
         }
     }
 
