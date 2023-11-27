@@ -210,7 +210,7 @@ def build_flash_loan_v2_fuzzer():
             "build",
             "--release",
             "--features",
-            "cmp dataflow evm print_txn_corpus full_trace flashloan_v2 force_cache",
+            "cmp dataflow evm print_txn_corpus full_trace force_cache",
             "--no-default-features",
         ]
     )
