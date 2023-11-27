@@ -144,8 +144,8 @@ def test_onchain(test):
         etherscan_key,
         "--work-dir",
         f"w_{name}",
-        "--onchain-builder",
-        "https://solc-builder.dev.infra.fuzz.land/"
+        # "--onchain-builder",
+        # "https://solc-builder.dev.infra.fuzz.land/"
         # "--run-forever"
     ]
 
