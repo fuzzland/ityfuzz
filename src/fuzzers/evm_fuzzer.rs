@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, process::exit, rc::Rc};
 
 use bytes::Bytes;
 use glob::glob;
@@ -89,9 +89,6 @@ pub fn evm_fuzzer(
     state: &mut EVMFuzzState,
 ) {
     info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
-
-    // create work dir if not exists
-    let path = Path::new(config.work_dir.as_str());
 
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);

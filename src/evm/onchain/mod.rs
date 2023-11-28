@@ -19,7 +19,6 @@ use libafl::{prelude::HasMetadata, schedulers::Scheduler};
 use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
 use tracing::debug;
-use tracing_subscriber::field::debug;
 
 use super::{corpus_initializer::EnvMetadata, types::EVMFuzzState};
 use crate::{

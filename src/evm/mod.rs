@@ -177,40 +177,6 @@ pub struct EvmArgs {
     /// (Default: high_confidence)
     #[arg(long, short, default_value = "high_confidence")]
     detectors: String, // <- internally this is known as oracles
-    /// Detect selfdestruct (Default: true)
-    #[arg(long, default_value = "true")]
-    selfdestruct_oracle: bool,
-
-    /// Detect pontential reentrancy vulnerability (Default: false)
-    #[arg(long, default_value = "false")]
-    reentrancy_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    arbitrary_external_call_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    math_calculate_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    echidna_oracle: bool,
-
-    #[arg(long, default_value = "true")]
-    invariant_oracle: bool,
-
-    ///Enable oracle for detecting whether bug() / typed_bug() is called
-    #[arg(long, default_value = "true")]
-    typed_bug_oracle: bool,
-
-    /// Setting any string here will enable state comparison oracle.
-    /// This arg holds file path pointing to state comparison oracle's desired
-    /// state
-    #[arg(long, default_value = "")]
-    state_comp_oracle: String,
-
-    /// Matching style for state comparison oracle (Select from "Exact",
-    /// "DesiredContain", "StateContain")
-    #[arg(long, default_value = "Exact")]
-    state_comp_matching: String,
 
     // /// Matching style for state comparison oracle (Select from "Exact",
     // /// "DesiredContain", "StateContain")
@@ -229,7 +195,7 @@ pub struct EvmArgs {
     write_relationship: bool,
 
     /// Do not quit when a bug is found, continue find new bugs
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "false", short = 'f')]
     run_forever: bool,
 
     /// random seed
@@ -315,6 +281,7 @@ enum EVMTargetType {
 }
 
 impl EVMTargetType {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             EVMTargetType::Glob => "glob",
@@ -352,6 +319,7 @@ enum OracleType {
 }
 
 impl OracleType {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             OracleType::ERC20 => "erc20",
@@ -427,10 +395,6 @@ impl OracleType {
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();
-    let work_path = Path::new(work_dir.as_str());
-    if !work_path.exists() {
-        std::fs::create_dir(work_path).unwrap();
-    }
 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => EVMTargetType::from_str(v.as_str()),
@@ -783,7 +747,11 @@ pub fn evm_main(args: EvmArgs) {
 
     let work_dir = args.work_dir.clone();
 
-    let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
+    let path = Path::new(work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let abis_json = format!("{}/abis.json", work_dir.as_str());
 
     let mut file = OpenOptions::new()
         .create(true)
