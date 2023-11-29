@@ -1,6 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc, str::FromStr, sync::Arc};
 
 use alloy_primitives::hex;
+use tracing::warn;
 
 use crate::evm::{
     abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
@@ -310,7 +311,10 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
             pair_bytecode: hex::decode(ETH_UNISWAPV2_PAIR_BYTECODE).unwrap(),
         },
-        _ => panic!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
+        _ => {
+            warn!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain);
+            UniswapInfo::default()
+        }
     }
 }
 pub const BSC_PANCAKEV2_PAIR_BYTECODE: &str = include_str!("bsc_pancakeV2_pair.bin");

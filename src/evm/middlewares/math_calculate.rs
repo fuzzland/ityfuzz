@@ -114,7 +114,7 @@ where
             0x04 | 0x05 => {
                 // DIV/ SDIV
                 // overflowing_add for placeholder, not used
-                check!(overflowing_add, "/");
+                // check!(overflowing_add, "/");
             }
             0x0a => {
                 // ** EXP
