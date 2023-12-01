@@ -820,13 +820,7 @@ where
                 .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
-        r.new_state.math_error = HashSet::from_iter(
-            vm_state
-                .math_error
-                .iter()
-                .cloned()
-                .chain(self.host.current_math_error.iter().cloned()),
-        );
+        r.new_state.math_error = self.host.current_math_error.clone();
 
         unsafe {
             ExecutionResult {

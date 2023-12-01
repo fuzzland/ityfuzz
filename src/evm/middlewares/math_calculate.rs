@@ -55,7 +55,7 @@ where
                     return;
                 }
                 let (l, r) = (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap());
-                let overflow = if $op == "/" { l < r } else { l.$overflow_fn(r).1 };
+                let overflow = if $op == "/" {l < r && alloy_primitives::Uint::ZERO == l } else { l.$overflow_fn(r).1 };
                 if !overflow ||
                 // already in fp
                     self.fp.contains(&(addr, pc)) ||
@@ -86,7 +86,7 @@ where
                         self.fp.insert((addr, pc));
                     }
                     SourceCodeResult::SourceCode(source_code) => {
-                        if source_code.contains($op) {
+                        if let Some(pos) = source_code.find($op) && pos != 0 {
                             // real bug
                             info!("contract {:?} math error on pc[{pc:x}]: {} {} {} {source_code:?}", addr, l, $op, r);
                             host.current_math_error.insert((addr, pc, $op));
@@ -114,7 +114,7 @@ where
             0x04 | 0x05 => {
                 // DIV/ SDIV
                 // overflowing_add for placeholder, not used
-                // check!(overflowing_add, "/");
+                check!(overflowing_add, "/");
             }
             0x0a => {
                 // ** EXP
