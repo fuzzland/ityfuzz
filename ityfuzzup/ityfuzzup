@@ -206,7 +206,7 @@ EOF
     say "done"
   fi
 
-  $ITYFUZZ_BIN_DIR/ityfuzz_ --help > /dev/null || {
+  $ITYFUZZ_BIN_DIR/ityfuzz --help > /dev/null || {
     warn "failed to run ityfuzz"
     err "please consider installing 'libssl-dev' or other missing dependencies"
   }
