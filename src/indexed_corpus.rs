@@ -1,7 +1,9 @@
 /// A corpus in memory with self-incementing indexes for items.
 use core::cell::RefCell;
-use std::cell::{Ref, RefMut};
-use std::collections::HashMap;
+use std::{
+    cell::{Ref, RefMut},
+    collections::HashMap,
+};
 
 use libafl::{
     corpus::{Corpus, Testcase},
