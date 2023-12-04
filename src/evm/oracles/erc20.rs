@@ -2,7 +2,6 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use tracing::debug;
 
 use crate::{
     evm::{
@@ -77,7 +76,6 @@ impl
 
                 // prev_balance is nonexistent
                 // #[cfg(feature = "flashloan_debug")]
-                debug!("Balance: {} for {:?} @ {:?}", new_balance, caller, token);
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
@@ -103,22 +101,7 @@ impl
                 );
             }
 
-            liquidation_txs.iter().for_each(|(caller, target, by)| {
-                debug!("Liquidation tx: {:?} -> {:?} ({})", caller, target, hex::encode(by));
-            });
-
-            debug!(
-                "Earned before liquidation: {:?}",
-                ctx.fuzz_state
-                    .get_execution_result()
-                    .new_state
-                    .state
-                    .flashloan_data
-                    .earned
-            );
             let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
-            debug!("results: {:?}", _out);
-            debug!("result state: {:?}", state.flashloan_data);
             ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
         }
 
