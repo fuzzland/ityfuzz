@@ -223,7 +223,7 @@ pub struct EvmArgs {
 
     /// Builder URL. If specified, will use this builder to build contracts
     /// instead of using bins and abis.
-    #[arg(long, default_value = "", short)]
+    #[arg(long, default_value = "")]
     onchain_builder: String,
 
     /// Replacement config (replacing bytecode) for onchain campaign
