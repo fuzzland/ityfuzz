@@ -245,7 +245,6 @@ impl Coverage {
             match self.pc_coverage.get_mut(addr) {
                 None => {}
                 Some(covered) => {
-                    println!("address: {:?}", addr);
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
                     // Handle Instruction Coverage
                     let real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
