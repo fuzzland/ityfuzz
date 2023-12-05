@@ -14,7 +14,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     evm::{
@@ -157,8 +157,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                // debug!("We have a solution from concolic execution: {}",
-                // solution.to_string());
+                debug!("We have a solution from concolic execution: {}", solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 

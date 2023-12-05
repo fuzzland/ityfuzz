@@ -564,7 +564,11 @@ where
 
         self.host.evmstate = vm_state.clone();
         self.host.env = input.get_vm_env().clone();
-        self.host.env.tx.caller = input.get_caller();
+        self.host.env.tx.caller = if input.get_origin().is_zero() {
+            input.get_caller()
+        } else {
+            input.get_origin() // vm.prank; concolic
+        };
         self.host.access_pattern = input.get_access_pattern().clone();
         self.host.call_count = 0;
         self.host.randomness = input.get_randomness();

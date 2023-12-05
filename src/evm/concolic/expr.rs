@@ -271,6 +271,7 @@ impl Expr {
                 ConcolicOp::CONSTBYTE(_) => true,
                 ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
                 ConcolicOp::CALLER => false,
+                ConcolicOp::ORIGIN => false,
                 _ => unreachable!(),
             },
             (Some(l), None) => l.is_concrete(),

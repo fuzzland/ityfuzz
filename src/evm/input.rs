@@ -879,6 +879,10 @@ impl VMInputT<EVMState, EVMAddress, EVMAddress, ConciseEVMInput> for EVMInput {
         self.env.tx.caller = origin;
     }
 
+    fn get_origin(&self) -> EVMAddress {
+        self.env.tx.caller
+    }
+
     fn get_contract(&self) -> EVMAddress {
         self.contract
     }

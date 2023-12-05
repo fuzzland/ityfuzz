@@ -38,6 +38,8 @@ where
     fn set_caller(&mut self, caller: Addr);
     /// Set the origin
     fn set_origin(&mut self, origin: Addr);
+    /// Get the origin
+    fn get_origin(&self) -> Addr;
 
     /// Get the contract address of the input (the address of the contract that
     /// is being called)

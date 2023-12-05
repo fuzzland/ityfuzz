@@ -758,6 +758,10 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
         todo!()
     }
 
+    fn get_origin(&self) -> AccountAddress {
+        todo!()
+    }
+
     fn get_contract(&self) -> AccountAddress {
         *self.module.address()
     }
