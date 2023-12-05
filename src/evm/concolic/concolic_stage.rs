@@ -180,6 +180,11 @@ where
                         Field::CallDataValue => {
                             new_testcase.set_txn_value(solution.value);
                         }
+                        Field::Origin => {
+                            if self.allow_symbolic_addresses {
+                                new_testcase.set_origin(solution.origin);
+                            }
+                        }
                     }
                 }
                 // debug!("new testcase: {:?}", new_testcase);
