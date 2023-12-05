@@ -319,7 +319,7 @@ impl OnChain {
             bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
             host.set_codedata(address_h160, contract_code.clone());
         }
-        if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) || !should_setup_abi {
+        if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) {
             return;
         }
 
