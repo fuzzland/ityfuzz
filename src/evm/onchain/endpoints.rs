@@ -189,6 +189,8 @@ pub struct PairData {
     rate: u32,
     initial_reserves_0: String,
     initial_reserves_1: String,
+    decimals_0: u32,
+    decimals_1: u32,
 }
 
 pub struct Info {
@@ -828,6 +830,9 @@ impl OnChainConfig {
                 }
                 let token0 = item["token0"].as_str().unwrap().to_string();
                 let token1 = item["token1"].as_str().unwrap().to_string();
+
+                let token0_decimals = item["token0_decimals"].as_u64().unwrap();
+                let token1_decimals = item["token1_decimals"].as_u64().unwrap();
                 let data = PairData {
                     src: if is_pegged { "pegged" } else { "v2" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
@@ -837,6 +842,8 @@ impl OnChainConfig {
                     rate: 0,
                     initial_reserves_0: "".to_string(),
                     initial_reserves_1: "".to_string(),
+                    decimals_0: token0_decimals as u32,
+                    decimals_1: token1_decimals as u32,
                 };
                 pairs.push(data);
             }
@@ -982,6 +989,8 @@ impl OnChainConfig {
                 initial_reserves_0: "".to_string(),
                 initial_reserves_1: "".to_string(),
                 src_exact: "".to_string(),
+                decimals_0: 0,
+                decimals_1: 0,
             };
         }
         let mut peg_info = self
@@ -1006,14 +1015,28 @@ impl OnChainConfig {
         }
     }
 
-    fn add_reserve_info(&self, pair_data: &mut PairData) {
+    /// returns whether the pair is significant
+    fn add_reserve_info(&self, pair_data: &mut PairData) -> bool {
         if pair_data.src == "pegged_weth" {
-            return;
+            return true;
         }
 
         let reserves = self.fetch_reserve(&pair_data.pair);
         pair_data.initial_reserves_0 = reserves.0;
         pair_data.initial_reserves_1 = reserves.1;
+
+        let reserves_0 = EVMU256::from(i128::from_str_radix(&pair_data.initial_reserves_0, 16).unwrap());
+        let reserves_1 = EVMU256::from(i128::from_str_radix(&pair_data.initial_reserves_1, 16).unwrap());
+
+        // bypass for incorrect decimal implementation
+        if pair_data.decimals_0 == 0 || pair_data.decimals_1 == 0 {
+            return true;
+        }
+
+        let min_r0 = EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1));
+        let min_r1 = EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1));
+
+        reserves_0 > min_r0 && reserves_1 > min_r1
     }
 
     fn with_info(&self, routes: Vec<Vec<PairData>>, network: &str, token: &str) -> Info {
@@ -1080,13 +1103,24 @@ impl OnChainConfig {
             &mut routes,
         );
 
-        for route in &mut routes {
+        let mut routes_without_low_liquidity_idx = vec![];
+
+        for (kth, route) in (&mut routes).iter_mut().enumerate() {
+            let mut low_liquidity = false;
             for hop in route {
-                self.add_reserve_info(hop);
+                low_liquidity |= (!self.add_reserve_info(hop));
+            }
+            if !low_liquidity {
+                routes_without_low_liquidity_idx.push(kth);
             }
         }
 
-        self.with_info(routes, network, token)
+        let routes_without_low_liquidity = routes_without_low_liquidity_idx
+            .iter()
+            .map(|&idx| routes[idx].clone())
+            .collect();
+
+        self.with_info(routes_without_low_liquidity, network, token)
     }
 }
 
