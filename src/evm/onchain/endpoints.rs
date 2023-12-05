@@ -831,8 +831,8 @@ impl OnChainConfig {
                 let token0 = item["token0"].as_str().unwrap().to_string();
                 let token1 = item["token1"].as_str().unwrap().to_string();
 
-                let token0_decimals = item["token0_decimals"].as_u64().unwrap();
-                let token1_decimals = item["token1_decimals"].as_u64().unwrap();
+                let token0_decimals = item["token0_decimals"].as_i64().unwrap();
+                let token1_decimals = item["token1_decimals"].as_i64().unwrap();
                 let data = PairData {
                     src: if is_pegged { "pegged" } else { "v2" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
@@ -842,8 +842,16 @@ impl OnChainConfig {
                     rate: 0,
                     initial_reserves_0: "".to_string(),
                     initial_reserves_1: "".to_string(),
-                    decimals_0: token0_decimals as u32,
-                    decimals_1: token1_decimals as u32,
+                    decimals_0: if token0_decimals >= 0 {
+                        token0_decimals as u32
+                    } else {
+                        0
+                    },
+                    decimals_1: if token1_decimals >= 0 {
+                        token1_decimals as u32
+                    } else {
+                        0
+                    },
                 };
                 pairs.push(data);
             }
@@ -1029,12 +1037,17 @@ impl OnChainConfig {
         let reserves_1 = EVMU256::from(i128::from_str_radix(&pair_data.initial_reserves_1, 16).unwrap());
 
         // bypass for incorrect decimal implementation
-        if pair_data.decimals_0 == 0 || pair_data.decimals_1 == 0 {
-            return true;
-        }
+        let min_r0 = if pair_data.decimals_0 == 0 {
+            EVMU256::ZERO
+        } else {
+            EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1))
+        };
 
-        let min_r0 = EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1));
-        let min_r1 = EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1));
+        let min_r1 = if pair_data.decimals_1 == 0 {
+            EVMU256::ZERO
+        } else {
+            EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1))
+        };
 
         reserves_0 > min_r0 && reserves_1 > min_r1
     }
