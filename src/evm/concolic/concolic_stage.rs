@@ -163,11 +163,12 @@ where
                 let mut new_testcase = (*orig_testcase).clone();
 
                 // if cannot set_bytes AND no fields to modify, skip
-                if data_abi.set_bytes(solution.input) {
+                if data_abi.set_bytes(solution.input.clone()) {
                     // This can fail if e.g. solving for an array
                     new_testcase.data = Some(data_abi);
-                } else if solution.fields.is_empty() {
-                    continue;
+                } else {
+                    new_testcase.data = None;
+                    new_testcase.direct_data = solution.input.into();
                 }
 
                 for mod_fields in solution.fields {
