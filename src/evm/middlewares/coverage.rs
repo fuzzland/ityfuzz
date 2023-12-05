@@ -60,8 +60,6 @@ pub struct Coverage {
 
     pub address_to_name: HashMap<EVMAddress, String>,
     pub pc_info: HashMap<(EVMAddress, usize), String>, // (address, pc) -> source code
-
-    pub sources: HashMap<EVMAddress, Vec<(String, String)>>, // address -> (filename, content)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -152,19 +150,6 @@ impl CoverageReport {
         text_file.write_all(self.to_string().as_bytes()).unwrap();
         text_file.flush().unwrap();
 
-        // write file information
-        let mut file_json_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/files.json", work_dir))
-            .unwrap();
-        file_json_file
-            .write_all(serde_json::to_string(&self.files).unwrap().as_bytes())
-            .unwrap();
-        file_json_file.flush().unwrap();
-
         // write json file
         let mut json_file = OpenOptions::new()
             .write(true)
@@ -246,7 +231,6 @@ impl Coverage {
             work_dir,
             address_to_name,
             pc_info: Default::default(),
-            sources: Default::default(),
         }
     }
 
@@ -258,12 +242,10 @@ impl Coverage {
 
         for (addr, all_pcs) in &self.total_instr_set {
             let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
-            report
-                .files
-                .insert(name.clone(), self.sources.get(addr).unwrap_or(&vec![]).clone());
             match self.pc_coverage.get_mut(addr) {
                 None => {}
                 Some(covered) => {
+                    println!("address: {:?}", addr);
                     let skip_pcs = self.skip_pcs.get(addr).unwrap_or(&default_skipper);
                     // Handle Instruction Coverage
                     let real_covered: HashSet<usize> = covered.difference(skip_pcs).cloned().collect();
@@ -337,15 +319,6 @@ where
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {
-        let meta = state
-            .metadata_map_mut()
-            .get_mut::<ArtifactInfoMetadata>()
-            .expect("ArtifactInfoMetadata not found");
-
-        if let Some(build_artifact) = meta.get_mut(&address) {
-            self.sources.insert(address, build_artifact.sources.clone());
-        }
-
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.clone());
 
         // find all skipping PCs
@@ -369,6 +342,20 @@ where
         self.total_jumpi_set.insert(address, jumpis);
 
         self.skip_pcs.insert(address, skip_pcs);
+
+        // write file information
+        let mut file_json_file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}/files.json", self.work_dir))
+            .unwrap();
+        let all_sources = SOURCE_MAP_PROVIDER.lock().unwrap().all_sources();
+        file_json_file
+            .write_all(serde_json::to_string(&all_sources).unwrap().as_bytes())
+            .unwrap();
+        file_json_file.flush().unwrap();
     }
 
     fn get_type(&self) -> MiddlewareType {
