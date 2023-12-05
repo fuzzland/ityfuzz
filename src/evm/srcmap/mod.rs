@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -44,6 +45,7 @@ struct SourceMap {
 pub struct SourceMapProvider {
     source_maps: HashMap<EVMAddress, SourceMap>, /* address -> SourceMap
                                                   * saved_filenames: HashSet<String>, */
+    source_code: HashMap<EVMAddress, Vec<(String, String)>>, // filename -> file_content
 }
 
 impl SourceMapProvider {
@@ -56,6 +58,9 @@ impl SourceMapProvider {
         replacements: Option<&Vec<(String, String)>>,
     ) {
         debug!("adding source map for address: {}", address);
+        self.source_code
+            .insert(address.clone(), files.clone().iter().cloned().collect_vec());
+
         let filenames = files.iter().map(|(name, _)| (name.clone())).collect();
         let list_raw_infos = self.uncompress_srcmap_single(map, &filenames, replacements);
         let bytecode_len = bytecode.len();
@@ -233,6 +238,10 @@ impl SourceMapProvider {
             }
         }
         results
+    }
+
+    pub fn all_sources(&self) -> HashMap<EVMAddress, Vec<(String, String)>> {
+        self.source_code.clone()
     }
 }
 

@@ -1,6 +1,9 @@
 /// A corpus in memory with self-incementing indexes for items.
 use core::cell::RefCell;
-use std::cell::{Ref, RefMut};
+use std::{
+    cell::{Ref, RefMut},
+    collections::HashMap,
+};
 
 use libafl::{
     corpus::{Corpus, Testcase},
@@ -21,7 +24,7 @@ where
     I: Input,
 {
     /// Mapping from index to testcase
-    entries: Vec<RefCell<Testcase<I>>>,
+    entries: HashMap<usize, RefCell<Testcase<I>>>,
     /// Dummy testcase ref
     dummy: RefCell<Testcase<I>>,
     /// Current index
@@ -44,38 +47,38 @@ where
     /// Returns the number of elements
     #[inline]
     fn count(&self) -> usize {
-        self.entries.len()
+        self.current_idx
     }
 
     /// Add an entry to the corpus and return its index
     #[inline]
     fn add(&mut self, testcase: Testcase<I>) -> Result<CorpusId, Error> {
-        self.entries.push(RefCell::new(testcase));
-        Ok(CorpusId::from(self.entries.len() - 1))
+        self.entries.insert(self.current_idx, RefCell::new(testcase));
+        self.current_idx += 1;
+        Ok(CorpusId::from(self.current_idx - 1))
     }
 
     /// Replaces the testcase at the given idx
     #[inline]
     fn replace(&mut self, idx: CorpusId, testcase: Testcase<I>) -> Result<Testcase<I>, Error> {
         let idx = usize::from(idx);
-        if idx >= self.entries.len() {
-            return Err(Error::key_not_found(format!("Index {idx} out of bounds")));
-        }
-        self.entries[idx] = RefCell::new(testcase);
-        Ok(self.entries[idx].borrow().clone())
+        let original = self.entries.get(&idx).unwrap().borrow().clone();
+        self.entries.insert(idx, RefCell::new(testcase));
+        Ok(original)
     }
 
     /// Removes an entry from the corpus, returning it if it was present.
     #[inline]
     fn remove(&mut self, idx: CorpusId) -> Result<Testcase<I>, Error> {
-        let dummy = self.dummy.borrow().clone();
-        self.replace(idx, dummy)
+        let idx = usize::from(idx);
+        let original = self.entries.remove(&idx).unwrap().into_inner();
+        Ok(original)
     }
 
     /// Get by id
     #[inline]
     fn get(&self, idx: CorpusId) -> Result<&RefCell<Testcase<I>>, Error> {
-        match self.entries.get(usize::from(idx)) {
+        match self.entries.get(&usize::from(idx)) {
             Some(entry) => Ok(entry),
             _ => Err(Error::key_not_found(format!("Index {idx} out of bounds"))),
         }
