@@ -31,7 +31,10 @@ use crate::{
         corpus_initializer::ABIMap,
         host::FuzzHost,
         input::{EVMInput, EVMInputTy},
-        middlewares::middleware::{add_corpus, Middleware, MiddlewareType},
+        middlewares::{
+            cheatcode::CHEATCODE_ADDRESS,
+            middleware::{add_corpus, Middleware, MiddlewareType},
+        },
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
@@ -417,7 +420,9 @@ impl OnChain {
             host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
         }
         let target = if is_proxy_call { caller } else { address_h160 };
-        state.add_address(&target);
+        if target != CHEATCODE_ADDRESS {
+            state.add_address(&target);
+        }
 
         // notify flashloan and blacklisting flashloan addresses
         {
