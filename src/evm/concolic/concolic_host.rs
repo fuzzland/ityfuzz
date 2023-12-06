@@ -231,10 +231,12 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::CALLER => {
                 self.constrained_field.push(Field::Caller);
+                self.constrained_field.push(Field::Origin);
                 Some(SymbolicTy::BV(self.caller.clone()))
             }
             ConcolicOp::ORIGIN => {
                 self.constrained_field.push(Field::Origin);
+                self.constrained_field.push(Field::Caller);
                 Some(SymbolicTy::BV(self.origin.clone()))
             }
             ConcolicOp::FINEGRAINEDINPUT(start, end) => Some(SymbolicTy::BV(self.slice_input(*start, *end))),
