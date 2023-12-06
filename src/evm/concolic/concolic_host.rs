@@ -277,6 +277,9 @@ impl<'a> Solving<'a> {
         let context = self.context;
         let solver = Solver::new(context);
         // debug!("Constraints: {:?}", self.constraints);
+
+        solver.assert(&self.caller._eq(&self.origin));
+
         for (nth, cons) in self.constraints.iter().enumerate() {
             // only solve the last constraint
             if optimistic && nth != self.constraints.len() - 1 {
@@ -1013,7 +1016,12 @@ where
             }
             // ORIGIN
             0x32 => {
-                vec![Some(Expr::new_origin())]
+                if !self.ctxs.is_empty() {
+                    // use concrete origin when inside a call
+                    vec![None]
+                } else {
+                    vec![Some(Expr::new_origin())]
+                }
             }
             // CALLER
             0x33 => {
