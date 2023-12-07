@@ -37,7 +37,7 @@ contract {{contract_name}} is Test {
     {{#if (is_deposit buy_type)}}
         vm.deal({{caller}}, {{value}});
     {{#with (lookup swap_data "deposit")~}}
-        {{this.addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
+        {{addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
     {{/with}}
     {{else}}
     {{#if (is_buy buy_type)}}

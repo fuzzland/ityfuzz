@@ -126,7 +126,7 @@ impl<T: SolutionTx> From<&T> for Tx {
     fn from(input: &T) -> Self {
         let (is_borrow, value, mut liq_percent, swap_data) =
             (input.is_borrow(), input.value(), input.liq_percent(), input.swap_data());
-        error!(
+        debug!(
             "Generate foundry, is_borrow: {:?}, value: {:?}, liq_percent: {:?}, swap_data: {:?}",
             is_borrow, value, liq_percent, swap_data
         );
