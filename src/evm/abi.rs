@@ -44,6 +44,10 @@ static mut CONCOLIC_COUNTER: u64 = 0;
 
 /// Convert a vector of bytes to hex string
 fn vec_to_hex(v: &Vec<u8>) -> String {
+    if v.is_empty() {
+        return String::from("\"\"");
+    }
+
     let mut s = String::new();
     s.push_str("0x");
     for i in v {

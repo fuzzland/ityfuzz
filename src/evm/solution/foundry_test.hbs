@@ -36,13 +36,13 @@ contract {{contract_name}} is Test {
     {{else}}
     {{#if (is_deposit buy_type)}}
         vm.deal({{caller}}, {{value}});
-    {{#with (lookup swap_data ["deposit"])~}}
-        {{addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
+    {{#with (lookup swap_data "deposit")~}}
+        {{this.addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
     {{/with}}
     {{else}}
     {{#if (is_buy buy_type)}}
         address[] memory path{{borrow_idx}} = new address[]();
-    {{#with (lookup swap_data ["buy"])~}}
+    {{#with (lookup swap_data "buy")~}}
         {{#each path}}
         path{{../../borrow_idx}}[{{@index}}] = {{{this}}};
         {{/each}}
@@ -57,7 +57,7 @@ contract {{contract_name}} is Test {
     {{/if}}
     {{#if fn_signature}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
-            "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
+            "{{fn_signature}}"{{#if fn_args}}, {{fn_args}}{{/if}}
         ));
     {{else}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
@@ -68,7 +68,7 @@ contract {{contract_name}} is Test {
     {{/if}}
     {{/if}}
     {{#if (is_withdraw sell_type)}}
-    {{#with (lookup swap_data ["withdraw"])~}}
+    {{#with (lookup swap_data "withdraw")~}}
         vm.prank({{caller}});
         {{addr}}.call(abi.encodeWithSignature("withdraw(uint256)", {{../value}}));
     {{/with}}
@@ -78,7 +78,7 @@ contract {{contract_name}} is Test {
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
         IERC20({{contract}}).approve(router, amount{{liq_idx}});
         address[] memory liq_path{{liq_idx}} = new address[]();
-    {{#with (lookup swap_data ["sell"])~}}
+    {{#with (lookup swap_data "sell")~}}
         {{#each path}}
         liq_path{{../../liq_idx}}[{{@index}}] = {{{this}}};
         {{/each}}
