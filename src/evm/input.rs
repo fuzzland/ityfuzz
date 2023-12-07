@@ -377,10 +377,10 @@ impl ConciseEVMInput {
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => self.as_transfer(),
                 EVMInputTy::Borrow => {
-                    if self.swap_data.contains_key("buy") {
-                        self.as_borrow()
-                    } else if self.swap_data.contains_key("deposit") {
+                    if self.swap_data.contains_key("deposit") {
                         self.as_deposit()
+                    } else {
+                        self.as_borrow()
                     }
                 }
                 EVMInputTy::Liquidate => None,
