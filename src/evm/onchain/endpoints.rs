@@ -1121,7 +1121,7 @@ impl OnChainConfig {
         for (kth, route) in (&mut routes).iter_mut().enumerate() {
             let mut low_liquidity = false;
             for hop in route {
-                low_liquidity |= (!self.add_reserve_info(hop));
+                low_liquidity |= !self.add_reserve_info(hop);
             }
             if !low_liquidity {
                 routes_without_low_liquidity_idx.push(kth);

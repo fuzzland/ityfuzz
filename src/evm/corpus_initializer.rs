@@ -542,6 +542,7 @@ where
             direct_data: Default::default(),
             randomness: vec![0],
             repeat: 1,
+            swap_data: HashMap::new(),
         };
         add_input_to_corpus!(self.state, &mut self.scheduler, input.clone(), artifacts);
         #[cfg(feature = "print_txn_corpus")]

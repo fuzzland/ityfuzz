@@ -24,38 +24,74 @@ contract {{contract_name}} is Test {
     }
 
     function test() public {
-    {{#if include_interface}}
+    {{#if router}}
         address router = {{router}};
-        address weth = {{weth}};
-        {{/if}}{{#each trace}}
+
+    {{/if}}
+{{#each trace}}
         vm.prank({{caller}});
-        {{#with this}}{{#if raw_code}}{{raw_code}}{{! Raw Code }}
-        {{else}}{{#if is_deposit}}vm.deal({{caller}}, {{value}});
-        weth.call{value: {{value}}}(abi.encodeWithSignature("deposit()", {{value}}));{{! Deposit weth }}
-        {{else}}{{#if is_borrow}}address[] memory path{{borrow_idx}} = new address[](2);{{! Borrow token }}
-        path{{borrow_idx}}[0] = weth;
-        path{{borrow_idx}}[1] = {{contract}};
+{{#with this}}
+    {{#if raw_code}}
+        {{raw_code}}
+    {{else}}
+    {{#if (is_deposit buy_type)}}
+        vm.deal({{caller}}, {{value}});
+    {{#with (lookup swap_data ["deposit"])~}}
+        {{addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
+    {{/with}}
+    {{else}}
+    {{#if (is_buy buy_type)}}
+        address[] memory path{{borrow_idx}} = new address[]();
+    {{#with (lookup swap_data ["buy"])~}}
+        {{#each path}}
+        path{{../../borrow_idx}}[{{@index}}] = {{{this}}};
+        {{/each}}
+    {{/with}}
         vm.deal({{caller}}, {{value}});
         IUniswapV2Router(router).swapExactETHForTokensSupportingFeeOnTransferTokens{
             value: {{value}}
         }(0, path{{borrow_idx}}, address(this), block.timestamp);
-        {{else}}{{#if value}}vm.deal({{caller}}, {{value}});{{/if}}
-        {{#if fn_signature}}{{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature({{! Call with signature }}
+    {{else}}
+    {{#if value}}
+        vm.deal({{caller}}, {{value}});
+    {{/if}}
+    {{#if fn_signature}}
+        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
             "{{fn_signature}}"{{#if fn_args}},{{fn_args}}{{/if}}
-        )); {{else}}{{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector({{! Call with selector }}
+        ));
+    {{else}}
+        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
             {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
-        ));{{/if}}{{/if}}{{/if}}{{/if}}{{#if liq_percent}}{{! Liquidation }}
+        ));
+    {{/if}}
+    {{/if}}
+    {{/if}}
+    {{/if}}
+    {{#if (is_withdraw sell_type)}}
+    {{#with (lookup swap_data ["withdraw"])~}}
+        vm.prank({{caller}});
+        {{addr}}.call(abi.encodeWithSignature("withdraw(uint256)", {{../value}}));
+    {{/with}}
+    {{else}}
+    {{#if (is_sell sell_type)}}
         vm.startPrank({{caller}});
         uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
         IERC20({{contract}}).approve(router, amount{{liq_idx}});
-        address[] memory liq_path{{liq_idx}} = new address[](2);
-        liq_path{{liq_idx}}[0] = {{contract}};
-        liq_path{{liq_idx}}[1] = address(weth);
+        address[] memory liq_path{{liq_idx}} = new address[]();
+    {{#with (lookup swap_data ["sell"])~}}
+        {{#each path}}
+        liq_path{{../../liq_idx}}[{{@index}}] = {{{this}}};
+        {{/each}}
+    {{/with}}
         vm.deal({{caller}}, amount{{liq_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
             amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
         );
-        vm.stopPrank();{{/if}}{{/with}}{{/each}}
+        vm.stopPrank();
+    {{/if}}
+    {{/if}}
+{{/with}}
+{{/each}}
     }
 
 {{#if stepping_with_return}}

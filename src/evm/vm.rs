@@ -33,6 +33,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
+use crate::{evm::uniswap::SwapData, generic_vm::vm_state};
 #[allow(unused_imports)]
 use crate::{
     evm::{
@@ -263,6 +264,8 @@ pub struct EVMState {
     pub integer_overflow: HashSet<(EVMAddress, usize, &'static str)>,
     #[serde(skip)]
     pub reentrancy_metadata: ReentrancyData,
+    #[serde(skip)]
+    pub swap_data: SwapData,
 }
 
 pub trait EVMStateT {
@@ -346,13 +349,17 @@ impl VMStateT for EVMState {
                 .map_or(false, |v2| v.iter().all(|(k, v)| v2.get(k).map_or(false, |v2| v == v2)))
         })
     }
+
+    fn get_swap_data(&self) -> HashMap<String, vm_state::SwapInfo> {
+        self.swap_data.to_generic()
+    }
 }
 
 impl EVMState {
     /// Create a new EVM state, containing empty state, no post execution
     /// context
     pub(crate) fn new() -> Self {
-        Self::default()
+        Default::default()
     }
 
     /// Get all storage slots of a specific contract
@@ -577,7 +584,7 @@ where
                 debug!("no code @ {:?}, did you forget to deploy?", call_ctx.code_address);
                 return IntermediateExecutionResult {
                     output: Bytes::new(),
-                    new_state: EVMState::default(),
+                    new_state: EVMState::new(),
                     pc: 0,
                     ret: InstructionResult::Revert,
                     stack: Default::default(),
@@ -998,7 +1005,7 @@ where
                         .clone()
                 };
 
-                let calldata = token_ctx.borrow().buy(
+                let mut calldata = token_ctx.borrow().buy(
                     state,
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
@@ -1006,7 +1013,7 @@ where
                 );
                 if !calldata.is_empty() {
                     assert_eq!(calldata.len(), 1);
-                    let (target, abi, value) = &calldata[0];
+                    let (target, abi, value) = &mut calldata[0];
                     let bys = abi.get_bytes();
                     let mut res = self.fast_call(
                         *target,
@@ -1021,6 +1028,10 @@ where
                             .borrow_mut()
                             .analyze_call(input, &mut res.new_state.flashloan_data)
                     }
+
+                    // Record the swap info for generating foundry in the future.
+                    res.new_state.swap_data.push(target, abi);
+
                     unsafe {
                         ExecutionResult {
                             output: res.output.to_vec(),
@@ -1160,7 +1171,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc};
+    use std::{cell::RefCell, collections::HashMap, path::Path, rc::Rc};
 
     use bytes::Bytes;
     use libafl::prelude::StdScheduler;
@@ -1238,6 +1249,7 @@ mod tests {
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
+            swap_data: HashMap::new(),
         };
 
         let mut state = FuzzState::new(0);
@@ -1275,6 +1287,7 @@ mod tests {
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
+            swap_data: HashMap::new(),
         };
 
         let execution_result_5 = evm_executor.execute(&input_5, &mut state);

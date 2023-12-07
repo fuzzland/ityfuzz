@@ -473,6 +473,7 @@ impl OnChain {
                     direct_data: Default::default(),
                     randomness: vec![0],
                     repeat: 1,
+                    swap_data: HashMap::new(),
                 };
                 add_corpus(host, state, &input);
             });
