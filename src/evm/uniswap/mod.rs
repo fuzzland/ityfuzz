@@ -355,11 +355,7 @@ impl SwapData {
             if let hash_map::Entry::Vacant(e) = self.inner.entry(new.ty) {
                 e.insert(new);
             } else {
-                self.inner
-                    .get_mut(&new.ty)
-                    .unwrap()
-                    .path
-                    .extend(new.path.into_iter().skip(1));
+                self.inner.get_mut(&new.ty).unwrap().concat_path(new.path);
             }
         }
     }
@@ -433,6 +429,19 @@ impl SwapInfo {
         } else {
             None
         }
+    }
+
+    pub fn concat_path(&mut self, new_path: Vec<String>) {
+        // Find the first common element from the end
+        let mut idx = self.path.len();
+        for i in (0..self.path.len()).rev() {
+            if self.path[i] == new_path[0] {
+                idx = i;
+                break;
+            }
+        }
+        self.path.truncate(idx);
+        self.path.extend(new_path);
     }
 }
 
