@@ -117,20 +117,14 @@ pub struct Tx {
     fn_selector: String,
     fn_args: String,
     liq_percent: u8,
-    liq_idx: u32,
+    balance_idx: u32,
     // map<type, swap_info>
     swap_data: HashMap<String, SwapInfo>,
 }
 
 impl<T: SolutionTx> From<&T> for Tx {
     fn from(input: &T) -> Self {
-        let (is_borrow, value, mut liq_percent, swap_data) =
-            (input.is_borrow(), input.value(), input.liq_percent(), input.swap_data());
-        debug!(
-            "Generate foundry, is_borrow: {:?}, value: {:?}, liq_percent: {:?}, swap_data: {:?}",
-            is_borrow, value, liq_percent, swap_data
-        );
-
+        let (is_borrow, mut liq_percent, swap_data) = (input.is_borrow(), input.liq_percent(), input.swap_data());
         let buy_type = BuyType::new(is_borrow, &swap_data);
         let sell_type = SellType::new(liq_percent, &swap_data);
 
@@ -145,7 +139,7 @@ impl<T: SolutionTx> From<&T> for Tx {
             sell_type,
             caller: input.caller(),
             contract: input.contract(),
-            value,
+            value: input.value(),
             fn_signature: input.fn_signature(),
             fn_selector: input.fn_selector(),
             fn_args: input.fn_args(),
@@ -209,12 +203,12 @@ impl TemplateArgs {
 }
 
 fn setup_trace(trace: &mut [Tx]) {
-    let (mut borrow_idx, mut liq_idx) = (0, 0);
+    let (mut borrow_idx, mut balance_idx) = (0, 0);
     for tx in trace.iter_mut() {
-        // Liquidation
-        if tx.sell_type == SellType::Sell {
-            tx.liq_idx = liq_idx;
-            liq_idx += 1;
+        // Liquidation / Withdraw
+        if [SellType::Sell, SellType::Withdraw].contains(&tx.sell_type) {
+            tx.balance_idx = balance_idx;
+            balance_idx += 1;
         }
 
         // Raw code

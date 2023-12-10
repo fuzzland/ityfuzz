@@ -36,9 +36,7 @@ contract {{contract_name}} is Test {
     {{else}}
     {{#if (is_deposit buy_type)}}
         vm.deal({{caller}}, {{value}});
-    {{#with (lookup swap_data "deposit")~}}
-        {{addr}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));
-    {{/with}}
+        {{#with (lookup swap_data "deposit")~}}{{target}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));{{/with}}
     {{else}}
     {{#if (is_buy buy_type)}}
         address[] memory path{{borrow_idx}} = new address[]();
@@ -68,24 +66,24 @@ contract {{contract_name}} is Test {
     {{/if}}
     {{/if}}
     {{#if (is_withdraw sell_type)}}
-    {{#with (lookup swap_data "withdraw")~}}
-        vm.prank({{caller}});
-        {{addr}}.call(abi.encodeWithSignature("withdraw(uint256)", {{../value}}));
-    {{/with}}
+        vm.startPrank({{caller}});
+        uint256 amount{{balance_idx}} = IERC20({{contract}}).balanceOf(address(this));
+        {{#with (lookup swap_data "withdraw")~}}{{target}}.call(abi.encodeWithSignature("withdraw(uint256)", amount{{../balance_idx}}));{{/with}}
+        vm.stopPrank();
     {{else}}
     {{#if (is_sell sell_type)}}
         vm.startPrank({{caller}});
-        uint256 amount{{liq_idx}} = IERC20({{contract}}).balanceOf(address(this));
-        IERC20({{contract}}).approve(router, amount{{liq_idx}});
-        address[] memory liq_path{{liq_idx}} = new address[]();
+        uint256 amount{{balance_idx}} = IERC20({{contract}}).balanceOf(address(this));
+        IERC20({{contract}}).approve(router, amount{{balance_idx}});
+        address[] memory liq_path{{balance_idx}} = new address[]();
     {{#with (lookup swap_data "sell")~}}
         {{#each path}}
-        liq_path{{../../liq_idx}}[{{@index}}] = {{{this}}};
+        liq_path{{../../balance_idx}}[{{@index}}] = {{{this}}};
         {{/each}}
     {{/with}}
-        vm.deal({{caller}}, amount{{liq_idx}});
+        vm.deal({{caller}}, amount{{balance_idx}});
         IUniswapV2Router(router).swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount{{liq_idx}}, 0, liq_path{{liq_idx}}, address(this), block.timestamp
+            amount{{balance_idx}}, 0, liq_path{{balance_idx}}, address(this), block.timestamp
         );
         vm.stopPrank();
     {{/if}}
