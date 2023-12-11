@@ -27,6 +27,7 @@ pub enum ConcolicOp {
     BALANCE,
     CALLVALUE,
     CALLER,
+    ORIGIN,
     // symbolic byte
     SYMBYTE(String),
     // helper OP for input slicing (not in EVM)
@@ -156,6 +157,14 @@ impl Expr {
         })
     }
 
+    pub fn new_origin() -> Box<Expr> {
+        Box::new(Expr {
+            lhs: None,
+            rhs: None,
+            op: ConcolicOp::ORIGIN,
+        })
+    }
+
     pub fn sliced_input(start: u32, end: u32) -> Box<Expr> {
         Box::new(Expr {
             lhs: None,
@@ -262,6 +271,7 @@ impl Expr {
                 ConcolicOp::CONSTBYTE(_) => true,
                 ConcolicOp::FINEGRAINEDINPUT(_, _) => false,
                 ConcolicOp::CALLER => false,
+                ConcolicOp::ORIGIN => false,
                 _ => unreachable!(),
             },
             (Some(l), None) => l.is_concrete(),

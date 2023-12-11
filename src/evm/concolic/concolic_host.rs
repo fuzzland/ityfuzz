@@ -50,6 +50,7 @@ const MAX_CALL_DEPTH: usize = 3;
 pub enum Field {
     Caller,
     CallDataValue,
+    Origin,
 }
 
 #[allow(clippy::vec_box)]
@@ -59,6 +60,7 @@ pub struct Solving<'a> {
     balance: &'a BV<'a>,
     calldatavalue: &'a BV<'a>,
     caller: &'a BV<'a>,
+    origin: &'a BV<'a>,
     constraints: &'a Vec<Box<Expr>>,
     constrained_field: Vec<Field>,
 }
@@ -71,6 +73,7 @@ impl<'a> Solving<'a> {
         balance: &'a BV<'a>,
         calldatavalue: &'a BV<'a>,
         caller: &'a BV<'a>,
+        origin: &'a BV<'a>,
         constraints: &'a Vec<Box<Expr>>,
     ) -> Self {
         Solving {
@@ -90,6 +93,7 @@ impl<'a> Solving<'a> {
             balance,
             calldatavalue,
             caller,
+            origin,
             constraints,
             constrained_field: vec![],
         }
@@ -106,6 +110,7 @@ pub enum SymbolicTy<'a> {
 pub struct Solution {
     pub input: Vec<u8>,
     pub caller: EVMAddress,
+    pub origin: EVMAddress,
     pub value: EVMU256,
     pub fields: Vec<Field>,
 }
@@ -115,6 +120,7 @@ impl Display for Solution {
         let mut s = String::new();
         s.push_str(&format!("(input: {:?}, ", hex::encode(&self.input)));
         s.push_str(&format!("caller: {:?}, ", self.caller));
+        s.push_str(&format!("origin: {:?}, ", self.origin));
         s.push_str(&format!("value: {})", self.value));
         write!(f, "{}", s)
     }
@@ -225,7 +231,13 @@ impl<'a> Solving<'a> {
             }
             ConcolicOp::CALLER => {
                 self.constrained_field.push(Field::Caller);
+                self.constrained_field.push(Field::Origin);
                 Some(SymbolicTy::BV(self.caller.clone()))
+            }
+            ConcolicOp::ORIGIN => {
+                self.constrained_field.push(Field::Origin);
+                self.constrained_field.push(Field::Caller);
+                Some(SymbolicTy::BV(self.origin.clone()))
             }
             ConcolicOp::FINEGRAINEDINPUT(start, end) => Some(SymbolicTy::BV(self.slice_input(*start, *end))),
             ConcolicOp::LNOT => {
@@ -267,6 +279,9 @@ impl<'a> Solving<'a> {
         let context = self.context;
         let solver = Solver::new(context);
         // debug!("Constraints: {:?}", self.constraints);
+
+        solver.assert(&self.caller._eq(self.origin));
+
         for (nth, cons) in self.constraints.iter().enumerate() {
             // only solve the last constraint
             if optimistic && nth != self.constraints.len() - 1 {
@@ -349,9 +364,12 @@ impl<'a> Solving<'a> {
                 let callvalue_int = EVMU256::from_str_radix(callvalue.trim_start_matches("#x"), 16).unwrap();
                 let caller = model.eval(self.caller, true).unwrap().to_string();
                 let caller_addr = EVMAddress::from_slice(&hex::decode(&caller.as_str()[26..66]).unwrap());
+                let origin = model.eval(self.origin, true).unwrap().to_string();
+                let origin_addr = EVMAddress::from_slice(&hex::decode(&origin.as_str()[26..66]).unwrap());
                 vec![Solution {
                     input: input_bytes,
                     caller: caller_addr,
+                    origin: origin_addr,
                     value: callvalue_int,
                     fields: self.constrained_field.clone(),
                 }]
@@ -644,6 +662,7 @@ impl ConcolicHost {
         //     .collect::<Vec<_>>();
         let callvalue = BV::new_const(&context, "callvalue", 256);
         let caller = BV::new_const(&context, "caller", 256);
+        let origin = BV::new_const(&context, "origin", 256);
         let balance = BV::new_const(&context, "balance", 256);
 
         let mut solving = Solving::new(
@@ -652,6 +671,7 @@ impl ConcolicHost {
             &balance,
             &callvalue,
             &caller,
+            &origin,
             &self.constraints,
         );
         solving.solve(false)
@@ -673,9 +693,18 @@ impl ConcolicHost {
             let context = Context::new(&Config::default());
             let callvalue = BV::new_const(&context, "callvalue", 256);
             let caller = BV::new_const(&context, "caller", 256);
+            let origin = BV::new_const(&context, "origin", 256);
             let balance = BV::new_const(&context, "balance", 256);
 
-            let mut solving = Solving::new(&context, &input_bytes, &balance, &callvalue, &caller, &constraints);
+            let mut solving = Solving::new(
+                &context,
+                &input_bytes,
+                &balance,
+                &callvalue,
+                &caller,
+                &origin,
+                &constraints,
+            );
 
             let solutions = solving.solve(false);
             let mut solutions_clone = solutions_clone.lock().unwrap();
@@ -989,7 +1018,12 @@ where
             }
             // ORIGIN
             0x32 => {
-                vec![None]
+                if !self.ctxs.is_empty() {
+                    // use concrete origin when inside a call
+                    vec![None]
+                } else {
+                    vec![Some(Expr::new_origin())]
+                }
             }
             // CALLER
             0x33 => {
