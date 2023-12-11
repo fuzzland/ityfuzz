@@ -55,11 +55,11 @@ contract {{contract_name}} is Test {
     {{/if}}
     {{#if fn_signature}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
-            "{{fn_signature}}"{{#if fn_args}}, {{fn_args}}{{/if}}
+            "{{fn_signature}}"{{#if fn_args}}, {{{fn_args}}}{{/if}}
         ));
     {{else}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
-            {{fn_selector}}{{#if fn_args}},{{fn_args}}{{/if}}
+            {{fn_selector}}{{#if fn_args}},{{{fn_args}}}{{/if}}
         ));
     {{/if}}
     {{/if}}
