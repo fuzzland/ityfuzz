@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use colored::{ColoredString, Colorize};
@@ -22,7 +22,10 @@ use crate::{
         types::{checksum, EVMAddress, EVMStagedVMState, EVMU256, EVMU512},
         vm::EVMState,
     },
-    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
+    generic_vm::{
+        vm_executor::ExecutionResult,
+        vm_state::{SwapInfo, VMStateT},
+    },
     input::{ConciseSerde, SolutionTx, VMInputT},
     mutation_utils::byte_mutator,
     state::{HasCaller, HasItyState},
@@ -88,6 +91,8 @@ pub trait EVMInputT {
     fn set_liquidation_percent(&mut self, v: u8);
 
     fn get_repeat(&self) -> usize;
+
+    fn get_swap_data(&self) -> HashMap<String, SwapInfo>;
 }
 
 /// EVM Input
@@ -137,6 +142,9 @@ pub struct EVMInput {
 
     /// Execute the transaction multiple times
     pub repeat: usize,
+
+    /// Swap data
+    pub swap_data: HashMap<String, SwapInfo>,
 }
 
 /// EVM Input Minimum for Deserializing
@@ -183,6 +191,9 @@ pub struct ConciseEVMInput {
 
     /// return data
     pub return_data: Option<Vec<u8>>,
+
+    /// Swap data
+    pub swap_data: HashMap<String, SwapInfo>,
 }
 
 /// EVM Input Minimum for Deserializing with human readable ABI
@@ -248,6 +259,8 @@ impl ConciseEVMInput {
             v => Some(v),
         };
 
+        let swap_data = execution_result.new_state.state.get_swap_data();
+
         Self {
             input_type: input.get_input_type(),
             caller: input.get_caller(),
@@ -271,6 +284,7 @@ impl ConciseEVMInput {
                 None => u32::MAX,
             },
             return_data,
+            swap_data,
         }
     }
 
@@ -298,6 +312,7 @@ impl ConciseEVMInput {
             layer: input.get_state().get_post_execution_len(),
             call_leak,
             return_data: None,
+            swap_data: input.get_swap_data(),
         }
     }
 
@@ -324,6 +339,7 @@ impl ConciseEVMInput {
                 direct_data: Bytes::from(hex::decode(&self.direct_data).unwrap_or_default()),
                 randomness: self.randomness.clone(),
                 repeat: self.repeat,
+                swap_data: self.swap_data.clone(),
             },
             self.call_leak,
         )
@@ -360,7 +376,13 @@ impl ConciseEVMInput {
             Some(ref d) => self.as_abi_call(d.to_colored_string()),
             None => match self.input_type {
                 EVMInputTy::ABI | EVMInputTy::ArbitraryCallBoundedAddr => self.as_transfer(),
-                EVMInputTy::Borrow => self.as_borrow(),
+                EVMInputTy::Borrow => {
+                    if self.swap_data.contains_key("deposit") {
+                        self.as_deposit()
+                    } else {
+                        self.as_borrow()
+                    }
+                }
                 EVMInputTy::Liquidate => None,
             },
         }
@@ -439,17 +461,32 @@ impl ConciseEVMInput {
         ))
     }
 
+    #[allow(dead_code)]
+    #[inline]
+    fn as_deposit(&self) -> Option<String> {
+        Some(format!(
+            "WETH.{}{}();",
+            self.colored_fn_name("deposit"),
+            self.colored_value(),
+        ))
+    }
+
     #[inline]
     fn append_liquidation(&self, indent: String, call: String) -> String {
         if self.liquidation_percent == 0 || unsafe { !CAN_LIQUIDATE } {
             return call;
         }
-
-        let liq_call = format!(
-            "{}.{}(100% Balance, 0, path:(* → WETH), address(this), block.timestamp);",
-            colored_address("Router"),
-            self.colored_fn_name("swapExactTokensForETH"),
-        );
+        let liq_call = if self.swap_data.contains_key("withdraw") {
+            format!("WETH.{}(100% Balance);", self.colored_fn_name("withdraw"))
+        } else if self.swap_data.contains_key("sell") {
+            format!(
+                "{}.{}(100% Balance, 0, path:(* → WETH), address(this), block.timestamp);",
+                colored_address("Router"),
+                self.colored_fn_name("swapExactTokensForETH"),
+            )
+        } else {
+            return call;
+        };
 
         let mut liq = indent.clone();
         liq.push_str(format!("├─[{}] {}", self.layer + 1, liq_call).as_str());
@@ -541,6 +578,10 @@ impl SolutionTx for ConciseEVMInput {
     fn liq_percent(&self) -> u8 {
         self.liquidation_percent
     }
+
+    fn swap_data(&self) -> HashMap<String, SwapInfo> {
+        self.swap_data.clone()
+    }
 }
 
 impl HasLen for EVMInput {
@@ -627,6 +668,10 @@ impl EVMInputT for EVMInput {
 
     fn get_repeat(&self) -> usize {
         self.repeat
+    }
+
+    fn get_swap_data(&self) -> HashMap<String, SwapInfo> {
+        self.swap_data.clone()
     }
 }
 

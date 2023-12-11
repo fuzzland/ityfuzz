@@ -86,6 +86,7 @@ impl
             let _path_idx = ctx.input.get_randomness()[0] as usize;
 
             let mut liquidation_txs = vec![];
+            let mut swap_infos = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
                 let txs = _token_info.borrow().sell(
@@ -99,9 +100,20 @@ impl
                     txs.iter()
                         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
+
+                if let Some(swap_info) = txs.last() {
+                    swap_infos.push(swap_info.clone());
+                }
             }
 
-            let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
+            let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);
+
+            // Record the swap info for generating foundry in the future.
+            state.swap_data = ctx.fuzz_state.get_execution_result().new_state.state.swap_data.clone();
+            for (target, mut abi, _) in swap_infos {
+                state.swap_data.push(&target, &mut abi);
+            }
+
             ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
         }
 
