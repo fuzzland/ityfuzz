@@ -84,8 +84,10 @@ where
         }
 
         if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            // 0..state.corpus().count() is the range of indexes of the corpus
+            let idxs = (0..state.corpus().count()).collect::<Vec<_>>();
             state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
-                interesting_idx: Default::default(),
+                interesting_idx: idxs,
                 solutions: vec![],
             });
         }
@@ -247,8 +249,10 @@ where
         OT: ObserversTuple<S>,
     {
         if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            // 0..state.corpus().count() is the range of indexes of the corpus
+            let idxs = (0..state.corpus().count()).collect::<Vec<_>>();
             state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
-                interesting_idx: Default::default(),
+                interesting_idx: idxs,
                 solutions: vec![],
             });
         }
