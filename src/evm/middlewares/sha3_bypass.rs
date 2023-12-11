@@ -485,6 +485,7 @@ mod tests {
             input_type: EVMInputTy::ABI,
             randomness: vec![],
             repeat: 1,
+            swap_data: HashMap::new(),
         };
 
         let res = evm_executor.execute(&input, &mut state);

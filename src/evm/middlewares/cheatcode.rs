@@ -1261,6 +1261,7 @@ mod tests {
                     input_type: EVMInputTy::ABI,
                     randomness: vec![],
                     repeat: 1,
+                    swap_data: HashMap::new(),
                 };
                 let mut state = FuzzState::new(0);
                 // deposit some ETH to the test contract

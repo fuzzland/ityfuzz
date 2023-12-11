@@ -747,8 +747,6 @@ pub fn evm_main(args: EvmArgs) {
 
     let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
 
-    let work_dir = args.work_dir.clone();
-
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     let mut file = OpenOptions::new()

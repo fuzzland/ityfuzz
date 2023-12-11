@@ -1,22 +1,17 @@
 use std::{
+    collections::HashMap,
     fs::{self, File},
     path::Path,
-    str::FromStr,
     sync::OnceLock,
     time::SystemTime,
 };
 
-use handlebars::Handlebars;
+use handlebars::{handlebars_helper, Handlebars};
 use serde::Serialize;
 use tracing::{debug, error};
 
-use super::{
-    types::{EVMAddress, EVMU256},
-    uniswap::{self, UniswapProvider},
-    Chain,
-    OnChainConfig,
-};
-use crate::{evm::types::checksum, input::SolutionTx};
+use super::{types::EVMU256, utils, OnChainConfig};
+use crate::{generic_vm::vm_state::SwapInfo, input::SolutionTx};
 
 /// Template
 const TEMPLATE: &str = include_str!("foundry_test.hbs");
@@ -24,18 +19,23 @@ const TEMPLATE: &str = include_str!("foundry_test.hbs");
 /// Cli args.
 static CLI_ARGS: OnceLock<CliArgs> = OnceLock::new();
 
+// Template helpers to compare strings
+handlebars_helper!(is_deposit: |ty: String| ty == "deposit");
+handlebars_helper!(is_buy: |ty: String| ty == "buy");
+handlebars_helper!(is_withdraw: |ty: String| ty == "withdraw");
+handlebars_helper!(is_sell: |ty: String| ty == "sell");
+
 /// Initialize CLI_ARGS.
 pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainConfig>) {
-    let (chain, weth, block_number) = match onchain {
+    let (chain, block_number) = match onchain {
         Some(oc) => {
-            let weth = get_weth(oc);
             let block_number = oc.block_number.clone();
             let number = EVMU256::from_str_radix(block_number.trim_start_matches("0x"), 16)
                 .unwrap()
                 .to_string();
-            (oc.chain_name.clone(), weth, number)
+            (oc.chain_name.clone(), number)
         }
-        None => (String::from(""), String::from(""), String::from("")),
+        None => (String::from(""), String::from("")),
     };
 
     let cli_args = CliArgs {
@@ -43,7 +43,6 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
         chain,
         target,
         block_number,
-        weth,
         output_dir: format!("{}/vulnerabilities", work_dir),
     };
 
@@ -52,6 +51,8 @@ pub fn init_cli_args(target: String, work_dir: String, onchain: &Option<OnChainC
 
 /// Generate a foundry test file.
 pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
+    let solution = utils::remove_color(&solution);
+
     let trace: Vec<Tx> = inputs.iter().map(Tx::from).collect();
     if trace.is_empty() {
         error!("generate_test error: no trace found.");
@@ -76,6 +77,11 @@ pub fn generate_test<T: SolutionTx>(solution: String, inputs: Vec<T>) {
         return;
     }
 
+    handlebars.register_helper("is_deposit", Box::new(is_deposit));
+    handlebars.register_helper("is_buy", Box::new(is_buy));
+    handlebars.register_helper("is_withdraw", Box::new(is_withdraw));
+    handlebars.register_helper("is_sell", Box::new(is_sell));
+
     let path = format!("{}/{}.t.sol", args.output_dir, args.contract_name);
     let output = File::create(path);
     if output.is_err() {
@@ -94,15 +100,15 @@ struct CliArgs {
     chain: String,
     target: String,
     block_number: String,
-    weth: String,
     output_dir: String,
 }
 
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
     raw_code: String,
-    is_deposit: bool,
-    is_borrow: bool,
+    // A tx can contain both a `buy` and a `sell` operation at the same time.
+    buy_type: BuyType,
+    sell_type: SellType,
     borrow_idx: u32,
     caller: String,
     contract: String,
@@ -111,20 +117,34 @@ pub struct Tx {
     fn_selector: String,
     fn_args: String,
     liq_percent: u8,
-    liq_idx: u32,
+    balance_idx: u32,
+    // map<type, swap_info>
+    swap_data: HashMap<String, SwapInfo>,
 }
 
 impl<T: SolutionTx> From<&T> for Tx {
     fn from(input: &T) -> Self {
+        let (is_borrow, mut liq_percent, swap_data) = (input.is_borrow(), input.liq_percent(), input.swap_data());
+        let buy_type = BuyType::new(is_borrow, &swap_data);
+        let sell_type = SellType::new(liq_percent, &swap_data);
+
+        // Adjust the liq_percent based on whether the `sell` operation is actually
+        // executed.
+        if liq_percent > 0 && sell_type != SellType::Sell {
+            liq_percent = 0;
+        }
+
         Self {
-            is_borrow: input.is_borrow(),
+            buy_type,
+            sell_type,
             caller: input.caller(),
             contract: input.contract(),
             value: input.value(),
             fn_signature: input.fn_signature(),
             fn_selector: input.fn_selector(),
             fn_args: input.fn_args(),
-            liq_percent: input.liq_percent(),
+            liq_percent,
+            swap_data,
             ..Default::default()
         }
     }
@@ -136,7 +156,6 @@ pub struct TemplateArgs {
     is_onchain: bool,
     include_interface: bool,
     router: String,
-    weth: String,
     chain: String,
     target: String,
     block_number: String,
@@ -159,19 +178,18 @@ impl TemplateArgs {
         let stepping_with_return = trace.iter().any(|tx| tx.fn_selector == "0x00000000");
         let mut trace: Vec<Tx> = trace.into_iter().filter(|tx| tx.fn_selector != "0x00000000").collect();
 
-        setup_trace(&mut trace, cli_args);
-        let router = get_router(&cli_args.chain);
+        setup_trace(&mut trace);
+        let router = get_router(&trace);
         let contract_name = make_contract_name(cli_args);
         let include_interface = trace
             .iter()
-            .any(|x| !x.raw_code.is_empty() || x.is_borrow || x.liq_percent > 0);
+            .any(|x| !x.raw_code.is_empty() || x.buy_type == BuyType::Buy || x.sell_type == SellType::Sell);
 
         Ok(Self {
             contract_name,
             is_onchain: cli_args.is_onchain,
             include_interface,
             router,
-            weth: cli_args.weth.clone(),
             chain: cli_args.chain.clone(),
             target: cli_args.target.clone(),
             block_number: cli_args.block_number.clone(),
@@ -184,13 +202,13 @@ impl TemplateArgs {
     }
 }
 
-fn setup_trace(trace: &mut [Tx], cli_args: &CliArgs) {
-    let (mut borrow_idx, mut liq_idx) = (0, 0);
+fn setup_trace(trace: &mut [Tx]) {
+    let (mut borrow_idx, mut balance_idx) = (0, 0);
     for tx in trace.iter_mut() {
-        // Liquidation
-        if tx.liq_percent > 0 {
-            tx.liq_idx = liq_idx;
-            liq_idx += 1;
+        // Liquidation / Withdraw
+        if [SellType::Sell, SellType::Withdraw].contains(&tx.sell_type) {
+            tx.balance_idx = balance_idx;
+            balance_idx += 1;
         }
 
         // Raw code
@@ -200,13 +218,9 @@ fn setup_trace(trace: &mut [Tx], cli_args: &CliArgs) {
         }
 
         // Borrow
-        if tx.is_borrow {
+        if tx.buy_type == BuyType::Buy {
             tx.borrow_idx = borrow_idx;
             borrow_idx += 1;
-            // deposit weth
-            if tx.contract == cli_args.weth {
-                tx.is_deposit = true;
-            }
         }
 
         // ABI Call
@@ -217,7 +231,7 @@ fn setup_trace(trace: &mut [Tx], cli_args: &CliArgs) {
 }
 
 fn make_raw_code(tx: &Tx) -> Option<String> {
-    if tx.is_borrow || tx.is_deposit {
+    if tx.buy_type != BuyType::None {
         return None;
     }
 
@@ -243,18 +257,24 @@ fn make_raw_code(tx: &Tx) -> Option<String> {
     }
 }
 
-fn get_router(chain: &str) -> String {
-    let chain = Chain::from_str(chain);
-    if chain.is_err() {
-        return EVMAddress::zero().to_string();
-    }
-    let chain = chain.unwrap();
-    if chain != Chain::ETH && chain != Chain::BSC {
-        return EVMAddress::zero().to_string();
-    }
-
-    let r = uniswap::get_uniswap_info(&UniswapProvider::UniswapV2, &chain).router;
-    checksum(&r)
+fn get_router(trace: &[Tx]) -> String {
+    trace
+        .iter()
+        .find(|t| {
+            // need swap
+            t.buy_type == BuyType::Buy || t.sell_type == SellType::Sell
+        })
+        .map(|t| {
+            if let Some(swap_info) = t.swap_data.get("buy") {
+                swap_info.target.clone()
+            } else {
+                t.swap_data
+                    .get("sell")
+                    .map(|swap_info| swap_info.target.clone())
+                    .unwrap_or_default()
+            }
+        })
+        .unwrap_or_default()
 }
 
 fn make_contract_name(cli_args: &CliArgs) -> String {
@@ -288,16 +308,66 @@ fn make_contract_name(cli_args: &CliArgs) -> String {
         .unwrap_or(default_name)
 }
 
-fn get_weth(oc: &OnChainConfig) -> String {
-    let chain = Chain::from_str(&oc.chain_name);
-    if chain.is_err() {
-        return EVMAddress::zero().to_string();
-    }
-    let chain = chain.unwrap();
-    if chain != Chain::ETH && chain != Chain::BSC {
-        return EVMAddress::zero().to_string();
-    }
+#[derive(Clone, Debug, Serialize, Default, PartialEq, Eq)]
+#[serde(into = "String")]
+pub enum BuyType {
+    #[default]
+    None,
+    Deposit,
+    Buy,
+}
 
-    let weth_str = oc.get_weth(&oc.chain_name);
-    checksum(&EVMAddress::from_str(&weth_str).unwrap())
+impl From<BuyType> for String {
+    fn from(input: BuyType) -> Self {
+        match input {
+            BuyType::None => "".to_string(),
+            BuyType::Deposit => "deposit".to_string(),
+            BuyType::Buy => "buy".to_string(),
+        }
+    }
+}
+
+impl BuyType {
+    pub fn new(is_borrow: bool, swap_data: &HashMap<String, SwapInfo>) -> Self {
+        if is_borrow {
+            if swap_data.contains_key("deposit") {
+                return BuyType::Deposit;
+            } else if swap_data.contains_key("buy") {
+                return BuyType::Buy;
+            }
+        }
+        BuyType::None
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Default, PartialEq, Eq)]
+#[serde(into = "String")]
+pub enum SellType {
+    #[default]
+    None,
+    Withdraw,
+    Sell,
+}
+
+impl From<SellType> for String {
+    fn from(input: SellType) -> Self {
+        match input {
+            SellType::None => "".to_string(),
+            SellType::Withdraw => "withdraw".to_string(),
+            SellType::Sell => "sell".to_string(),
+        }
+    }
+}
+
+impl SellType {
+    pub fn new(liq_percent: u8, swap_data: &HashMap<String, SwapInfo>) -> Self {
+        if liq_percent > 0 {
+            if swap_data.contains_key("withdraw") {
+                return SellType::Withdraw;
+            } else if swap_data.contains_key("sell") {
+                return SellType::Sell;
+            }
+        }
+        SellType::None
+    }
 }

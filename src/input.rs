@@ -1,6 +1,6 @@
-/// Defines trait for VM inputs that are sent to any smart contract VM
-use std::any;
 use std::fmt::Debug;
+/// Defines trait for VM inputs that are sent to any smart contract VM
+use std::{any, collections::HashMap};
 
 use libafl::{
     inputs::Input,
@@ -11,7 +11,10 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     evm::{abi::BoxedABI, types::EVMU256},
-    generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
+    generic_vm::{
+        vm_executor::ExecutionResult,
+        vm_state::{SwapInfo, VMStateT},
+    },
     state::{HasCaller, HasItyState},
     state_input::StagedVMState,
 };
@@ -140,5 +143,8 @@ pub trait SolutionTx {
     }
     fn liq_percent(&self) -> u8 {
         0
+    }
+    fn swap_data(&self) -> HashMap<String, SwapInfo> {
+        HashMap::new()
     }
 }
