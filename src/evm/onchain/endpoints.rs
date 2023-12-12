@@ -383,7 +383,7 @@ impl OnChainConfig {
             }
         }) {
             Ok(t) => {
-                if !t.contains("error") {
+                if !t.is_empty() && !t.contains("error") {
                     self.rpc_cache.save(hash.as_str(), t.as_str()).unwrap();
                 }
                 Some(t)
