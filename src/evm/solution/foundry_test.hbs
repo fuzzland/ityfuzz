@@ -17,6 +17,16 @@ import "forge-std/Test.sol";
  */
 
 contract {{contract_name}} is Test {
+{{#if struct_defs}}
+{{#each struct_defs}}
+    struct {{this.name}} {
+        {{#each this.props}}
+        {{{this}}};
+        {{/each}}
+    }
+{{/each}}
+
+{{/if}}
     function setUp() public {
         {{#if is_onchain}}
         vm.createSelectFork("{{chain}}", {{block_number}});
@@ -31,12 +41,14 @@ contract {{contract_name}} is Test {
 {{#each trace}}
         vm.prank({{caller}});
 {{#with this}}
-    {{#if raw_code}}
-        {{raw_code}}
+    {{#if interface_calls}}
+        {{#each interface_calls}}
+        {{{this}}}
+        {{/each}}
     {{else}}
     {{#if (is_deposit buy_type)}}
         vm.deal({{caller}}, {{value}});
-        {{#with (lookup swap_data "deposit")~}}{{target}}.call{value: {{../value}}}(abi.encodeWithSignature("deposit()"));{{/with}}
+        {{#with (lookup swap_data "deposit")~}}I({{target}}).deposit{value: {{../value}}}();{{/with}}
     {{else}}
     {{#if (is_buy buy_type)}}
         address[] memory path{{borrow_idx}} = new address[]();
@@ -53,22 +65,16 @@ contract {{contract_name}} is Test {
     {{#if value}}
         vm.deal({{caller}}, {{value}});
     {{/if}}
-    {{#if fn_signature}}
-        {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSignature(
-            "{{fn_signature}}"{{#if fn_args}}, {{{fn_args}}}{{/if}}
-        ));
-    {{else}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
             {{fn_selector}}{{#if fn_args}},{{{fn_args}}}{{/if}}
         ));
     {{/if}}
     {{/if}}
     {{/if}}
-    {{/if}}
     {{#if (is_withdraw sell_type)}}
         vm.startPrank({{caller}});
         uint256 amount{{balance_idx}} = IERC20({{contract}}).balanceOf(address(this));
-        {{#with (lookup swap_data "withdraw")~}}{{target}}.call(abi.encodeWithSignature("withdraw(uint256)", amount{{../balance_idx}}));{{/with}}
+        {{#with (lookup swap_data "withdraw")~}}I({{target}}).withdraw(amount{{../balance_idx}});{{/with}}
         vm.stopPrank();
     {{else}}
     {{#if (is_sell sell_type)}}
@@ -97,8 +103,15 @@ contract {{contract_name}} is Test {
     receive() external payable {}
 {{/if}}
 }
+{{#if interface}}
 
+interface I {
+{{#each interface}}
+    {{{this}}}
+{{/each}}
+}
 {{#if include_interface}}
+
 interface IERC20 {
     function balanceOf(address owner) external view returns (uint256);
     function approve(address spender, uint256 value) external returns (bool);

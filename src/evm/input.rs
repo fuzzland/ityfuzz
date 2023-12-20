@@ -582,6 +582,14 @@ impl SolutionTx for ConciseEVMInput {
     fn swap_data(&self) -> HashMap<String, SwapInfo> {
         self.swap_data.clone()
     }
+
+    #[cfg(not(feature = "debug"))]
+    fn calldata(&self) -> String {
+        match self.data {
+            Some(ref d) => hex::encode(d.get_bytes()),
+            None => "".to_string(),
+        }
+    }
 }
 
 impl HasLen for EVMInput {

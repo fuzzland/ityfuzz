@@ -1,15 +1,19 @@
+mod abi;
+
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     path::Path,
     sync::OnceLock,
     time::SystemTime,
 };
 
+use abi::StructDef;
 use handlebars::{handlebars_helper, Handlebars};
 use serde::Serialize;
 use tracing::{debug, error};
 
+use self::abi::{Abi, DecodedArg};
 use super::{types::EVMU256, utils, OnChainConfig};
 use crate::{generic_vm::vm_state::SwapInfo, input::SolutionTx};
 
@@ -105,7 +109,7 @@ struct CliArgs {
 
 #[derive(Debug, Serialize, Default)]
 pub struct Tx {
-    raw_code: String,
+    interface_calls: Vec<String>,
     // A tx can contain both a `buy` and a `sell` operation at the same time.
     buy_type: BuyType,
     sell_type: SellType,
@@ -116,6 +120,7 @@ pub struct Tx {
     fn_signature: String,
     fn_selector: String,
     fn_args: String,
+    calldata: String,
     liq_percent: u8,
     balance_idx: u32,
     // map<type, swap_info>
@@ -143,6 +148,7 @@ impl<T: SolutionTx> From<&T> for Tx {
             fn_signature: input.fn_signature(),
             fn_selector: input.fn_selector(),
             fn_args: input.fn_args(),
+            calldata: input.calldata(),
             liq_percent,
             swap_data,
             ..Default::default()
@@ -150,9 +156,36 @@ impl<T: SolutionTx> From<&T> for Tx {
     }
 }
 
+impl Tx {
+    pub fn make_interface_call(&self, args: &[DecodedArg]) -> String {
+        let fn_name = self
+            .fn_signature
+            .split('(')
+            .next()
+            .unwrap_or(&self.fn_selector)
+            .to_string();
+
+        let args = args
+            .iter()
+            .map(|DecodedArg { value, .. }| value.clone())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let mut fn_call = format!("I({}).{}", self.contract, fn_name);
+        if !self.value.is_empty() {
+            fn_call.push_str(format!("{{value: {}}}", self.value).as_str());
+        }
+        fn_call.push_str(format!("({});", args).as_str());
+        fn_call
+    }
+}
+
 #[derive(Debug, Serialize, Default)]
 pub struct TemplateArgs {
     contract_name: String,
+    // map<struct_signature, struct_def>
+    struct_defs: HashMap<String, StructDef>,
+    interface: HashSet<String>,
     is_onchain: bool,
     include_interface: bool,
     router: String,
@@ -183,10 +216,19 @@ impl TemplateArgs {
         let contract_name = make_contract_name(cli_args);
         let include_interface = trace
             .iter()
-            .any(|x| !x.raw_code.is_empty() || x.buy_type == BuyType::Buy || x.sell_type == SellType::Sell);
+            .any(|x| !x.interface_calls.is_empty() || x.buy_type == BuyType::Buy || x.sell_type == SellType::Sell);
+
+        // Decode calldata and collect struct definitions and interface declarations
+        let mut struct_defs = HashMap::new();
+        let mut interface = HashSet::new();
+        for tx in trace.iter_mut() {
+            decode_calldata(tx, &mut struct_defs, &mut interface);
+        }
 
         Ok(Self {
             contract_name,
+            struct_defs,
+            interface,
             is_onchain: cli_args.is_onchain,
             include_interface,
             router,
@@ -202,6 +244,56 @@ impl TemplateArgs {
     }
 }
 
+fn decode_calldata(tx: &mut Tx, struct_defs: &mut HashMap<String, StructDef>, interface: &mut HashSet<String>) {
+    // Ignore preset interfaces (IERC20 / IUniswapV2Router)
+    if !tx.interface_calls.is_empty() || tx.buy_type == BuyType::Buy || tx.sell_type == SellType::Sell {
+        return;
+    }
+
+    if tx.buy_type == BuyType::Deposit || tx.sell_type == SellType::Withdraw {
+        if tx.buy_type == BuyType::Deposit {
+            interface.insert("function deposit() external payable;".to_string());
+        }
+        if tx.sell_type == SellType::Withdraw {
+            interface.insert("function withdraw(uint256) external;".to_string());
+        }
+        return;
+    }
+
+    let mut abi = Abi::new();
+    if let Ok(args) = abi.decode_input(&tx.fn_signature, &tx.calldata) {
+        let sd = abi.take_struct_defs();
+        struct_defs.extend(sd.clone());
+        interface.insert(make_interface(&tx.fn_signature, &sd));
+
+        tx.interface_calls.extend(abi.take_memory_vars());
+        tx.interface_calls.push(tx.make_interface_call(args.as_slice()));
+    }
+}
+
+fn make_interface(fn_sig: &str, struct_defs: &HashMap<String, StructDef>) -> String {
+    let mut fn_decl = fn_sig.to_string();
+    // struct_signature: "(address,address,uint24)"
+    for (struct_signature, struct_def) in struct_defs.iter() {
+        let struct_arr_sig = format!("{}[]", struct_signature);
+        if fn_decl.contains(&struct_arr_sig) {
+            fn_decl = fn_decl.replace(&struct_arr_sig, &format!("{}[] memory", struct_def.name));
+        } else {
+            fn_decl = fn_decl.replace(struct_signature, &format!("{} memory", struct_def.name));
+        }
+    }
+
+    let res = fn_decl
+        .replace("bytes,", "bytes memory,")
+        .replace("bytes)", "bytes memory)")
+        .replace("string,", "string memory,")
+        .replace("string)", "string memory)")
+        .replace("],", "] memory,")
+        .replace("])", "] memory)");
+
+    format!("function {} external payable;", res)
+}
+
 fn setup_trace(trace: &mut [Tx]) {
     let (mut borrow_idx, mut balance_idx) = (0, 0);
     for tx in trace.iter_mut() {
@@ -212,8 +304,8 @@ fn setup_trace(trace: &mut [Tx]) {
         }
 
         // Raw code
-        if let Some(code) = make_raw_code(tx) {
-            tx.raw_code = code;
+        if let Some(call) = make_erc20_calls(tx) {
+            tx.interface_calls = vec![call];
             continue;
         }
 
@@ -230,7 +322,7 @@ fn setup_trace(trace: &mut [Tx]) {
     }
 }
 
-fn make_raw_code(tx: &Tx) -> Option<String> {
+fn make_erc20_calls(tx: &Tx) -> Option<String> {
     if tx.buy_type != BuyType::None {
         return None;
     }
