@@ -157,7 +157,7 @@ impl<T: SolutionTx> From<&T> for Tx {
 }
 
 impl Tx {
-    pub fn make_interface_call(&self, args: Option<&[DecodedArg]>) -> String {
+    pub fn make_interface_call(&self, args: &[DecodedArg]) -> String {
         let fn_name = self
             .fn_signature
             .split('(')
@@ -165,20 +165,17 @@ impl Tx {
             .unwrap_or(&self.fn_selector)
             .to_string();
 
-        let fn_args = if let Some(args) = args {
-            args.iter()
-                .map(|DecodedArg { value, .. }| value.clone())
-                .collect::<Vec<String>>()
-                .join(", ")
-        } else {
-            self.fn_args.clone()
-        };
+        let args = args
+            .iter()
+            .map(|DecodedArg { value, .. }| value.clone())
+            .collect::<Vec<String>>()
+            .join(", ");
 
         let mut fn_call = format!("I({}).{}", self.contract, fn_name);
         if !self.value.is_empty() {
             fn_call.push_str(format!("{{value: {}}}", self.value).as_str());
         }
-        fn_call.push_str(format!("({});", fn_args).as_str());
+        fn_call.push_str(format!("({});", args).as_str());
         fn_call
     }
 }
@@ -270,10 +267,7 @@ fn decode_calldata(tx: &mut Tx, struct_defs: &mut HashMap<String, StructDef>, in
         interface.insert(make_interface(&tx.fn_signature, &sd));
 
         tx.interface_calls.extend(abi.take_memory_vars());
-        tx.interface_calls.push(tx.make_interface_call(Some(args.as_slice())));
-    } else if !tx.fn_signature.is_empty() {
-        interface.insert(make_interface(&tx.fn_signature, &HashMap::new()));
-        tx.interface_calls.push(tx.make_interface_call(None));
+        tx.interface_calls.push(tx.make_interface_call(args.as_slice()));
     }
 }
 
