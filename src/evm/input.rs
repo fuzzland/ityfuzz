@@ -394,7 +394,8 @@ impl ConciseEVMInput {
     #[allow(dead_code)]
     #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
-        if self.fn_signature().is_empty() {
+        let selector = self.fn_selector().trim_start_matches("0x").to_string();
+        if self.fn_signature().is_empty() || call_str.starts_with(&selector) {
             return self.as_fn_selector_call();
         }
 

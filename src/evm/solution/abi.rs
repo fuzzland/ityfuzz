@@ -9,6 +9,8 @@ use alloy_primitives::{hex, U256};
 use anyhow::Result;
 use serde::Serialize;
 
+use crate::evm::utils::prettify_value;
+
 #[derive(Debug, Default)]
 pub struct Abi {
     /// map<struct_signature, struct_definition>
@@ -301,7 +303,7 @@ pub fn format_token_raw(token: &DynSolValue) -> String {
             if num == &U256::MAX {
                 String::from("type(uint256).max")
             } else {
-                num.to_string()
+                prettify_value(*num)
             }
         }
         DynSolValue::Bool(b) => b.to_string(),
