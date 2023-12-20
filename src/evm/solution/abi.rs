@@ -100,10 +100,13 @@ impl Abi {
     pub fn take_memory_vars(&mut self) -> Vec<String> {
         let mut vars = Vec::new();
         if let Some(arrays) = self.arrays.take() {
+            // put all declarations before assignments
+            let mut arr_assignments = Vec::new();
             for (_, array_info) in arrays {
                 vars.push(array_info.declaration);
-                vars.extend(array_info.assignments);
+                arr_assignments.extend(array_info.assignments);
             }
+            vars.extend(arr_assignments);
         }
         if let Some(struct_instances) = self.struct_instances.take() {
             vars.extend(struct_instances.values().map(|s| s.to_string()));

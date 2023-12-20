@@ -394,11 +394,11 @@ impl ConciseEVMInput {
     #[allow(dead_code)]
     #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
-        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
-        if parts.len() < 2 {
+        if self.fn_signature().is_empty() {
             return self.as_fn_selector_call();
         }
 
+        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
         let mut fn_call = self.colored_fn_name(parts[0]).to_string();
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
