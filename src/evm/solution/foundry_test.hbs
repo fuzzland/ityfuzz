@@ -66,7 +66,7 @@ contract {{contract_name}} is Test {
         vm.deal({{caller}}, {{value}});
     {{/if}}
         {{contract}}.call{{#if value}}{value: {{value}}}{{/if}}(abi.encodeWithSelector(
-            {{fn_selector}}{{#if fn_args}},{{{fn_args}}}{{/if}}
+            {{fn_selector}}{{#if fn_args}}, {{{fn_args}}}{{/if}}
         ));
     {{/if}}
     {{/if}}

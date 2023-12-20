@@ -395,7 +395,7 @@ impl ConciseEVMInput {
     #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
         let parts: Vec<&str> = call_str.splitn(2, '(').collect();
-        if parts.len() < 2 && call_str.len() == 8 {
+        if parts.len() < 2 {
             return self.as_fn_selector_call();
         }
 
@@ -405,12 +405,7 @@ impl ConciseEVMInput {
             fn_call.push_str(&self.colored_value());
         }
 
-        if parts.len() < 2 {
-            fn_call.push_str("()");
-        } else {
-            fn_call.push_str(format!("({}", parts[1]).as_str());
-        }
-
+        fn_call.push_str(format!("({}", parts[1]).as_str());
         Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
     }
 
