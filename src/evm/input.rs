@@ -568,7 +568,7 @@ impl SolutionTx for ConciseEVMInput {
     }
 
     fn value(&self) -> String {
-        self.txn_value.unwrap_or_default().to_string()
+        prettify_value(self.txn_value.unwrap_or_default())
     }
 
     fn is_borrow(&self) -> bool {

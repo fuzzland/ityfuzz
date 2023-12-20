@@ -463,3 +463,98 @@ impl SellType {
         SellType::None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockInput {
+        caller: String,
+        contract: String,
+        fn_signature: String,
+        fn_selector: String,
+        fn_args: String,
+        value: String,
+        is_borrow: bool,
+        liq_percent: u8,
+        swap_data: HashMap<String, SwapInfo>,
+        calldata: String,
+    }
+
+    impl MockInput {
+        fn new(fn_sig: &str, calldata: &str, value: &str) -> Self {
+            Self {
+                caller: String::from(""),
+                contract: String::from("0xca143ce32fe78f1f7019d7d551a6402fc5350c73"),
+                fn_signature: String::from(fn_sig),
+                fn_selector: String::from(""),
+                fn_args: String::from(""),
+                value: String::from(value),
+                is_borrow: false,
+                liq_percent: 0,
+                swap_data: HashMap::new(),
+                calldata: String::from(calldata),
+            }
+        }
+    }
+
+    impl SolutionTx for MockInput {
+        fn caller(&self) -> String {
+            self.caller.clone()
+        }
+        fn contract(&self) -> String {
+            self.contract.clone()
+        }
+        fn fn_signature(&self) -> String {
+            self.fn_signature.clone()
+        }
+        fn fn_selector(&self) -> String {
+            self.fn_selector.clone()
+        }
+        fn fn_args(&self) -> String {
+            self.fn_args.clone()
+        }
+        fn value(&self) -> String {
+            self.value.clone()
+        }
+        fn is_borrow(&self) -> bool {
+            self.is_borrow
+        }
+        fn liq_percent(&self) -> u8 {
+            self.liq_percent
+        }
+        fn swap_data(&self) -> HashMap<String, SwapInfo> {
+            self.swap_data.clone()
+        }
+        fn calldata(&self) -> String {
+            self.calldata.clone()
+        }
+    }
+
+    #[test]
+    fn test_template_is_valid() {
+        let mut handlebars = Handlebars::new();
+        assert!(handlebars.register_template_string("foundry_test", TEMPLATE).is_ok());
+    }
+
+    #[test]
+    fn test_generate_test() {
+        let target = "0xca143ce32fe78f1f7019d7d551a6402fc5350c73".to_string();
+        let work_dir = "/tmp".to_string();
+        init_cli_args(target, work_dir, &None);
+
+        let input1 = MockInput::new(
+            "approve(address,uint256)",
+            "0x095ea7b300000000000000000000000089257a52ad585aacb1137fcc8abbd03a963b96830000000000000000000000000000000000000000000000056bc75e2d63100000",
+            "",
+        );
+        let input2 = MockInput::new(
+            "createPair(address,address)",
+            "c9c65396000000000000000000000000aaec620ab3a0aa4e503c544d8715d70082da7891000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "1234",
+        );
+        let inputs = vec![input1, input2];
+        let solution = String::from("solution");
+        generate_test(solution, inputs);
+    }
+}
