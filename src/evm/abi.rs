@@ -297,14 +297,15 @@ impl BoxedABI {
     }
 
     pub fn to_colored_string(&self) -> String {
-        if self.function == [0; 4] {
-            self.to_string()
-        } else {
-            let mut args = self.b.to_colored_string();
+        if let Some(fn_sig) = self.get_func_signature() {
+            let fn_name = fn_sig.split('(').next().unwrap();
+            let mut args: String = self.b.to_colored_string();
             if args.is_empty() {
                 args = "()".to_string();
             }
-            format!("{}{}", self.get_func_name(), args)
+            format!("{}{}", fn_name, args)
+        } else {
+            self.to_string()
         }
     }
 }
