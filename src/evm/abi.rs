@@ -300,7 +300,11 @@ impl BoxedABI {
         if self.function == [0; 4] {
             self.to_string()
         } else {
-            format!("{}{}", self.get_func_name(), self.b.to_colored_string())
+            let mut args = self.b.to_colored_string();
+            if args.is_empty() {
+                args = "()".to_string();
+            }
+            format!("{}{}", self.get_func_name(), args)
         }
     }
 }
