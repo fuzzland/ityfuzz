@@ -15,7 +15,7 @@ default = [
     "print_txn_corpus",
     "full_trace",
     "force_cache",
-    "real_balance"
+    "real_balance",
 ]
 evm = []
 cmp = []
@@ -127,3 +127,6 @@ alloy-primitives = "0.4.1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 colored = "2.0"
+
+# error handling
+anyhow = "1.0"

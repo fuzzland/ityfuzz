@@ -8,6 +8,8 @@ pub mod scheduler;
 pub mod types;
 pub mod vm_state;
 
+mod input_printer;
+
 use clap::Parser;
 
 use crate::fuzzers::move_fuzzer::{move_fuzzer, MoveFuzzConfig};
