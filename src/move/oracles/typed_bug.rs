@@ -59,16 +59,17 @@ impl
                 .map(|bug_id| {
                     let mut hasher = DefaultHasher::new();
                     bug_id.hash(&mut hasher);
+                    let real_bug_idx = (hasher.finish() << 8) + TYPED_BUG_BUG_IDX;
                     let msg = json!({
-                        "bug_type": ctx.post_state.typed_bug,
+                        "bug_type": "Bug".to_string(),
                         "bug_info": format!("{:?} violated", bug_id),
-                        "module": ctx.input.module,
+                        "bug_idx": real_bug_idx,
                     });
                     unsafe {
                         ORACLE_OUTPUT.push(msg);
                     }
 
-                    hasher.finish() << (8 + TYPED_BUG_BUG_IDX)
+                    real_bug_idx
                 })
                 .collect_vec()
         } else {
