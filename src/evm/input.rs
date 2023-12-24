@@ -144,6 +144,7 @@ pub struct EVMInput {
     pub repeat: usize,
 
     /// Swap data
+    #[serde(skip_deserializing)]
     pub swap_data: HashMap<String, SwapInfo>,
 }
 
@@ -193,6 +194,7 @@ pub struct ConciseEVMInput {
     pub return_data: Option<Vec<u8>>,
 
     /// Swap data
+    #[serde(skip_deserializing)]
     pub swap_data: HashMap<String, SwapInfo>,
 }
 

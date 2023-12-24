@@ -108,13 +108,16 @@ impl
 
             let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);
 
-            // Record the swap info for generating foundry in the future.
-            state.swap_data = ctx.fuzz_state.get_execution_result().new_state.state.swap_data.clone();
-            for (target, mut abi, _) in swap_infos {
-                state.swap_data.push(&target, &mut abi);
-            }
+            let is_reverted = _out.iter().any(|(_, is_success)| *is_success == false);
 
-            ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
+            // Record the swap info for generating foundry in the future.
+            if !is_reverted {
+                state.swap_data = ctx.fuzz_state.get_execution_result().new_state.state.swap_data.clone();
+                for (target, mut abi, _) in swap_infos {
+                    state.swap_data.push(&target, &mut abi);
+                }
+                ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
+            }
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
