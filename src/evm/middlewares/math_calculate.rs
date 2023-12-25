@@ -55,7 +55,7 @@ where
                     return;
                 }
                 let (l, r) = (interp.stack.peek(0).unwrap(), interp.stack.peek(1).unwrap());
-                let overflow = if $op == "/" {l < r && alloy_primitives::Uint::ZERO == l } else { l.$overflow_fn(r).1 };
+                let overflow = if $op == "/" {l < r || r == alloy_primitives::Uint::ZERO } else { l.$overflow_fn(r).1 };
                 if !overflow ||
                 // already in fp
                     self.fp.contains(&(addr, pc)) ||
