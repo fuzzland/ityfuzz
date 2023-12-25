@@ -451,6 +451,7 @@ macro_rules! init_host {
     ($host:expr) => {
         $host.current_self_destructs = vec![];
         $host.current_arbitrary_calls = vec![];
+        $host.current_math_error = HashSet::new();
         $host.call_count = 0;
         $host.jumpi_trace = 37;
         $host.current_typed_bug = vec![];
@@ -563,6 +564,7 @@ where
             self.host.jumpi_trace = 37;
             self.host.current_self_destructs = vec![];
             self.host.current_arbitrary_calls = vec![];
+            self.host.current_math_error = HashSet::new();
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -831,7 +833,13 @@ where
                 .chain(self.host.current_arbitrary_calls.iter().cloned()),
         );
 
-        r.new_state.math_error = self.host.current_math_error.clone();
+        r.new_state.math_error = HashSet::from_iter(
+            vm_state
+                .math_error
+                .iter()
+                .cloned()
+                .chain(self.host.current_math_error.iter().cloned()),
+        );
 
         unsafe {
             ExecutionResult {
@@ -1074,6 +1082,7 @@ where
             self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
             self.host.current_self_destructs = vec![];
             self.host.current_arbitrary_calls = vec![];
+            self.host.current_math_error = HashSet::new();
             self.host.call_count = 0;
             self.host.jumpi_trace = 37;
             self.host.current_typed_bug = vec![];

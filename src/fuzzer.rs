@@ -598,11 +598,15 @@ where
                         if !path.exists() {
                             std::fs::create_dir_all(path).unwrap();
                         }
-                        let mut file = File::create(format!("{}/{}", vulns_dir, bug_idxs.clone())).unwrap();
-                        file.write_all(data.as_bytes()).unwrap();
-                        let mut replayable_file =
-                            File::create(format!("{}/{}_replayable", vulns_dir, bug_idxs)).unwrap();
-                        replayable_file.write_all(txn_json.as_bytes()).unwrap();
+
+                        // println!("bug_idxs: {}", bug_idxs);
+                        for bug_idx in bug_idxs.split(",") {
+                            let mut file = File::create(format!("{}/{}", vulns_dir, bug_idx.clone())).unwrap();
+                            file.write_all(data.as_bytes()).unwrap();
+                            let mut replayable_file =
+                                File::create(format!("{}/{}_replayable", vulns_dir, bug_idx)).unwrap();
+                            replayable_file.write_all(txn_json.as_bytes()).unwrap();
+                        }
                     }
                     // dump_file!(state, vulns_dir, false);
                 }
