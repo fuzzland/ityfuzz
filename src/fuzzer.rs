@@ -586,9 +586,8 @@ where
                     let vulns_dir = format!("{}/vulnerabilities", self.work_dir.as_str());
 
                     if !unsafe { REPLAY } {
-                        unsafe {
-                            DUMP_FILE_COUNT += 1;
-                        }
+                        let bug_idxs =
+                            unsafe { ORACLE_OUTPUT.iter().map(|v| v["bug_idx"].as_u64().unwrap()).join(",") };
                         let data = format!(
                             "Reverted? {} \n Txn: {}",
                             state.get_execution_result().reverted,
@@ -599,10 +598,10 @@ where
                         if !path.exists() {
                             std::fs::create_dir_all(path).unwrap();
                         }
-                        let mut file = File::create(format!("{}/{}", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                        let mut file = File::create(format!("{}/{}", vulns_dir, bug_idxs.clone())).unwrap();
                         file.write_all(data.as_bytes()).unwrap();
                         let mut replayable_file =
-                            File::create(format!("{}/{}_replayable", vulns_dir, unsafe { DUMP_FILE_COUNT })).unwrap();
+                            File::create(format!("{}/{}_replayable", vulns_dir, bug_idxs)).unwrap();
                         replayable_file.write_all(txn_json.as_bytes()).unwrap();
                     }
                     // dump_file!(state, vulns_dir, false);

@@ -227,7 +227,10 @@ where
             };
             contract.deployed_address = deployed_address;
             info!("Contract {} deployed to: {deployed_address:?}", contract.name);
-            self.state.add_address(&deployed_address);
+
+            if deployed_address != CHEATCODE_ADDRESS {
+                self.state.add_address(&deployed_address);
+            }
         }
         info!("Deployed all contracts\n");
     }
@@ -539,6 +542,7 @@ where
             direct_data: Default::default(),
             randomness: vec![0],
             repeat: 1,
+            swap_data: HashMap::new(),
         };
         add_input_to_corpus!(self.state, &mut self.scheduler, input.clone(), artifacts);
         #[cfg(feature = "print_txn_corpus")]

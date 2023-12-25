@@ -2,7 +2,6 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use bytes::Bytes;
 use revm_primitives::Bytecode;
-use tracing::debug;
 
 use crate::{
     evm::{
@@ -77,7 +76,6 @@ impl
 
                 // prev_balance is nonexistent
                 // #[cfg(feature = "flashloan_debug")]
-                debug!("Balance: {} for {:?} @ {:?}", new_balance, caller, token);
 
                 if *new_balance > EVMU256::ZERO {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
@@ -88,6 +86,7 @@ impl
             let _path_idx = ctx.input.get_randomness()[0] as usize;
 
             let mut liquidation_txs = vec![];
+            let mut swap_infos = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
                 let txs = _token_info.borrow().sell(
@@ -101,25 +100,24 @@ impl
                     txs.iter()
                         .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
                 );
+
+                if let Some(swap_info) = txs.last() {
+                    swap_infos.push(swap_info.clone());
+                }
             }
 
-            liquidation_txs.iter().for_each(|(caller, target, by)| {
-                debug!("Liquidation tx: {:?} -> {:?} ({})", caller, target, hex::encode(by));
-            });
+            let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);
 
-            debug!(
-                "Earned before liquidation: {:?}",
-                ctx.fuzz_state
-                    .get_execution_result()
-                    .new_state
-                    .state
-                    .flashloan_data
-                    .earned
-            );
-            let (_out, state) = ctx.call_post_batch_dyn(&liquidation_txs);
-            debug!("results: {:?}", _out);
-            debug!("result state: {:?}", state.flashloan_data);
-            ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
+            let is_reverted = _out.iter().any(|(_, is_success)| *is_success == false);
+
+            // Record the swap info for generating foundry in the future.
+            if !is_reverted {
+                state.swap_data = ctx.fuzz_state.get_execution_result().new_state.state.swap_data.clone();
+                for (target, mut abi, _) in swap_infos {
+                    state.swap_data.push(&target, &mut abi);
+                }
+                ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
+            }
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();

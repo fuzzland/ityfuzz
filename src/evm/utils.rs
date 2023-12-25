@@ -1,4 +1,5 @@
 use colored::Colorize;
+use regex::Regex;
 use revm_primitives::U256;
 
 use crate::input::ConciseSerde;
@@ -20,7 +21,7 @@ pub fn prettify_value(value: U256) -> String {
         let integer = value / one_eth;
         let decimal: String = (value % one_eth).to_string().chars().take(4).collect();
 
-        format!("{}.{} Ether", integer, decimal)
+        format!("{}.{} ether", integer, decimal)
     } else {
         value.to_string()
     }
@@ -70,6 +71,12 @@ pub fn prettify_concise_inputs<CI: ConciseSerde>(inputs: &[CI]) -> String {
 
     push_last_input(&mut res, pending);
     res
+}
+
+pub fn remove_color(input: &str) -> String {
+    let reg = Regex::new(r"\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]").unwrap();
+
+    reg.replace_all(input, "").to_string()
 }
 
 fn get_rgb_by_address(addr: &str) -> (u8, u8, u8) {

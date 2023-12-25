@@ -14,7 +14,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, Named};
 use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     evm::{
@@ -84,8 +84,10 @@ where
         }
 
         if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            // 0..state.corpus().count() is the range of indexes of the corpus
+            let idxs = (0..state.corpus().count()).collect::<Vec<_>>();
             state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
-                interesting_idx: Default::default(),
+                interesting_idx: idxs,
                 solutions: vec![],
             });
         }
@@ -157,8 +159,7 @@ where
             let mut testcases = vec![];
 
             while let Some((solution, orig_testcase)) = metadata.solutions.pop() {
-                // debug!("We have a solution from concolic execution: {}",
-                // solution.to_string());
+                debug!("We have a solution from concolic execution: {}", solution.to_string());
                 let mut data_abi = orig_testcase.get_data_abi().expect("data abi");
                 let mut new_testcase = (*orig_testcase).clone();
 
@@ -179,6 +180,11 @@ where
                         }
                         Field::CallDataValue => {
                             new_testcase.set_txn_value(solution.value);
+                        }
+                        Field::Origin => {
+                            if self.allow_symbolic_addresses {
+                                new_testcase.set_origin(solution.origin);
+                            }
                         }
                     }
                 }
@@ -247,8 +253,10 @@ where
         OT: ObserversTuple<S>,
     {
         if !state.metadata_map().contains::<ConcolicPrioritizationMetadata>() {
+            // 0..state.corpus().count() is the range of indexes of the corpus
+            let idxs = (0..state.corpus().count()).collect::<Vec<_>>();
             state.metadata_map_mut().insert(ConcolicPrioritizationMetadata {
-                interesting_idx: Default::default(),
+                interesting_idx: idxs,
                 solutions: vec![],
             });
         }

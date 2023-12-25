@@ -1,13 +1,36 @@
-use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc, str::FromStr, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{hash_map, HashMap},
+    fmt::Debug,
+    ops::Deref,
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+};
 
 use alloy_primitives::hex;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::evm::{
-    abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
-    onchain::endpoints::Chain,
-    types::{EVMAddress, EVMU256},
+use super::types::checksum;
+use crate::{
+    evm::{
+        abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
+        onchain::endpoints::Chain,
+        types::{EVMAddress, EVMU256},
+    },
+    generic_vm::vm_state,
 };
+
+// deposit
+const SWAP_DEPOSIT: [u8; 4] = [0xd0, 0xe3, 0x0d, 0xb0];
+// withdraw
+const SWAP_WITHDRAW: [u8; 4] = [0x2e, 0x1a, 0x7d, 0x4d];
+// swapExactETHForTokensSupportingFeeOnTransferTokens
+const SWAP_BUY: [u8; 4] = [0xb6, 0xf9, 0xde, 0x95];
+// swapExactTokensForETHSupportingFeeOnTransferTokens
+const SWAP_SELL: [u8; 4] = [0x79, 0x1a, 0xc9, 0x47];
+
 #[derive(Clone, Debug)]
 pub enum UniswapProvider {
     PancakeSwap,
@@ -100,8 +123,8 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
         // )
         if self.is_weth {
             let mut abi = BoxedABI::new(Box::new(AEmpty {}));
-            abi.function = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit
-                                                     // EVMU256::from(perct) * unsafe {WETH_MAX}
+            abi.function = SWAP_DEPOSIT; // deposit
+                                         // EVMU256::from(perct) * unsafe {WETH_MAX}
             vec![(self.weth_address, abi, amount_in)]
         } else {
             if self.swaps.is_empty() {
@@ -157,7 +180,7 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
                 ],
                 dynamic_size: false,
             }));
-            abi.function = [0xb6, 0xf9, 0xde, 0x95]; // swapExactETHForTokensSupportingFeeOnTransferTokens
+            abi.function = SWAP_BUY;
 
             match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
                 None => vec![(
@@ -197,7 +220,7 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
         }));
 
         if self.is_weth {
-            abi_amount.function = [0x2e, 0x1a, 0x7d, 0x4d]; // withdraw
+            abi_amount.function = SWAP_WITHDRAW; // withdraw
             vec![(self.weth_address, abi_amount, EVMU256::ZERO)]
         } else {
             if self.swaps.is_empty() {
@@ -253,7 +276,7 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
                 ],
                 dynamic_size: false,
             }));
-            sell_abi.function = [0x79, 0x1a, 0xc9, 0x47]; // swapExactTokensForETHSupportingFeeOnTransferTokens
+            sell_abi.function = SWAP_SELL;
 
             let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
                 None => path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router,
@@ -319,6 +342,123 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
 }
 pub const BSC_PANCAKEV2_PAIR_BYTECODE: &str = include_str!("bsc_pancakeV2_pair.bin");
 pub const ETH_UNISWAPV2_PAIR_BYTECODE: &str = include_str!("eth_uniswapV2_pair.bin");
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct SwapData {
+    inner: HashMap<SwapType, SwapInfo>,
+}
+
+impl SwapData {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn push(&mut self, addr: &EVMAddress, abi: &mut BoxedABI) {
+        if let Some(new) = SwapInfo::try_new(addr, abi) {
+            // swap_infos with same type will be merged
+            if let hash_map::Entry::Vacant(e) = self.inner.entry(new.ty) {
+                e.insert(new);
+            } else {
+                self.inner.get_mut(&new.ty).unwrap().concat_path(new.path);
+            }
+        }
+    }
+
+    pub fn to_generic(&self) -> HashMap<String, vm_state::SwapInfo> {
+        self.inner
+            .iter()
+            .map(|(k, v)| ((*k).into(), v.clone().into()))
+            .collect()
+    }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
+#[serde(into = "String")]
+pub enum SwapType {
+    #[default]
+    Deposit,
+    Buy,
+    Withdraw,
+    Sell,
+}
+
+impl From<SwapType> for String {
+    fn from(ty: SwapType) -> Self {
+        match ty {
+            SwapType::Deposit => "deposit".to_string(),
+            SwapType::Buy => "buy".to_string(),
+            SwapType::Withdraw => "withdraw".to_string(),
+            SwapType::Sell => "sell".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct SwapInfo {
+    pub ty: SwapType,
+    pub target: String,
+    pub path: Vec<String>,
+}
+
+impl SwapInfo {
+    pub fn try_new(target: &EVMAddress, abi: &mut BoxedABI) -> Option<Self> {
+        let get_path = |abi: &mut BoxedABI, idx: usize| -> Option<Vec<String>> {
+            if let Some(args) = abi.b.as_any().downcast_mut::<AArray>() {
+                let path = args.data[idx]
+                    .b
+                    .as_any()
+                    .downcast_ref::<AArray>()
+                    .unwrap()
+                    .data
+                    .iter()
+                    .map(|x| x.b.to_string())
+                    .collect::<Vec<_>>();
+                Some(path)
+            } else {
+                None
+            }
+        };
+
+        let (ty, path) = match abi.function {
+            SWAP_BUY => (SwapType::Buy, get_path(abi, 1)),
+            SWAP_SELL => (SwapType::Sell, get_path(abi, 2)),
+            SWAP_DEPOSIT => (SwapType::Deposit, Some(vec![])),
+            SWAP_WITHDRAW => (SwapType::Withdraw, Some(vec![])),
+            _ => return None,
+        };
+
+        if let Some(path) = path {
+            let target = checksum(target);
+            Some(Self { ty, target, path })
+        } else {
+            None
+        }
+    }
+
+    pub fn concat_path(&mut self, new_path: Vec<String>) {
+        // Find the first common element from the end
+        let mut idx = self.path.len();
+        for i in (0..self.path.len()).rev() {
+            if self.path[i] == new_path[0] {
+                idx = i;
+                break;
+            }
+        }
+        self.path.truncate(idx);
+        self.path.extend(new_path);
+    }
+}
+
+// Uniswap info -> Generic swap info
+impl From<SwapInfo> for vm_state::SwapInfo {
+    fn from(info: SwapInfo) -> Self {
+        Self {
+            ty: info.ty.into(),
+            target: info.target,
+            path: info.path,
+        }
+    }
+}
 
 // #[cfg(test)]
 // mod tests {

@@ -44,16 +44,16 @@ bytes = { version = "1.2.1", features = ["serde"] }
 retry = "2.0.0"
 serde_cbor = "0.11.2"
 clap = { version = "4.4.4", features = ["derive"] }
-sentry = "0.29.1"
+sentry = "0.32.1"
 rlp = "0.5.2"
 ethers = "2.0.7"
 
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
-libafl = "0.11.1"
-libafl_bolts = "0.11.1"
+libafl = "=0.11.1"
+libafl_bolts = "=0.11.1"
 rand = "0.8.5"
-nix = "0.24"
+nix = "0.27.1"
 serde = "1.0.147"
 serde_traitobject = "0.2.8"
 serde_json = "1.0.73"
@@ -87,9 +87,9 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc27
     "memory_limit",
 ] }
 # external fuzzing-based abi decompiler
-heimdall-core = { git = "https://github.com/fuzzland/heimdall-rs.git", rev = "3d95f04146bbef2e0e88e6949a06519c938b47d7" }
+heimdall-core = { git = "https://github.com/Jon-Becker/heimdall-rs.git", rev = "256973b58370e05aed1536d1cfe44add20805ea4" }
 # heimdall_core relies on an async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.34.0", features = ["full"] }
 
 
 move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
@@ -119,3 +119,6 @@ alloy-primitives = "0.4.1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 colored = "2.0"
+
+# error handling
+anyhow = "1.0"

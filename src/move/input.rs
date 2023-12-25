@@ -16,6 +16,7 @@ use move_vm_types::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::input_printer::print_value;
 use crate::{
     evm::{abi::BoxedABI, types::EVMU256},
     generic_vm::vm_executor::ExecutionResult,
@@ -144,14 +145,13 @@ impl ConciseSerde for ConciseMoveInput {
     }
 
     fn serialize_string(&self) -> String {
-        format!(
-            "{:?} => {}::{}<{}>({})",
-            self.caller,
-            self.module,
-            self.function,
-            self.ty_args.iter().map(|ty| format!("{:?}", ty)).join(","),
-            self.args.iter().map(|arg| format!("{:?}", arg.value)).join(", ")
-        )
+        let mut res = format!("{:?} => {}::{}", self.caller, self.module, self.function);
+        if !self.ty_args.is_empty() {
+            res.push_str(format!("<{}>", self.ty_args.iter().map(|ty| format!("{:?}", ty)).join(",")).as_str())
+        }
+        res.push_str(format!("({})", self.args.iter().map(|arg| print_value(&arg.value)).join(", ")).as_str());
+
+        res
     }
 }
 
@@ -752,6 +752,14 @@ impl VMInputT<MoveVMState, ModuleId, AccountAddress, ConciseMoveInput> for MoveF
 
     fn set_caller(&mut self, caller: AccountAddress) {
         self.caller = caller;
+    }
+
+    fn set_origin(&mut self, _origin: AccountAddress) {
+        todo!()
+    }
+
+    fn get_origin(&self) -> AccountAddress {
+        todo!()
     }
 
     fn get_contract(&self) -> AccountAddress {

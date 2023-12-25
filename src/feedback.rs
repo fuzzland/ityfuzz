@@ -33,6 +33,9 @@ use crate::{
     state::{HasExecutionResult, HasInfantStateState, InfantStateState},
 };
 
+const KNOWN_STATE_MAX_SIZE: usize = 1000;
+const KNOWN_STATE_SKIP_SIZE: usize = 500;
+
 /// OracleFeedback is a wrapper around a set of oracles and producers.
 /// It executes the producers and then oracles after each successful execution.
 /// If any of the oracle returns true, then it returns true and report a
@@ -564,6 +567,10 @@ where
             let hash = state.get_execution_result().new_state.state.get_hash();
             if self.known_states.contains(&hash) {
                 return Ok(false);
+            }
+            self.known_states.insert(hash);
+            if self.known_states.len() > KNOWN_STATE_MAX_SIZE {
+                self.known_states = self.known_states.iter().skip(KNOWN_STATE_SKIP_SIZE).cloned().collect();
             }
             return Ok(true);
         }
