@@ -129,6 +129,3 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 colored = "2.0"
-
-# error handling
-anyhow = "1.0"
