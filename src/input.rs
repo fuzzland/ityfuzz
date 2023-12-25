@@ -147,4 +147,7 @@ pub trait SolutionTx {
     fn swap_data(&self) -> HashMap<String, SwapInfo> {
         HashMap::new()
     }
+    fn calldata(&self) -> String {
+        String::from("")
+    }
 }

@@ -394,23 +394,19 @@ impl ConciseEVMInput {
     #[allow(dead_code)]
     #[inline]
     fn as_abi_call(&self, call_str: String) -> Option<String> {
-        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
-        if parts.len() < 2 && call_str.len() == 8 {
+        let selector = self.fn_selector().trim_start_matches("0x").to_string();
+        if self.fn_signature().is_empty() || call_str.starts_with(&selector) {
             return self.as_fn_selector_call();
         }
 
+        let parts: Vec<&str> = call_str.splitn(2, '(').collect();
         let mut fn_call = self.colored_fn_name(parts[0]).to_string();
         let value = self.txn_value.unwrap_or_default();
         if value != EVMU256::ZERO {
             fn_call.push_str(&self.colored_value());
         }
 
-        if parts.len() < 2 {
-            fn_call.push_str("()");
-        } else {
-            fn_call.push_str(format!("({}", parts[1]).as_str());
-        }
-
+        fn_call.push_str(format!("({}", parts[1]).as_str());
         Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
     }
 
@@ -568,7 +564,7 @@ impl SolutionTx for ConciseEVMInput {
     }
 
     fn value(&self) -> String {
-        self.txn_value.unwrap_or_default().to_string()
+        prettify_value(self.txn_value.unwrap_or_default())
     }
 
     fn is_borrow(&self) -> bool {
@@ -581,6 +577,14 @@ impl SolutionTx for ConciseEVMInput {
 
     fn swap_data(&self) -> HashMap<String, SwapInfo> {
         self.swap_data.clone()
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn calldata(&self) -> String {
+        match self.data {
+            Some(ref d) => hex::encode(d.get_bytes()),
+            None => "".to_string(),
+        }
     }
 }
 
