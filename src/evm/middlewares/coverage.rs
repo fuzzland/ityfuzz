@@ -319,15 +319,6 @@ where
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {
-        let meta = state
-            .metadata_map_mut()
-            .get_mut::<ArtifactInfoMetadata>()
-            .expect("ArtifactInfoMetadata not found");
-
-        if let Some(build_artifact) = meta.get_mut(&address) {
-            self.sources.insert(address, build_artifact.sources.clone());
-        }
-
         let (pcs, jumpis, mut skip_pcs) = instructions_pc(&bytecode.bytecode);
 
         // find all skipping PCs
