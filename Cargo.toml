@@ -52,16 +52,16 @@ bytes = { version = "1.2.1", features = ["serde"] }
 retry = "2.0.0"
 serde_cbor = "0.11.2"
 clap = { version = "4.4.4", features = ["derive"] }
-sentry = "0.29.1"
+sentry = "0.32.1"
 rlp = "0.5.2"
 ethers = "2.0.7"
 
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
-libafl = "0.11.1"
-libafl_bolts = "0.11.1"
+libafl = "=0.11.1"
+libafl_bolts = "=0.11.1"
 rand = "0.8.5"
-nix = "0.24"
+nix = "0.27.1"
 serde = "1.0.147"
 serde_traitobject = "0.2.8"
 serde_json = "1.0.73"
@@ -129,6 +129,3 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 colored = "2.0"
-
-# error handling
-anyhow = "1.0"
