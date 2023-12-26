@@ -56,7 +56,7 @@ def test_one(path):
     start_time = time.time()
     cmd = [
         TIMEOUT_BIN,
-        "10m",
+        "5s",
         "./target/release/ityfuzz",
         "evm",
         "-t",
@@ -130,7 +130,7 @@ def test_onchain(test):
     cmd = [
         TIMEOUT_BIN,
         # set timeout to 5m because it takes longer time to sync the chain
-        "5m",
+        "15m",
         "./target/release/ityfuzz",
         "evm",
         "-t",
