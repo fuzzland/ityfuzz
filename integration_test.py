@@ -130,7 +130,7 @@ def test_onchain(test):
     cmd = [
         TIMEOUT_BIN,
         # set timeout to 5m because it takes longer time to sync the chain
-        "15m",
+        "5m",
         "./target/release/ityfuzz",
         "evm",
         "-t",

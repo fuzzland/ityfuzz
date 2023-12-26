@@ -4,7 +4,7 @@ use libafl::schedulers::Scheduler;
 use revm_interpreter::Interpreter;
 use revm_primitives::{keccak256, B256};
 use serde::Serialize;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::evm::{
     host::FuzzHost,
@@ -30,7 +30,6 @@ impl MathCalculateMiddleware {
             let info = get_uniswap_info(&UniswapProvider::UniswapV2, chain);
             let whitelist = HashSet::from([info.router]);
             let pair_hash = keccak256(&info.pair_bytecode);
-            println!("pair_hash: {:?}", pair_hash);
             return Self {
                 report_when_no_srcmap,
                 whitelist,
@@ -71,11 +70,15 @@ where
                     self.whitelist.insert(addr);
                     return;
                 }
+                if host.current_math_error.contains(&(addr, pc, $op)) {
+                    // already reported
+                    return;
+                }
                 match  SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(&addr, pc) {
                     SourceCodeResult::NoSourceMap => {
                         // no srcmap
                         if self.report_when_no_srcmap {
-                            info!("contract {:?} maybe math error on pc[{pc:x}]: {} {} {}", addr, l, $op, r);
+                            debug!("contract {:?} maybe math error on pc[{pc:x}]: {} {} {}", addr, l, $op, r);
                             host.current_math_error.insert((addr, pc, $op));
                         } else {
                             self.fp.insert((addr, pc));
@@ -88,11 +91,7 @@ where
                     SourceCodeResult::SourceCode(source_code) => {
                         if let Some(pos) = source_code.find($op) && pos != 0 {
                             // real bug
-                            if host.current_math_error.contains(&(addr, pc, $op)) {
-                                // already reported
-                                return;
-                            }
-                            info!("contract {:?} math error on pc[{pc:x}]: {} {} {} {source_code:?}", addr, l, $op, r);
+                            debug!("contract {:?} math error on pc[{pc:x}]: {} {} {} {source_code:?}", addr, l, $op, r);
                             host.current_math_error.insert((addr, pc, $op));
                         } else {
                             // fp
@@ -131,11 +130,4 @@ where
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::IntegerOverflow
     }
-}
-
-#[cfg(test)]
-mod test {
-
-    #[test]
-    fn test_merge() {}
 }

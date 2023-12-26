@@ -180,7 +180,10 @@ pub fn evm_fuzzer(
 
     if config.math_calculate_oracle {
         debug!("math_calculate oracle enabled");
-        let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(config.onchain, true)));
+        let integer_overflow_middleware = Rc::new(RefCell::new(MathCalculateMiddleware::new(
+            config.onchain,
+            config.math_calculate_report_when_no_srcmap,
+        )));
         fuzz_host.add_middlewares(integer_overflow_middleware);
     }
 

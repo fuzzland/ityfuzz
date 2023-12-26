@@ -178,6 +178,9 @@ pub struct EvmArgs {
     #[arg(long, short, default_value = "high_confidence")]
     detectors: String, // <- internally this is known as oracles
 
+    #[arg(long, short, default_value = "false")]
+    math_calculate_report_when_no_srcmap: bool,
+
     // /// Matching style for state comparison oracle (Select from "Exact",
     // /// "DesiredContain", "StateContain")
     // #[arg(long, default_value = "Exact")]
@@ -715,6 +718,7 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: oracle_types.contains(&OracleType::TypedBug),
         arbitrary_external_call: oracle_types.contains(&OracleType::ArbitraryCall),
         math_calculate_oracle: oracle_types.contains(&OracleType::MathCalculate),
+        math_calculate_report_when_no_srcmap: args.math_calculate_report_when_no_srcmap,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
