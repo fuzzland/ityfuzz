@@ -88,6 +88,10 @@ where
                     SourceCodeResult::SourceCode(source_code) => {
                         if let Some(pos) = source_code.find($op) && pos != 0 {
                             // real bug
+                            if host.current_math_error.contains(&(addr, pc, $op)) {
+                                // already reported
+                                return;
+                            }
                             info!("contract {:?} math error on pc[{pc:x}]: {} {} {} {source_code:?}", addr, l, $op, r);
                             host.current_math_error.insert((addr, pc, $op));
                         } else {
