@@ -211,7 +211,7 @@ impl ContractLoader {
                     Some(ABIConfig {
                         abi: String::from("()"),
                         function: [0; 4],
-                        function_name: String::from("!receive!"),
+                        function_name: String::from("receive"),
                         is_static: false,
                         is_payable: true,
                         is_constructor: false,

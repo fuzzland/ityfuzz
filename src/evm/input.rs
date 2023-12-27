@@ -908,12 +908,6 @@ impl ConciseSerde for ConciseEVMInput {
             tree_level += 2;
         }
 
-        // Stepping with return
-        if self.step {
-            let res = format!("{}└─ ← ()", indent.clone());
-            return self.append_liquidation(indent, res);
-        }
-
         let mut call = indent.clone();
         call.push_str(format!("├─[{}] ", tree_level).as_str());
         call.push_str(self.pretty_txn().expect("Failed to pretty print txn").as_str());

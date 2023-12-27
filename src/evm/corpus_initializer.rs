@@ -526,10 +526,10 @@ where
         let input = EVMInput {
             caller: self.state.get_rand_caller(),
             contract: deployed_address,
-            data: if abi.function_name != "!receive!" {
-                Some(abi_instance)
-            } else {
+            data: if abi.function == [0; 4] && abi.function_name == "receive" {
                 None
+            } else {
+                Some(abi_instance)
             },
             sstate: StagedVMState::new_uninitialized(),
             sstate_idx: 0,
