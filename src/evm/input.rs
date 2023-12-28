@@ -407,8 +407,12 @@ impl ConciseEVMInput {
         if value != EVMU256::ZERO {
             fn_call.push_str(&self.colored_value());
         }
+        if parts.len() == 1 {
+            fn_call.push_str("()");
+        } else {
+            fn_call.push_str(format!("({}", parts[1]).as_str());
+        }
 
-        fn_call.push_str(format!("({}", parts[1]).as_str());
         Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
     }
 
