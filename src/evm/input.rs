@@ -476,11 +476,8 @@ impl ConciseEVMInput {
     #[allow(dead_code)]
     #[inline]
     fn as_stepping_with_return(&self, indent: &str, tree_level: i32) -> String {
-        // `!receive!()` or `!fallback!()`
-        let fn_call = self
-            .pretty_txn()
-            .expect("Failed to print stepping with return")
-            .replace('!', "");
+        // `receive()` or `fallback()`
+        let fn_call = self.pretty_txn().expect("Failed to print stepping with return");
         format!("{}├─[{}] {}", indent, tree_level, fn_call)
     }
 
