@@ -48,6 +48,7 @@ use crate::{
 pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
 pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
+#[cfg(feature = "force_cache")]
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub struct OnChain {
@@ -319,11 +320,19 @@ impl OnChain {
             bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
             host.set_codedata(address_h160, contract_code.clone());
         }
-        if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) {
+        debug!("load code for {:?}", address_h160);
+        if unsafe { IS_FAST_CALL } || self.blacklist.contains(&address_h160) || !should_setup_abi {
+            debug!(
+                "return due to {} or {} or {}",
+                unsafe { IS_FAST_CALL },
+                self.blacklist.contains(&address_h160),
+                !should_setup_abi
+            );
             return;
         }
 
         // setup abi
+        debug!("setup abi for {:?}", address_h160);
         self.loaded_abi.insert(address_h160);
 
         let mut parsed_abi = vec![];
@@ -331,6 +340,7 @@ impl OnChain {
             parsed_abi = abis.clone();
         } else {
             let mut abi = None;
+            debug!("try use abi from builder");
             if let Some(builder) = &self.builder {
                 debug!("onchain job {:?}", address_h160);
                 let build_job = builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);

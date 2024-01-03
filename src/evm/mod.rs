@@ -178,6 +178,9 @@ pub struct EvmArgs {
     #[arg(long, short, default_value = "high_confidence")]
     detectors: String, // <- internally this is known as oracles
 
+    #[arg(long, short, default_value = "false")]
+    math_calculate_report_when_no_srcmap: bool,
+
     // /// Matching style for state comparison oracle (Select from "Exact",
     // /// "DesiredContain", "StateContain")
     // #[arg(long, default_value = "Exact")]
@@ -195,7 +198,7 @@ pub struct EvmArgs {
     write_relationship: bool,
 
     /// Do not quit when a bug is found, continue find new bugs
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "false", short = 'f')]
     run_forever: bool,
 
     /// random seed
@@ -281,6 +284,7 @@ enum EVMTargetType {
 }
 
 impl EVMTargetType {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             EVMTargetType::Glob => "glob",
@@ -318,6 +322,7 @@ enum OracleType {
 }
 
 impl OracleType {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             OracleType::ERC20 => "erc20",
@@ -393,10 +398,6 @@ impl OracleType {
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
     let work_dir = args.work_dir.clone();
-    let work_path = Path::new(work_dir.as_str());
-    if !work_path.exists() {
-        std::fs::create_dir(work_path).unwrap();
-    }
 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => EVMTargetType::from_str(v.as_str()),
@@ -717,6 +718,7 @@ pub fn evm_main(args: EvmArgs) {
         typed_bug: oracle_types.contains(&OracleType::TypedBug),
         arbitrary_external_call: oracle_types.contains(&OracleType::ArbitraryCall),
         math_calculate_oracle: oracle_types.contains(&OracleType::MathCalculate),
+        math_calculate_report_when_no_srcmap: args.math_calculate_report_when_no_srcmap,
         builder,
         local_files_basedir_pattern: match target_type {
             EVMTargetType::Glob => Some(args.target),
@@ -747,7 +749,13 @@ pub fn evm_main(args: EvmArgs) {
 
     let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
 
-    let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
+    let work_dir = args.work_dir.clone();
+
+    let path = Path::new(work_dir.as_str());
+    if !path.exists() {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let abis_json = format!("{}/abis.json", work_dir.as_str());
 
     let mut file = OpenOptions::new()
         .create(true)

@@ -6,6 +6,7 @@ bin
 corpus
 .idea
 .vscode
+.DS_Store
 node_modules
 cache
 *.bin
