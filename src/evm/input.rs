@@ -408,7 +408,11 @@ impl ConciseEVMInput {
             fn_call.push_str(&self.colored_value());
         }
 
-        fn_call.push_str(format!("({}", parts[1]).as_str());
+        if parts.len() == 1 {
+            fn_call.push_str("()");
+        } else {
+            fn_call.push_str(format!("({}", parts[1]).as_str());
+        }
         Some(format!("{}.{}", colored_address(&self.contract()), fn_call))
     }
 
@@ -467,6 +471,14 @@ impl ConciseEVMInput {
             self.colored_fn_name("deposit"),
             self.colored_value(),
         ))
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    fn as_stepping_with_return(&self, indent: &str, tree_level: i32) -> String {
+        // `receive()` or `fallback()`
+        let fn_call = self.pretty_txn().expect("Failed to print stepping with return");
+        format!("{}├─[{}] {}", indent, tree_level, fn_call)
     }
 
     #[inline]
@@ -910,7 +922,7 @@ impl ConciseSerde for ConciseEVMInput {
 
         // Stepping with return
         if self.step {
-            let res = format!("{}└─ ← ()", indent.clone());
+            let res = self.as_stepping_with_return(&indent, tree_level);
             return self.append_liquidation(indent, res);
         }
 
