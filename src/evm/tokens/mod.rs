@@ -63,7 +63,6 @@ pub struct UniswapInfo {
     pub router: EVMAddress,
     pub factory: EVMAddress,
     pub init_code_hash: Vec<u8>,
-    pub pair_bytecode: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -294,27 +293,22 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
             init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
-            pair_bytecode: hex::decode(BSC_PANCAKEV2_PAIR_BYTECODE).unwrap(),
         },
         (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
             pool_fee: 25,
             router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
             factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
             init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
-            pair_bytecode: hex::decode(BSC_PANCAKEV2_PAIR_BYTECODE).unwrap(),
         },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
             pool_fee: 3,
             router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
             factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
             init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
-            pair_bytecode: hex::decode(ETH_UNISWAPV2_PAIR_BYTECODE).unwrap(),
         },
         _ => panic!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
     }
 }
-pub const BSC_PANCAKEV2_PAIR_BYTECODE: &str = include_str!("bsc_pancakeV2_pair.bin");
-pub const ETH_UNISWAPV2_PAIR_BYTECODE: &str = include_str!("eth_uniswapV2_pair.bin");
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct SwapData {
