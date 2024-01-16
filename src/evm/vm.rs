@@ -33,7 +33,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
-use crate::{evm::uniswap::SwapData, generic_vm::vm_state};
+use crate::{evm::tokens::SwapData, generic_vm::vm_state};
 #[allow(unused_imports)]
 use crate::{
     evm::{
@@ -1009,8 +1009,7 @@ where
                         .clone()
                 };
 
-                let mut calldata = token_ctx.borrow().buy(
-                    state,
+                let mut calldata = token_ctx.buy(
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
                     input.get_randomness().as_slice(),

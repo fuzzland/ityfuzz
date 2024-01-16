@@ -10,8 +10,8 @@ use crate::{
         oracle::EVMBugResult,
         oracles::{u512_div_float, ERC20_BUG_IDX},
         producers::erc20::ERC20Producer,
+        tokens::TokenContext,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        uniswap::TokenContextT,
         vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
@@ -21,7 +21,7 @@ use crate::{
 
 pub struct IERC20OracleFlashloan {
     pub balance_of: Vec<u8>,
-    pub known_tokens: HashMap<EVMAddress, Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>>,
+    pub known_tokens: HashMap<EVMAddress, TokenContext>,
     pub known_pair_reserve_slot: HashMap<EVMAddress, EVMU256>,
     pub erc20_producer: Rc<RefCell<ERC20Producer>>,
 }
@@ -36,12 +36,7 @@ impl IERC20OracleFlashloan {
         }
     }
 
-    pub fn register_token(
-        &mut self,
-        token: EVMAddress,
-        token_ctx: Rc<RefCell<dyn TokenContextT<EVMFuzzState>>>,
-        can_liquidate: bool,
-    ) {
+    pub fn register_token(&mut self, token: EVMAddress, token_ctx: TokenContext, can_liquidate: bool) {
         // setting can_liquidate to true to turn on liquidation
         unsafe {
             CAN_LIQUIDATE |= can_liquidate;
@@ -89,8 +84,7 @@ impl
             let mut swap_infos = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
-                let txs = _token_info.borrow().sell(
-                    ctx.fuzz_state,
+                let txs = _token_info.sell(
                     _amount,
                     ctx.fuzz_state.callers_pool[0],
                     ctx.input.get_randomness().as_slice(),

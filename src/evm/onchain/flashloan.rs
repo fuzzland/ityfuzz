@@ -35,8 +35,8 @@ use crate::{
         mutator::AccessPattern,
         onchain::endpoints::OnChainConfig,
         oracles::erc20::IERC20OracleFlashloan,
+        tokens::TokenContext,
         types::{convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256, EVMU512},
-        uniswap::UniswapTokenContext,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
@@ -130,7 +130,7 @@ impl Flashloan {
         }
     }
 
-    fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
+    fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
         self.endpoint
             .as_mut()
             .map(|endpoint| endpoint.fetch_uniswap_path_cached(addr).clone())
@@ -170,9 +170,7 @@ impl Flashloan {
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
                             let can_liquidate = !token_ctx.swaps.is_empty(); // if there is more than one liquidation path, we can liquidate
-                            oracle
-                                .unwrap()
-                                .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);
+                            oracle.unwrap().register_token(*addr, token_ctx, can_liquidate);
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {

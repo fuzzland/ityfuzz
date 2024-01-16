@@ -21,6 +21,8 @@ use crate::{
     generic_vm::vm_state,
 };
 
+pub mod constant_pair;
+
 // deposit
 const SWAP_DEPOSIT: [u8; 4] = [0xd0, 0xe3, 0x0d, 0xb0];
 // withdraw
@@ -75,26 +77,8 @@ pub struct PathContext {
     pub final_pegged_pair: Rc<RefCell<Option<PairContext>>>,
 }
 
-pub trait TokenContextT<S> {
-    fn buy(
-        &self,
-        state: &mut S,
-        amount_in: EVMU256,
-        to: EVMAddress,
-        seed: &[u8],
-    ) -> Vec<(EVMAddress, BoxedABI, EVMU256)>;
-
-    fn sell(
-        &self,
-        state: &mut S,
-        amount_in: EVMU256,
-        to: EVMAddress,
-        seed: &[u8],
-    ) -> Vec<(EVMAddress, BoxedABI, EVMU256)>;
-}
-
 #[derive(Clone, Debug, Default)]
-pub struct UniswapTokenContext {
+pub struct TokenContext {
     pub swaps: Vec<PathContext>,
     pub is_weth: bool,
     pub weth_address: EVMAddress,
@@ -103,14 +87,8 @@ pub struct UniswapTokenContext {
 
 static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 
-impl<S> TokenContextT<S> for UniswapTokenContext {
-    fn buy(
-        &self,
-        _state: &mut S,
-        amount_in: EVMU256,
-        to: EVMAddress,
-        seed: &[u8],
-    ) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
+impl TokenContext {
+    pub fn buy(&self, amount_in: EVMU256, to: EVMAddress, seed: &[u8]) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
         unsafe {
             WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
         }
@@ -193,13 +171,7 @@ impl<S> TokenContextT<S> for UniswapTokenContext {
     }
 
     // swapExactTokensForETHSupportingFeeOnTransferTokens
-    fn sell(
-        &self,
-        _state: &mut S,
-        amount_in: EVMU256,
-        to: EVMAddress,
-        seed: &[u8],
-    ) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
+    pub fn sell(&self, amount_in: EVMU256, to: EVMAddress, seed: &[u8]) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
         unsafe {
             WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
         }

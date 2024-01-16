@@ -22,8 +22,8 @@ use tracing::{debug, error, info, warn};
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
+        tokens::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider},
         types::{EVMAddress, EVMU256},
-        uniswap::{get_uniswap_info, PairContext, PathContext, UniswapProvider, UniswapTokenContext},
     },
 };
 
@@ -250,7 +250,7 @@ pub struct OnChainConfig {
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
-    uniswap_path_cache: HashMap<EVMAddress, UniswapTokenContext>,
+    uniswap_path_cache: HashMap<EVMAddress, TokenContext>,
     rpc_cache: FileSystemCache,
 }
 
@@ -710,14 +710,14 @@ impl OnChainConfig {
         slot_value
     }
 
-    pub fn fetch_uniswap_path(&mut self, network: &str, token_address: EVMAddress) -> UniswapTokenContext {
+    pub fn fetch_uniswap_path(&mut self, network: &str, token_address: EVMAddress) -> TokenContext {
         let token = format!("{:?}", token_address);
         let info: Info = self.find_path_subgraph(network, &token);
 
         let basic_info = info.basic_info;
         if basic_info.weth.is_empty() {
             warn!("failed to find weth address");
-            return UniswapTokenContext::default();
+            return TokenContext::default();
         }
         let weth = EVMAddress::from_str(&basic_info.weth).unwrap();
         let is_weth = basic_info.is_weth;
@@ -783,7 +783,7 @@ impl OnChainConfig {
             })
             .collect();
 
-        UniswapTokenContext {
+        TokenContext {
             swaps: paths_parsed,
             is_weth,
             weth_address: weth,
@@ -791,7 +791,7 @@ impl OnChainConfig {
         }
     }
 
-    pub fn fetch_uniswap_path_cached(&mut self, token: EVMAddress) -> &UniswapTokenContext {
+    pub fn fetch_uniswap_path_cached(&mut self, token: EVMAddress) -> &TokenContext {
         if self.uniswap_path_cache.contains_key(&token) {
             return self.uniswap_path_cache.get(&token).unwrap();
         }
