@@ -1,23 +1,13 @@
 use std::{
     cell::RefCell,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
-    env,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    panic,
+    collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
     sync::Arc,
-    time::Duration,
 };
 
 use itertools::Itertools;
-use reqwest::header::HeaderMap;
-use retry::{delay::Fixed, retry_with_index, OperationResult};
-use revm_primitives::B160;
-use serde::Deserialize;
-use serde_json::{json, Value};
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 use super::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider};
 use crate::evm::{
@@ -192,8 +182,18 @@ fn get_pair(onchain: &mut OnChainConfig, token: &str, network: &str, is_pegged: 
         is_pegged || pegged_tokens.values().contains(&token),
         weth,
     );
-    if pairs.len() > 10 {
-        pairs.retain(|p| pegged_tokens.values().contains(&p.next));
+
+    for pair in &mut pairs {
+        add_reserve_info(onchain, pair);
+    }
+    pairs.sort_by(|a, b| {
+        let a = get_liquidity_cmp(a);
+        let b = get_liquidity_cmp(b);
+        b.cmp(&a)
+    });
+
+    if pairs.len() > 3 {
+        pairs = pairs[0..3].to_vec();
     }
     pairs
 }
@@ -264,32 +264,39 @@ fn get_pegged_next_hop(onchain: &mut OnChainConfig, token: &str, network: &str) 
 }
 
 /// returns whether the pair is significant
-fn add_reserve_info(onchain: &mut OnChainConfig, pair_data: &mut PairData) -> bool {
+fn add_reserve_info(onchain: &mut OnChainConfig, pair_data: &mut PairData) {
     if pair_data.src == "pegged_weth" {
-        return true;
+        return;
     }
 
     let reserves = onchain.fetch_reserve(&pair_data.pair);
     pair_data.initial_reserves_0 = reserves.0;
     pair_data.initial_reserves_1 = reserves.1;
+}
 
+fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {
     let reserves_0 = EVMU256::from(i128::from_str_radix(&pair_data.initial_reserves_0, 16).unwrap());
     let reserves_1 = EVMU256::from(i128::from_str_radix(&pair_data.initial_reserves_1, 16).unwrap());
 
     // bypass for incorrect decimal implementation
-    let min_r0 = if pair_data.decimals_0 == 0 {
-        EVMU256::ZERO
+
+    let liquidity = if pair_data.in_ == 0 {
+        let min_r0 = if pair_data.decimals_0 == 0 {
+            EVMU256::ZERO
+        } else {
+            EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1))
+        };
+        reserves_0 / min_r0
     } else {
-        EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1))
+        let min_r1 = if pair_data.decimals_1 == 0 {
+            EVMU256::ZERO
+        } else {
+            EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1))
+        };
+        reserves_1 / min_r1
     };
 
-    let min_r1 = if pair_data.decimals_1 == 0 {
-        EVMU256::ZERO
-    } else {
-        EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1))
-    };
-
-    reserves_0 > min_r0 && reserves_1 > min_r1
+    liquidity
 }
 
 fn with_info(routes: Vec<Vec<PairData>>, network: &str, token: &str) -> Info {
@@ -358,27 +365,12 @@ fn find_path_subgraph(onchain: &mut OnChainConfig, token: &str) -> Info {
         &mut routes,
     );
 
-    let mut routes_without_low_liquidity_idx = vec![];
-
-    for (kth, route) in (&mut routes).iter_mut().enumerate() {
-        let mut low_liquidity = false;
-        for hop in route {
-            low_liquidity |= !add_reserve_info(onchain, hop);
-        }
-        if !low_liquidity {
-            routes_without_low_liquidity_idx.push(kth);
-        }
-    }
-
-    let routes_without_low_liquidity = routes_without_low_liquidity_idx
-        .iter()
-        .map(|&idx| routes[idx].clone())
-        .collect();
-
-    with_info(routes_without_low_liquidity, network.as_str(), token)
+    with_info(routes, network.as_str(), token)
 }
 
 mod tests {
+    use tracing::debug;
+
     use super::*;
     use crate::evm::{
         onchain::endpoints::Chain::{BSC, ETH},
@@ -409,11 +401,12 @@ mod tests {
 
     #[test]
     fn test_get_pair() {
-        let mut config = OnChainConfig::new(BSC, 22055611);
-        let v = get_pair(&mut config, "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", "bsc", false);
-
-        debug!("{:?}", v);
+        let mut config = OnChainConfig::new(ETH, 19021411);
+        let v = get_pair(&mut config, "0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8", "eth", false);
         assert!(!v.is_empty());
+        for p in v {
+            println!("pair: {:?}", p);
+        }
     }
 
     #[test]

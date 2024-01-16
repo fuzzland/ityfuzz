@@ -102,7 +102,7 @@ impl
 
             let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);
 
-            let is_reverted = _out.iter().any(|(_, is_success)| *is_success == false);
+            let is_reverted = _out.iter().any(|(_, is_success)| !(*is_success));
 
             // Record the swap info for generating foundry in the future.
             if !is_reverted {

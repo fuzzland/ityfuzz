@@ -20,7 +20,6 @@ use serde_json;
 use tracing::info;
 
 use crate::evm::{
-    blaz::builder::ArtifactInfoMetadata,
     bytecode_iterator::all_bytecode,
     host::FuzzHost,
     middlewares::middleware::{Middleware, MiddlewareType},
@@ -314,7 +313,7 @@ where
         &mut self,
         _: Option<&mut Interpreter>,
         _host: &mut FuzzHost<SC>,
-        state: &mut EVMFuzzState,
+        _state: &mut EVMFuzzState,
         bytecode: &mut Bytecode,
         address: EVMAddress,
     ) {

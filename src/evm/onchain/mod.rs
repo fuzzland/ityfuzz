@@ -299,7 +299,7 @@ impl OnChain {
         address_h160: EVMAddress,
         host: &mut FuzzHost<SC>,
         force_cache: bool,
-        should_setup_abi: bool,
+        _should_setup_abi: bool,
         is_proxy_call: bool,
         caller: EVMAddress,
         state: &mut EVMFuzzState,

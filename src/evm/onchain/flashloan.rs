@@ -133,10 +133,7 @@ impl Flashloan {
     }
 
     fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
-        match self.endpoint.as_mut() {
-            Some(config) => Some(fetch_uniswap_path(config, addr)),
-            None => None,
-        }
+        self.endpoint.as_mut().map(|config| fetch_uniswap_path(config, addr))
     }
 
     pub fn on_contract_insertion(

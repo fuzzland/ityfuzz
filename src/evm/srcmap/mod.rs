@@ -59,7 +59,7 @@ impl SourceMapProvider {
     ) {
         debug!("adding source map for address: {}", address);
         self.source_code
-            .insert(address.clone(), files.clone().iter().cloned().collect_vec());
+            .insert(*address, files.iter().cloned().collect_vec());
 
         let filenames = files.iter().map(|(name, _)| (name.clone())).collect();
         let list_raw_infos = self.uncompress_srcmap_single(map, &filenames, replacements);
