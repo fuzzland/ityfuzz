@@ -22,6 +22,7 @@ use crate::{
 };
 
 pub mod constant_pair;
+pub mod uniswap;
 
 // deposit
 const SWAP_DEPOSIT: [u8; 4] = [0xd0, 0xe3, 0x0d, 0xb0];
@@ -40,6 +41,7 @@ pub enum UniswapProvider {
     UniswapV3,
     Biswap,
 }
+
 impl FromStr for UniswapProvider {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -54,6 +56,7 @@ impl FromStr for UniswapProvider {
         }
     }
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct UniswapInfo {
     pub pool_fee: usize,
@@ -62,6 +65,7 @@ pub struct UniswapInfo {
     pub init_code_hash: Vec<u8>,
     pub pair_bytecode: Vec<u8>,
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct PairContext {
     pub pair_address: EVMAddress,
@@ -70,6 +74,7 @@ pub struct PairContext {
     pub uniswap_info: Arc<UniswapInfo>,
     pub initial_reserves: (EVMU256, EVMU256),
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct PathContext {
     pub route: Vec<Rc<RefCell<PairContext>>>,

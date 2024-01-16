@@ -35,7 +35,7 @@ use crate::{
         mutator::AccessPattern,
         onchain::endpoints::OnChainConfig,
         oracles::erc20::IERC20OracleFlashloan,
-        tokens::TokenContext,
+        tokens::{uniswap::fetch_uniswap_path, TokenContext},
         types::{convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256, EVMU512},
     },
     generic_vm::vm_state::VMStateT,
@@ -58,6 +58,7 @@ pub struct Flashloan {
     pair_address: HashSet<EVMAddress>,
     pub unbound_tracker: HashMap<usize, HashSet<EVMAddress>>, // pc -> [address called]
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+    pub token_context_cache: HashMap<EVMAddress, TokenContext>,
 }
 
 impl Debug for Flashloan {
@@ -126,14 +127,16 @@ impl Flashloan {
             erc20_address: Default::default(),
             pair_address: Default::default(),
             unbound_tracker: Default::default(),
+            token_context_cache: Default::default(),
             flashloan_oracle,
         }
     }
 
     fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
-        self.endpoint
-            .as_mut()
-            .map(|endpoint| endpoint.fetch_uniswap_path_cached(addr).clone())
+        match self.endpoint.as_mut() {
+            Some(config) => Some(fetch_uniswap_path(config, addr)),
+            None => None,
+        }
     }
 
     pub fn on_contract_insertion(
