@@ -45,6 +45,7 @@ use crate::{
 
 pub static mut CAN_LIQUIDATE: bool = false;
 
+#[macro_export]
 macro_rules! scale {
     () => {
         EVMU512::from(1_000_000)

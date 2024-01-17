@@ -12,7 +12,7 @@ use crate::{
         producers::erc20::ERC20Producer,
         tokens::TokenContext,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
-        vm::EVMState,
+        vm::{EVMExecutor, EVMState},
     },
     generic_vm::vm_state::VMStateT,
     oracle::Oracle,
@@ -84,20 +84,36 @@ impl
             let mut swap_infos = vec![];
 
             for (caller, _token_info, _amount) in liquidations_earned {
-                let txs = _token_info.sell(
+                // let txs = _token_info.sell(
+                //     _amount,
+                //     ctx.fuzz_state.callers_pool[0],
+                //     ctx.input.get_randomness().as_slice(),
+                // );
+
+                // liquidation_txs.extend(
+                //     txs.iter()
+                //         .map(|(addr, abi, _)| (caller, *addr,
+                // Bytes::from(abi.get_bytes()))), );
+
+                // if let Some(swap_info) = txs.last() {
+                //     swap_infos.push(swap_info.clone());
+                // }
+
+                _token_info.sell(
                     _amount,
-                    ctx.fuzz_state.callers_pool[0],
+                    caller,
+                    ctx.fuzz_state,
+                    ctx.post_state,
+                    unsafe {
+                        &mut *ctx
+                            .executor
+                            .deref()
+                            .borrow_mut()
+                            .as_any()
+                            .downcast_mut_unchecked::<EVMExecutor<EVMState, ConciseEVMInput, _>>()
+                    },
                     ctx.input.get_randomness().as_slice(),
                 );
-
-                liquidation_txs.extend(
-                    txs.iter()
-                        .map(|(addr, abi, _)| (caller, *addr, Bytes::from(abi.get_bytes()))),
-                );
-
-                if let Some(swap_info) = txs.last() {
-                    swap_infos.push(swap_info.clone());
-                }
             }
 
             let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);

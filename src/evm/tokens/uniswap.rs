@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
@@ -9,7 +9,15 @@ use std::{
 use itertools::Itertools;
 use tracing::{info, warn};
 
-use super::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider};
+use super::{
+    get_uniswap_info,
+    v2_transformer::UniswapPairContext,
+    weth_transformer::WethContext,
+    PairContext,
+    PathContext,
+    TokenContext,
+    UniswapProvider,
+};
 use crate::evm::{
     onchain::endpoints::{Chain, OnChainConfig, PairData},
     types::{EVMAddress, EVMU256},
@@ -39,58 +47,59 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
     let weth = EVMAddress::from_str(&basic_info.weth).unwrap();
     let is_weth = basic_info.is_weth;
 
-    let routes = info.routes;
+    let routes: Vec<Vec<PairData>> = info.routes;
 
     let paths_parsed = routes
         .iter()
         .map(|pairs| {
             let mut path_parsed: PathContext = Default::default();
-            pairs.iter().for_each(|pair| {
-                match pair.src.as_str() {
-                    "v2" => {
-                        // let decimals0 = pair["decimals0"].as_u64().expect("failed to parse
-                        // decimals0"); let decimals1 =
-                        // pair["decimals1"].as_u64().expect("failed to parse decimals1");
-                        // let next = EVMAddress::from_str(pair["next"].as_str().expect("failed to parse
-                        // next")).expect("failed to parse next");
-
-                        path_parsed.route.push(Rc::new(RefCell::new(PairContext {
-                            pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
-                            next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
-                            side: pair.in_ as u8,
-                            uniswap_info: Arc::new(get_uniswap_info(
-                                &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
-                                &Chain::from_str(&onchain.chain_name).unwrap(),
-                            )),
-                            initial_reserves: (
-                                EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
-                                EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
-                            ),
-                        })));
-                    }
-                    "pegged" => {
-                        // always live at final
-                        path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
-                        path_parsed.final_pegged_pair = Rc::new(RefCell::new(Some(PairContext {
-                            pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
-                            next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
-                            side: pair.in_ as u8,
-                            uniswap_info: Arc::new(get_uniswap_info(
-                                &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
-                                &Chain::from_str(&onchain.chain_name).unwrap(),
-                            )),
-                            initial_reserves: (
-                                EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
-                                EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
-                            ),
-                        })));
-                    }
-                    "pegged_weth" => {
-                        path_parsed.final_pegged_ratio = EVMU256::from(pair.rate);
-                        path_parsed.final_pegged_pair = Rc::new(RefCell::new(None));
-                    }
-                    _ => unimplemented!("unknown swap path source"),
+            pairs.iter().for_each(|pair| match pair.src.as_str() {
+                "v2" => {
+                    let inner = Rc::new(RefCell::new(UniswapPairContext {
+                        pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
+                        next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
+                        side: pair.in_ as u8,
+                        uniswap_info: Arc::new(get_uniswap_info(
+                            &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
+                            &Chain::from_str(&onchain.chain_name).unwrap(),
+                        )),
+                        initial_reserves: (
+                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
+                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
+                        ),
+                        in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
+                    }));
+                    path_parsed.route.push(super::PairContextTy::Uniswap(inner));
                 }
+                "pegged" => {
+                    let inner_pair = Rc::new(RefCell::new(UniswapPairContext {
+                        pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
+                        next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
+                        side: pair.in_ as u8,
+                        uniswap_info: Arc::new(get_uniswap_info(
+                            &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
+                            &Chain::from_str(&onchain.chain_name).unwrap(),
+                        )),
+                        initial_reserves: (
+                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
+                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
+                        ),
+                        in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
+                    }));
+                    path_parsed.route.push(super::PairContextTy::Uniswap(inner_pair));
+                    assert_eq!(pair.next, basic_info.weth);
+                    let inner = Rc::new(RefCell::new(WethContext {
+                        weth_address: EVMAddress::from_str(&pair.next.as_str()).expect("failed to parse pair"),
+                    }));
+                    path_parsed.route.push(super::PairContextTy::Weth(inner));
+                }
+                "pegged_weth" => {
+                    let inner = Rc::new(RefCell::new(WethContext {
+                        weth_address: EVMAddress::from_str(pair.in_token.as_str()).expect("failed to parse pair"),
+                    }));
+                    path_parsed.route.push(super::PairContextTy::Weth(inner));
+                }
+                _ => unimplemented!("unknown swap path source"),
             });
             path_parsed
         })
@@ -100,7 +109,6 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
         swaps: paths_parsed,
         is_weth,
         weth_address: weth,
-        address: token_address,
     }
 }
 
@@ -240,6 +248,7 @@ fn get_pegged_next_hop(onchain: &mut OnChainConfig, token: &str, network: &str) 
             src_exact: "".to_string(),
             decimals_0: 0,
             decimals_1: 0,
+            in_token: token.to_string(),
         };
     }
     let mut peg_info = get_pair(onchain, token, network, true)
@@ -418,6 +427,5 @@ mod tests {
         );
         assert!(!v.swaps.is_empty());
         assert!(!v.weth_address.is_zero());
-        assert!(!v.address.is_zero());
     }
 }

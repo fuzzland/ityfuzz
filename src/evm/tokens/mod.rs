@@ -1,4 +1,5 @@
 use std::{
+    borrow::BorrowMut,
     cell::RefCell,
     collections::{hash_map, HashMap},
     fmt::Debug,
@@ -9,20 +10,33 @@ use std::{
 };
 
 use alloy_primitives::hex;
-use serde::{Deserialize, Serialize};
+use bytes::Bytes;
+use libafl::schedulers::Scheduler;
+use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::types::checksum;
+use super::{
+    types::{checksum, EVMFuzzState},
+    vm::{EVMExecutor, EVMState, MEM_LIMIT},
+};
 use crate::{
     evm::{
         abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
         onchain::endpoints::Chain,
         types::{EVMAddress, EVMU256},
     },
-    generic_vm::vm_state,
+    generic_vm::{
+        vm_executor::GenericVM,
+        vm_state::{self, VMStateT},
+    },
+    input::ConciseSerde,
+    is_call_success,
 };
 
 pub mod constant_pair;
 pub mod uniswap;
+pub mod v2_transformer;
+pub mod weth_transformer;
 
 // deposit
 const SWAP_DEPOSIT: [u8; 4] = [0xd0, 0xe3, 0x0d, 0xb0];
@@ -65,20 +79,41 @@ pub struct UniswapInfo {
     pub init_code_hash: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct PairContext {
-    pub pair_address: EVMAddress,
-    pub next_hop: EVMAddress,
-    pub side: u8,
-    pub uniswap_info: Arc<UniswapInfo>,
-    pub initial_reserves: (EVMU256, EVMU256),
+pub trait PairContext {
+    fn transform<VS, CI, SC>(
+        &self,
+        src: &EVMAddress,
+        amount: EVMU256,
+        state: &mut EVMFuzzState,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+        reverse: bool,
+    ) -> Option<(EVMAddress, EVMU256)>
+    where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static;
+
+    fn name(&self) -> String;
+}
+
+#[derive(Clone)]
+enum PairContextTy {
+    Uniswap(Rc<RefCell<v2_transformer::UniswapPairContext>>),
+    Weth(Rc<RefCell<weth_transformer::WethContext>>),
+}
+
+impl Debug for PairContextTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PairContextTy::Uniswap(ctx) => write!(f, "Uniswap({:?})", ctx.borrow()),
+            PairContextTy::Weth(ctx) => write!(f, "Weth({:?})", ctx.borrow()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct PathContext {
-    pub route: Vec<Rc<RefCell<PairContext>>>,
-    pub final_pegged_ratio: EVMU256,
-    pub final_pegged_pair: Rc<RefCell<Option<PairContext>>>,
+    pub route: Vec<PairContextTy>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -86,203 +121,124 @@ pub struct TokenContext {
     pub swaps: Vec<PathContext>,
     pub is_weth: bool,
     pub weth_address: EVMAddress,
-    pub address: EVMAddress,
 }
 
 static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 
 impl TokenContext {
-    pub fn buy(&self, amount_in: EVMU256, to: EVMAddress, seed: &[u8]) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
-        unsafe {
-            WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
-        }
-        // function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        //     uint amountOutMin,
-        //     address[] calldata path,
-        //     address to,
-        //     uint deadline
-        // )
+    pub fn buy<VS, CI, SC>(
+        &self,
+        amount_in: EVMU256,
+        to: EVMAddress,
+        state: &mut EVMFuzzState,
+        vm_state: EVMState,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+        seed: &[u8],
+    ) -> Option<EVMState>
+    where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    {
+        vm.host.evmstate = vm_state;
         if self.is_weth {
-            let mut abi = BoxedABI::new(Box::new(AEmpty {}));
-            abi.function = SWAP_DEPOSIT; // deposit
-                                         // EVMU256::from(perct) * unsafe {WETH_MAX}
-            vec![(self.weth_address, abi, amount_in)]
+            let ctx = self.swaps[0].route[0];
+            if let PairContextTy::Weth(ctx) = ctx {
+                ctx.deref()
+                    .borrow_mut()
+                    .transform(&self.weth_address, amount_in, state, vm, false);
+            } else {
+                panic!("Invalid weth context");
+            }
         } else {
             if self.swaps.is_empty() {
-                return vec![];
+                return None;
             }
+            let mut current_amount_in = amount_in;
+            let mut current_sender = None;
             let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
-            // let amount_in = path_ctx.get_amount_in(perct, reserve);
-            let mut path: Vec<EVMAddress> = path_ctx
-                .route
-                .iter()
-                .rev()
-                .map(|pair| pair.deref().borrow().next_hop)
-                .collect();
-            // when it is pegged token or weth
-            if path.is_empty() || path[0] != self.weth_address {
-                path.insert(0, self.weth_address);
-            }
-            path.insert(path.len(), self.address);
-            let mut abi = BoxedABI::new(Box::new(AArray {
-                data: vec![
-                    BoxedABI::new(Box::new(A256 {
-                        data: vec![0; 32],
-                        is_address: false,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Uint,
-                    })),
-                    BoxedABI::new(Box::new(AArray {
-                        data: path
-                            .iter()
-                            .map(|addr| {
-                                BoxedABI::new(Box::new(A256 {
-                                    data: addr.as_bytes().to_vec(),
-                                    is_address: true,
-                                    dont_mutate: false,
-                                    inner_type: A256InnerType::Address,
-                                }))
-                            })
-                            .collect(),
-                        dynamic_size: true,
-                    })),
-                    BoxedABI::new(Box::new(A256 {
-                        data: to.0.to_vec(),
-                        is_address: true,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Address,
-                    })),
-                    BoxedABI::new(Box::new(A256 {
-                        data: vec![0xff; 32],
-                        is_address: false,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Uint,
-                    })),
-                ],
-                dynamic_size: false,
-            }));
-            abi.function = SWAP_BUY;
-
-            match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
-                None => vec![(
-                    path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router,
-                    abi,
-                    amount_in,
-                )],
-                Some(info) => vec![(info.uniswap_info.router, abi, amount_in)],
+            for pair in path_ctx.route.iter().rev() {
+                match pair {
+                    PairContextTy::Uniswap(ctx) => {
+                        if let Some((receiver, amount)) = ctx.deref().borrow_mut().transform(
+                            &current_sender.unwrap(),
+                            current_amount_in,
+                            state,
+                            vm,
+                            true,
+                        ) {
+                            current_amount_in = amount;
+                            current_sender = Some(receiver);
+                        } else {
+                            return None;
+                        }
+                    }
+                    PairContextTy::Weth(ctx) => {
+                        assert!(current_sender.is_none());
+                        ctx.deref().borrow_mut().transform(&to, amount_in, state, vm, true);
+                        current_sender = Some(to);
+                    }
+                }
             }
         }
+        Some(vm.host.evmstate.clone())
     }
 
     // swapExactTokensForETHSupportingFeeOnTransferTokens
-    pub fn sell(&self, amount_in: EVMU256, to: EVMAddress, seed: &[u8]) -> Vec<(EVMAddress, BoxedABI, EVMU256)> {
-        unsafe {
-            WETH_MAX = EVMU256::from(10).pow(EVMU256::from(24));
-        }
-        // function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        //     uint amountIn,
-        //     uint amountOutMin,
-        //     address[] calldata path,
-        //     address to,
-        //     uint deadline
-        // )
-        let amount: [u8; 32] = amount_in.to_be_bytes();
-        let mut abi_amount = BoxedABI::new(Box::new(A256 {
-            data: amount.to_vec(),
-            is_address: false,
-            dont_mutate: false,
-            inner_type: A256InnerType::Uint,
-        }));
-
+    pub fn sell<VS, CI, SC>(
+        &self,
+        amount_in: EVMU256,
+        src: EVMAddress,
+        state: &mut EVMFuzzState,
+        vm_state: EVMState,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+        seed: &[u8],
+    ) -> Option<EVMState>
+    where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    {
         if self.is_weth {
-            abi_amount.function = SWAP_WITHDRAW; // withdraw
-            vec![(self.weth_address, abi_amount, EVMU256::ZERO)]
+            let ctx = self.swaps[0].route[0];
+            if let PairContextTy::Weth(ctx) = ctx {
+                ctx.deref()
+                    .borrow_mut()
+                    .transform(&self.weth_address, amount_in, state, vm, false);
+            } else {
+                panic!("Invalid weth context");
+            }
         } else {
             if self.swaps.is_empty() {
-                return vec![];
+                return None;
             }
             let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
-            // let amount_in = path_ctx.get_amount_in(perct, reserve);
-            let mut path: Vec<EVMAddress> = path_ctx
-                .route
-                .iter()
-                .map(|pair| pair.deref().borrow().next_hop)
-                .collect();
-            // when it is pegged token or weth
-            if path.is_empty() || *path.last().unwrap() != self.weth_address {
-                path.push(self.weth_address);
+            let mut current_amount_in = amount_in;
+            let mut current_sender = src;
+            let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
+            for pair in path_ctx.route.iter() {
+                match pair {
+                    PairContextTy::Uniswap(ctx) => {
+                        if let Some((receiver, amount)) =
+                            ctx.deref()
+                                .borrow_mut()
+                                .transform(&current_sender, current_amount_in, state, vm, false)
+                        {
+                            current_amount_in = amount;
+                            current_sender = receiver;
+                        } else {
+                            return None;
+                        }
+                    }
+                    PairContextTy::Weth(ctx) => {
+                        ctx.deref()
+                            .borrow_mut()
+                            .transform(&current_sender, current_amount_in, state, vm, false);
+                    }
+                }
             }
-            path.insert(0, self.address);
-            let mut sell_abi = BoxedABI::new(Box::new(AArray {
-                data: vec![
-                    abi_amount,
-                    BoxedABI::new(Box::new(A256 {
-                        data: vec![0; 32],
-                        is_address: false,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Uint,
-                    })),
-                    BoxedABI::new(Box::new(AArray {
-                        data: path
-                            .iter()
-                            .map(|addr| {
-                                BoxedABI::new(Box::new(A256 {
-                                    data: addr.as_bytes().to_vec(),
-                                    is_address: true,
-                                    dont_mutate: false,
-                                    inner_type: A256InnerType::Address,
-                                }))
-                            })
-                            .collect(),
-                        dynamic_size: true,
-                    })),
-                    BoxedABI::new(Box::new(A256 {
-                        data: to.0.to_vec(),
-                        is_address: true,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Address,
-                    })),
-                    BoxedABI::new(Box::new(A256 {
-                        data: vec![0xff; 32],
-                        is_address: false,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Uint,
-                    })),
-                ],
-                dynamic_size: false,
-            }));
-            sell_abi.function = SWAP_SELL;
-
-            let router = match path_ctx.final_pegged_pair.deref().borrow().as_ref() {
-                None => path_ctx.route.last().unwrap().deref().borrow().uniswap_info.router,
-                Some(info) => info.uniswap_info.router,
-            };
-
-            let mut approve_abi = BoxedABI::new(Box::new(AArray {
-                data: vec![
-                    BoxedABI::new(Box::new(A256 {
-                        data: router.0.to_vec(),
-                        is_address: true,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Address,
-                    })),
-                    BoxedABI::new(Box::new(A256 {
-                        data: vec![0xff; 32],
-                        is_address: false,
-                        dont_mutate: false,
-                        inner_type: A256InnerType::Uint,
-                    })),
-                ],
-                dynamic_size: false,
-            }));
-
-            approve_abi.function = [0x09, 0x5e, 0xa7, 0xb3]; // approve
-
-            vec![
-                (self.address, approve_abi, EVMU256::ZERO),
-                (router, sell_abi, EVMU256::ZERO),
-            ]
         }
+        Some(vm.host.evmstate.clone())
     }
 }
 
@@ -427,8 +383,57 @@ impl From<SwapInfo> for vm_state::SwapInfo {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use libafl::schedulers::StdScheduler;
+
+    use super::TokenContext;
+    use crate::{
+        evm::{
+            config::StorageFetchingMode,
+            host::FuzzHost,
+            input::ConciseEVMInput,
+            onchain::{
+                endpoints::{Chain, OnChainConfig},
+                OnChain,
+            },
+            types::{generate_random_address, EVMFuzzState, EVMU256},
+            vm::{EVMExecutor, EVMState},
+        },
+        state::FuzzState,
+    };
+
+    #[test]
+    fn test_buy() {
+        let state = FuzzState::new(0);
+        let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+
+        let onchain = OnChainConfig::new(Chain::BSC, 0);
+        let onchain_mid = OnChain::new(onchain, StorageFetchingMode::OneByOne);
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(onchain_mid)));
+
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+
+        let vm_state = EVMState::default();
+        let ctx = TokenContext {
+            swaps: vec![],
+            is_weth: false,
+            weth_address: generate_random_address(&mut state),
+        };
+        let r_addr = generate_random_address(&mut state);
+        ctx.buy(
+            EVMU256::from(200000),
+            r_addr,
+            &mut state,
+            vm_state,
+            &mut evm_executor,
+            &[0],
+        );
+    }
+}
 //     use std::str::FromStr;
 
 //     use tracing::debug;
