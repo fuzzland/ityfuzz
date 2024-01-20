@@ -85,7 +85,7 @@ pub struct EVMInitializationArtifacts {
     pub build_artifacts: HashMap<EVMAddress, BuildJobResult>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct EnvMetadata {
     pub env: Env,
 }

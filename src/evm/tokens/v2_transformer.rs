@@ -14,7 +14,7 @@ use libafl::schedulers::Scheduler;
 use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{PairContext, UniswapInfo};
+use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
 use crate::{
     evm::{
         abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
@@ -26,6 +26,7 @@ use crate::{
         vm_executor::GenericVM,
         vm_state::{self, VMStateT},
     },
+    get_code_tokens,
     input::ConciseSerde,
     is_call_success,
 };
@@ -41,6 +42,7 @@ pub struct UniswapPairContext {
 
 impl UniswapPairContext {
     pub fn calculate_amounts_out(&self, amount_in: EVMU256, reserve_in: EVMU256, reserve_out: EVMU256) -> EVMU256 {
+        println!("fee: {}", self.uniswap_info.pool_fee);
         let amount_in_with_fee = amount_in * EVMU256::from(10000 - self.uniswap_info.pool_fee);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = reserve_in * EVMU256::from(10000) + amount_in_with_fee;
@@ -54,15 +56,16 @@ impl UniswapPairContext {
 
 pub fn reserve_parser(reserve_slot: &EVMU256) -> (EVMU256, EVMU256) {
     let reserve_bytes: [u8; 32] = reserve_slot.to_be_bytes();
-    let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
-    let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
+    let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
+    let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
     (reserve_0, reserve_1)
 }
 
 pub fn reserve_update(reserve_0: EVMU256, reserve_1: EVMU256) -> EVMU256 {
     let mut ret = vec![0x00; 4];
-    ret.extend_from_slice(&reserve_0.to_be_bytes());
-    ret.extend_from_slice(&reserve_1.to_be_bytes());
+    // to uint112
+    ret.extend_from_slice(&reserve_1.to_be_bytes::<32>()[18..32]);
+    ret.extend_from_slice(&reserve_0.to_be_bytes::<32>()[18..32]);
     EVMU256::try_from_be_slice(&ret).unwrap()
 }
 
@@ -71,8 +74,7 @@ pub fn transfer_bytes(dst: &EVMAddress, amount: EVMU256) -> Bytes {
     ret.extend_from_slice(&[0xa9, 0x05, 0x9c, 0xbb]); // transfer
     ret.extend_from_slice(&[0x00; 12]); // padding
     ret.extend_from_slice(&dst.0); // dst
-    ret.extend_from_slice(&[0x00; 12]); // padding
-    ret.extend_from_slice(&amount.to_be_bytes()); // amount
+    ret.extend_from_slice(&amount.to_be_bytes::<32>()); // amount
     Bytes::from(ret)
 }
 
@@ -88,6 +90,7 @@ impl PairContext for UniswapPairContext {
     fn transform<VS, CI, SC>(
         &self,
         src: &EVMAddress,
+        next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
         vm: &mut EVMExecutor<VS, CI, SC>,
@@ -104,27 +107,20 @@ impl PairContext for UniswapPairContext {
             (self.in_token_address, self.next_hop, self.side)
         };
 
-        let in_token_code = vm
-            .host
-            .code
-            .get(&in_token_address)
-            .unwrap_or_else(|| panic!("no code {:?}", in_token_address)) // todo: warm address
-            .clone();
-        let out_token_code = vm
-            .host
-            .code
-            .get(&out_token_address)
-            .unwrap_or_else(|| panic!("no code {:?}", out_token_address)) // todo: warm address
-            .clone();
+        let in_token_code = get_code_tokens!(in_token_address, vm);
+        let out_token_code = get_code_tokens!(out_token_address, vm);
 
         // get balance of pair's token
         macro_rules! balanceof_token {
             ($dir: expr, $who: expr) => {{
                 let addr = if $dir { in_token_address } else { out_token_address };
-                let code = if $dir { in_token_code } else { out_token_code };
                 let call = Contract::new_with_context_analyzed(
                     balance_of_bytes($who),
-                    code,
+                    if $dir {
+                        in_token_code.clone()
+                    } else {
+                        out_token_code.clone()
+                    },
                     &CallContext {
                         address: addr,
                         caller: EVMAddress::default(),
@@ -144,6 +140,8 @@ impl PairContext for UniswapPairContext {
                     } else {
                         return None;
                     };
+
+                println!("balance of {:?}@{:?}: {:?}", $who, addr, in_balance);
                 in_balance
             }};
         }
@@ -152,10 +150,13 @@ impl PairContext for UniswapPairContext {
         macro_rules! transfer_token {
             ($dir: expr, $who: expr, $dst: expr, $amt: expr) => {{
                 let addr = if $dir { in_token_address } else { out_token_address };
-                let code = if $dir { in_token_code } else { out_token_code };
                 let call = Contract::new_with_context_analyzed(
                     transfer_bytes($dst, $amt),
-                    code,
+                    if $dir {
+                        in_token_code.clone()
+                    } else {
+                        out_token_code.clone()
+                    },
                     &CallContext {
                         address: addr,
                         caller: $who,
@@ -164,25 +165,23 @@ impl PairContext for UniswapPairContext {
                         scheme: CallScheme::Call,
                     },
                 );
+                println!("pre_vm_state: {:?}", vm.host.evmstate.state);
+
                 let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+
                 let ir = vm.host.run_inspect(&mut interp, state);
+                println!("post_vm_state: {:?}", vm.host.evmstate.state);
+                println!("transfer return value: {:?}", interp.return_value());
+                println!("bytes: {:?}", transfer_bytes($dst, $amt));
+                println!("from: {:?}, {:?}", $who, addr);
                 if !is_call_success!(ir) {
                     return None;
                 }
+                println!("transfer success");
             }};
         }
 
-        // 0. get balance of pair's token
-        let original_balance = balanceof_token!(true, &self.pair_address);
-
-        // 1. transfer all token to pair
-        transfer_token!(true, src.clone(), &self.pair_address, amount);
-
-        // 2. get balance of pair's token
-        let new_balance = balanceof_token!(true, &self.pair_address);
-
-        // 3. calculate amount out
-        let amount_in = new_balance - original_balance;
+        // 1. get balance of pair's token
         let reserve_slot = vm
             .host
             .evmstate
@@ -197,19 +196,42 @@ impl PairContext for UniswapPairContext {
         };
         let reserve_in = if side == 0 { reserve.0 } else { reserve.1 };
         let reserve_out = if side == 0 { reserve.1 } else { reserve.0 };
-        let amount_out = self.calculate_amounts_out(amount, reserve_in, reserve_out);
+
+        // 2. get balance of pair's token
+        let new_balance = balanceof_token!(true, &self.pair_address);
+        balanceof_token!(false, &self.pair_address);
+
+        // 3. calculate amount out
+        let amount_in = new_balance - reserve_in;
+
+        // println!("original balance: {:?}", reserve_in);
+        // println!("new balance: {:?}", new_balance);
+
+        let amount_out = self.calculate_amounts_out(amount_in, reserve_in, reserve_out);
+
+        // 3.5 transfer out token
+        transfer_token!(false, self.pair_address, next, amount_out);
 
         // 4. update reserve
         let new_reserve_0 = if side == 0 {
-            reserve.0 + amount_in
+            new_balance
         } else {
-            reserve.0 - amount_out
+            balanceof_token!(false, &self.pair_address)
         };
         let new_reserve_1 = if side == 0 {
-            reserve.1 - amount_out
+            balanceof_token!(false, &self.pair_address)
         } else {
-            reserve.1 + amount_in
+            new_balance
         };
+
+        // #[cfg(test)]
+        // {
+        //     println!("amount in: {:?}", amount_in);
+        //     println!("amount out: {:?}", amount_out);
+        //     println!("orginal reserve: {:?}", reserve);
+        //     println!("new reserve: {:?}", (new_reserve_0, new_reserve_1));
+        // }
+
         if let Some(pair) = vm.host.evmstate.get_mut(&self.pair_address) {
             pair.insert(EVMU256::from(8), reserve_update(new_reserve_0, new_reserve_1));
         } else {

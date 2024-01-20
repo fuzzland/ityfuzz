@@ -13,25 +13,6 @@ use crate::{
     oracle::Oracle,
 };
 
-pub struct NoOracle {}
-
-impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for NoOracle
-{
-    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
-        0
-    }
-
-    fn oracle(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
-        vec![]
-    }
-}
-
-pub fn dummy_precondition(_ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
-    99
-}
-
 pub struct EVMBugResult {
     pub bug_type: String,
     pub bug_info: String,

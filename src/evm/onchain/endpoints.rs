@@ -11,10 +11,12 @@ use std::{
     time::Duration,
 };
 
+use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::{delay::Fixed, retry_with_index, OperationResult};
-use revm_primitives::B160;
+use revm_interpreter::{analysis::to_analysed, BytecodeLocked};
+use revm_primitives::{Bytecode, B160};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
@@ -216,7 +218,7 @@ pub struct GetPairResponseDataPairToken {
     pub id: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct OnChainConfig {
     pub endpoint_url: String,
     pub client: reqwest::blocking::Client,
@@ -236,11 +238,38 @@ pub struct OnChainConfig {
     pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     code_cache: HashMap<EVMAddress, String>,
+    code_cache_analyzed: HashMap<EVMAddress, Arc<BytecodeLocked>>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
     uniswap_path_cache: HashMap<EVMAddress, TokenContext>,
     rpc_cache: FileSystemCache,
+}
+
+impl Debug for OnChainConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OnChainConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("chain_id", &self.chain_id)
+            .field("block_number", &self.block_number)
+            .field("timestamp", &self.timestamp)
+            .field("coinbase", &self.coinbase)
+            .field("gaslimit", &self.gaslimit)
+            .field("block_hash", &self.block_hash)
+            .field("etherscan_api_key", &self.etherscan_api_key)
+            .field("etherscan_base", &self.etherscan_base)
+            .field("chain_name", &self.chain_name)
+            .field("balance_cache", &self.balance_cache)
+            .field("pair_cache", &self.pair_cache)
+            .field("slot_cache", &self.slot_cache)
+            .field("code_cache", &self.code_cache)
+            .field("price_cache", &self.price_cache)
+            .field("abi_cache", &self.abi_cache)
+            .field("storage_dump_cache", &self.storage_dump_cache)
+            .field("uniswap_path_cache", &self.uniswap_path_cache)
+            .field("rpc_cache", &self.rpc_cache)
+            .finish()
+    }
 }
 
 impl OnChainConfig {
@@ -664,6 +693,21 @@ impl OnChainConfig {
         resp_string
     }
 
+    pub fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Arc<BytecodeLocked> {
+        if self.code_cache_analyzed.contains_key(&address) {
+            return self.code_cache_analyzed[&address].clone();
+        }
+
+        let code = self.get_contract_code(address, force_cache);
+        let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(
+            hex::decode(code).expect("fail to decode contract code"),
+        )));
+        let contract_code = Arc::new(BytecodeLocked::try_from(to_analysed(contract_code)).unwrap());
+
+        self.code_cache_analyzed.insert(address, contract_code.clone());
+        contract_code
+    }
+
     pub fn get_contract_slot(&mut self, address: EVMAddress, slot: EVMU256, force_cache: bool) -> EVMU256 {
         if self.slot_cache.contains_key(&(address, slot)) {
             return self.slot_cache[&(address, slot)];
@@ -731,7 +775,7 @@ impl OnChainConfig {
                     in_: if token == token0 { 0 } else { 1 },
                     pair,
                     next: if token == token0 { token1 } else { token0 },
-                    in_token: token,
+                    in_token: token.clone(),
                     src_exact: item["interface"].as_str().unwrap().to_string(),
                     rate: 0,
                     initial_reserves_0: "".to_string(),

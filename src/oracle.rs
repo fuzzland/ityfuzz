@@ -24,7 +24,7 @@ use crate::{
 
 /// The context passed to the oracle
 #[allow(clippy::type_complexity)]
-pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
+pub struct OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
@@ -32,6 +32,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// The state of the fuzzer
     pub fuzz_state: &'a mut S,
@@ -42,13 +43,14 @@ where
     /// The metadata of the oracle
     pub metadata: SerdeAnyMap,
     /// The executor
-    pub executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+    pub executor: Rc<RefCell<E>>,
     /// The input executed by the VM
     pub input: &'a I,
-    pub phantom: PhantomData<Addr>,
+    pub phantom: PhantomData<(Addr, Code, By, Loc, SlotTy, Out, CI)>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
+    OracleCtx<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
     S: State + HasCorpus + HasMetadata + HasExecutionResult<Loc, Addr, VS, Out, CI>,
@@ -57,15 +59,11 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// Create a new oracle context
     #[allow(clippy::type_complexity)]
-    pub fn new(
-        fuzz_state: &'a mut S,
-        pre_state: &'a VS,
-        executor: &'a mut Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
-        input: &'a I,
-    ) -> Self {
+    pub fn new(fuzz_state: &'a mut S, pre_state: &'a VS, executor: Rc<RefCell<E>>, input: &'a I) -> Self {
         Self {
             post_state: fuzz_state.get_execution_result().new_state.state.clone(),
             fuzz_state,
@@ -95,7 +93,7 @@ where
 }
 
 /// Producer trait provides functions needed to produce data for the oracle
-pub trait Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+pub trait Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
@@ -103,16 +101,17 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// Produce data for the oracle, called everytime before any oracle is
     /// called
-    fn produce(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>);
+    fn produce(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>);
     /// Cleanup. Called everytime after the oracle is called
-    fn notify_end(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>);
+    fn notify_end(&mut self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>);
 }
 
 /// Oracle trait provides functions needed to implement an oracle
-pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+pub trait Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
@@ -120,13 +119,14 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// Transition function, called everytime after non-reverted execution
-    fn transition(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>, stage: u64) -> u64;
+    fn transition(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>, stage: u64) -> u64;
 
     /// Oracle function, called everytime after non-reverted execution
     /// Returns Some(bug_idx) if the oracle is violated
-    fn oracle(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>, stage: u64) -> Vec<u64>;
+    fn oracle(&self, ctx: &mut OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>, stage: u64) -> Vec<u64>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

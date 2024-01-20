@@ -56,7 +56,7 @@ impl FromStr for FuzzerTypes {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
+pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> {
     pub onchain: Option<OnChainConfig>,
     pub onchain_storage_fetching: Option<StorageFetchingMode>,
     pub flashloan: bool,
@@ -65,8 +65,8 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub concolic_timeout: u32,
     pub concolic_num_threads: usize,
     pub contract_loader: ContractLoader,
-    pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
-    pub producers: Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+    pub oracle: Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
+    pub producers: Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
     pub replay_file: Option<String>,
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     pub selfdestruct_oracle: bool,
@@ -93,7 +93,9 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
     pub preset_file_path: String,
 }
 
-impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> {
+impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Debug
+    for Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
             .field("onchain", &self.onchain)

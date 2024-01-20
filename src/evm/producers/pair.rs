@@ -6,7 +6,7 @@ use revm_primitives::Bytecode;
 use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
-        types::{EVMAddress, EVMFuzzState, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMQueueExecutor, EVMU256},
         vm::EVMState,
     },
     oracle::{OracleCtx, Producer},
@@ -45,6 +45,7 @@ impl
         EVMInput,
         EVMFuzzState,
         ConciseEVMInput,
+        EVMQueueExecutor,
     > for PairProducer
 {
     fn produce(
@@ -60,6 +61,7 @@ impl
             EVMInput,
             EVMFuzzState,
             ConciseEVMInput,
+            EVMQueueExecutor,
         >,
     ) {
         {
@@ -100,6 +102,7 @@ impl
             EVMInput,
             EVMFuzzState,
             ConciseEVMInput,
+            EVMQueueExecutor,
         >,
     ) {
         self.reserves.clear();

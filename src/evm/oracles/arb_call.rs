@@ -15,7 +15,7 @@ use crate::{
         oracle::EVMBugResult,
         oracles::ARB_CALL_BUG_IDX,
         srcmap::SOURCE_MAP_PROVIDER,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
         vm::EVMState,
     },
     oracle::{Oracle, OracleCtx},
@@ -40,8 +40,19 @@ pub struct ArbitraryCallMetadata {
 impl_serdeany!(ArbitraryCallMetadata);
 
 impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for ArbitraryCallOracle
+    Oracle<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+        EVMQueueExecutor,
+    > for ArbitraryCallOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -60,6 +71,7 @@ impl
             EVMInput,
             EVMFuzzState,
             ConciseEVMInput,
+            EVMQueueExecutor,
         >,
         _stage: u64,
     ) -> Vec<u64> {

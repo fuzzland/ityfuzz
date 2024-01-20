@@ -56,6 +56,25 @@ pub enum UniswapProvider {
     Biswap,
 }
 
+#[macro_export]
+macro_rules! get_code_tokens {
+    ($addr: expr, $vm: expr) => {
+        match $vm.host.code.get(&$addr) {
+            Some(code) => code.clone(),
+            None => {
+                let code = CODE_REGISTRY
+                    .lock()
+                    .unwrap()
+                    .get(&$addr)
+                    .cloned()
+                    .expect(format!("Internal Error: token {:?} code not found in registry.", $addr).as_str());
+                $vm.host.code.insert($addr, code.clone());
+                code
+            }
+        }
+    };
+}
+
 impl FromStr for UniswapProvider {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -83,6 +102,8 @@ pub trait PairContext {
     fn transform<VS, CI, SC>(
         &self,
         src: &EVMAddress,
+        next: &EVMAddress,
+
         amount: EVMU256,
         state: &mut EVMFuzzState,
         vm: &mut EVMExecutor<VS, CI, SC>,
@@ -131,22 +152,20 @@ impl TokenContext {
         amount_in: EVMU256,
         to: EVMAddress,
         state: &mut EVMFuzzState,
-        vm_state: EVMState,
         vm: &mut EVMExecutor<VS, CI, SC>,
         seed: &[u8],
-    ) -> Option<EVMState>
+    ) -> Option<()>
     where
         VS: VMStateT + Default + 'static,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        vm.host.evmstate = vm_state;
         if self.is_weth {
-            let ctx = self.swaps[0].route[0];
+            let ctx = &self.swaps[0].route[0];
             if let PairContextTy::Weth(ctx) = ctx {
                 ctx.deref()
                     .borrow_mut()
-                    .transform(&self.weth_address, amount_in, state, vm, false);
+                    .transform(&to, &to, amount_in, state, vm, false);
             } else {
                 panic!("Invalid weth context");
             }
@@ -157,31 +176,69 @@ impl TokenContext {
             let mut current_amount_in = amount_in;
             let mut current_sender = None;
             let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
-            for pair in path_ctx.route.iter().rev() {
+            let path_len = path_ctx.route.len();
+            for (nth, pair) in path_ctx.route.iter().rev().enumerate() {
+                let is_final = nth == path_len - 1;
+
+                let next = if is_final {
+                    to
+                } else {
+                    match &path_ctx.route[path_len - nth - 2] {
+                        PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
+                        PairContextTy::Weth(ctx) => panic!("Invalid weth context"),
+                    }
+                };
+
                 match pair {
                     PairContextTy::Uniswap(ctx) => {
+                        #[cfg(test)]
+                        {
+                            println!("Uniswap");
+                            println!("current_amount_in: {:?}", current_amount_in);
+                            println!("current_sender: {:?}", current_sender);
+                            println!("ctx: {:?}", ctx.borrow());
+                        }
                         if let Some((receiver, amount)) = ctx.deref().borrow_mut().transform(
                             &current_sender.unwrap(),
+                            &next,
                             current_amount_in,
                             state,
                             vm,
                             true,
                         ) {
+                            #[cfg(test)]
+                            {
+                                println!("receiver: {:?}", receiver);
+                                println!("amount: {:?}", amount);
+                            }
                             current_amount_in = amount;
                             current_sender = Some(receiver);
                         } else {
+                            #[cfg(test)]
+                            {
+                                println!("Uniswap Failed");
+                            }
                             return None;
                         }
                     }
                     PairContextTy::Weth(ctx) => {
+                        #[cfg(test)]
+                        {
+                            println!("Weth");
+                            println!("current_amount_in: {:?}", current_amount_in);
+                            println!("current_sender: {:?}", current_sender);
+                            println!("ctx: {:?}", ctx.borrow());
+                        }
                         assert!(current_sender.is_none());
-                        ctx.deref().borrow_mut().transform(&to, amount_in, state, vm, true);
+                        ctx.deref()
+                            .borrow_mut()
+                            .transform(&to, &next, amount_in, state, vm, true);
                         current_sender = Some(to);
                     }
                 }
             }
         }
-        Some(vm.host.evmstate.clone())
+        Some(())
     }
 
     // swapExactTokensForETHSupportingFeeOnTransferTokens
@@ -190,55 +247,54 @@ impl TokenContext {
         amount_in: EVMU256,
         src: EVMAddress,
         state: &mut EVMFuzzState,
-        vm_state: EVMState,
         vm: &mut EVMExecutor<VS, CI, SC>,
         seed: &[u8],
-    ) -> Option<EVMState>
+    ) -> Option<()>
     where
         VS: VMStateT + Default + 'static,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        if self.is_weth {
-            let ctx = self.swaps[0].route[0];
-            if let PairContextTy::Weth(ctx) = ctx {
-                ctx.deref()
-                    .borrow_mut()
-                    .transform(&self.weth_address, amount_in, state, vm, false);
-            } else {
-                panic!("Invalid weth context");
-            }
-        } else {
-            if self.swaps.is_empty() {
-                return None;
-            }
-            let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
-            let mut current_amount_in = amount_in;
-            let mut current_sender = src;
-            let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
-            for pair in path_ctx.route.iter() {
-                match pair {
-                    PairContextTy::Uniswap(ctx) => {
-                        if let Some((receiver, amount)) =
-                            ctx.deref()
-                                .borrow_mut()
-                                .transform(&current_sender, current_amount_in, state, vm, false)
-                        {
-                            current_amount_in = amount;
-                            current_sender = receiver;
-                        } else {
-                            return None;
-                        }
-                    }
-                    PairContextTy::Weth(ctx) => {
-                        ctx.deref()
-                            .borrow_mut()
-                            .transform(&current_sender, current_amount_in, state, vm, false);
-                    }
-                }
-            }
-        }
-        Some(vm.host.evmstate.clone())
+        // if self.is_weth {
+        //     if let PairContextTy::Weth(ctx) = &self.swaps[0].route[0] {
+        //         ctx.deref()
+        //             .borrow_mut()
+        //             .transform(&self.weth_address, amount_in, state, vm, false)
+        //             .map(|_| ())
+        //     } else {
+        //         panic!("Invalid weth context");
+        //     }
+        // } else {
+        //     if self.swaps.is_empty() {
+        //         return None;
+        //     }
+        //     let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
+        //     let mut current_amount_in = amount_in;
+        //     let mut current_sender = src;
+        //     let path_ctx = &self.swaps[seed[0] as usize % self.swaps.len()];
+        //     for pair in path_ctx.route.iter() {
+        //         match pair {
+        //             PairContextTy::Uniswap(ctx) => {
+        //                 if let Some((receiver, amount)) =
+        //                     ctx.deref()
+        //                         .borrow_mut()
+        //                         .transform(&current_sender, current_amount_in, state,
+        // vm, false)                 {
+        //                     current_amount_in = amount;
+        //                     current_sender = receiver;
+        //                 } else {
+        //                     return None;
+        //                 }
+        //             }
+        //             PairContextTy::Weth(ctx) => {
+        //                 ctx.deref()
+        //                     .borrow_mut()
+        //                     .transform(&current_sender, current_amount_in, state, vm,
+        // false);             }
+        //         }
+        //     }
+        // }
+        Some(())
     }
 }
 
@@ -257,7 +313,7 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
         },
         (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
-            pool_fee: 3,
+            pool_fee: 30,
             router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
             factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
             init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
@@ -387,51 +443,110 @@ impl From<SwapInfo> for vm_state::SwapInfo {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use libafl::schedulers::StdScheduler;
+    use alloy_sol_types::abi::token;
+    use libafl::{schedulers::StdScheduler, state::HasMetadata};
 
-    use super::TokenContext;
+    use super::*;
     use crate::{
         evm::{
+            abi::ABIAddressToInstanceMap,
             config::StorageFetchingMode,
+            corpus_initializer::EnvMetadata,
             host::FuzzHost,
             input::ConciseEVMInput,
             onchain::{
                 endpoints::{Chain, OnChainConfig},
                 OnChain,
             },
-            types::{generate_random_address, EVMFuzzState, EVMU256},
+            oracles::v2_pair::reserve_parser,
+            tokens::{
+                uniswap::{fetch_uniswap_path, CODE_REGISTRY},
+                v2_transformer::UniswapPairContext,
+                PairContext,
+                PathContext,
+            },
+            types::{generate_random_address, EVMAddress, EVMFuzzState, EVMU256},
             vm::{EVMExecutor, EVMState},
         },
-        state::FuzzState,
+        generic_vm::vm_state,
+        state::{FuzzState, HasCaller},
     };
+
+    macro_rules! wrap {
+        ($x: expr) => {
+            Rc::new(RefCell::new($x))
+        };
+    }
 
     #[test]
     fn test_buy() {
-        let state = FuzzState::new(0);
+        let mut state = FuzzState::new(0);
+        let dummy_caller = generate_random_address(&mut state);
+        state.add_caller(&dummy_caller);
+        state
+            .metadata_map_mut()
+            .insert::<ABIAddressToInstanceMap>(ABIAddressToInstanceMap::new());
+        state.metadata_map_mut().insert::<EnvMetadata>(EnvMetadata::default());
+
         let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
 
-        let onchain = OnChainConfig::new(Chain::BSC, 0);
-        let onchain_mid = OnChain::new(onchain, StorageFetchingMode::OneByOne);
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(onchain_mid)));
+        let mut onchain = OnChainConfig::new(Chain::ETH, 19044110);
+        let onchain_mid = OnChain::new(onchain.clone(), StorageFetchingMode::OneByOne);
+        let onchain_mid_ptr = wrap!(onchain_mid);
+        fuzz_host.add_middlewares(onchain_mid_ptr);
+        let vm_state = EVMState::default();
+
+        fuzz_host.evmstate = vm_state;
+
+        // weth => usdc => dpr
+
+        let dpr = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+        let nth: usize = 0;
+
+        CODE_REGISTRY
+            .lock()
+            .unwrap()
+            .insert(dpr, onchain.get_contract_code_analyzed(dpr, false));
+
+        let token_ctx = fetch_uniswap_path(&mut onchain, dpr);
+
+        println!("======== Token Swaps ========");
+        token_ctx.swaps.iter().for_each(|x| {
+            println!("route: {:?}", x.route);
+        });
 
         let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
-        let vm_state = EVMState::default();
-        let ctx = TokenContext {
-            swaps: vec![],
-            is_weth: false,
-            weth_address: generate_random_address(&mut state),
-        };
         let r_addr = generate_random_address(&mut state);
-        ctx.buy(
-            EVMU256::from(200000),
+        let res = token_ctx.buy(
+            EVMU256::from_str("2000000000000000000").unwrap(),
             r_addr,
             &mut state,
-            vm_state,
             &mut evm_executor,
-            &[0],
+            &[nth as u8],
         );
+        println!("res: {:?}", res);
+        let result_state = evm_executor.host.evmstate;
+        println!("vm state: {:?}", result_state);
+
+        // print reserve change
+        // token_ctx.swaps[nth].route.iter().for_each(|x| match x {
+        //     PairContextTy::Uniswap(ctx) => {
+        //         let pair_addr = ctx.borrow().pair_address;
+        //         let (r0, r1) =
+        // reserve_parser(&result_state.state[&pair_addr][&EVMU256::from(8)]);
+        //         println!(
+        //             "reserve change: {:?} ({}, {}) => ({}, {})",
+        //             ctx.borrow().pair_address,
+        //             ctx.borrow().initial_reserves.0,
+        //             ctx.borrow().initial_reserves.1,
+        //             r0,
+        //             r1
+        //         );
+        //     }
+        //     _ => {}
+        // });
     }
 }
 //     use std::str::FromStr;
@@ -447,43 +562,42 @@ mod tests {
 //         };
 //     }
 
-//     #[test]
-//     fn test_uniswap_sell() {
-//         let t1 = TokenContext {
-//             swaps: vec![PathContext {
-//                 route: vec![wrap!(PairContext {
-//                     pair_address:
+// #[test]
+// fn test_uniswap_sell() {
+//     let t1 = TokenContext {
+//         swaps: vec![PathContext {
+//             route: vec![wrap!(PairContext {
+//                 pair_address:
 // EVMAddress::from_str("0x0000000000000000000000000000000000000000").unwrap(),
-//                     side: 0,
-//                     uniswap_info:
+//                 side: 0,
+//                 uniswap_info:
 // Arc::new(get_uniswap_info(&UniswapProvider::PancakeSwap, &Chain::BSC)),
-//                     initial_reserves: (Default::default(),
-// Default::default()),                     next_hop:
+//                 initial_reserves: (Default::default(), Default::default()),
+//                 next_hop:
 // EVMAddress::from_str("0x1100000000000000000000000000000000000000").unwrap(),
-//                 })],
-//                 final_pegged_ratio: EVMU256::from(1),
-//                 final_pegged_pair: Rc::new(RefCell::new(None)),
-//             }],
-//             is_weth: false,
-//             weth_address:
+//             })],
+//             final_pegged_ratio: EVMU256::from(1),
+//             final_pegged_pair: Rc::new(RefCell::new(None)),
+//         }],
+//         is_weth: false,
+//         weth_address:
 // EVMAddress::from_str("0xee00000000000000000000000000000000000000").unwrap(),
-//             address:
+//         address:
 // EVMAddress::from_str("0xff00000000000000000000000000000000000000").unwrap(),
-//         };
+//     };
 
-//         let plan = generate_uniswap_router_sell(
-//             &t1,
-//             0,
-//             EVMU256::from(10000),
-//
-// EVMAddress::from_str("0x2300000000000000000000000000000000000000").unwrap(),
-//         );
-//         debug!(
-//             "plan: {:?}",
-//             plan.unwrap()
-//                 .iter()
-//                 .map(|x| hex::encode(x.0.get_bytes()))
-//                 .collect::<Vec<_>>()
-//         );
-//     }
+//     let plan = generate_uniswap_router_sell(
+//         &t1,
+//         0,
+//         EVMU256::from(10000),
+//         EVMAddress::from_str("0x2300000000000000000000000000000000000000").
+// unwrap(),     );
+//     debug!(
+//         "plan: {:?}",
+//         plan.unwrap()
+//             .iter()
+//             .map(|x| hex::encode(x.0.get_bytes()))
+//             .collect::<Vec<_>>()
+//     );
 // }
+// // }

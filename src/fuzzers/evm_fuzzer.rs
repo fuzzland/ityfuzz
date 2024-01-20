@@ -83,6 +83,7 @@ pub fn evm_fuzzer(
         EVMInput,
         EVMFuzzState,
         ConciseEVMInput,
+        EVMQueueExecutor,
     >,
     state: &mut EVMFuzzState,
 ) {
@@ -435,6 +436,7 @@ pub fn evm_fuzzer(
         EVMInput,
         FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
         ConciseEVMInput,
+        EVMQueueExecutor,
     > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
     let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,

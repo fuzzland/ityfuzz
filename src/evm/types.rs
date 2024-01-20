@@ -37,6 +37,7 @@ pub type EVMOracleCtx<'a> = OracleCtx<
     EVMInput,
     EVMFuzzState,
     ConciseEVMInput,
+    EVMQueueExecutor,
 >;
 pub type EVMFuzzMutator<'a> = FuzzMutator<
     EVMState,

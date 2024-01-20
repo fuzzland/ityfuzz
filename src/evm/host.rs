@@ -1211,6 +1211,7 @@ where
         index: EVMU256,
         value: EVMU256,
     ) -> Option<(EVMU256, EVMU256, EVMU256, bool)> {
+        println!("sstore: {:?} {:?} {:?}", address, index, value);
         match self.evmstate.get_mut(&address) {
             Some(account) => {
                 account.insert(index, value);

@@ -1002,20 +1002,27 @@ where
                         .clone()
                 };
 
+                self.host.evmstate = unsafe {
+                    VMStateT::as_any(input.get_state())
+                        .downcast_ref_unchecked::<EVMState>()
+                        .clone()
+                };
+
                 match token_ctx.buy(
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
                     state,
-                    input.get_state().clone(),
                     self,
                     input.get_randomness().as_slice(),
                 ) {
-                    Some(new_state) => unsafe {
+                    Some(()) => unsafe {
                         ExecutionResult {
                             output: vec![],
                             reverted: false,
                             new_state: StagedVMState::new_with_state(
-                                VMStateT::as_any(&new_state).downcast_ref_unchecked::<VS>().clone(),
+                                VMStateT::as_any(&self.host.evmstate.clone())
+                                    .downcast_ref_unchecked::<VS>()
+                                    .clone(),
                             ),
                             additional_info: None,
                         }

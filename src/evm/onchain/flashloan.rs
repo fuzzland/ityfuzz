@@ -40,7 +40,7 @@ use crate::{
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
-    state::{HasCaller, HasItyState},
+    state::{HasCaller, HasItyState, InfantStateState},
 };
 
 pub static mut CAN_LIQUIDATE: bool = false;

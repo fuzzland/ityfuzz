@@ -11,7 +11,7 @@ use crate::{
         oracles::{u512_div_float, ERC20_BUG_IDX},
         producers::erc20::ERC20Producer,
         tokens::TokenContext,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256, EVMU512},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256, EVMU512},
         vm::{EVMExecutor, EVMState},
     },
     generic_vm::vm_state::VMStateT,
@@ -50,8 +50,19 @@ impl IERC20OracleFlashloan {
 }
 
 impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for IERC20OracleFlashloan
+    Oracle<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+        EVMQueueExecutor,
+    > for IERC20OracleFlashloan
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -80,8 +91,12 @@ impl
 
             let _path_idx = ctx.input.get_randomness()[0] as usize;
 
-            let mut liquidation_txs = vec![];
-            let mut swap_infos = vec![];
+            // let mut liquidation_txs = vec![];
+            // let mut swap_infos = vec![];
+
+            {
+                ctx.executor.deref().borrow_mut().host.evmstate = ctx.post_state.clone();
+            }
 
             for (caller, _token_info, _amount) in liquidations_earned {
                 // let txs = _token_info.sell(
@@ -103,31 +118,26 @@ impl
                     _amount,
                     caller,
                     ctx.fuzz_state,
-                    ctx.post_state,
-                    unsafe {
-                        &mut *ctx
-                            .executor
-                            .deref()
-                            .borrow_mut()
-                            .as_any()
-                            .downcast_mut_unchecked::<EVMExecutor<EVMState, ConciseEVMInput, _>>()
-                    },
+                    &mut *ctx.executor.deref().borrow_mut(),
                     ctx.input.get_randomness().as_slice(),
                 );
             }
 
-            let (_out, mut state) = ctx.call_post_batch_dyn(&liquidation_txs);
+            // let (_out, mut state) =
+            // ctx.call_post_batch_dyn(&liquidation_txs);
 
-            let is_reverted = _out.iter().any(|(_, is_success)| !(*is_success));
+            // let is_reverted = _out.iter().any(|(_, is_success)|
+            // !(*is_success));
 
             // Record the swap info for generating foundry in the future.
-            if !is_reverted {
-                state.swap_data = ctx.fuzz_state.get_execution_result().new_state.state.swap_data.clone();
-                for (target, mut abi, _) in swap_infos {
-                    state.swap_data.push(&target, &mut abi);
-                }
-                ctx.fuzz_state.get_execution_result_mut().new_state.state = state;
-            }
+            // if !is_reverted {
+            //     // state.swap_data =
+            //     // ctx.fuzz_state.get_execution_result().new_state.state.
+            // swap_data.clone();     // for (target, mut abi, _) in
+            // swap_infos {     //     state.swap_data.push(&target,
+            // &mut abi);     // }
+            //     ctx.fuzz_state.get_execution_result_mut().new_state.state =
+            // state; }
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();

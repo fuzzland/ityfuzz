@@ -56,6 +56,7 @@ use serde_json::json;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
 
+use self::types::EVMQueueExecutor;
 use crate::{
     fuzzers::evm_fuzzer::evm_fuzzer,
     oracle::{Oracle, Producer},
@@ -478,6 +479,7 @@ pub fn evm_main(args: EvmArgs) {
                         ConciseEVMInput,
                     >,
                     ConciseEVMInput,
+                    EVMQueueExecutor,
                 >,
             >,
         >,
@@ -497,6 +499,7 @@ pub fn evm_main(args: EvmArgs) {
                     EVMInput,
                     EVMFuzzState,
                     ConciseEVMInput,
+                    EVMQueueExecutor,
                 >,
             >,
         >,

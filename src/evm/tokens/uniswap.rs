@@ -3,10 +3,13 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use itertools::Itertools;
+use lazy_static::lazy_static;
+use revm_interpreter::BytecodeLocked;
+use revm_primitives::Bytecode;
 use tracing::{info, warn};
 
 use super::{
@@ -35,6 +38,10 @@ pub struct BasicInfo {
 
 const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
+lazy_static! {
+    pub static ref CODE_REGISTRY: Mutex<HashMap<EVMAddress, Arc<BytecodeLocked>>> = Mutex::new(HashMap::new());
+}
+
 pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress) -> TokenContext {
     let token = format!("{:?}", token_address);
     let info: Info = find_path_subgraph(onchain, &token);
@@ -48,6 +55,15 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
     let is_weth = basic_info.is_weth;
 
     let routes: Vec<Vec<PairData>> = info.routes;
+
+    macro_rules! register_code {
+        ($addr: expr) => {
+            CODE_REGISTRY
+                .lock()
+                .unwrap()
+                .insert($addr, onchain.get_contract_code_analyzed($addr, false));
+        };
+    }
 
     let paths_parsed = routes
         .iter()
@@ -69,6 +85,7 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
                         ),
                         in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
                     }));
+                    register_code!(inner.borrow().next_hop);
                     path_parsed.route.push(super::PairContextTy::Uniswap(inner));
                 }
                 "pegged" => {
@@ -86,6 +103,7 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
                         ),
                         in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
                     }));
+                    register_code!(inner_pair.borrow().next_hop);
                     path_parsed.route.push(super::PairContextTy::Uniswap(inner_pair));
                     assert_eq!(pair.next, basic_info.weth);
                     let inner = Rc::new(RefCell::new(WethContext {
@@ -94,9 +112,9 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
                     path_parsed.route.push(super::PairContextTy::Weth(inner));
                 }
                 "pegged_weth" => {
-                    let inner = Rc::new(RefCell::new(WethContext {
-                        weth_address: EVMAddress::from_str(pair.in_token.as_str()).expect("failed to parse pair"),
-                    }));
+                    let weth_address = EVMAddress::from_str(pair.in_token.as_str()).expect("failed to parse pair");
+                    register_code!(weth_address);
+                    let inner = Rc::new(RefCell::new(WethContext { weth_address }));
                     path_parsed.route.push(super::PairContextTy::Weth(inner));
                 }
                 _ => unimplemented!("unknown swap path source"),

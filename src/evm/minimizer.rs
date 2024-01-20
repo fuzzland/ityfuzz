@@ -84,6 +84,7 @@ type EVMOracleFeedback<'a> = OracleFeedback<
     EVMInput,
     FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
     ConciseEVMInput,
+    EVMQueueExecutor,
 >;
 
 impl<E: libafl::executors::HasObservers>

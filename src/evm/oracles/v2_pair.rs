@@ -11,7 +11,7 @@ use crate::{
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
         oracles::V2_PAIR_BUG_IDX,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
         vm::EVMState,
     },
     oracle::{Oracle, OracleCtx},
@@ -33,8 +33,19 @@ impl PairBalanceOracle {
 }
 
 impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for PairBalanceOracle
+    Oracle<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+        EVMQueueExecutor,
+    > for PairBalanceOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -53,6 +64,7 @@ impl
             EVMInput,
             EVMFuzzState,
             ConciseEVMInput,
+            EVMQueueExecutor,
         >,
         _stage: u64,
     ) -> Vec<u64> {

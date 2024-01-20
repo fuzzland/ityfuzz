@@ -14,7 +14,7 @@ use libafl::schedulers::Scheduler;
 use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{PairContext, UniswapInfo};
+use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
 use crate::{
     evm::{
         abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
@@ -26,6 +26,7 @@ use crate::{
         vm_executor::GenericVM,
         vm_state::{self, VMStateT},
     },
+    get_code_tokens,
     input::ConciseSerde,
     is_call_success,
     scale,
@@ -40,6 +41,7 @@ impl PairContext for WethContext {
     fn transform<VS, CI, SC>(
         &self,
         src: &EVMAddress,
+        next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
         vm: &mut EVMExecutor<VS, CI, SC>,
@@ -58,18 +60,13 @@ impl PairContext for WethContext {
             .oracle_recheck_balance
             .insert(self.weth_address);
         let addr = self.weth_address;
-        let code = vm
-            .host
-            .code
-            .get(&addr)
-            .unwrap_or_else(|| panic!("no code {:?}", addr)) // todo: warm address
-            .clone();
+        let code = get_code_tokens!(addr, vm);
         let call = Contract::new_with_context_analyzed(
             Bytes::from(vec![]),
             code,
             &CallContext {
                 address: addr,
-                caller: *src,
+                caller: *next,
                 code_address: addr,
                 apparent_value: amount,
                 scheme: CallScheme::Call,
