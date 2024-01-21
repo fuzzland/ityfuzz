@@ -193,10 +193,12 @@ impl TokenContext {
                     PairContextTy::Uniswap(ctx) => {
                         #[cfg(test)]
                         {
-                            println!("Uniswap");
-                            println!("current_amount_in: {:?}", current_amount_in);
-                            println!("current_sender: {:?}", current_sender);
-                            println!("ctx: {:?}", ctx.borrow());
+                            println!("======== Uniswap ========");
+                            println!("pair = {:?}", ctx.borrow().pair_address);
+                            println!(
+                                "{:?} => {:?} ({}/{:?})",
+                                current_sender, next, current_amount_in, current_amount_in
+                            );
                         }
                         if let Some((receiver, amount)) = ctx.deref().borrow_mut().transform(
                             &current_sender.unwrap(),
@@ -208,15 +210,14 @@ impl TokenContext {
                         ) {
                             #[cfg(test)]
                             {
-                                println!("receiver: {:?}", receiver);
-                                println!("amount: {:?}", amount);
+                                println!("Hop out = {}/{:?}", amount, amount);
                             }
                             current_amount_in = amount;
                             current_sender = Some(receiver);
                         } else {
                             #[cfg(test)]
                             {
-                                println!("Uniswap Failed");
+                                println!("!!! Uniswap Failed !!!");
                             }
                             return None;
                         }
@@ -224,10 +225,11 @@ impl TokenContext {
                     PairContextTy::Weth(ctx) => {
                         #[cfg(test)]
                         {
-                            println!("Weth");
-                            println!("current_amount_in: {:?}", current_amount_in);
-                            println!("current_sender: {:?}", current_sender);
-                            println!("ctx: {:?}", ctx.borrow());
+                            println!("======== Weth ========");
+                            println!(
+                                "{:?} => {:?} ({}/{:?})",
+                                current_sender, next, current_amount_in, current_amount_in
+                            );
                         }
                         assert!(current_sender.is_none());
                         ctx.deref()
@@ -478,8 +480,7 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_buy() {
+    fn buy(token: EVMAddress, amount: EVMU256, nth: usize, block: u64) {
         let mut state = FuzzState::new(0);
         let dummy_caller = generate_random_address(&mut state);
         state.add_caller(&dummy_caller);
@@ -490,7 +491,7 @@ mod tests {
 
         let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
 
-        let mut onchain = OnChainConfig::new(Chain::ETH, 19044110);
+        let mut onchain = OnChainConfig::new(Chain::ETH, block);
         let onchain_mid = OnChain::new(onchain.clone(), StorageFetchingMode::OneByOne);
         let onchain_mid_ptr = wrap!(onchain_mid);
         fuzz_host.add_middlewares(onchain_mid_ptr);
@@ -498,55 +499,93 @@ mod tests {
 
         fuzz_host.evmstate = vm_state;
 
-        // weth => usdc => dpr
-
-        let dpr = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
-        let nth: usize = 0;
-
         CODE_REGISTRY
             .lock()
             .unwrap()
-            .insert(dpr, onchain.get_contract_code_analyzed(dpr, false));
+            .insert(token, onchain.get_contract_code_analyzed(token, false));
 
-        let token_ctx = fetch_uniswap_path(&mut onchain, dpr);
+        let token_ctx = fetch_uniswap_path(&mut onchain, token);
 
         println!("======== Token Swaps ========");
         token_ctx.swaps.iter().for_each(|x| {
-            println!("route: {:?}", x.route);
+            println!("route: {:?}", x.route.iter());
         });
+        println!("selected route: {:?}", token_ctx.swaps[nth].route);
 
         let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let r_addr = generate_random_address(&mut state);
-        let res = token_ctx.buy(
-            EVMU256::from_str("2000000000000000000").unwrap(),
-            r_addr,
-            &mut state,
-            &mut evm_executor,
-            &[nth as u8],
-        );
-        println!("res: {:?}", res);
+        let res = token_ctx.buy(amount, r_addr, &mut state, &mut evm_executor, &[nth as u8]);
+
+        if res.is_none() {
+            println!("buy failed");
+            return;
+        }
+
         let result_state = evm_executor.host.evmstate;
-        println!("vm state: {:?}", result_state);
 
         // print reserve change
-        // token_ctx.swaps[nth].route.iter().for_each(|x| match x {
-        //     PairContextTy::Uniswap(ctx) => {
-        //         let pair_addr = ctx.borrow().pair_address;
-        //         let (r0, r1) =
-        // reserve_parser(&result_state.state[&pair_addr][&EVMU256::from(8)]);
-        //         println!(
-        //             "reserve change: {:?} ({}, {}) => ({}, {})",
-        //             ctx.borrow().pair_address,
-        //             ctx.borrow().initial_reserves.0,
-        //             ctx.borrow().initial_reserves.1,
-        //             r0,
-        //             r1
-        //         );
-        //     }
-        //     _ => {}
-        // });
+        println!("======== Reserve Changes ========");
+
+        token_ctx.swaps[nth].route.iter().for_each(|x| match x {
+            PairContextTy::Uniswap(ctx) => {
+                let pair_addr = ctx.borrow().pair_address;
+                let (r0, r1) = reserve_parser(&result_state.state[&pair_addr][&EVMU256::from(8)]);
+                println!(
+                    "{:?} ({}, {}) => ({}, {}), slot = {:?}",
+                    ctx.borrow().pair_address,
+                    ctx.borrow().initial_reserves.0,
+                    ctx.borrow().initial_reserves.1,
+                    r0,
+                    r1,
+                    result_state.state[&pair_addr][&EVMU256::from(8)]
+                );
+            }
+            _ => {}
+        });
+    }
+
+    #[test]
+    fn test_buy_single_hop() {
+        let token = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // dpr => weth
+        buy(token, amount, 1, 19044110);
+    }
+
+    #[test]
+    fn test_buy_two_hop() {
+        let token = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // dpr => usdc => weth
+        buy(token, amount, 0, 19044110);
+    }
+
+    // https://www.tdly.co/shared/simulation/c1d5d70f-8718-4740-961a-3f789a0834c1
+    #[test]
+    fn test_buy_one_hop_with_fee() {
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => weth
+        buy(token, amount, 0, 19044110);
+    }
+
+    // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
+    #[test]
+    fn test_buy_two_hop_with_fee() {
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => OSAK => weth
+        buy(token, amount, 1, 19044110);
+    }
+
+    #[test]
+    fn test_buy_three_hop_with_fee() {
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => weth
+        buy(token, amount, 2, 19044110);
     }
 }
 //     use std::str::FromStr;

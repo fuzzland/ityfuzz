@@ -313,6 +313,10 @@ fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {
         } else {
             EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_0 - 1))
         };
+
+        if min_r0 == EVMU256::ZERO {
+            return EVMU256::ZERO;
+        }
         reserves_0 / min_r0
     } else {
         let min_r1 = if pair_data.decimals_1 == 0 {
@@ -320,6 +324,11 @@ fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {
         } else {
             EVMU256::from(10).pow(EVMU256::from(pair_data.decimals_1 - 1))
         };
+
+        if min_r1 == EVMU256::ZERO {
+            return EVMU256::ZERO;
+        }
+
         reserves_1 / min_r1
     };
 

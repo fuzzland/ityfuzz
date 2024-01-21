@@ -42,7 +42,7 @@ pub struct UniswapPairContext {
 
 impl UniswapPairContext {
     pub fn calculate_amounts_out(&self, amount_in: EVMU256, reserve_in: EVMU256, reserve_out: EVMU256) -> EVMU256 {
-        println!("fee: {}", self.uniswap_info.pool_fee);
+        // println!("fee: {}", self.uniswap_info.pool_fee);
         let amount_in_with_fee = amount_in * EVMU256::from(10000 - self.uniswap_info.pool_fee);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = reserve_in * EVMU256::from(10000) + amount_in_with_fee;
@@ -138,10 +138,12 @@ impl PairContext for UniswapPairContext {
                     if let Some(num) = EVMU256::try_from_be_slice(interp.return_value().to_vec().as_slice()) {
                         num
                     } else {
+                        println!("balance of failed");
+                        println!("return value: {:?}", interp.return_value());
                         return None;
                     };
 
-                println!("balance of {:?}@{:?}: {:?}", $who, addr, in_balance);
+                // println!("balance of {:?}@{:?}: {:?}", $who, addr, in_balance);
                 in_balance
             }};
         }
@@ -165,19 +167,21 @@ impl PairContext for UniswapPairContext {
                         scheme: CallScheme::Call,
                     },
                 );
-                println!("pre_vm_state: {:?}", vm.host.evmstate.state);
+                // println!("pre_vm_state: {:?}", vm.host.evmstate.state);
 
                 let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
 
                 let ir = vm.host.run_inspect(&mut interp, state);
-                println!("post_vm_state: {:?}", vm.host.evmstate.state);
-                println!("transfer return value: {:?}", interp.return_value());
-                println!("bytes: {:?}", transfer_bytes($dst, $amt));
-                println!("from: {:?}, {:?}", $who, addr);
+                // println!("post_vm_state: {:?}", vm.host.evmstate.state);
+                // println!("transfer return value: {:?}", interp.return_value());
+                // println!("bytes: {:?}", transfer_bytes($dst, $amt));
+                // println!("from: {:?}, {:?}", $who, addr);
                 if !is_call_success!(ir) {
+                    println!("transfer failed");
+                    println!("return value: {:?}", interp.return_value());
                     return None;
                 }
-                println!("transfer success");
+                // println!("transfer success");
             }};
         }
 
