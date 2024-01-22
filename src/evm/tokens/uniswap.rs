@@ -401,6 +401,11 @@ fn find_path_subgraph(onchain: &mut OnChainConfig, token: &str) -> Info {
 }
 
 mod tests {
+    use super::*;
+    use crate::evm::{
+        onchain::endpoints::Chain::{BSC, ETH},
+        types::EVMAddress,
+    };
 
     #[test]
     fn test_get_pegged_next_hop() {
