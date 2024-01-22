@@ -13,12 +13,12 @@ use crate::{
     oracle::Oracle,
     r#move::{
         input::{ConciseMoveInput, MoveFunctionInput},
+        movevm::MoveVM,
         oracles::TYPED_BUG_BUG_IDX,
         types::{MoveAddress, MoveFuzzState, MoveOracleCtx, MoveOutput, MoveSlotTy},
         vm_state::MoveVMState,
     },
 };
-
 pub struct TypedBugOracle;
 
 impl Default for TypedBugOracle {

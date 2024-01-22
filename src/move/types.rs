@@ -7,6 +7,7 @@ use crate::{
     oracle::OracleCtx,
     r#move::{
         input::{ConciseMoveInput, MoveFunctionInput},
+        movevm::MoveVM,
         vm_state::MoveVMState,
     },
     state::{FuzzState, InfantStateState},

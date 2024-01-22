@@ -8,7 +8,7 @@ use super::{
 use crate::{feedback::OracleFeedback, minimizer::SequentialMinimizer, tracer::TxnTrace};
 
 pub struct MoveMinimizer;
-
+use crate::r#move::movevm::MoveVM;
 type MoveOracleFeedback<'a> = OracleFeedback<
     'a,
     MoveVMState,
