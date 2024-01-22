@@ -39,7 +39,7 @@ pub struct BasicInfo {
 const MAX_HOPS: u32 = 2; // Assuming the value of MAX_HOPS
 
 lazy_static! {
-    pub static ref CODE_REGISTRY: Mutex<HashMap<EVMAddress, Arc<BytecodeLocked>>> = Mutex::new(HashMap::new());
+    pub static ref CODE_REGISTRY: Mutex<HashMap<EVMAddress, Bytecode>> = Mutex::new(HashMap::new());
 }
 
 pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress) -> TokenContext {
@@ -451,6 +451,17 @@ mod tests {
         let v = fetch_uniswap_path(
             &mut config,
             EVMAddress::from_str("0xcff086ead392ccb39c49ecda8c974ad5238452ac").unwrap(),
+        );
+        assert!(!v.swaps.is_empty());
+        assert!(!v.weth_address.is_zero());
+    }
+
+    #[test]
+    fn test_fetch_uniswap_path_wbnb() {
+        let mut config = OnChainConfig::new(BSC, 22055611);
+        let v = fetch_uniswap_path(
+            &mut config,
+            EVMAddress::from_str("0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c").unwrap(),
         );
         assert!(!v.swaps.is_empty());
         assert!(!v.weth_address.is_zero());

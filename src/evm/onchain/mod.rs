@@ -180,7 +180,7 @@ where
             // SLOAD
             0x54 => {
                 let address = interp.contract.address;
-                let slot_idx = interp.stack.peek(0).unwrap();
+                let slot_idx: alloy_primitives::Uint<256, 4> = interp.stack.peek(0).unwrap();
 
                 macro_rules! load_data {
                     ($func: ident, $stor: ident, $key: ident) => {{
@@ -398,7 +398,7 @@ impl OnChain {
         let mut abi_hashes_to_add = HashSet::new();
         if is_proxy_call {
             // check caller's hash and see what is missing
-            let caller_hashes = match host.address_to_hash.get(&caller) {
+            let caller_hashes: Vec<[u8; 4]> = match host.address_to_hash.get(&caller) {
                 Some(v) => v.clone(),
                 None => vec![],
             };

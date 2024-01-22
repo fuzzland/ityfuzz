@@ -298,7 +298,7 @@ where
                 //    in state
                 // 2. Use Heimdall to extract abi
                 // 3. Reconfirm on failures of heimdall
-                debug!("Contract {} has no abi", contract.name);
+                info!("Contract {} has no abi", contract.name);
                 let contract_code = hex::encode(contract.code.clone());
                 let sigs = extract_sig_from_contract(&contract_code);
                 let mut unknown_sigs: usize = 0;
@@ -311,7 +311,7 @@ where
                 }
 
                 if unknown_sigs >= sigs.len() / 30 {
-                    debug!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
+                    info!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()
                         .map(|abi| {

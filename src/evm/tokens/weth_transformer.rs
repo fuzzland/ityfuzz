@@ -37,6 +37,14 @@ pub struct WethContext {
     pub weth_address: EVMAddress,
 }
 
+pub fn withdraw_bytes(amount: EVMU256) -> Bytes {
+    let mut ret = Vec::new();
+    ret.extend_from_slice(&[0xa9, 0x05, 0x9c, 0xbb]); // transfer to null
+    ret.extend_from_slice(&[0x00; 32]); // padding
+    ret.extend_from_slice(&amount.to_be_bytes::<32>()); // amount
+    Bytes::from(ret)
+}
+
 impl PairContext for WethContext {
     fn transform<VS, CI, SC>(
         &self,
@@ -52,32 +60,62 @@ impl PairContext for WethContext {
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        assert!(reverse, "weth transform must be reverse");
-        vm.host.evmstate.flashloan_data.owed += EVMU512::from(amount) * scale!();
-        vm.host
-            .evmstate
-            .flashloan_data
-            .oracle_recheck_balance
-            .insert(self.weth_address);
+        if reverse {
+            // println!("bought {:?} weth", amount);
+            // buy
+            vm.host.evmstate.flashloan_data.owed += EVMU512::from(amount) * scale!();
+            vm.host
+                .evmstate
+                .flashloan_data
+                .oracle_recheck_balance
+                .insert(self.weth_address);
+        } else {
+            // println!("sold {:?} weth", amount);
+            // sell
+            vm.host.evmstate.flashloan_data.earned += EVMU512::from(amount) * scale!();
+            vm.host
+                .evmstate
+                .flashloan_data
+                .oracle_recheck_balance
+                .insert(self.weth_address);
+        }
+
+        // todo: fix real balance
+        vm.host.evmstate.balance.insert(self.weth_address, EVMU256::MAX);
+
         let addr = self.weth_address;
-        let code = get_code_tokens!(addr, vm);
+        let code = get_code_tokens!(addr, vm, state);
         let call = Contract::new_with_context_analyzed(
-            Bytes::from(vec![]),
+            if reverse {
+                // buy
+                Bytes::from(vec![])
+            } else {
+                // sell
+                withdraw_bytes(amount)
+            },
             code,
             &CallContext {
                 address: addr,
-                caller: *next,
+                caller: if reverse { *next } else { *src },
                 code_address: addr,
-                apparent_value: amount,
+                apparent_value: if reverse { amount } else { EVMU256::ZERO },
                 scheme: CallScheme::Call,
             },
         );
-        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+        let mut interp = Interpreter::new_with_memory_limit(call.clone(), 1e10 as u64, false, MEM_LIMIT);
         let ir = vm.host.run_inspect(&mut interp, state);
         if !is_call_success!(ir) {
+            println!(
+                "call: {:?} => {:?} {:?}",
+                call.caller,
+                call.address,
+                hex::encode(call.input)
+            );
+            panic!("Weth call failed: {:?} {:?}", ir, interp.return_value());
             return None;
         }
-        Some((*src, amount))
+
+        Some((*next, amount))
     }
 
     fn name(&self) -> String {

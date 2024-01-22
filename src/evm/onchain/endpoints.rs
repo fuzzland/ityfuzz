@@ -238,7 +238,7 @@ pub struct OnChainConfig {
     pair_cache: HashMap<EVMAddress, Vec<PairData>>,
     slot_cache: HashMap<(EVMAddress, EVMU256), EVMU256>,
     code_cache: HashMap<EVMAddress, String>,
-    code_cache_analyzed: HashMap<EVMAddress, Arc<BytecodeLocked>>,
+    code_cache_analyzed: HashMap<EVMAddress, Bytecode>,
     price_cache: HashMap<EVMAddress, Option<(u32, u32)>>,
     abi_cache: HashMap<EVMAddress, Option<String>>,
     storage_dump_cache: HashMap<EVMAddress, Option<Arc<HashMap<EVMU256, EVMU256>>>>,
@@ -693,7 +693,7 @@ impl OnChainConfig {
         resp_string
     }
 
-    pub fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Arc<BytecodeLocked> {
+    pub fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
         if self.code_cache_analyzed.contains_key(&address) {
             return self.code_cache_analyzed[&address].clone();
         }
@@ -702,8 +702,7 @@ impl OnChainConfig {
         let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(
             hex::decode(code).expect("fail to decode contract code"),
         )));
-        let contract_code = Arc::new(BytecodeLocked::try_from(to_analysed(contract_code)).unwrap());
-
+        let contract_code = to_analysed(contract_code);
         self.code_cache_analyzed.insert(address, contract_code.clone());
         contract_code
     }

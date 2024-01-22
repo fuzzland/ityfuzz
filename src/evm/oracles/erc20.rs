@@ -70,7 +70,20 @@ impl
 
     fn oracle(&self, ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
         use crate::evm::input::EVMInputT;
-        // println!("Oracle: {:?}", ctx.input.get_randomness());
+        ctx.fuzz_state
+            .get_execution_result_mut()
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_balance
+            .clear();
+        ctx.fuzz_state
+            .get_execution_result_mut()
+            .new_state
+            .state
+            .flashloan_data
+            .oracle_recheck_reserve
+            .clear();
         let liquidation_percent = ctx.input.get_liquidation_percent();
         if liquidation_percent > 0 {
             // println!("Liquidation percent: {}", liquidation_percent);
@@ -78,12 +91,10 @@ impl
             let mut liquidations_earned = Vec::new();
 
             for ((caller, token), new_balance) in self.erc20_producer.deref().borrow().balances.iter() {
-                let token_info = self.known_tokens.get(token).expect("Token not found");
-
-                // prev_balance is nonexistent
-                // #[cfg(feature = "flashloan_debug")]
-
-                if *new_balance > EVMU256::ZERO {
+                // println!("token: {:?}, new_balance: {:?}", token, new_balance);
+                if *new_balance > EVMU256::ZERO &&
+                    let Some(token_info) = self.known_tokens.get(token)
+                {
                     let liq_amount = *new_balance * liquidation_percent / EVMU256::from(10);
                     liquidations_earned.push((*caller, token_info, liq_amount));
                 }
@@ -91,62 +102,41 @@ impl
 
             let _path_idx = ctx.input.get_randomness()[0] as usize;
 
-            // let mut liquidation_txs = vec![];
-            // let mut swap_infos = vec![];
-
             {
                 ctx.executor.deref().borrow_mut().host.evmstate = ctx.post_state.clone();
             }
-
+            let mut failed = false;
             for (caller, _token_info, _amount) in liquidations_earned {
-                // let txs = _token_info.sell(
-                //     _amount,
-                //     ctx.fuzz_state.callers_pool[0],
-                //     ctx.input.get_randomness().as_slice(),
-                // );
-
-                // liquidation_txs.extend(
-                //     txs.iter()
-                //         .map(|(addr, abi, _)| (caller, *addr,
-                // Bytes::from(abi.get_bytes()))), );
-
-                // if let Some(swap_info) = txs.last() {
-                //     swap_infos.push(swap_info.clone());
-                // }
-
-                _token_info.sell(
-                    _amount,
-                    caller,
-                    ctx.fuzz_state,
-                    &mut *ctx.executor.deref().borrow_mut(),
-                    ctx.input.get_randomness().as_slice(),
-                );
+                if _token_info
+                    .sell(
+                        _amount,
+                        caller,
+                        ctx.fuzz_state,
+                        &mut *ctx.executor.deref().borrow_mut(),
+                        ctx.input.get_randomness().as_slice(),
+                    )
+                    .is_none()
+                {
+                    failed = true;
+                    break;
+                }
             }
-
-            // let (_out, mut state) =
-            // ctx.call_post_batch_dyn(&liquidation_txs);
-
-            // let is_reverted = _out.iter().any(|(_, is_success)|
-            // !(*is_success));
-
-            // Record the swap info for generating foundry in the future.
-            // if !is_reverted {
-            //     // state.swap_data =
-            //     // ctx.fuzz_state.get_execution_result().new_state.state.
-            // swap_data.clone();     // for (target, mut abi, _) in
-            // swap_infos {     //     state.swap_data.push(&target,
-            // &mut abi);     // }
-            //     ctx.fuzz_state.get_execution_result_mut().new_state.state =
-            // state; }
+            if !failed {
+                ctx.fuzz_state.get_execution_result_mut().new_state.state =
+                    ctx.executor.deref().borrow_mut().host.evmstate.clone();
+            }
         }
 
         let exec_res = ctx.fuzz_state.get_execution_result_mut();
-        exec_res.new_state.state.flashloan_data.oracle_recheck_balance.clear();
-        exec_res.new_state.state.flashloan_data.oracle_recheck_reserve.clear();
 
         if exec_res.new_state.state.has_post_execution() {
             return vec![];
         }
+
+        // println!(
+        //     "balance: {:?} - {:?}",
+        //     exec_res.new_state.state.flashloan_data.earned,
+        // exec_res.new_state.state.flashloan_data.owed );
 
         if exec_res.new_state.state.flashloan_data.earned > exec_res.new_state.state.flashloan_data.owed &&
             exec_res.new_state.state.flashloan_data.earned - exec_res.new_state.state.flashloan_data.owed >

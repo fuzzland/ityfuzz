@@ -40,6 +40,8 @@ pub struct UniswapPairContext {
     pub initial_reserves: (EVMU256, EVMU256),
 }
 
+const MAX_RESERVE: u128 = 1 << 112;
+
 impl UniswapPairContext {
     pub fn calculate_amounts_out(&self, amount_in: EVMU256, reserve_in: EVMU256, reserve_out: EVMU256) -> EVMU256 {
         // println!("fee: {}", self.uniswap_info.pool_fee);
@@ -86,6 +88,45 @@ pub fn balance_of_bytes(addr: &EVMAddress) -> Bytes {
     Bytes::from(ret)
 }
 
+impl UniswapPairContext {
+    pub fn initial_transfer<VS, CI, SC>(
+        &self,
+        src: &EVMAddress,
+        next: &EVMAddress,
+        amount: EVMU256,
+        state: &mut EVMFuzzState,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+    ) -> Option<()>
+    where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    {
+        let call = Contract::new_with_context_analyzed(
+            transfer_bytes(next, amount),
+            get_code_tokens!(self.in_token_address, vm, state),
+            &CallContext {
+                address: self.in_token_address,
+                caller: *src,
+                code_address: self.in_token_address,
+                apparent_value: EVMU256::ZERO,
+                scheme: CallScheme::Call,
+            },
+        );
+
+        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+        let ir = vm.host.run_inspect(&mut interp, state);
+        if !is_call_success!(ir) {
+            // println!("transfer failed1");
+            // println!("return value: {:?}", interp.return_value());
+            return None;
+        } else {
+            // println!("transfer success");
+            return Some(());
+        }
+    }
+}
+
 impl PairContext for UniswapPairContext {
     fn transform<VS, CI, SC>(
         &self,
@@ -107,8 +148,8 @@ impl PairContext for UniswapPairContext {
             (self.in_token_address, self.next_hop, self.side)
         };
 
-        let in_token_code = get_code_tokens!(in_token_address, vm);
-        let out_token_code = get_code_tokens!(out_token_address, vm);
+        let in_token_code = get_code_tokens!(in_token_address, vm, state);
+        let out_token_code = get_code_tokens!(out_token_address, vm, state);
 
         // get balance of pair's token
         macro_rules! balanceof_token {
@@ -138,8 +179,8 @@ impl PairContext for UniswapPairContext {
                     if let Some(num) = EVMU256::try_from_be_slice(interp.return_value().to_vec().as_slice()) {
                         num
                     } else {
-                        println!("balance of failed");
-                        println!("return value: {:?}", interp.return_value());
+                        // println!("balance of failed");
+                        // println!("return value: {:?}", interp.return_value());
                         return None;
                     };
 
@@ -167,22 +208,32 @@ impl PairContext for UniswapPairContext {
                         scheme: CallScheme::Call,
                     },
                 );
+
+                // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);
                 // println!("pre_vm_state: {:?}", vm.host.evmstate.state);
 
                 let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
 
                 let ir = vm.host.run_inspect(&mut interp, state);
-                // println!("post_vm_state: {:?}", vm.host.evmstate.state);
-                // println!("transfer return value: {:?}", interp.return_value());
                 // println!("bytes: {:?}", transfer_bytes($dst, $amt));
-                // println!("from: {:?}, {:?}", $who, addr);
+                // println!("from: {:?} => {:?}, {:?}", $who, $dst, addr);
                 if !is_call_success!(ir) {
-                    println!("transfer failed");
-                    println!("return value: {:?}", interp.return_value());
+                    // println!("transfer failed2");
+                    // println!("return value: {:?}", interp.return_value());
                     return None;
                 }
                 // println!("transfer success");
             }};
+        }
+
+        // 0. ensure not locked, check unlock slot at 0xc
+        if let Some(slots) = vm.host.evmstate.state.get(&self.pair_address) {
+            if let Some(slot) = slots.get(&EVMU256::from(0xc)) {
+                if *slot == EVMU256::ZERO {
+                    // locked
+                    return None;
+                }
+            }
         }
 
         // 1. get balance of pair's token
@@ -191,9 +242,9 @@ impl PairContext for UniswapPairContext {
             .evmstate
             .state
             .get(&self.pair_address)
-            .map(|x| x.get(&EVMU256::from(8)).unwrap().clone());
+            .map(|x| x.get(&EVMU256::from(8)).clone());
 
-        let reserve = if let Some(reserve_slot) = &reserve_slot {
+        let reserve = if let Some(Some(reserve_slot)) = &reserve_slot {
             reserve_parser(reserve_slot)
         } else {
             (self.initial_reserves.0, self.initial_reserves.1)
@@ -228,6 +279,11 @@ impl PairContext for UniswapPairContext {
             new_balance
         };
 
+        let max_reserve = EVMU256::from(MAX_RESERVE);
+        if new_reserve_0 > max_reserve || new_reserve_1 > max_reserve {
+            return None;
+        }
+
         // #[cfg(test)]
         // {
         //     println!("amount in: {:?}", amount_in);
@@ -260,7 +316,7 @@ impl PairContext for UniswapPairContext {
             .flashloan_data
             .oracle_recheck_reserve
             .insert(self.pair_address);
-        Some((self.pair_address, amount_out))
+        Some((*next, amount_out))
     }
 
     fn name(&self) -> String {

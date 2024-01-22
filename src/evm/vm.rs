@@ -1001,13 +1001,11 @@ where
                         .unwrap_or_else(|| panic!("unknown token : {:?}", token))
                         .clone()
                 };
-
                 self.host.evmstate = unsafe {
                     VMStateT::as_any(input.get_state())
                         .downcast_ref_unchecked::<EVMState>()
                         .clone()
                 };
-
                 match token_ctx.buy(
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
@@ -1041,59 +1039,6 @@ where
                         }
                     }
                 }
-
-                // let mut calldata = token_ctx.buy(
-                //     input.get_txn_value().unwrap(),
-                //     input.get_caller(),
-                //     input.get_randomness().as_slice(),
-                // );
-                // if !calldata.is_empty() {
-                //     assert_eq!(calldata.len(), 1);
-                //     let (target, abi, value) = &mut calldata[0];
-                //     let bys = abi.get_bytes();
-                //     let mut res = self.fast_call(
-                //         *target,
-                //         Bytes::from(bys),
-                //         input.get_state(),
-                //         state,
-                //         *value,
-                //         input.get_caller(),
-                //     );
-                //     if let Some(ref m) = self.host.flashloan_middleware {
-                //         m.deref()
-                //             .borrow_mut()
-                //             .analyze_call(input, &mut
-                // res.new_state.flashloan_data)     }
-
-                //     // Record the swap info for generating foundry in the
-                // future.     res.new_state.swap_data.
-                // push(target, abi);
-
-                //     unsafe {
-                //         ExecutionResult {
-                //             output: res.output.to_vec(),
-                //             reverted: !is_call_success!(res.ret),
-                //             new_state: StagedVMState::new_with_state(
-                //
-                // VMStateT::as_any(&res.new_state).
-                // downcast_ref_unchecked::<VS>().clone(),
-                //             ),
-                //             additional_info: None,
-                //         }
-                //     }
-                // } else {
-                //     ExecutionResult {
-                //         // we don't have enough liquidity to buy the token
-                //         output: vec![],
-                //         reverted: false,
-                //         new_state: StagedVMState::new_with_state(unsafe {
-                //             VMStateT::as_any(input.get_state())
-                //                 .downcast_ref_unchecked::<VS>()
-                //                 .clone()
-                //         }),
-                //         additional_info: None,
-                //     }
-                // }
             }
             EVMInputTy::Liquidate => {
                 unreachable!("liquidate should be handled by middleware");

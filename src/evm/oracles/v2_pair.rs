@@ -128,7 +128,7 @@ impl
 
 pub fn reserve_parser(reserve_slot: &EVMU256) -> (EVMU256, EVMU256) {
     let reserve_bytes: [u8; 32] = reserve_slot.to_be_bytes();
-    let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
-    let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
+    let reserve_1 = EVMU256::try_from_be_slice(&reserve_bytes[4..18]).unwrap();
+    let reserve_0 = EVMU256::try_from_be_slice(&reserve_bytes[18..32]).unwrap();
     (reserve_0, reserve_1)
 }

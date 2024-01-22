@@ -277,7 +277,7 @@ where
             middlewares_enabled: false,
             middlewares: Rc::new(RefCell::new(Default::default())),
             coverage_changed: false,
-            flashloan_middleware: None,
+            flashloan_middleware: self.flashloan_middleware.clone(),
             middlewares_latent_call_actions: vec![],
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),

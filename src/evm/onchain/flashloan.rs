@@ -175,11 +175,11 @@ impl Flashloan {
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {
-                            debug!("Unable to liquidate token {:?}", addr);
+                            println!("Unable to liquidate token {:?}", addr);
                         }
                     }
                     None => {
-                        debug!("Unable to liquidate token {:?}", addr);
+                        println!("Unable to liquidate token 2{:?}", addr);
                     }
                 }
             }
