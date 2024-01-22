@@ -21,6 +21,7 @@ type MoveOracleFeedback<'a> = OracleFeedback<
     MoveFunctionInput,
     MoveFuzzState,
     ConciseMoveInput,
+    MoveVM<MoveFunctionInput, MoveFuzzState>,
 >;
 
 impl<E: libafl::executors::HasObservers>

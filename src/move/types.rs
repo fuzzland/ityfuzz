@@ -47,6 +47,7 @@ pub type MoveOracleCtx<'a> = OracleCtx<
     MoveFunctionInput,
     MoveFuzzState,
     ConciseMoveInput,
+    MoveVM<MoveFunctionInput, MoveFuzzState>,
 >;
 
 pub type TypedValue = (Type, Value);

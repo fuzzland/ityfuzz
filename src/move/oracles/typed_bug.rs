@@ -45,6 +45,7 @@ impl
         MoveFunctionInput,
         MoveFuzzState,
         ConciseMoveInput,
+        MoveVM<MoveFunctionInput, MoveFuzzState>,
     > for TypedBugOracle
 {
     fn transition(&self, _ctx: &mut MoveOracleCtx<'_>, _stage: u64) -> u64 {
