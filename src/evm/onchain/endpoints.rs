@@ -1,11 +1,9 @@
 use std::{
-    cell::RefCell,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, HashMap},
     env,
     fmt::Debug,
     hash::{Hash, Hasher},
     panic,
-    rc::Rc,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -15,7 +13,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use retry::{delay::Fixed, retry_with_index, OperationResult};
-use revm_interpreter::{analysis::to_analysed, BytecodeLocked};
+use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{Bytecode, B160};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -24,7 +22,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
-        tokens::{get_uniswap_info, PairContext, PathContext, TokenContext, UniswapProvider},
+        tokens::TokenContext,
         types::{EVMAddress, EVMU256},
     },
 };

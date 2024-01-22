@@ -15,7 +15,7 @@ use crate::{
         oracle::EVMBugResult,
         oracles::ARB_CALL_BUG_IDX,
         srcmap::SOURCE_MAP_PROVIDER,
-        types::{EVMAddress, EVMFuzzExecutor, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
         vm::EVMState,
     },
     oracle::{Oracle, OracleCtx},

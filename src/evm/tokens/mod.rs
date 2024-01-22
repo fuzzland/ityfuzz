@@ -6,22 +6,19 @@ use std::{
     ops::Deref,
     rc::Rc,
     str::FromStr,
-    sync::Arc,
 };
 
 use alloy_primitives::hex;
-use bytes::Bytes;
 use libafl::schedulers::Scheduler;
-use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
     types::{checksum, EVMFuzzState},
-    vm::{EVMExecutor, EVMState, MEM_LIMIT},
+    vm::EVMExecutor,
 };
 use crate::{
     evm::{
-        abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
+        abi::{AArray, BoxedABI},
         onchain::endpoints::Chain,
         types::{EVMAddress, EVMU256},
     },
@@ -30,7 +27,6 @@ use crate::{
         vm_state::{self, VMStateT},
     },
     input::ConciseSerde,
-    is_call_success,
     state::HasCaller,
 };
 
@@ -185,7 +181,7 @@ impl TokenContext {
                 } else {
                     match &path_ctx.route[path_len - nth - 2] {
                         PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
-                        PairContextTy::Weth(ctx) => panic!("Invalid weth context"),
+                        PairContextTy::Weth(_ctx) => panic!("Invalid weth context"),
                     }
                 };
 
@@ -283,7 +279,7 @@ impl TokenContext {
                 } else {
                     match &path_ctx.route[nth + 1] {
                         PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
-                        PairContextTy::Weth(ctx) => state.get_rand_caller(),
+                        PairContextTy::Weth(_ctx) => state.get_rand_caller(),
                     }
                 };
                 match pair {
@@ -500,7 +496,6 @@ impl From<SwapInfo> for vm_state::SwapInfo {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use alloy_sol_types::abi::token;
     use libafl::{schedulers::StdScheduler, state::HasMetadata};
 
     use super::*;
@@ -516,16 +511,10 @@ mod tests {
                 OnChain,
             },
             oracles::v2_pair::reserve_parser,
-            tokens::{
-                uniswap::{fetch_uniswap_path, CODE_REGISTRY},
-                v2_transformer::UniswapPairContext,
-                PairContext,
-                PathContext,
-            },
+            tokens::uniswap::{fetch_uniswap_path, CODE_REGISTRY},
             types::{generate_random_address, EVMAddress, EVMFuzzState, EVMU256},
             vm::{EVMExecutor, EVMState},
         },
-        generic_vm::vm_state,
         state::{FuzzState, HasCaller},
     };
 

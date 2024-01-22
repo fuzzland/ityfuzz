@@ -1,31 +1,17 @@
-use std::{
-    cell::RefCell,
-    collections::{hash_map, HashMap},
-    fmt::Debug,
-    ops::Deref,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use alloy_primitives::hex;
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 
 use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
 use crate::{
     evm::{
-        abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
-        onchain::endpoints::Chain,
         types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::{EVMExecutor, MEM_LIMIT},
     },
-    generic_vm::{
-        vm_executor::GenericVM,
-        vm_state::{self, VMStateT},
-    },
+    generic_vm::vm_state::VMStateT,
     get_code_tokens,
     input::ConciseSerde,
     is_call_success,
@@ -51,8 +37,8 @@ impl UniswapPairContext {
         if denominator == EVMU256::ZERO {
             return EVMU256::ZERO;
         }
-        let amount_out = numerator / denominator;
-        amount_out
+
+        numerator / denominator
     }
 }
 
@@ -119,10 +105,10 @@ impl UniswapPairContext {
         if !is_call_success!(ir) {
             // println!("transfer failed1");
             // println!("return value: {:?}", interp.return_value());
-            return None;
+            None
         } else {
             // println!("transfer success");
-            return Some(());
+            Some(())
         }
     }
 }
@@ -130,9 +116,9 @@ impl UniswapPairContext {
 impl PairContext for UniswapPairContext {
     fn transform<VS, CI, SC>(
         &self,
-        src: &EVMAddress,
+        _src: &EVMAddress,
         next: &EVMAddress,
-        amount: EVMU256,
+        _amount: EVMU256,
         state: &mut EVMFuzzState,
         vm: &mut EVMExecutor<VS, CI, SC>,
         reverse: bool,
@@ -242,7 +228,7 @@ impl PairContext for UniswapPairContext {
             .evmstate
             .state
             .get(&self.pair_address)
-            .map(|x| x.get(&EVMU256::from(8)).clone());
+            .map(|x| x.get(&EVMU256::from(8)));
 
         let reserve = if let Some(Some(reserve_slot)) = &reserve_slot {
             reserve_parser(reserve_slot)
@@ -297,7 +283,7 @@ impl PairContext for UniswapPairContext {
         } else {
             let mut pair = HashMap::new();
             pair.insert(EVMU256::from(8), reserve_update(new_reserve_0, new_reserve_1));
-            vm.host.evmstate.insert(self.pair_address.clone(), pair);
+            vm.host.evmstate.insert(self.pair_address, pair);
         }
 
         // 5. now we have raped the pair, setup flashloan data and transfer out
@@ -320,6 +306,6 @@ impl PairContext for UniswapPairContext {
     }
 
     fn name(&self) -> String {
-        format!("uniswap_v2")
+        "uniswap_v2".to_string()
     }
 }

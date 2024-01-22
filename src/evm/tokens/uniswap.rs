@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::RefCell,
     collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
@@ -8,7 +8,6 @@ use std::{
 
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use revm_interpreter::BytecodeLocked;
 use revm_primitives::Bytecode;
 use tracing::{info, warn};
 
@@ -16,7 +15,6 @@ use super::{
     get_uniswap_info,
     v2_transformer::UniswapPairContext,
     weth_transformer::WethContext,
-    PairContext,
     PathContext,
     TokenContext,
     UniswapProvider,
@@ -107,7 +105,7 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
                     path_parsed.route.push(super::PairContextTy::Uniswap(inner_pair));
                     assert_eq!(pair.next, basic_info.weth);
                     let inner = Rc::new(RefCell::new(WethContext {
-                        weth_address: EVMAddress::from_str(&pair.next.as_str()).expect("failed to parse pair"),
+                        weth_address: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
                     }));
                     path_parsed.route.push(super::PairContextTy::Weth(inner));
                 }
@@ -307,7 +305,7 @@ fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {
 
     // bypass for incorrect decimal implementation
 
-    let liquidity = if pair_data.in_ == 0 {
+    if pair_data.in_ == 0 {
         let min_r0 = if pair_data.decimals_0 == 0 {
             EVMU256::ZERO
         } else {
@@ -330,9 +328,7 @@ fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {
         }
 
         reserves_1 / min_r1
-    };
-
-    liquidity
+    }
 }
 
 fn with_info(routes: Vec<Vec<PairData>>, network: &str, token: &str) -> Info {
@@ -405,13 +401,6 @@ fn find_path_subgraph(onchain: &mut OnChainConfig, token: &str) -> Info {
 }
 
 mod tests {
-    use tracing::debug;
-
-    use super::*;
-    use crate::evm::{
-        onchain::endpoints::Chain::{BSC, ETH},
-        types::EVMAddress,
-    };
 
     #[test]
     fn test_get_pegged_next_hop() {

@@ -1,17 +1,6 @@
-use bytes::Bytes;
-use revm_primitives::Bytecode;
-
 /// Dummy oracle for testing
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::{
-    evm::{
-        srcmap::RawSourceMapInfo,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
-        vm::EVMState,
-    },
-    fuzzer::ORACLE_OUTPUT,
-    oracle::Oracle,
-};
+use crate::evm::input::ConciseEVMInput;
+use crate::{evm::srcmap::RawSourceMapInfo, fuzzer::ORACLE_OUTPUT};
 
 pub struct EVMBugResult {
     pub bug_type: String,

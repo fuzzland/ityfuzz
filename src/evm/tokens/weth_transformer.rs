@@ -1,31 +1,18 @@
-use std::{
-    cell::RefCell,
-    collections::{hash_map, HashMap},
-    fmt::Debug,
-    ops::Deref,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 use alloy_primitives::hex;
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 
-use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
+use super::{uniswap::CODE_REGISTRY, PairContext};
 use crate::{
     evm::{
-        abi::{A256InnerType, AArray, AEmpty, BoxedABI, A256},
-        onchain::endpoints::Chain,
         types::{EVMAddress, EVMFuzzState, EVMU256, EVMU512},
         vm::{EVMExecutor, MEM_LIMIT},
     },
-    generic_vm::{
-        vm_executor::GenericVM,
-        vm_state::{self, VMStateT},
-    },
+    generic_vm::vm_state::VMStateT,
     get_code_tokens,
     input::ConciseSerde,
     is_call_success,

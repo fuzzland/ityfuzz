@@ -12,7 +12,7 @@ use crate::{
         producers::erc20::ERC20Producer,
         tokens::TokenContext,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256, EVMU512},
-        vm::{EVMExecutor, EVMState},
+        vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
     oracle::Oracle,
