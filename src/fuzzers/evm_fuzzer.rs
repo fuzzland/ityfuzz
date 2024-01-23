@@ -83,13 +83,14 @@ pub fn evm_fuzzer(
         EVMInput,
         EVMFuzzState,
         ConciseEVMInput,
+        EVMQueueExecutor,
     >,
     state: &mut EVMFuzzState,
 ) {
     info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
     // create work dir if not exists
-    let path = Path::new(config.work_dir.as_str());
+    let _path = Path::new(config.work_dir.as_str());
 
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
@@ -435,6 +436,7 @@ pub fn evm_fuzzer(
         EVMInput,
         FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
         ConciseEVMInput,
+        EVMQueueExecutor,
     > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
     let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,

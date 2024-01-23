@@ -7,6 +7,7 @@ use crate::{
     oracle::OracleCtx,
     r#move::{
         input::{ConciseMoveInput, MoveFunctionInput},
+        movevm::MoveVM,
         vm_state::MoveVMState,
     },
     state::{FuzzState, InfantStateState},
@@ -47,6 +48,7 @@ pub type MoveOracleCtx<'a> = OracleCtx<
     MoveFunctionInput,
     MoveFuzzState,
     ConciseMoveInput,
+    MoveVM<MoveFunctionInput, MoveFuzzState>,
 >;
 
 pub type TypedValue = (Type, Value);

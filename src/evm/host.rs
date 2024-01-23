@@ -277,7 +277,7 @@ where
             middlewares_enabled: false,
             middlewares: Rc::new(RefCell::new(Default::default())),
             coverage_changed: false,
-            flashloan_middleware: None,
+            flashloan_middleware: self.flashloan_middleware.clone(),
             middlewares_latent_call_actions: vec![],
             scheduler: self.scheduler.clone(),
             next_slot: Default::default(),
@@ -313,11 +313,11 @@ where
 // hack: I don't want to change evm internal to add a new type of return
 // this return type is never used as we disabled gas
 pub static mut ACTIVE_MATCH_EXT_CALL: bool = false;
-const UNBOUND_CALL_THRESHOLD: usize = 3;
+const UNBOUND_CALL_THRESHOLD: usize = 50;
 
 // if a PC transfers control to >10 addresses, we consider call at this PC to be
 // unbounded
-const CONTROL_LEAK_THRESHOLD: usize = 10;
+const CONTROL_LEAK_THRESHOLD: usize = 50;
 
 impl<SC> FuzzHost<SC>
 where
@@ -624,8 +624,12 @@ where
         {
             record_func_hash!();
             push_interp!();
-            // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
-            // input.contract, hex::encode(input.input.clone()));
+            // println!(
+            //     "staticcall self {:?} -> {:?} with {:?}",
+            //     input.context.caller,
+            //     input.contract,
+            //     hex::encode(input.input.clone())
+            // );
             return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
         }
 
@@ -634,8 +638,12 @@ where
             if state.has_caller(&input.contract) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
-                // debug!("call self {:?} -> {:?} with {:?}", input.context.caller,
-                // input.contract, hex::encode(input.input.clone()));
+                // println!(
+                //     "call self {:?} -> {:?} with {:?}",
+                //     input.context.caller,
+                //     input.contract,
+                //     hex::encode(input.input.clone())
+                // );
                 return (ControlLeak, Gas::new(0), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
@@ -659,8 +667,13 @@ where
                     input.context.address,
                     interp.program_counter(),
                 ));
-                // debug!("ub leak {:?} -> {:?} with {:?} {}", input.context.caller,
-                // input.contract, hex::encode(input.input.clone()), self.jumpi_trace);
+                // println!(
+                //     "ub leak {:?} -> {:?} with {:?} {}",
+                //     input.context.caller,
+                //     input.contract,
+                //     hex::encode(input.input.clone()),
+                //     self.jumpi_trace
+                // );
                 push_interp!();
                 return (
                     InstructionResult::ArbitraryExternalCallAddressBounded(

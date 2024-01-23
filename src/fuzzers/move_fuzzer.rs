@@ -79,7 +79,7 @@ pub fn move_fuzzer(config: &MoveFuzzConfig) {
     let infant_feedback = CmpFeedback::new(vm_ref.borrow().get_cmp(), infant_scheduler.clone(), vm_ref.clone());
     let infant_result_feedback = DataflowFeedback::new(vm_ref.borrow().get_read(), vm_ref.borrow().get_write());
 
-    let mut oracles: Vec<Rc<RefCell<dyn Oracle<_, _, _, _, _, _, _, _, _, _>>>> =
+    let mut oracles: Vec<Rc<RefCell<dyn Oracle<_, _, _, _, _, _, _, _, _, _, _>>>> =
         vec![Rc::new(RefCell::new(TypedBugOracle::new()))];
     let mut producers = vec![];
 

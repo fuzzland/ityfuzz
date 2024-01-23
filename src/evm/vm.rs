@@ -33,7 +33,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
 use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
-use crate::{evm::uniswap::SwapData, generic_vm::vm_state};
+use crate::{evm::tokens::SwapData, generic_vm::vm_state};
 #[allow(unused_imports)]
 use crate::{
     evm::{
@@ -77,10 +77,10 @@ macro_rules! get_token_ctx {
 #[macro_export]
 macro_rules! is_call_success {
     ($ret: expr) => {
-        $ret == InstructionResult::Return ||
-            $ret == InstructionResult::Stop ||
-            $ret == ControlLeak ||
-            $ret == InstructionResult::SelfDestruct
+        $ret == revm_interpreter::InstructionResult::Return ||
+            $ret == revm_interpreter::InstructionResult::Stop ||
+            $ret == revm_interpreter::InstructionResult::ControlLeak ||
+            $ret == revm_interpreter::InstructionResult::SelfDestruct
     };
 }
 
@@ -476,15 +476,15 @@ where
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
     SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
 {
-    fn fast_call(
+    pub fn fast_call_(
         &mut self,
         address: EVMAddress,
         data: Bytes,
-        vm_state: &EVMState,
+        vm_state: &mut EVMState,
         state: &mut EVMFuzzState,
         value: EVMU256,
         from: EVMAddress,
-    ) -> IntermediateExecutionResult {
+    ) -> (Bytes, InstructionResult) {
         unsafe {
             IS_FAST_CALL = true;
         }
@@ -505,23 +505,16 @@ where
                 scheme: CallScheme::Call,
             },
         );
-        unsafe {
-            self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
-        }
+        self.host.evmstate = vm_state.clone();
         let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
         let ret = self.host.run_inspect(&mut interp, state);
+        *vm_state = self.host.evmstate.clone();
         unsafe {
             IS_FAST_CALL = false;
         }
-        IntermediateExecutionResult {
-            output: interp.return_value(),
-            new_state: self.host.evmstate.clone(),
-            pc: interp.program_counter(),
-            ret,
-            stack: Default::default(),
-            memory: Default::default(),
-        }
+        (interp.return_value(), ret)
     }
+
     /// Create a new EVM executor given a host and deployer address
     pub fn new(fuzz_host: FuzzHost<SC>, deployer: EVMAddress) -> Self {
         Self {
@@ -1008,55 +1001,42 @@ where
                         .unwrap_or_else(|| panic!("unknown token : {:?}", token))
                         .clone()
                 };
-
-                let mut calldata = token_ctx.borrow().buy(
-                    state,
+                self.host.evmstate = unsafe {
+                    VMStateT::as_any(input.get_state())
+                        .downcast_ref_unchecked::<EVMState>()
+                        .clone()
+                };
+                match token_ctx.buy(
                     input.get_txn_value().unwrap(),
                     input.get_caller(),
+                    state,
+                    self,
                     input.get_randomness().as_slice(),
-                );
-                if !calldata.is_empty() {
-                    assert_eq!(calldata.len(), 1);
-                    let (target, abi, value) = &mut calldata[0];
-                    let bys = abi.get_bytes();
-                    let mut res = self.fast_call(
-                        *target,
-                        Bytes::from(bys),
-                        input.get_state(),
-                        state,
-                        *value,
-                        input.get_caller(),
-                    );
-                    if let Some(ref m) = self.host.flashloan_middleware {
-                        m.deref()
-                            .borrow_mut()
-                            .analyze_call(input, &mut res.new_state.flashloan_data)
-                    }
-
-                    // Record the swap info for generating foundry in the future.
-                    res.new_state.swap_data.push(target, abi);
-
-                    unsafe {
+                ) {
+                    Some(()) => unsafe {
                         ExecutionResult {
-                            output: res.output.to_vec(),
-                            reverted: !is_call_success!(res.ret),
+                            output: vec![],
+                            reverted: false,
                             new_state: StagedVMState::new_with_state(
-                                VMStateT::as_any(&res.new_state).downcast_ref_unchecked::<VS>().clone(),
+                                VMStateT::as_any(&self.host.evmstate.clone())
+                                    .downcast_ref_unchecked::<VS>()
+                                    .clone(),
                             ),
                             additional_info: None,
                         }
-                    }
-                } else {
-                    ExecutionResult {
-                        // we don't have enough liquidity to buy the token
-                        output: vec![],
-                        reverted: false,
-                        new_state: StagedVMState::new_with_state(unsafe {
-                            VMStateT::as_any(input.get_state())
-                                .downcast_ref_unchecked::<VS>()
-                                .clone()
-                        }),
-                        additional_info: None,
+                    },
+                    None => {
+                        ExecutionResult {
+                            // we don't have enough liquidity to buy the token
+                            output: vec![],
+                            reverted: true,
+                            new_state: StagedVMState::new_with_state(unsafe {
+                                VMStateT::as_any(input.get_state())
+                                    .downcast_ref_unchecked::<VS>()
+                                    .clone()
+                            }),
+                            additional_info: None,
+                        }
                     }
                 }
             }

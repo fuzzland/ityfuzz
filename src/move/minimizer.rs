@@ -8,7 +8,7 @@ use super::{
 use crate::{feedback::OracleFeedback, minimizer::SequentialMinimizer, tracer::TxnTrace};
 
 pub struct MoveMinimizer;
-
+use crate::r#move::movevm::MoveVM;
 type MoveOracleFeedback<'a> = OracleFeedback<
     'a,
     MoveVMState,
@@ -21,6 +21,7 @@ type MoveOracleFeedback<'a> = OracleFeedback<
     MoveFunctionInput,
     MoveFuzzState,
     ConciseMoveInput,
+    MoveVM<MoveFunctionInput, MoveFuzzState>,
 >;
 
 impl<E: libafl::executors::HasObservers>

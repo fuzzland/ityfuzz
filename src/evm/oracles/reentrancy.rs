@@ -12,7 +12,7 @@ use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
         oracle::EVMBugResult,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
+        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
         vm::EVMState,
     },
     generic_vm::vm_state::VMStateT,
@@ -31,8 +31,19 @@ impl ReentrancyOracle {
 }
 
 impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for ReentrancyOracle
+    Oracle<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        ConciseEVMInput,
+        EVMQueueExecutor,
+    > for ReentrancyOracle
 {
     fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
         0
@@ -51,6 +62,7 @@ impl
             EVMInput,
             EVMFuzzState,
             ConciseEVMInput,
+            EVMQueueExecutor,
         >,
         _stage: u64,
     ) -> Vec<u64> {

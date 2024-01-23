@@ -19,6 +19,7 @@ use serde_json::Value;
 
 use crate::{
     evm::{
+        tokens::constant_pair::ConstantPairMetadata,
         types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
         vm::{IN_DEPLOY, SETCODE_ONLY},
     },
@@ -128,6 +129,10 @@ pub struct SetupData {
     pub target_contracts: Vec<EVMAddress>,
     pub target_senders: Vec<EVMAddress>,
     pub target_selectors: HashMap<EVMAddress, Vec<Vec<u8>>>,
+
+    // Flashloan specific
+    pub v2_pairs: Vec<EVMAddress>,
+    pub constant_pairs: Vec<ConstantPairMetadata>,
 }
 
 pub fn set_hash(name: &str, out: &mut [u8]) {
@@ -864,6 +869,8 @@ impl ContractLoader {
             (deployer, deployed_addr, abi_sig!("targetContracts")),
             (deployer, deployed_addr, abi_sig!("targetSenders")),
             (deployer, deployed_addr, abi_sig!("targetSelectors")),
+            (deployer, deployed_addr, abi_sig!("v2Pairs")),
+            (deployer, deployed_addr, abi_sig!("constantPairs")),
         ];
 
         let (res, _) = evm_executor.fast_call(&calls, &new_vm_state, &mut state);
@@ -873,6 +880,7 @@ impl ContractLoader {
             SETCODE_ONLY = false;
         }
 
+        // (address)[]
         macro_rules! parse_nth_result_addr {
             ($nth: expr) => {{
                 let (res_bys, succ) = res[$nth].clone();
@@ -973,6 +981,15 @@ impl ContractLoader {
             map
         };
 
+        let v2_pairs = parse_nth_result_addr!(5);
+
+        // (address, address, uint256)[]
+        let constant_pairs = if res[6].1 {
+            ConstantPairMetadata::from_return_data(&res[6].0)
+        } else {
+            vec![]
+        };
+
         // get the newly deployed code by setUp()
         let code: HashMap<EVMAddress, Bytes> = evm_executor
             .host
@@ -990,6 +1007,8 @@ impl ContractLoader {
             target_contracts,
             target_senders,
             target_selectors,
+            v2_pairs,
+            constant_pairs,
         }
     }
 }

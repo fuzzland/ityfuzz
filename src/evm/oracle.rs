@@ -1,36 +1,6 @@
-use bytes::Bytes;
-use revm_primitives::Bytecode;
-
 /// Dummy oracle for testing
-use crate::evm::input::{ConciseEVMInput, EVMInput};
-use crate::{
-    evm::{
-        srcmap::RawSourceMapInfo,
-        types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMU256},
-        vm::EVMState,
-    },
-    fuzzer::ORACLE_OUTPUT,
-    oracle::Oracle,
-};
-
-pub struct NoOracle {}
-
-impl
-    Oracle<EVMState, EVMAddress, Bytecode, Bytes, EVMAddress, EVMU256, Vec<u8>, EVMInput, EVMFuzzState, ConciseEVMInput>
-    for NoOracle
-{
-    fn transition(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
-        0
-    }
-
-    fn oracle(&self, _ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> Vec<u64> {
-        vec![]
-    }
-}
-
-pub fn dummy_precondition(_ctx: &mut EVMOracleCtx<'_>, _stage: u64) -> u64 {
-    99
-}
+use crate::evm::input::ConciseEVMInput;
+use crate::{evm::srcmap::RawSourceMapInfo, fuzzer::ORACLE_OUTPUT};
 
 pub struct EVMBugResult {
     pub bug_type: String,

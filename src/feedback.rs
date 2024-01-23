@@ -41,31 +41,33 @@ const KNOWN_STATE_SKIP_SIZE: usize = 500;
 /// If any of the oracle returns true, then it returns true and report a
 /// vulnerability found.
 #[allow(clippy::type_complexity)]
-pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI>
+pub struct OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S: 'static, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// A set of producers that produce data needed by oracles
-    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+    producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
     /// A set of oracles that check for vulnerabilities
-    oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
+    oracle: &'a Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
     /// VM executor
-    executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+    executor: Rc<RefCell<E>>,
     phantom: PhantomData<Out>,
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Debug
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Debug
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OracleFeedback")
@@ -74,22 +76,23 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Named
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Named
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     fn name(&self) -> &str {
         "OracleFeedback"
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
-    OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
+    OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     S: State
         + HasClientPerfMonitor
@@ -104,13 +107,14 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// Create a new [`OracleFeedback`]
     #[allow(clippy::type_complexity)]
     pub fn new(
-        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
-        producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>>>>,
-        executor: Rc<RefCell<dyn GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>>>,
+        oracle: &'a mut Vec<Rc<RefCell<dyn Oracle<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
+        producers: &'a mut Vec<Rc<RefCell<dyn Producer<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>>>>,
+        executor: Rc<RefCell<E>>,
     ) -> Self {
         Self {
             producers,
@@ -128,8 +132,8 @@ where
             return false;
         }
         // set up oracle context
-        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> =
-            OracleCtx::new(state, input.get_state(), &mut self.executor, input);
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> =
+            OracleCtx::new(state, input.get_state(), self.executor.clone(), input);
 
         // cleanup producers by calling `notify_end` hooks
         macro_rules! before_exit {
@@ -184,8 +188,8 @@ where
     }
 }
 
-impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> Feedback<S>
-    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI>
+impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Feedback<S>
+    for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
     S: State
         + HasClientPerfMonitor
@@ -200,6 +204,7 @@ where
     Loc: Serialize + DeserializeOwned + Debug + Clone,
     Out: Default + Into<Vec<u8>> + Clone,
     CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde,
+    E: GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI>,
 {
     /// since OracleFeedback is just a wrapper around one stateless oracle
     /// we don't need to do initialization
@@ -239,8 +244,8 @@ where
         }
 
         // set up oracle context
-        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI> =
-            OracleCtx::new(state, input.get_state(), &mut self.executor, input);
+        let mut oracle_ctx: OracleCtx<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> =
+            OracleCtx::new(state, input.get_state(), self.executor.clone(), input);
 
         // cleanup producers by calling `notify_end` hooks
         macro_rules! before_exit {

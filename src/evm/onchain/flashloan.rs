@@ -35,8 +35,8 @@ use crate::{
         mutator::AccessPattern,
         onchain::endpoints::OnChainConfig,
         oracles::erc20::IERC20OracleFlashloan,
+        tokens::{uniswap::fetch_uniswap_path, TokenContext},
         types::{convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256, EVMU512},
-        uniswap::UniswapTokenContext,
     },
     generic_vm::vm_state::VMStateT,
     input::VMInputT,
@@ -45,6 +45,7 @@ use crate::{
 
 pub static mut CAN_LIQUIDATE: bool = false;
 
+#[macro_export]
 macro_rules! scale {
     () => {
         EVMU512::from(1_000_000)
@@ -58,6 +59,7 @@ pub struct Flashloan {
     pair_address: HashSet<EVMAddress>,
     pub unbound_tracker: HashMap<usize, HashSet<EVMAddress>>, // pc -> [address called]
     pub flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
+    pub token_context_cache: HashMap<EVMAddress, TokenContext>,
 }
 
 impl Debug for Flashloan {
@@ -126,14 +128,13 @@ impl Flashloan {
             erc20_address: Default::default(),
             pair_address: Default::default(),
             unbound_tracker: Default::default(),
+            token_context_cache: Default::default(),
             flashloan_oracle,
         }
     }
 
-    fn get_token_context(&mut self, addr: EVMAddress) -> Option<UniswapTokenContext> {
-        self.endpoint
-            .as_mut()
-            .map(|endpoint| endpoint.fetch_uniswap_path_cached(addr).clone())
+    fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
+        self.endpoint.as_mut().map(|config| fetch_uniswap_path(config, addr))
     }
 
     pub fn on_contract_insertion(
@@ -148,16 +149,25 @@ impl Flashloan {
         }
         self.known_addresses.insert(*addr);
 
-        // if the contract is erc20, query its holders
+        // balanceOf(address) - 70a08231
+        // allowance(address,address) - dd62ed3e
+        // transfer(address,uint256) - a9059cbb
+        // approve(address,uint256) - 095ea7b3
+        // transferFrom(address,address,uint256) - 23b872dd
         let abi_signatures_token = vec![
-            "balanceOf".to_string(),
-            "transfer".to_string(),
-            "transferFrom".to_string(),
-            "approve".to_string(),
+            [0x70, 0xa0, 0x82, 0x31],
+            [0xdd, 0x62, 0xed, 0x3e],
+            [0xa9, 0x05, 0x9c, 0xbb],
+            [0x09, 0x5e, 0xa7, 0xb3],
+            [0x23, 0xb8, 0x72, 0xdd],
         ];
 
-        let abi_signatures_pair = vec!["skim".to_string(), "sync".to_string(), "swap".to_string()];
-        let abi_names = abi.iter().map(|x| x.function_name.clone()).collect::<HashSet<String>>();
+        let abi_signatures_pair = vec![
+            [0x02, 0x2c, 0x0d, 0x9f],
+            [0xff, 0xf6, 0xca, 0xe9],
+            [0xbc, 0x25, 0xcf, 0x77],
+        ];
+        let abi_names = abi.iter().map(|x| x.function.clone()).collect::<HashSet<[u8; 4]>>();
 
         let mut is_erc20 = false;
         let mut is_pair = false;
@@ -170,17 +180,15 @@ impl Flashloan {
                         // avoid delegate call on token -> make oracle borrow multiple times
                         if oracle.is_ok() {
                             let can_liquidate = !token_ctx.swaps.is_empty(); // if there is more than one liquidation path, we can liquidate
-                            oracle
-                                .unwrap()
-                                .register_token(*addr, Rc::new(RefCell::new(token_ctx)), can_liquidate);
+                            oracle.unwrap().register_token(*addr, token_ctx, can_liquidate);
                             self.erc20_address.insert(*addr);
                             is_erc20 = true;
                         } else {
-                            debug!("Unable to liquidate token {:?}", addr);
+                            println!("Unable to liquidate token {:?}", addr);
                         }
                     }
                     None => {
-                        debug!("Unable to liquidate token {:?}", addr);
+                        println!("Unable to liquidate token 2{:?}", addr);
                     }
                 }
             }
