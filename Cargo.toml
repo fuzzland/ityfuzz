@@ -45,6 +45,7 @@ sui_support = [
 ]
 debug = []
 flashloan_debug = []
+no_etherscan = []
 
 
 [dependencies]
@@ -79,17 +80,17 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 num_cpus = "1.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "91f3a4cc2762d0b45ab88f48faa6a7c39fa84f84", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
@@ -129,3 +130,4 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 colored = "2.0"
+evmole = "0.3.2"

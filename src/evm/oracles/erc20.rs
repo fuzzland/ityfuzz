@@ -91,7 +91,8 @@ impl
             let mut liquidations_earned = Vec::new();
 
             for ((caller, token), new_balance) in self.erc20_producer.deref().borrow().balances.iter() {
-                // println!("token: {:?}, new_balance: {:?}", token, new_balance);
+                // println!("token: {:?}, user: {:?}, new_balance: {:?}", token, caller,
+                // new_balance);
                 if *new_balance > EVMU256::ZERO &&
                     let Some(token_info) = self.known_tokens.get(token)
                 {
@@ -107,6 +108,7 @@ impl
             }
             let mut failed = false;
             for (caller, _token_info, _amount) in liquidations_earned {
+                let backup = ctx.executor.deref().borrow_mut().host.evmstate.clone();
                 if _token_info
                     .sell(
                         _amount,
@@ -117,8 +119,8 @@ impl
                     )
                     .is_none()
                 {
-                    failed = true;
-                    break;
+                    ctx.executor.deref().borrow_mut().host.evmstate = backup;
+                    continue;
                 }
             }
             if !failed {

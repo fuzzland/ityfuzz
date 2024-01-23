@@ -495,6 +495,10 @@ impl OnChainConfig {
     }
 
     pub fn fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
+        #[cfg(feature = "no_etherscan")]
+        {
+            return None;
+        }
         let endpoint = format!(
             "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
             self.etherscan_base,
