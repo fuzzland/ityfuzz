@@ -14,7 +14,7 @@ default = [
     "evm",
     "print_txn_corpus",
     "full_trace",
-    "force_cache"
+    "force_cache",
 ]
 evm = []
 cmp = []
@@ -45,6 +45,7 @@ sui_support = [
 debug = []
 flashloan_debug = []
 no_etherscan = []
+collect_metrics = []
 
 
 [dependencies]

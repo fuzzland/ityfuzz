@@ -1018,6 +1018,21 @@ where
                     let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
                         self.coverage_changed = true;
+                        #[cfg(feature = "collect_metrics")]
+                        {
+                            let now = std::time::SystemTime::now();
+                            let pc = interp.program_counter();
+                            let addr = interp.contract.address;
+                            let code_addr = interp.contract.code_address;
+
+                            println!(
+                                "[@NEW_BRANCH@]:{},{},{:?},{:?}",
+                                now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
+                                pc,
+                                addr,
+                                code_addr
+                            );
+                        }
                     }
                     JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);
 
