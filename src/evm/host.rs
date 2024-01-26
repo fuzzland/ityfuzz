@@ -237,6 +237,8 @@ where
     pub expected_emits: VecDeque<ExpectedEmit>,
     /// Expected calls
     pub expected_calls: ExpectedCallTracker,
+
+    pub collect_metrics: HashSet<(EVMAddress, usize)>,
 }
 
 impl<SC> Debug for FuzzHost<SC>
@@ -307,6 +309,7 @@ where
             expected_emits: self.expected_emits.clone(),
             expected_revert: self.expected_revert.clone(),
             expected_calls: self.expected_calls.clone(),
+            collect_metrics: self.collect_metrics.clone(),
         }
     }
 }
@@ -367,6 +370,7 @@ where
             expected_revert: None,
             expected_emits: VecDeque::new(),
             expected_calls: ExpectedCallTracker::new(),
+            collect_metrics: Default::default(),
         }
     }
 
@@ -1019,28 +1023,30 @@ where
                     let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
                         self.coverage_changed = true;
-                        #[cfg(feature = "collect_metrics")]
+                        // #[cfg(feature = "collect_metrics")]
                         {
                             let now = std::time::SystemTime::now();
                             let pc = interp.program_counter();
-                            let addr = interp.contract.address;
                             let code_addr = interp.contract.code_address;
-
-                            let mut skip = false;
-                            if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
-                                if !whitelist.contains(&addr) {
-                                    skip = true;
+                            if !self.collect_metrics.contains(&(code_addr, pc)) {
+                                let addr = interp.contract.address;
+                                let mut skip = false;
+                                if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
+                                    if !whitelist.contains(&addr) {
+                                        skip = true;
+                                    }
                                 }
-                            }
 
-                            if !skip {
-                                println!(
-                                    "[@NEW_BRANCH@]:{},{},{:?},{:?}",
-                                    now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
-                                    pc,
-                                    addr,
-                                    code_addr
-                                );
+                                if !skip {
+                                    println!(
+                                        "[@NEW_BRANCH@]:{},{},{:?},{:?}",
+                                        now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
+                                        pc,
+                                        addr,
+                                        code_addr
+                                    );
+                                    self.collect_metrics.insert((code_addr, pc));
+                                }
                             }
                         }
                     }
