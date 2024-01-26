@@ -1044,7 +1044,7 @@ where
                             }
                         }
                     }
-                    JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);
+                    JMP_MAP[idx] = if JMP_MAP[idx] == u8::MAX { 1 } else { JMP_MAP[idx] + 1 };
 
                     #[cfg(feature = "cmp")]
                     {
