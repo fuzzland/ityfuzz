@@ -79,6 +79,7 @@ use crate::{
         onchain::{
             abi_decompiler::fetch_abi_heimdall,
             flashloan::{register_borrow_txn, Flashloan},
+            WHITELIST_ADDR,
         },
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
         vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
@@ -1025,13 +1026,22 @@ where
                             let addr = interp.contract.address;
                             let code_addr = interp.contract.code_address;
 
-                            println!(
-                                "[@NEW_BRANCH@]:{},{},{:?},{:?}",
-                                now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
-                                pc,
-                                addr,
-                                code_addr
-                            );
+                            let mut skip = false;
+                            if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
+                                if !whitelist.contains(&addr) {
+                                    skip = true;
+                                }
+                            }
+
+                            if !skip {
+                                println!(
+                                    "[@NEW_BRANCH@]:{},{},{:?},{:?}",
+                                    now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
+                                    pc,
+                                    addr,
+                                    code_addr
+                                );
+                            }
                         }
                     }
                     JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);

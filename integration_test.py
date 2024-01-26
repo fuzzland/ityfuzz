@@ -152,31 +152,35 @@ def test_onchain(test):
 
     # try 3 times in case of rpc failure
     for i in range(3):
+        outfile = f"res_{name}_{i}.txt"
+
         p = subprocess.run(
             " ".join(cmd),
-            stdout=subprocess.PIPE,
+            stdout=open(outfile, "w+"),
             stderr=subprocess.PIPE,
             shell=True,
             env=my_env,
         )
 
-        if b"Found violations!" in p.stdout:
-            print(
-                f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s"
-            )
-            open(f"res_{name}.txt", "w+").write(
-                p.stderr.decode("utf-8")
-                + " ".join(cmd)
-                + "\n"
-                + p.stdout.decode("utf-8")
-            )
-            return
-        if b"panicked" in p.stderr or b"panicked" in p.stdout:
-            crashed_any = True
-            print("================ STDERR =================")
-            print(p.stderr.decode("utf-8"))
-            print("================ STDOUT =================")
-            print(p.stdout.decode("utf-8"))
+        
+
+        # if b"Found violations!" in p.stdout:
+        #     print(
+        #         f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s"
+        #     )
+        #     open(f"res_{name}_{i}.txt", "w+").write(
+        #         p.stderr.decode("utf-8")
+        #         + " ".join(cmd)
+        #         + "\n"
+        #         + p.stdout.decode("utf-8")
+        #     )
+        #     return
+        # if b"panicked" in p.stderr or b"panicked" in p.stdout:
+        #     crashed_any = True
+        #     print("================ STDERR =================")
+        #     print(p.stderr.decode("utf-8"))
+        #     print("================ STDOUT =================")
+        #     print(p.stdout.decode("utf-8"))
         time.sleep(30)
 
     print(f"=== Failed to test onchain for contracts: {name}")
