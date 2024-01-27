@@ -160,7 +160,7 @@ def test_onchain(test):
             env=my_env,
         )
 
-        if b"Found violations!" in p.stdout:
+        if b"Found vulnerabilities" in p.stdout:
             print(
                 f"=== Success: Tested onchain for contracts: {name}, Finished in {time.time() - start_time}s"
             )
