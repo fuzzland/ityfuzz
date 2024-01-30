@@ -58,7 +58,6 @@ pub struct Coverage {
     pub work_dir: String,
 
     pub address_to_name: HashMap<EVMAddress, String>,
-    pub pc_info: HashMap<(EVMAddress, usize), String>, // (address, pc) -> source code
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -229,7 +228,6 @@ impl Coverage {
             skip_pcs: Default::default(),
             work_dir,
             address_to_name,
-            pc_info: Default::default(),
         }
     }
 
@@ -259,6 +257,7 @@ impl Coverage {
                             covered_code: real_covered
                                 .iter()
                                 .map(|pc| SOURCE_MAP_PROVIDER.lock().unwrap().get_raw_source_map_info(addr, *pc))
+                                .filter(|info| info.is_some())
                                 .collect(),
                             address: *addr,
                         },
@@ -322,9 +321,7 @@ where
         // find all skipping PCs
         pcs.iter().for_each(
             |pc| match SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(&address, *pc) {
-                SourceCodeResult::SourceCode(source_code) => {
-                    self.pc_info.insert((address, *pc), source_code.clone());
-                }
+                SourceCodeResult::SourceCode(_) | SourceCodeResult::NoSourceMap => {}
                 _ => {
                     skip_pcs.insert(*pc);
                 }
