@@ -50,6 +50,8 @@ pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
 
+pub static mut ADDR_CODE_ADDR: Option<HashMap<EVMAddress, EVMAddress>> = None;
+
 pub struct OnChain {
     pub loaded_data: HashSet<(EVMAddress, EVMU256)>,
     pub loaded_code: HashSet<EVMAddress>,
@@ -78,6 +80,7 @@ impl Debug for OnChain {
 impl OnChain {
     pub fn new(endpoint: OnChainConfig, storage_fetching: StorageFetchingMode) -> Self {
         unsafe {
+            ADDR_CODE_ADDR = Some(HashMap::new());
             BLACKLIST_ADDR = Some(HashSet::from([
                 EVMAddress::from_str("0x3cb4ca3c9dc0e02d252098eebb3871ac7a43c54d").unwrap(),
                 EVMAddress::from_str("0x6aed013308d847cb87502d86e7d9720b17b4c1f2").unwrap(),
@@ -397,6 +400,9 @@ impl OnChain {
         // set up host
         let mut abi_hashes_to_add = HashSet::new();
         if is_proxy_call {
+            unsafe {
+                ADDR_CODE_ADDR.as_mut().unwrap().insert(caller, address_h160);
+            }
             // check caller's hash and see what is missing
             let caller_hashes: Vec<[u8; 4]> = match host.address_to_hash.get(&caller) {
                 Some(v) => v.clone(),

@@ -91,6 +91,7 @@ pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> {
     pub load_corpus: String,
     #[cfg(feature = "use_presets")]
     pub preset_file_path: String,
+    pub score_config: String,
 }
 
 impl<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Debug

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, str::FromStr};
 
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     host::{BRANCH_STATUS, BRANCH_STATUS_IDX},
+    onchain::ADDR_CODE_ADDR,
     types::EVMAddress,
 };
 use crate::{
@@ -121,26 +122,44 @@ impl PowerABITestcaseMetadata {
     }
 }
 
+pub fn parse_sig_to_score(filename: &str) -> HashMap<(EVMAddress, String), usize> {
+    let mut sig_to_score = HashMap::new();
+    let content = std::fs::read_to_string(filename).unwrap();
+    for line in content.lines() {
+        let mut iter = line.split(',');
+        let address = EVMAddress::from_str(iter.next().unwrap()).expect("address should be valid");
+        let slug = iter.next().unwrap();
+        let score = iter.next().unwrap().parse::<usize>().expect("score should be valid");
+        sig_to_score.insert((address, slug.to_owned()), score);
+    }
+    sig_to_score
+}
+
 impl_serdeany!(PowerABITestcaseMetadata);
 
 #[derive(Debug, Clone)]
 pub struct PowerABIScheduler<S> {
+    pub sig_to_score: HashMap<(EVMAddress, String), usize>,
     phantom: PhantomData<S>,
 }
 
 impl<S> Default for PowerABIScheduler<S> {
     fn default() -> Self {
-        Self::new()
+        Self::new(HashMap::new())
     }
 }
 
 impl<S> PowerABIScheduler<S> {
-    pub fn new() -> Self {
-        Self { phantom: PhantomData }
+    pub fn new(sig_to_score: HashMap<(EVMAddress, String), usize>) -> Self {
+        Self {
+            phantom: PhantomData,
+            sig_to_score,
+        }
     }
 
-    fn add_abi_metadata(&mut self, testcase: &mut Testcase<EVMInput>, artifact: &BuildJobResult) -> Result<(), Error> {
+    fn add_abi_metadata(&mut self, testcase: &mut Testcase<EVMInput>) -> Result<(), Error> {
         let input = testcase.input().clone().unwrap();
+        let address = input.get_contract();
         let tc_func = match input.get_data_abi() {
             Some(abi) => abi.function,
             None => {
@@ -166,34 +185,17 @@ impl<S> PowerABIScheduler<S> {
                 }
             };
             let name = tc_func_name.split('(').next().unwrap();
-            format!("{}:{}", name, amount_args)
+            format!("{}@{}", name, amount_args)
         };
-        for (_filename, ast) in artifact.asts.iter() {
-            let contracts = ast["contracts"].as_array().unwrap();
-            for contract in contracts {
-                let funcs = contract["functions"].as_array().unwrap();
-                for func in funcs {
-                    let func_slug = {
-                        let arg_len = func["args"].as_array().unwrap().len();
-                        let name = func["name"].as_str().unwrap();
-                        format!("{}:{}", name, arg_len)
-                    };
 
-                    if tc_func_slug == func_slug {
-                        let func_source = func["source"].as_str().unwrap();
-                        let num_lines = func_source.matches('\n').count() + 1;
-                        if num_lines <= 1 {
-                            break; // not true function implementation, break to
-                                   // find in next contract
-                        }
-                        testcase.add_metadata(PowerABITestcaseMetadata::new(num_lines));
-                        return Ok(());
-                    }
-                }
-            }
-        }
-        // NOTE: testcase function is [0,0,0,0] !fallback!
-        testcase.add_metadata(PowerABITestcaseMetadata::new(1));
+        let real_addr = unsafe { ADDR_CODE_ADDR.as_ref().unwrap().get(&address).unwrap_or(&address) };
+
+        testcase.add_metadata(PowerABITestcaseMetadata::new(
+            self.sig_to_score
+                .get(&(*real_addr, tc_func_slug.to_owned()))
+                .unwrap_or(&1)
+                .to_owned(),
+        ));
         Ok(())
     }
 }
@@ -218,16 +220,10 @@ where
                 let current_idx = *state.corpus().current();
                 testcase.set_parent_id_optional(current_idx);
             }
-            let meta = state.metadata_map().get::<ArtifactInfoMetadata>().unwrap();
-            let artifact = match meta.get(&input.contract) {
-                Some(artifact) => artifact,
-                None => {
-                    testcase.add_metadata(PowerABITestcaseMetadata::new(1));
-                    return Ok(());
-                } // some contracts are not in ArtifactInfo, like borrow
-            };
             if !input.is_step() {
-                self.add_abi_metadata(&mut testcase, artifact)?;
+                self.add_abi_metadata(&mut testcase)?;
+            } else {
+                testcase.add_metadata(PowerABITestcaseMetadata::new(1));
             }
         }
 
@@ -359,15 +355,7 @@ where
     ) -> Result<(), Error> {
         let mut testcase = state.testcase_mut(idx).unwrap();
         testcase.set_parent_id_optional(None);
-        let input = testcase.input().clone().unwrap();
-        let artifact = match artifacts.build_artifacts.get(&input.contract) {
-            Some(artifact) => artifact,
-            None => {
-                testcase.add_metadata(PowerABITestcaseMetadata::new(1));
-                return Ok(());
-            } // build_artifacts may not contain contracts whose source code is not available
-        };
-        self.add_abi_metadata(&mut testcase, artifact)?;
+        self.add_abi_metadata(&mut testcase)?;
         Ok(())
     }
 }
@@ -394,7 +382,7 @@ where
             meta.testcase_to_uncovered_branches.get(&idx).unwrap_or(&0).to_owned() + 1
         };
 
-        let mut power = uncov_branch as f64 * 32.0;
+        let mut power = uncov_branch as f64 * 16.0 + _num_lines as f64 * 16.0;
 
         if power >= 3200.0 {
             power = 3200.0;

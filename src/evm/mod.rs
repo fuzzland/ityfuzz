@@ -271,6 +271,11 @@ pub struct EvmArgs {
     #[cfg(feature = "use_presets")]
     #[arg(long, default_value = "")]
     preset_file_path: String,
+
+    /// Score config file. If specified, will load the score config file and
+    /// calculate score for each testcase.
+    #[arg(long, default_value = "")]
+    score_config: String,
 }
 
 enum EVMTargetType {
@@ -728,6 +733,7 @@ pub fn evm_main(args: EvmArgs) {
         #[cfg(feature = "use_presets")]
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
+        score_config: args.score_config,
     };
 
     let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();

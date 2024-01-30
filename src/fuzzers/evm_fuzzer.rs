@@ -58,7 +58,7 @@ use crate::{
             typed_bug::TypedBugOracle,
         },
         presets::ExploitTemplate,
-        scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
+        scheduler::{parse_sig_to_score, PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
         vm::{EVMExecutor, EVMState},
     },
@@ -95,7 +95,11 @@ pub fn evm_fuzzer(
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
-    let scheduler = PowerABIScheduler::new();
+    let scheduler = PowerABIScheduler::new(if config.score_config.is_empty() {
+        Default::default()
+    } else {
+        parse_sig_to_score(&config.score_config)
+    });
 
     let jmps = unsafe { &mut JMP_MAP };
     let cmps = unsafe { &mut CMP_MAP };
@@ -111,6 +115,8 @@ pub fn evm_fuzzer(
     // step if it is a call to cheatcode_address, and this step should not be
     // visible to other middlewares.
     fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+
+    state.metadata_map_mut().insert(UncoveredBranchesMetadata::new());
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
@@ -300,7 +306,6 @@ pub fn evm_fuzzer(
     );
     let mutator: EVMFuzzMutator = FuzzMutator::new(infant_scheduler.clone());
 
-    state.metadata_map_mut().insert(UncoveredBranchesMetadata::new());
     let std_stage = PowerABIMutationalStage::new(mutator);
 
     let call_printer_mid = Rc::new(RefCell::new(CallPrinter::new(artifacts.address_to_name.clone())));
