@@ -32,7 +32,7 @@ use revm_primitives::Bytecode;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{debug, error};
 
-use super::{input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
+use super::{host::CALL_CONTEXT, input::EVMInput, middlewares::reentrancy::ReentrancyData, types::EVMFuzzState};
 use crate::{evm::tokens::SwapData, generic_vm::vm_state};
 #[allow(unused_imports)]
 use crate::{
@@ -548,6 +548,8 @@ where
         state: &mut EVMFuzzState,
         cleanup: bool,
     ) -> IntermediateExecutionResult {
+        unsafe { CALL_CONTEXT = Some(input.clone()) }
+
         // Initial setups
         if cleanup {
             self.host.coverage_changed = false;

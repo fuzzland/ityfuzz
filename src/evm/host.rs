@@ -70,7 +70,7 @@ use super::{
 };
 use crate::{
     evm::{
-        abi::{get_abi_type_boxed, register_abi_instance},
+        abi::{get_abi_type_boxed, register_abi_instance, FUNCTION_SIG},
         contract_utils::extract_sig_from_contract,
         corpus_initializer::ABIMap,
         input::{EVMInput, EVMInputTy},
@@ -81,6 +81,7 @@ use crate::{
             flashloan::{register_borrow_txn, Flashloan},
             WHITELIST_ADDR,
         },
+        srcmap::{SourceCodeResult, SOURCE_MAP_PROVIDER},
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
         vm::{is_reverted_or_control_leak, EVMState, SinglePostExecution, IN_DEPLOY, IS_FAST_CALL_STATIC},
     },
@@ -122,6 +123,8 @@ pub static mut WRITE_RELATIONSHIPS: bool = false;
 /// Branch status of the current execution
 pub static mut BRANCH_STATUS: [Option<(EVMAddress, usize, bool)>; MAP_SIZE] = [None; MAP_SIZE];
 pub static mut BRANCH_STATUS_IDX: usize = 0;
+
+pub static mut CALL_CONTEXT: Option<EVMInput> = None;
 
 pub fn clear_branch_status() {
     unsafe {
@@ -238,7 +241,7 @@ where
     /// Expected calls
     pub expected_calls: ExpectedCallTracker,
 
-    pub collect_metrics: HashSet<(EVMAddress, usize)>,
+    pub collect_metrics: HashSet<(EVMAddress, EVMAddress, [u8; 4], usize)>,
 }
 
 impl<SC> Debug for FuzzHost<SC>
@@ -1025,10 +1028,18 @@ where
                         self.coverage_changed = true;
                         // #[cfg(feature = "collect_metrics")]
                         {
-                            let now = std::time::SystemTime::now();
                             let pc = interp.program_counter();
                             let code_addr = interp.contract.code_address;
-                            if !self.collect_metrics.contains(&(code_addr, pc)) {
+                            let code_ctx = unsafe { CALL_CONTEXT.as_ref().unwrap() };
+                            let call = match code_ctx.data {
+                                Some(ref data) => data.function.clone(),
+                                None => Default::default(),
+                            };
+                            if !self
+                                .collect_metrics
+                                .contains(&(code_addr, code_ctx.contract, call, idx))
+                            {
+                                let now = std::time::SystemTime::now();
                                 let addr = interp.contract.address;
                                 let mut skip = false;
                                 if let Some(whitelist) = unsafe { WHITELIST_ADDR.as_ref() } {
@@ -1039,14 +1050,62 @@ where
 
                                 if !skip {
                                     println!(
-                                        "[@NEW_BRANCH@]:{},{},{:?},{:?}",
+                                        "[@NEW_BRANCH@]:{},{},{:?},{:?},{}",
                                         now.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
                                         pc,
                                         addr,
-                                        code_addr
+                                        code_addr,
+                                        is_zero(br)
                                     );
-                                    self.collect_metrics.insert((code_addr, pc));
+                                    println!("[@BRANCH_CALLER@]");
+
+                                    if code_ctx.input_type == EVMInputTy::ABI {
+                                        if code_ctx.step {
+                                            println!("step!!");
+                                        } else if let Some(input) = &code_ctx.data {
+                                            let tc_func_name = unsafe {
+                                                FUNCTION_SIG.get(&input.function).unwrap_or_else(|| {
+                                                    panic!(
+                                                        "function signature {} @ {:?} not found in FUNCTION_SIG",
+                                                        hex::encode(input.function),
+                                                        code_ctx.contract
+                                                    )
+                                                })
+                                            };
+                                            let tc_func_slug = {
+                                                let amount_args = tc_func_name.matches(',').count() + {
+                                                    if tc_func_name.contains("()") {
+                                                        0
+                                                    } else {
+                                                        1
+                                                    }
+                                                };
+                                                let name = tc_func_name.split('(').next().unwrap();
+                                                format!("{}@{}", name, amount_args)
+                                            };
+                                            let src = code_ctx.contract;
+                                            println!("{:?}:{}", src, tc_func_slug);
+                                        }
+                                    }
+
+                                    println!("[@BRANCH_CALLER@]");
+
+                                    println!("[@BRANCH_CODE_START@]");
+
+                                    let source = SOURCE_MAP_PROVIDER
+                                        .lock()
+                                        .unwrap()
+                                        .get_source_code(&interp.contract.code_address, pc);
+
+                                    match source {
+                                        SourceCodeResult::SourceCode(x) => {
+                                            println!("{}", x)
+                                        }
+                                        _ => {}
+                                    }
+                                    println!("[@BRANCH_CODE_END@]");
                                 }
+                                self.collect_metrics.insert((code_addr, code_ctx.contract, call, idx));
                             }
                         }
                     }
