@@ -1027,7 +1027,7 @@ where
                     if JMP_MAP[idx] == 0 {
                         self.coverage_changed = true;
                         // #[cfg(feature = "collect_metrics")]
-                        {
+                        if unsafe { CALL_CONTEXT.is_some() } {
                             let pc = interp.program_counter();
                             let code_addr = interp.contract.code_address;
                             let code_ctx = unsafe { CALL_CONTEXT.as_ref().unwrap() };
