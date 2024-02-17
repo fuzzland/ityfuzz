@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::process::Stdio;
 
 use bytes::Bytes;
 use itertools::Itertools;
@@ -144,7 +145,6 @@ impl OffChainArtifact {
         if !std::path::Path::new(&folder).exists() {
             std::fs::create_dir_all(&folder)?;
         }
-        let forge_path = folder.clone() + "/1.json";
         let combined_json_path = folder.clone() + "/combined.json";
 
         match bin {
@@ -164,10 +164,13 @@ impl OffChainArtifact {
                 let has_build_info_path = parts.iter().any(|p| p.starts_with("--build-info-path"));
                 if !has_build_info_path {
                     parts.push("--build-info-path");
-                    parts.push(forge_path.as_str());
+                    parts.push(folder.as_str());
                 } else {
                     return Err("build-info-path is not supported".into());
                 }
+            }
+            "npx" | "npm" | "pnpm" | "yarn" => {
+                return Err("Hardhat not supported yet :(".into());
             }
             _ => {
                 return Err("unsupported command".into());
@@ -177,9 +180,10 @@ impl OffChainArtifact {
         // execute the command and directly output to stdout
         let output = std::process::Command::new(bin)
             .args(parts)
-            .output()?;
-        if !output.status.success() {
-            return Err(format!("command failed: {}", String::from_utf8_lossy(&output.stderr)).into());
+            .status()
+            .expect("failed to execute command");
+        if !output.success() {
+            return Err(format!("command failed").into());
         }
 
         match bin {
@@ -209,8 +213,15 @@ impl OffChainArtifact {
                 )
             }
             "forge" => {
-                let json = std::fs::read_to_string(folder + "/1.json")?;
-                Self::from_solc_json(json)
+                for entry in std::fs::read_dir(folder)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
+                        let json = std::fs::read_to_string(path)?;
+                        return Self::from_solc_json(json);
+                    }
+                }
+                Err("no json file found".into())
             }
             _ => {
                 Err("unsupported command".into())

@@ -95,10 +95,10 @@ struct RPCCall {
 
 /// CLI for ItyFuzz for EVM smart contracts
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, trailing_var_arg = true, allow_hyphen_values = true)]
 pub struct EvmArgs {
     /// Glob pattern / address to find contracts
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "none")]
     target: String,
 
     #[arg(long, default_value = "false")]
@@ -271,6 +271,14 @@ pub struct EvmArgs {
     #[cfg(feature = "use_presets")]
     #[arg(long, default_value = "")]
     preset_file_path: String,
+
+    #[arg(long, default_value = "")]
+    base_directory: String,
+
+    /// Command to build the contract. If specified, will use this command to
+    /// build contracts instead of using bins and abis.
+    #[arg()]
+    build_command: Vec<String>,
 }
 
 enum EVMTargetType {
@@ -393,6 +401,10 @@ impl OracleType {
 #[allow(clippy::type_complexity)]
 pub fn evm_main(args: EvmArgs) {
     let target = args.target.clone();
+    if !args.base_directory.is_empty() {
+        std::env::set_current_dir(args.base_directory).unwrap();
+    }
+
     let work_dir = args.work_dir.clone();
     let work_path = Path::new(work_dir.as_str());
     if !work_path.exists() {
@@ -570,7 +582,7 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() {
+    if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() || args.build_command.len() > 0 {
         if onchain.is_some() {
             target_type = EVMTargetType::AnvilFork;
         } else if !args.setup_file.is_empty() {
@@ -578,7 +590,7 @@ pub fn evm_main(args: EvmArgs) {
         } else if !args.offchain_config_url.is_empty() || !args.offchain_config_file.is_empty() {
             target_type = EVMTargetType::Config;
         } else {
-            panic!("Builder artifacts is provided, but missing offchain_config_*, Anvil config, or setup_file");
+            panic!("Please specify --setup-file (The contract that deploys the project) or --offchain-config-file (JSON for deploying the project)");
         }
     }
 
@@ -586,9 +598,13 @@ pub fn evm_main(args: EvmArgs) {
         Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
     } else if !args.builder_artifacts_file.is_empty() {
         Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
+    } else if args.build_command.len() > 0 {
+        let command = args.build_command.join(" ");
+        Some(OffChainArtifact::from_command(command).expect("Failed to build the project"))
     } else {
         None
     };
+
     let offchain_config = if !args.offchain_config_url.is_empty() {
         Some(OffchainConfig::from_json_url(args.offchain_config_url).expect("failed to parse offchain config"))
     } else if !args.offchain_config_file.is_empty() {

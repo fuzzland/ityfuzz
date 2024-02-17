@@ -31,7 +31,7 @@ extern crate crypto;
 
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
@@ -738,20 +738,33 @@ impl ContractLoader {
         let mut all_slugs = vec![];
         let mut found = false;
         let mut setup_data = None;
+        let mut last_slug = None;
         'artifacts: for artifact in offchain_artifacts {
             for ((filename, contract_name), contract_artifact) in &artifact.contracts {
                 let slug = format!("{filename}:{contract_name}");
                 all_slugs.push(slug.clone());
-                if slug == setup_file {
-                    found = true;
-                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone(), work_dir));
 
-                    break 'artifacts;
+                if slug.contains(&setup_file) {
+                    if last_slug.is_some() {
+                        panic!("More than one contract found matching the provided deployment script pattern {}: \n- {}\n- {}", setup_file, last_slug.unwrap(), slug);
+                    }
+                    found = true;
+                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone(), work_dir.clone()));
+                    last_slug = Some(slug);
+                    continue;
+                    // break 'artifacts;
                 }
             }
         }
         if !found {
-            panic!("Contract not found. Available contracts: {:?}", all_slugs);
+            let all_files = all_slugs.iter().filter(|s| !s.starts_with("lib/")).map(|s| {
+                format!("- {}", s)
+            }).collect::<Vec<String>>().join("\n");
+            panic!(
+                "Deployment script {} not found. Available contracts: \n{}",
+                setup_file,
+                all_files
+            );
         }
         for (addr, code) in setup_data.clone().unwrap().code {
             let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
@@ -849,7 +862,10 @@ impl ContractLoader {
             &mut state,
         );
 
-        assert!(res[0].1, "setUp() failed");
+        if !res[0].1 {
+            info!("setUp() failed: {:?}", res[0].0);
+        }
+
 
         // now get Foundry invariant test config by calling
         // * excludeContracts() => array of addresses
