@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::process::Stdio;
+use std::{error::Error, process::Stdio};
 
 use bytes::Bytes;
 use itertools::Itertools;
@@ -141,7 +140,13 @@ impl OffChainArtifact {
             return Err("invalid command".into());
         }
         let bin = parts.remove(0);
-        let folder = format!(".tmp-build-info-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
+        let folder = format!(
+            ".tmp-build-info-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
         if !std::path::Path::new(&folder).exists() {
             std::fs::create_dir_all(&folder)?;
         }
@@ -196,19 +201,28 @@ impl OffChainArtifact {
                     let path = entry.path();
                     if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with("_meta.json") {
                         let json = std::fs::read_to_string(path)?;
-                        metadata.push(serde_json::from_str::<Value>(&json)?
-                            .as_object().unwrap()
-                            .get("sources").unwrap()
-                            .as_object().unwrap()
-                            .iter()
-                            .map(|(filename, source)| {
-                                (filename.clone(), source["content"].as_str().unwrap().to_string())
-                            })
-                            .collect::<Vec<_>>());
+                        metadata.push(
+                            serde_json::from_str::<Value>(&json)?
+                                .as_object()
+                                .unwrap()
+                                .get("sources")
+                                .unwrap()
+                                .as_object()
+                                .unwrap()
+                                .iter()
+                                .map(|(filename, source)| {
+                                    (filename.clone(), source["content"].as_str().unwrap().to_string())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
                     }
                 }
                 Self::_from_solc_json(
-                    metadata.iter().flatten().map(|(filename, source)| (filename.clone(), source.clone())).collect(),
+                    metadata
+                        .iter()
+                        .flatten()
+                        .map(|(filename, source)| (filename.clone(), source.clone()))
+                        .collect(),
                     &output,
                 )
             }
@@ -223,27 +237,45 @@ impl OffChainArtifact {
                 }
                 Err("no json file found".into())
             }
-            _ => {
-                Err("unsupported command".into())
-            }
+            _ => Err("unsupported command".into()),
         }
     }
 
     pub fn from_solc_json(json: String) -> Result<Vec<Self>, Box<dyn Error>> {
         let arr = serde_json::from_str::<Value>(&json)?;
-        let input = arr.as_object().expect("failed to parse object")
-            .get("input").expect("get contracts failed")
-            .as_object().expect("get contracts failed");
+        let input = arr
+            .as_object()
+            .expect("failed to parse object")
+            .get("input")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
 
-        let output = arr.as_object().expect("failed to parse object")
-            .get("output").expect("get contracts failed")
-            .as_object().expect("get contracts failed");
+        let output = arr
+            .as_object()
+            .expect("failed to parse object")
+            .get("output")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
 
-        let sources_kv = input.get("sources").expect("get sources failed")
-            .as_object().expect("get sources failed");
-        Self::_from_solc_json(sources_kv.iter().map(|(filename, source)| {
-            (filename.clone(), source["content"].as_str().expect("get content failed").to_string())
-        }).collect(), output)
+        let sources_kv = input
+            .get("sources")
+            .expect("get sources failed")
+            .as_object()
+            .expect("get sources failed");
+        Self::_from_solc_json(
+            sources_kv
+                .iter()
+                .map(|(filename, source)| {
+                    (
+                        filename.clone(),
+                        source["content"].as_str().expect("get content failed").to_string(),
+                    )
+                })
+                .collect(),
+            output,
+        )
     }
 
     fn _from_solc_json(input: Vec<(String, String)>, output: &Map<String, Value>) -> Result<Vec<Self>, Box<dyn Error>> {
@@ -256,7 +288,10 @@ impl OffChainArtifact {
             for error in errors.as_array().expect("get errors failed") {
                 let error = error.as_object().expect("get error failed");
                 if error["severity"].as_str().expect("get severity failed") == "error" {
-                    return Err(error["formattedMessage"].as_str().expect("get formattedMessage failed").into());
+                    return Err(error["formattedMessage"]
+                        .as_str()
+                        .expect("get formattedMessage failed")
+                        .into());
                 }
             }
         }
@@ -277,8 +312,11 @@ impl OffChainArtifact {
             }
         }
 
-        let contracts = output.get("contracts").expect("get contracts failed")
-            .as_object().expect("get contracts failed");
+        let contracts = output
+            .get("contracts")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
 
         for (file_name, contract) in contracts {
             if file_name.contains(":") {
@@ -289,7 +327,10 @@ impl OffChainArtifact {
                 let bytecode = contract["bin"].as_str().expect("get bytecode failed");
                 let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
                 let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
-                let source_map = contract["srcmap-runtime"].as_str().expect("get sourceMap failed").to_string();
+                let source_map = contract["srcmap-runtime"]
+                    .as_str()
+                    .expect("get sourceMap failed")
+                    .to_string();
                 result.contracts.insert(
                     (file_name.to_string(), contract_name.to_string()),
                     ContractArtifact {
@@ -302,10 +343,15 @@ impl OffChainArtifact {
             } else {
                 for (contract_name, contract) in contract.as_object().expect("get contract failed") {
                     let contract = contract.as_object().expect("get contract failed");
-                    let bytecode = contract["evm"]["bytecode"]["object"].as_str().expect("get bytecode failed");
+                    let bytecode = contract["evm"]["bytecode"]["object"]
+                        .as_str()
+                        .expect("get bytecode failed");
                     let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
                     let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
-                    let source_map = contract["evm"]["deployedBytecode"]["sourceMap"].as_str().expect("get sourceMap failed").to_string();
+                    let source_map = contract["evm"]["deployedBytecode"]["sourceMap"]
+                        .as_str()
+                        .expect("get sourceMap failed")
+                        .to_string();
                     result.contracts.insert(
                         (file_name.clone(), contract_name.clone()),
                         ContractArtifact {
@@ -317,7 +363,6 @@ impl OffChainArtifact {
                     );
                 }
             }
-
         }
         Ok(vec![result])
     }
@@ -375,13 +420,16 @@ mod tests {
     // #[test]
     // fn test_from_url() {
     //     use super::*;
-    //     // let url = "/Users/shou/coding/test_foundry/build-info/685c8631ec48f140bc646da3dcfdb3d9.json";
-    //     // let artifact = OffChainArtifact::from_solc_file(url.to_string()).expect("get artifact failed");
-    //     // chdir
+    //     // let url =
+    // "/Users/shou/coding/test_foundry/build-info/
+    // 685c8631ec48f140bc646da3dcfdb3d9.json";     // let artifact =
+    // OffChainArtifact::from_solc_file(url.to_string()).expect("get artifact
+    // failed");     // chdir
     //     let dir = "/Users/shou/coding/test_foundry";
     //     std::env::set_current_dir(dir).expect("set current dir failed");
     //
-    //     let artifact = OffChainArtifact::from_command("solc src/Counter.sol".to_string()).expect("get artifact failed");
+    //     let artifact = OffChainArtifact::from_command("solc
+    // src/Counter.sol".to_string()).expect("get artifact failed");
     //     println!("{:?}", artifact);
     // }
 }

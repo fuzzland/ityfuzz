@@ -582,7 +582,8 @@ pub fn evm_main(args: EvmArgs) {
         None
     };
 
-    if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() || args.build_command.len() > 0 {
+    if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() || args.build_command.len() > 0
+    {
         if onchain.is_some() {
             target_type = EVMTargetType::AnvilFork;
         } else if !args.setup_file.is_empty() {

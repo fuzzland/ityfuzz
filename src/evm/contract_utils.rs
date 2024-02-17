@@ -749,7 +749,10 @@ impl ContractLoader {
                         panic!("More than one contract found matching the provided deployment script pattern {}: \n- {}\n- {}", setup_file, last_slug.unwrap(), slug);
                     }
                     found = true;
-                    setup_data = Some(Self::call_setup(contract_artifact.deploy_bytecode.clone(), work_dir.clone()));
+                    setup_data = Some(Self::call_setup(
+                        contract_artifact.deploy_bytecode.clone(),
+                        work_dir.clone(),
+                    ));
                     last_slug = Some(slug);
                     continue;
                     // break 'artifacts;
@@ -757,13 +760,15 @@ impl ContractLoader {
             }
         }
         if !found {
-            let all_files = all_slugs.iter().filter(|s| !s.starts_with("lib/")).map(|s| {
-                format!("- {}", s)
-            }).collect::<Vec<String>>().join("\n");
+            let all_files = all_slugs
+                .iter()
+                .filter(|s| !s.starts_with("lib/"))
+                .map(|s| format!("- {}", s))
+                .collect::<Vec<String>>()
+                .join("\n");
             panic!(
                 "Deployment script {} not found. Available contracts: \n{}",
-                setup_file,
-                all_files
+                setup_file, all_files
             );
         }
         for (addr, code) in setup_data.clone().unwrap().code {
@@ -865,7 +870,6 @@ impl ContractLoader {
         if !res[0].1 {
             info!("setUp() failed: {:?}", res[0].0);
         }
-
 
         // now get Foundry invariant test config by calling
         // * excludeContracts() => array of addresses
