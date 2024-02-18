@@ -1,9 +1,9 @@
-use std::error::Error;
+use std::{error::Error, process::Stdio};
 
 use bytes::Bytes;
 use itertools::Itertools;
 use revm_primitives::HashMap;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::evm::blaz::{builder::BuildJobResult, get_client};
 
@@ -128,6 +128,270 @@ impl OffChainArtifact {
         Ok(artifacts)
     }
 
+    pub fn from_solc_file(file: String) -> Result<Vec<Self>, Box<dyn Error>> {
+        let json = std::fs::read_to_string(file)?;
+        Self::from_solc_json(json)
+    }
+
+    pub fn from_command(command: String) -> Result<Vec<Self>, Box<dyn Error>> {
+        // parse the command
+        let mut parts = command.split_whitespace().collect_vec();
+        if parts.len() < 2 {
+            return Err("invalid command".into());
+        }
+        let bin = parts.remove(0);
+        let mut folder = format!(
+            ".tmp-build-info-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+        if !std::path::Path::new(&folder).exists() {
+            std::fs::create_dir_all(&folder)?;
+        }
+
+        macro_rules! remove_folder {
+            () => {
+                if folder.starts_with(".tmp") && std::path::Path::new(&folder).exists() {
+                    std::fs::remove_dir_all(folder.clone())?;
+                }
+            };
+        }
+        let combined_json_path = folder.clone() + "/combined.json";
+
+        match bin {
+            "solc" => {
+                parts.push("--combined-json=bin,bin-runtime,abi,ast,srcmap,srcmap-runtime,storage-layout");
+                parts.push("--metadata");
+                parts.push("--metadata-literal");
+                parts.push("--overwrite");
+                parts.push("-o");
+                parts.push(folder.as_str());
+            }
+            "forge" => {
+                let has_build_info = parts.iter().any(|p| p.starts_with("--build-info"));
+                if !has_build_info {
+                    parts.push("--build-info");
+                }
+                let has_build_info_path = parts.iter().any(|p| p.starts_with("--build-info-path"));
+                if !has_build_info_path {
+                    parts.push("--build-info-path");
+                    parts.push(folder.as_str());
+                } else {
+                    remove_folder!();
+                    return Err("build-info-path is not supported".into());
+                }
+            }
+            "npx" | "npm" | "pnpm" | "yarn" => {
+                folder = std::env::current_dir()?.to_str().unwrap().to_string() + "/artifacts/build-info";
+            }
+            _ => {
+                remove_folder!();
+                return Err(format!("unsupported command: {}", parts[0]).into());
+            }
+        }
+
+        // execute the command and directly output to stdout
+        let output = std::process::Command::new(bin)
+            .args(parts)
+            .status()
+            .expect("failed to execute command");
+        if !output.success() {
+            remove_folder!();
+            return Err(format!("command failed").into());
+        }
+
+        let res = match bin {
+            "solc" => {
+                let mut metadata = vec![];
+                let combined_json = serde_json::from_str::<Value>(&std::fs::read_to_string(combined_json_path)?)?;
+                let output = combined_json.as_object().unwrap();
+                for entry in std::fs::read_dir(folder.clone())? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with("_meta.json") {
+                        let json = std::fs::read_to_string(path)?;
+                        metadata.push(
+                            serde_json::from_str::<Value>(&json)?
+                                .as_object()
+                                .unwrap()
+                                .get("sources")
+                                .unwrap()
+                                .as_object()
+                                .unwrap()
+                                .iter()
+                                .map(|(filename, source)| {
+                                    (filename.clone(), source["content"].as_str().unwrap().to_string())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                }
+                Self::_from_solc_json(
+                    metadata
+                        .iter()
+                        .flatten()
+                        .map(|(filename, source)| (filename.clone(), source.clone()))
+                        .collect(),
+                    &output,
+                )
+            }
+            "forge" => {
+                for entry in std::fs::read_dir(folder.clone())? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
+                        let json = std::fs::read_to_string(path)?;
+                        remove_folder!();
+                        return Self::from_solc_json(json);
+                    }
+                }
+                Err("no json file found".into())
+            }
+            "npx" | "npm" | "pnpm" | "yarn" => {
+                for entry in std::fs::read_dir(folder.clone())? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
+                        let json = std::fs::read_to_string(path)?;
+                        return Self::from_solc_json(json);
+                    }
+                }
+                Err("no json file found in artifacts/build-info/".into())
+            }
+            _ => Err("unsupported command".into()),
+        };
+        remove_folder!();
+        res
+    }
+
+    pub fn from_solc_json(json: String) -> Result<Vec<Self>, Box<dyn Error>> {
+        let arr = serde_json::from_str::<Value>(&json)?;
+        let input = arr
+            .as_object()
+            .expect("failed to parse object")
+            .get("input")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
+
+        let output = arr
+            .as_object()
+            .expect("failed to parse object")
+            .get("output")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
+
+        let sources_kv = input
+            .get("sources")
+            .expect("get sources failed")
+            .as_object()
+            .expect("get sources failed");
+        Self::_from_solc_json(
+            sources_kv
+                .iter()
+                .map(|(filename, source)| {
+                    (
+                        filename.clone(),
+                        source["content"].as_str().expect("get content failed").to_string(),
+                    )
+                })
+                .collect(),
+            output,
+        )
+    }
+
+    fn _from_solc_json(input: Vec<(String, String)>, output: &Map<String, Value>) -> Result<Vec<Self>, Box<dyn Error>> {
+        let mut result = Self {
+            contracts: HashMap::new(),
+            sources: vec![],
+        };
+
+        if let Some(errors) = output.get("errors") {
+            for error in errors.as_array().expect("get errors failed") {
+                let error = error.as_object().expect("get error failed");
+                if error["severity"].as_str().expect("get severity failed") == "error" {
+                    return Err(error["formattedMessage"]
+                        .as_str()
+                        .expect("get formattedMessage failed")
+                        .into());
+                }
+            }
+        }
+
+        if let Some(srclist) = output.get("sourceList") {
+            let srclist = srclist.as_array().expect("get sourceList failed");
+            for filename in srclist {
+                let filename = filename.as_str().expect("get filename failed");
+                for (name, source) in &input {
+                    if name == filename {
+                        result.sources.push((name.clone(), source.clone()));
+                    }
+                }
+            }
+        } else {
+            for (name, source) in &input {
+                result.sources.push((name.clone(), source.clone()));
+            }
+        }
+
+        let contracts = output
+            .get("contracts")
+            .expect("get contracts failed")
+            .as_object()
+            .expect("get contracts failed");
+
+        for (file_name, contract) in contracts {
+            if file_name.contains(":") {
+                let parts = file_name.split(":").collect_vec();
+                let contract_name = parts[1];
+                let file_name = parts[0];
+                let contract = contract.as_object().expect("get contract failed");
+                let bytecode = contract["bin"].as_str().expect("get bytecode failed");
+                let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
+                let source_map = contract["srcmap-runtime"]
+                    .as_str()
+                    .expect("get sourceMap failed")
+                    .to_string();
+                result.contracts.insert(
+                    (file_name.to_string(), contract_name.to_string()),
+                    ContractArtifact {
+                        deploy_bytecode: bytecode,
+                        abi,
+                        source_map,
+                        source_map_replacements: vec![],
+                    },
+                );
+            } else {
+                for (contract_name, contract) in contract.as_object().expect("get contract failed") {
+                    let contract = contract.as_object().expect("get contract failed");
+                    let bytecode = contract["evm"]["bytecode"]["object"]
+                        .as_str()
+                        .expect("get bytecode failed");
+                    let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                    let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
+                    let source_map = contract["evm"]["deployedBytecode"]["sourceMap"]
+                        .as_str()
+                        .expect("get sourceMap failed")
+                        .to_string();
+                    result.contracts.insert(
+                        (file_name.clone(), contract_name.clone()),
+                        ContractArtifact {
+                            deploy_bytecode: bytecode,
+                            abi,
+                            source_map,
+                            source_map_replacements: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        Ok(vec![result])
+    }
+
     pub fn locate(_existing_artifacts: &[Self], _to_find: Vec<u8>) -> Option<BuildJobResult> {
         todo!("locate artifact")
         // let mut candidates = vec![];
@@ -175,12 +439,22 @@ impl OffChainArtifact {
 
 #[cfg(test)]
 mod tests {
-
+    // use tracing::debug;
+    // use crate::evm::blaz::offchain_artifacts::OffChainArtifact;
+    //
     // #[test]
     // fn test_from_url() {
-    //     let url = "https://storage.googleapis.com/faas_bucket_1/client_builds/36b4bea2-2f2d-41d0-835e-db10e0a72ddf-results.json?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=client-project-rw%40adept-vigil-394020.iam.gserviceaccount.com%2F20230821%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230821T163007Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=89f3af8074712c7d5720844617064c1f62544c9b4667dbf7b910d988ef81c10c282ffcdd6160acff8a513e581b2516a6de8cda08f92788d210da110d87c00dff65c9a4f19fdb8e004b90578dd2978fbbf1c7bef7b9415579da7127651c46a2ae6115b1d425eba7c7950dc6df52925e7f4f204605c5c470fccebb922db95fa0d3ebeabfa33454ab1174e8ae8efa5b2cd7269c2edfd446cfee696d8b5172171eb3ae71db9da2f3554f52dc522ba01d60de71ba4fc5eb8040ff85a16fdf5685ba983f53728da90a672ada45e92eda1e4c88ee397027eacd36972f5f8551afbdf1ed747ce12e19a0c4b446e66b4cca6c8a177c2ee8e503d09930fa04ba464c1d6db6";
-    //     let artifact =
-    // OffChainArtifact::from_json_url(url.to_string()).expect("get artifact
-    // failed");     debug!("{:?}", artifact);
+    //     use super::*;
+    //     // let url =
+    // "/Users/shou/coding/test_foundry/build-info/
+    // 685c8631ec48f140bc646da3dcfdb3d9.json";     // let artifact =
+    // OffChainArtifact::from_solc_file(url.to_string()).expect("get artifact
+    // failed");     // chdir
+    //     let dir = "/Users/shou/coding/test_foundry";
+    //     std::env::set_current_dir(dir).expect("set current dir failed");
+    //
+    //     let artifact = OffChainArtifact::from_command("solc
+    // src/Counter.sol".to_string()).expect("get artifact failed");
+    //     println!("{:?}", artifact);
     // }
 }

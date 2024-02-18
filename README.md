@@ -11,15 +11,18 @@
 
 ItyFuzz is a blazing-fast EVM and MoveVM smart contract hybrid fuzzer that combines symbolic execution and fuzzing to find bugs in smart contracts offchain and onchain. 
 
+## Install
+```
+curl -L https://ity.fuzz.land/ | bash
+ityfuzzup
+```
+
 ## Example
+#### Fuzzing Deployed Smart Contract
 
 Generating full exploit to steal funds from a [contract](https://polygonscan.com/address/0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb) with flashloan + read-only reentrancy vulnerability on Polygon.
 
 ```bash
-# Install ItyFuzz
-curl -L https://ity.fuzz.land/ | bash
-ityfuzzup
-
 # Fork Polygon at block 35718198 and fuzz the contract
 ETH_RPC_URL=https://polygon-rpc.com ityfuzz evm\
     -t 0xbcf6e9d27bf95f3f5eddb93c38656d684317d5b4,0x5d6c48f05ad0fde3f64bab50628637d73b1eb0bb\
@@ -27,6 +30,14 @@ ETH_RPC_URL=https://polygon-rpc.com ityfuzz evm\
     --flashloan\
     --onchain-block-number 35718198\
     --onchain-etherscan-api-key TR24XDQF35QCNK9PZBV8XEH2XRSWTPWFWT # <-- Get your own API key at https://polygonscan.com/apis if this one is rate limited 
+```
+
+#### Foundry Invariant Test
+Run a Foundry invariant test defined in `Invariant` contract in `test/Invariant.sol`.
+
+```bash
+# Replaces: forge test --mc test/Invariant.sol:Invariant
+ityfuzz evm -m test/Invariant.sol:Invariant -- forge test
 ```
 
 For other examples and usages, check out the [docs](https://docs.ityfuzz.rs).
