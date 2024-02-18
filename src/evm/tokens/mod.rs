@@ -653,9 +653,9 @@ mod tests {
     //     let token =
     // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
     // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     // HarryPotterObamaSonic10Inu
-    // => weth     trade("buy", token, amount, 0, 19044110,
-    // &EVMAddress::zero()); }
+    // EVMU256::from_str("2000000000000000000").unwrap();     //
+    // HarryPotterObamaSonic10Inu => weth     trade("buy", token, amount, 0,
+    // 19044110, &EVMAddress::zero()); }
     //
     // // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
     // #[test]
@@ -663,9 +663,9 @@ mod tests {
     //     let token =
     // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
     // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     // HarryPotterObamaSonic10Inu
-    // => OSAK => weth     trade("buy", token, amount, 1, 19044110,
-    // &EVMAddress::zero()); }
+    // EVMU256::from_str("2000000000000000000").unwrap();     //
+    // HarryPotterObamaSonic10Inu => OSAK => weth     trade("buy", token,
+    // amount, 1, 19044110, &EVMAddress::zero()); }
     //
     // #[test]
     // fn test_buy_three_hop_with_fee() {
@@ -673,7 +673,7 @@ mod tests {
     //     let token =
     // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
     // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     // HarryPotterObamaSonic10Inu
-    // => weth     trade("buy", token, amount, 2, 19044110,
-    // &EVMAddress::zero()); }
+    // EVMU256::from_str("2000000000000000000").unwrap();     //
+    // HarryPotterObamaSonic10Inu => weth     trade("buy", token, amount, 2,
+    // 19044110, &EVMAddress::zero()); }
 }
