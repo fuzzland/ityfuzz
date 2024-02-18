@@ -140,7 +140,7 @@ impl OffChainArtifact {
             return Err("invalid command".into());
         }
         let bin = parts.remove(0);
-        let folder = format!(
+        let mut folder = format!(
             ".tmp-build-info-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -153,7 +153,7 @@ impl OffChainArtifact {
 
         macro_rules! remove_folder {
             () => {
-                if std::path::Path::new(&folder).exists() {
+                if folder.starts_with(".tmp") && std::path::Path::new(&folder).exists() {
                     std::fs::remove_dir_all(folder.clone())?;
                 }
             };
@@ -184,12 +184,11 @@ impl OffChainArtifact {
                 }
             }
             "npx" | "npm" | "pnpm" | "yarn" => {
-                remove_folder!();
-                return Err("Hardhat not supported yet :(".into());
+                folder = std::env::current_dir()?.to_str().unwrap().to_string() + "/artifacts/build-info";
             }
             _ => {
                 remove_folder!();
-                return Err("unsupported command".into());
+                return Err(format!("unsupported command: {}", parts[0]).into());
             }
         }
 
@@ -250,10 +249,20 @@ impl OffChainArtifact {
                 }
                 Err("no json file found".into())
             }
+            "npx" | "npm" | "pnpm" | "yarn" => {
+                for entry in std::fs::read_dir(folder.clone())? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
+                        let json = std::fs::read_to_string(path)?;
+                        return Self::from_solc_json(json);
+                    }
+                }
+                Err("no json file found in artifacts/build-info/".into())
+            }
             _ => Err("unsupported command".into()),
         };
         remove_folder!();
-
         res
     }
 

@@ -599,7 +599,7 @@ pub fn evm_main(mut args: EvmArgs) {
         } else if !args.offchain_config_url.is_empty() || !args.offchain_config_file.is_empty() {
             target_type = EVMTargetType::Config;
         } else {
-            panic!("Please specify --setup-file (The contract that deploys the project) or --offchain-config-file (JSON for deploying the project)");
+            panic!("Please specify --deployment-script (The contract that deploys the project) or --offchain-config-file (JSON for deploying the project)");
         }
     }
 

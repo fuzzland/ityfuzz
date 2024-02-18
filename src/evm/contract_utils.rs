@@ -762,7 +762,7 @@ impl ContractLoader {
         if !found {
             let all_files = all_slugs
                 .iter()
-                .filter(|s| !s.starts_with("lib/"))
+                .filter(|s| !s.starts_with("lib/") && !s.starts_with("hardhat/"))
                 .map(|s| format!("- {}", s))
                 .collect::<Vec<String>>()
                 .join("\n");
