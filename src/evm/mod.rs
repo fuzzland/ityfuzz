@@ -255,10 +255,17 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     load_corpus: String,
 
-    /// Specify the setup file that deploys all the contract. Fuzzer invokes
-    /// setUp() to deploy.
+    /// [DEPRECATED] Specify the setup file that deploys all the contract.
+    /// Fuzzer invokes setUp() to deploy.
     #[arg(long, default_value = "")]
     setup_file: String,
+
+    /// Specify the deployment script contract that deploys all the contract.
+    /// Fuzzer invokes constructor or setUp() of this script to deploy.
+    /// For example, if you have contract X in file Y that deploys all the
+    /// contracts, you can specify --deployment-script Y:X
+    #[arg(long, short = 'm', default_value = "")]
+    deployment_script: String,
 
     /// Forcing a contract to use the given abi. This is useful when the
     /// contract is a complex proxy or decompiler has trouble to detect the abi.
@@ -399,7 +406,8 @@ impl OracleType {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn evm_main(args: EvmArgs) {
+pub fn evm_main(mut args: EvmArgs) {
+    args.setup_file = args.deployment_script;
     let target = args.target.clone();
     if !args.base_directory.is_empty() {
         std::env::set_current_dir(args.base_directory).unwrap();

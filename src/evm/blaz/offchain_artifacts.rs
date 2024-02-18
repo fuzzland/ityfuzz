@@ -150,6 +150,14 @@ impl OffChainArtifact {
         if !std::path::Path::new(&folder).exists() {
             std::fs::create_dir_all(&folder)?;
         }
+
+        macro_rules! remove_folder {
+            () => {
+                if std::path::Path::new(&folder).exists() {
+                    std::fs::remove_dir_all(folder.clone())?;
+                }
+            };
+        }
         let combined_json_path = folder.clone() + "/combined.json";
 
         match bin {
@@ -171,13 +179,16 @@ impl OffChainArtifact {
                     parts.push("--build-info-path");
                     parts.push(folder.as_str());
                 } else {
+                    remove_folder!();
                     return Err("build-info-path is not supported".into());
                 }
             }
             "npx" | "npm" | "pnpm" | "yarn" => {
+                remove_folder!();
                 return Err("Hardhat not supported yet :(".into());
             }
             _ => {
+                remove_folder!();
                 return Err("unsupported command".into());
             }
         }
@@ -188,15 +199,16 @@ impl OffChainArtifact {
             .status()
             .expect("failed to execute command");
         if !output.success() {
+            remove_folder!();
             return Err(format!("command failed").into());
         }
 
-        match bin {
+        let res = match bin {
             "solc" => {
                 let mut metadata = vec![];
                 let combined_json = serde_json::from_str::<Value>(&std::fs::read_to_string(combined_json_path)?)?;
                 let output = combined_json.as_object().unwrap();
-                for entry in std::fs::read_dir(folder)? {
+                for entry in std::fs::read_dir(folder.clone())? {
                     let entry = entry?;
                     let path = entry.path();
                     if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with("_meta.json") {
@@ -227,18 +239,22 @@ impl OffChainArtifact {
                 )
             }
             "forge" => {
-                for entry in std::fs::read_dir(folder)? {
+                for entry in std::fs::read_dir(folder.clone())? {
                     let entry = entry?;
                     let path = entry.path();
                     if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
                         let json = std::fs::read_to_string(path)?;
+                        remove_folder!();
                         return Self::from_solc_json(json);
                     }
                 }
                 Err("no json file found".into())
             }
             _ => Err("unsupported command".into()),
-        }
+        };
+        remove_folder!();
+
+        res
     }
 
     pub fn from_solc_json(json: String) -> Result<Vec<Self>, Box<dyn Error>> {
