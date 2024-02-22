@@ -14,7 +14,8 @@ default = [
     "evm",
     "print_txn_corpus",
     "full_trace",
-    "force_cache"
+    "force_cache",
+    "real_balance"
 ]
 evm = []
 cmp = []

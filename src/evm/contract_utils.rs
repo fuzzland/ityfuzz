@@ -736,33 +736,25 @@ impl ContractLoader {
         }
 
         let mut all_slugs = vec![];
-        let mut found = false;
+        let mut all_matched_slugs = vec![];
         let mut setup_data = None;
-        let mut last_slug = None;
-        'artifacts: for artifact in offchain_artifacts {
-            for ((filename, contract_name), contract_artifact) in &artifact.contracts {
+        for artifact in offchain_artifacts {
+            for ((filename, contract_name), contract_artifact) in &artifact.contracts.iter()
+                .filter(|((s, _), _)| !s.starts_with("lib/") && !s.starts_with("hardhat/"))
+                .collect::<Vec<_>>()
+            {
                 let slug = format!("{filename}:{contract_name}");
                 all_slugs.push(slug.clone());
 
                 if slug.contains(&setup_file) {
-                    if last_slug.is_some() {
-                        panic!("More than one contract found matching the provided deployment script pattern {}: \n- {}\n- {}", setup_file, last_slug.unwrap(), slug);
-                    }
-                    found = true;
-                    setup_data = Some(Self::call_setup(
-                        contract_artifact.deploy_bytecode.clone(),
-                        work_dir.clone(),
-                    ));
-                    last_slug = Some(slug);
-                    continue;
-                    // break 'artifacts;
+                    all_matched_slugs.push(slug.clone());
                 }
             }
         }
-        if !found {
+
+        if all_matched_slugs.is_empty() {
             let all_files = all_slugs
                 .iter()
-                .filter(|s| !s.starts_with("lib/") && !s.starts_with("hardhat/"))
                 .map(|s| format!("- {}", s))
                 .collect::<Vec<String>>()
                 .join("\n");
@@ -770,7 +762,36 @@ impl ContractLoader {
                 "Deployment script {} not found. Available contracts: \n{}",
                 setup_file, all_files
             );
+        } else if all_matched_slugs.len() > 1 {
+            let all_files = all_matched_slugs
+                .iter()
+                .map(|s| format!("- {}", s))
+                .collect::<Vec<String>>()
+                .join("\n");
+            panic!(
+                "More than one contract found matching the provided deployment script pattern {}: \n{}",
+                setup_file,
+                all_files
+            );
         }
+
+        let setup_file = all_matched_slugs[0].clone();
+
+        'artifacts: for artifact in offchain_artifacts {
+            for ((filename, contract_name), contract_artifact) in &artifact.contracts {
+                let slug = format!("{filename}:{contract_name}");
+                all_slugs.push(slug.clone());
+
+                if slug.contains(&setup_file) {
+                    setup_data = Some(Self::call_setup(
+                        contract_artifact.deploy_bytecode.clone(),
+                        work_dir.clone(),
+                    ));
+                    break 'artifacts;
+                }
+            }
+        }
+
         for (addr, code) in setup_data.clone().unwrap().code {
             let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
 
