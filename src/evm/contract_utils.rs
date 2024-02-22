@@ -739,7 +739,9 @@ impl ContractLoader {
         let mut all_matched_slugs = vec![];
         let mut setup_data = None;
         for artifact in offchain_artifacts {
-            for ((filename, contract_name), contract_artifact) in &artifact.contracts.iter()
+            for ((filename, contract_name), contract_artifact) in &artifact
+                .contracts
+                .iter()
                 .filter(|((s, _), _)| !s.starts_with("lib/") && !s.starts_with("hardhat/"))
                 .collect::<Vec<_>>()
             {
@@ -770,8 +772,7 @@ impl ContractLoader {
                 .join("\n");
             panic!(
                 "More than one contract found matching the provided deployment script pattern {}: \n{}",
-                setup_file,
-                all_files
+                setup_file, all_files
             );
         }
 
