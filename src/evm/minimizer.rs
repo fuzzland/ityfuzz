@@ -118,7 +118,6 @@ impl<E: libafl::executors::HasObservers>
         let mut txs = Self::get_call_seq(last_sstate, state);
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
         assert!(!txs.is_empty());
-        txs.iter().for_each(|tx| println!("{:?}", tx));
         let mut minimized = false;
         let mut initial_state = txs[0].0.sstate.clone();
         while !minimized {
