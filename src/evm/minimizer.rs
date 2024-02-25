@@ -119,11 +119,12 @@ impl<E: libafl::executors::HasObservers>
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
         assert!(!txs.is_empty());
         let mut minimized = false;
+        let mut initial_state = txs[0].0.sstate.clone();
         while !minimized {
             minimized = true;
             for try_skip in 0..(txs.len()) {
-                let mut current_state = txs[0].0.sstate.clone();
                 let mut is_solution = false;
+                let mut current_state = initial_state.clone();
 
                 for (i, item) in txs.iter().enumerate() {
                     if i == try_skip {
@@ -132,7 +133,7 @@ impl<E: libafl::executors::HasObservers>
 
                     // skip when there is no post execution but the tx is step
                     if item.0.is_step() && !current_state.state.has_post_execution() {
-                        continue;
+                        break;
                     }
 
                     let (mut tx, call_leak) = item.clone();
