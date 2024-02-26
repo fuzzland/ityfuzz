@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use colored::Colorize;
 use regex::Regex;
 use revm_primitives::U256;
@@ -77,6 +79,36 @@ pub fn remove_color(input: &str) -> String {
     let reg = Regex::new(r"\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]").unwrap();
 
     reg.replace_all(input, "").to_string()
+}
+
+pub fn try_write_file(path: &str, data: &str, append: bool) -> Result<(), String> {
+    let mut retry = 3;
+    while retry > 0 {
+        retry -= 1;
+
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(append)
+            .open(path)
+        {
+            Ok(mut file) => match file.write_all(data.as_bytes()) {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    if retry <= 0 {
+                        return Err(format!("Failed to write to file: {}", e));
+                    }
+                }
+            },
+            Err(e) => {
+                if retry <= 0 {
+                    return Err(format!("Failed to create or open file: {}", e));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn get_rgb_by_address(addr: &str) -> (u8, u8, u8) {

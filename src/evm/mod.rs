@@ -415,9 +415,7 @@ pub fn evm_main(mut args: EvmArgs) {
 
     let work_dir = args.work_dir.clone();
     let work_path = Path::new(work_dir.as_str());
-    if !work_path.exists() {
-        std::fs::create_dir(work_path).unwrap();
-    }
+    let _ = std::fs::create_dir_all(work_path);
 
     let mut target_type: EVMTargetType = match args.target_type {
         Some(v) => EVMTargetType::from_str(v.as_str()),
@@ -777,12 +775,6 @@ pub fn evm_main(mut args: EvmArgs) {
 
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(abis_json)
-        .expect("Failed to open or create abis.json");
-
-    writeln!(file, "{}", json_str).expect("Failed to write abis to abis.json");
+    utils::try_write_file(&abis_json, &json_str, true).unwrap();
     evm_fuzzer(config, &mut state)
 }

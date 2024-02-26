@@ -69,7 +69,11 @@ pub fn all_bytecode(bytes: &Vec<u8>) -> Vec<(usize, u8)> {
     let mut res = Vec::new();
 
     while i < bytes.len() - cbor_len {
-        let op = *bytes.get(i).unwrap();
+        let op = if let Some(op) = bytes.get(i) {
+            *op
+        } else {
+            break;
+        };
         res.push((i, op));
         i += 1;
         if (0x60..=0x7f).contains(&op) {
