@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, fs::OpenOptions, io::Write};
+use std::{collections::HashMap, fmt::Debug};
 
 use bytes::Bytes;
 use itertools::Itertools;
@@ -13,6 +13,7 @@ use crate::evm::{
     middlewares::middleware::{Middleware, MiddlewareType},
     srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
     types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256},
+    utils,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -94,22 +95,14 @@ impl CallPrinter {
     }
 
     pub fn save_trace(&self, path: &str) {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(false)
-            .open(path)
-            .unwrap();
-        file.write_all(self.get_trace().as_bytes()).unwrap();
+        utils::try_write_file(path, &self.get_trace(), false).unwrap();
 
-        let mut json_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(false)
-            .open(format!("{}.json", path))
-            .unwrap();
-        let json = serde_json::to_string(&self.results).unwrap();
-        json_file.write_all(json.as_bytes()).unwrap();
+        utils::try_write_file(
+            &format!("{}.json", path),
+            &serde_json::to_string(&self.results).unwrap(),
+            false,
+        )
+        .unwrap();
     }
 
     fn translate_address(&self, a: EVMAddress) -> String {
