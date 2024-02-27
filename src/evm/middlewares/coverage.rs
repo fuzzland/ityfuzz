@@ -2,14 +2,12 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::{Debug, Display, Formatter},
     fs,
-    fs::OpenOptions,
-    io::Write,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use itertools::Itertools;
-use libafl::{schedulers::Scheduler, state::HasMetadata};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -19,13 +17,16 @@ use serde::Serialize;
 use serde_json;
 use tracing::info;
 
-use crate::evm::{
-    bytecode_iterator::all_bytecode,
-    host::FuzzHost,
-    middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::{RawSourceMapInfo, SourceCodeResult, SOURCE_MAP_PROVIDER},
-    types::{is_zero, EVMAddress, EVMFuzzState},
-    vm::IN_DEPLOY,
+use crate::{
+    evm::{
+        bytecode_iterator::all_bytecode,
+        host::FuzzHost,
+        middlewares::middleware::{Middleware, MiddlewareType},
+        srcmap::{RawSourceMapInfo, SourceCodeResult, SOURCE_MAP_PROVIDER},
+        types::{is_zero, EVMAddress, EVMFuzzState},
+        vm::IN_DEPLOY,
+    },
+    utils,
 };
 
 pub static mut EVAL_COVERAGE: bool = false;
@@ -139,28 +140,14 @@ impl CoverageReport {
 
     pub fn dump_file(&self, work_dir: String) {
         // write text file
-        let mut text_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/coverage.txt", work_dir.clone()))
-            .unwrap();
-        text_file.write_all(self.to_string().as_bytes()).unwrap();
-        text_file.flush().unwrap();
+        let path = format!("{}/coverage.txt", work_dir.clone());
+        let content = self.to_string();
+        utils::try_write_file(path, &content, false).expect("Failed to write coverage.txt");
 
         // write json file
-        let mut json_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/coverage.json", work_dir))
-            .unwrap();
-        json_file
-            .write_all(serde_json::to_string(self).unwrap().as_bytes())
-            .unwrap();
-        json_file.flush().unwrap();
+        let path = format!("{}/coverage.json", work_dir);
+        let content = serde_json::to_string(self).unwrap();
+        utils::try_write_file(path, &content, false).expect("Failed to write coverage.json");
 
         // write succint json file
         let succint_cov_map = self.succint();
@@ -168,17 +155,9 @@ impl CoverageReport {
         if !Path::new(&format!("{}/coverage", work_dir)).exists() {
             fs::create_dir_all(format!("{}/coverage", work_dir)).unwrap();
         }
-        let mut diff_json_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/coverage/cov_{}.json", work_dir, timestamp))
-            .unwrap();
-        diff_json_file
-            .write_all(serde_json::to_string(&succint_cov_map).unwrap().as_bytes())
-            .unwrap();
-        diff_json_file.flush().unwrap();
+        let path = format!("{}/coverage/cov_{}.json", work_dir, timestamp);
+        let content = serde_json::to_string(&succint_cov_map).unwrap();
+        utils::try_write_file(path, &content, false).expect("Failed to write succint coverage.json");
     }
 
     pub fn summarize(&self) {
@@ -342,18 +321,10 @@ where
         self.skip_pcs.insert(address, skip_pcs);
 
         // write file information
-        let mut file_json_file = OpenOptions::new()
-            .write(true)
-            .append(false)
-            .create(true)
-            .truncate(true)
-            .open(format!("{}/files.json", self.work_dir))
-            .unwrap();
         let all_sources = SOURCE_MAP_PROVIDER.lock().unwrap().all_sources();
-        file_json_file
-            .write_all(serde_json::to_string(&all_sources).unwrap().as_bytes())
-            .unwrap();
-        file_json_file.flush().unwrap();
+        let path = format!("{}/files.json", self.work_dir);
+        let content = serde_json::to_string(&all_sources).unwrap();
+        utils::try_write_file(path, &content, false).expect("Failed to write files.json");
     }
 
     fn get_type(&self) -> MiddlewareType {

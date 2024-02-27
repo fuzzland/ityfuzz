@@ -2,7 +2,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     env,
     fmt::Debug,
-    fs::{File, OpenOptions},
+    fs::File,
     hash::{Hash, Hasher},
     io::Write,
     marker::PhantomData,
@@ -49,6 +49,7 @@ use crate::{
     oracle::BugMetadata,
     scheduler::HasReportCorpus,
     state::{HasCurrentInputIdx, HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState},
+    utils,
 };
 
 pub static mut RUN_FOREVER: bool = false;
@@ -566,20 +567,14 @@ where
                 solution::generate_test(cur_report.clone(), minimized);
 
                 let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
-                let mut f = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(vuln_file)
-                    .expect("Unable to open file");
-                f.write_all(unsafe {
+                let mut content = unsafe {
                     ORACLE_OUTPUT
                         .iter()
                         .map(|v| serde_json::to_string(v).expect("failed to json"))
                         .join("\n")
-                        .as_bytes()
-                })
-                .expect("Unable to write data");
-                f.write_all(b"\n").expect("Unable to write data");
+                };
+                content.push('\n');
+                utils::try_write_file(vuln_file, &content, true).expect("failed to write vuln_info.jsonl");
 
                 #[cfg(feature = "print_txn_corpus")]
                 {

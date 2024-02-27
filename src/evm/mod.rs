@@ -29,8 +29,6 @@ pub mod vm;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
-    io::Write,
     path::Path,
     rc::Rc,
     str::FromStr,
@@ -774,7 +772,6 @@ pub fn evm_main(mut args: EvmArgs) {
     let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
 
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
-
-    utils::try_write_file(&abis_json, &json_str, true).unwrap();
+    super::utils::try_write_file(abis_json, &json_str, true).expect("Failed to write ABI map to file");
     evm_fuzzer(config, &mut state)
 }

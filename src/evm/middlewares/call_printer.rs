@@ -8,11 +8,13 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing::debug;
 
-use crate::evm::{
-    host::FuzzHost,
-    middlewares::middleware::{Middleware, MiddlewareType},
-    srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
-    types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256},
+use crate::{
+    evm::{
+        host::FuzzHost,
+        middlewares::middleware::{Middleware, MiddlewareType},
+        srcmap::{RawSourceMapInfo, SOURCE_MAP_PROVIDER},
+        types::{as_u64, convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256},
+    },
     utils,
 };
 
@@ -95,14 +97,14 @@ impl CallPrinter {
     }
 
     pub fn save_trace(&self, path: &str) {
-        utils::try_write_file(path, &self.get_trace(), false).unwrap();
+        utils::try_write_file(path, &self.get_trace(), false).expect("Failed to write trace file");
 
         utils::try_write_file(
-            &format!("{}.json", path),
+            format!("{}.json", path),
             &serde_json::to_string(&self.results).unwrap(),
             false,
         )
-        .unwrap();
+        .expect("Failed to write trace json file");
     }
 
     fn translate_address(&self, a: EVMAddress) -> String {

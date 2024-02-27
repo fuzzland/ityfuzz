@@ -20,6 +20,7 @@ use tracing::{debug, error};
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{blaz::get_client, srcmap::SOURCE_MAP_PROVIDER, types::EVMAddress},
+    utils,
 };
 
 #[derive(Clone, Debug)]
@@ -64,13 +65,8 @@ impl BuildJob {
                 std::fs::create_dir_all(path).unwrap();
             }
             let builder_file = format!("{}/builder_id.txt", self.work_dir.as_str());
-            let mut file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(builder_file)
-                .expect("Failed to open or create builder_id.txt");
-            writeln!(file, "0x{}:{}", hex::encode(addr), task_id)
-                .expect("Failed to write addr:task_id to builder_id.txt");
+            let content = format!("0x{}:{}", hex::encode(addr), task_id);
+            utils::try_write_file(builder_file, &content, true).expect("Failed to write builder_id.txt");
 
             Some(JobContext::new(task_id.to_string(), self.build_server.clone()))
         } else {

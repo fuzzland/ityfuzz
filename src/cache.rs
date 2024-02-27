@@ -1,9 +1,11 @@
 use std::{
     error::Error,
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::prelude::*,
     path::Path,
 };
+
+use crate::utils;
 
 pub trait Cache {
     fn save(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>>;
@@ -40,9 +42,8 @@ impl Cache for FileSystemCache {
         if let Some(parent) = path_obj.parent() {
             fs::create_dir_all(parent)?;
         }
-        let mut file = OpenOptions::new().write(true).create(true).open(path)?;
-        file.write_all(value.as_bytes())?;
-        Ok(())
+
+        Ok(utils::try_write_file(path, value, false)?)
     }
 
     fn load(&self, key: &str) -> Result<String, Box<dyn Error>> {
