@@ -45,6 +45,7 @@ pub enum Chain {
     CELO,
     ZKEVM,
     ZkevmTestnet,
+    BLAST,
     LOCAL,
 }
 
@@ -75,6 +76,7 @@ impl FromStr for Chain {
             "CELO" | "celo" => Ok(Self::CELO),
             "ZKEVM" | "zkevm" => Ok(Self::ZKEVM),
             "ZKEVM_TESTNET" | "zkevm_testnet" => Ok(Self::ZkevmTestnet),
+            "BLAST" | "blast" => Ok(Self::BLAST),
             "LOCAL" | "local" => Ok(Self::LOCAL),
             _ => Err(()),
         }
@@ -100,6 +102,7 @@ impl Chain {
             Chain::CELO => 42220,
             Chain::ZKEVM => 1101,
             Chain::ZkevmTestnet => 1442,
+            Chain::BLAST => 81457,
             Chain::LOCAL => 31337,
         }
     }
@@ -122,6 +125,7 @@ impl Chain {
             Chain::CELO => "celo",
             Chain::ZKEVM => "zkevm",
             Chain::ZkevmTestnet => "zkevm_testnet",
+            Chain::BLAST => "blast",
             Chain::LOCAL => "local",
         }
         .to_string()
@@ -148,6 +152,7 @@ impl Chain {
             Chain::CELO => "https://rpc.ankr.com/celo",
             Chain::ZKEVM => "https://rpc.ankr.com/polygon_zkevm",
             Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
+            Chain::BLAST => "https://rpc.ankr.com/blast",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -171,6 +176,7 @@ impl Chain {
             Chain::CELO => "https://api.celoscan.io/api",
             Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
             Chain::ZkevmTestnet => "https://api-testnet-zkevm.polygonscan.com/api",
+            Chain::BLAST => "https://api.routescan.io/v2/network/mainnet/evm/81457/etherscan",
             Chain::LOCAL => "http://localhost:8080/abi/",
         }
         .to_string()
