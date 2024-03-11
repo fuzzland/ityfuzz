@@ -83,7 +83,7 @@ Selected new vulnerabilities found:
 | FreeCash | Incorrect logic leading to price manipulation | $12k |
 | 0xnoob Token | Incorrect logic leading to price manipulation | $7k |
 | Baby Wojak Token | Incorrect logic leading to price manipulation | $4k |
-| Arrow | Incorrect posiition logic leading to fund loss | Found During Audit |
+| Arrow | Incorrect position logic leading to fund loss | Found During Audit |
 
 ItyFuzz can automatically generate exploits for >80% of previous hacks without any knowledge of the hack. 
 Refer to [backtesting](https://docs.ityfuzz.rs/tutorials/exp-known-working-hacks) for running previously hacked protocols.
