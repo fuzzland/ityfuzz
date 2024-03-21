@@ -371,7 +371,7 @@ pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInf
             factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
             init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
         },
-        _ => panic!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
+        _ => println!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
     }
 }
 
