@@ -251,6 +251,7 @@ impl PairContext for UniswapPairContext {
         let amount_out = self.calculate_amounts_out(amount_in, reserve_in, reserve_out);
 
         // 3.5 transfer out token
+        let original_balance = balanceof_token!(false, next);
         transfer_token!(false, self.pair_address, next, amount_out);
 
         // 4. update reserve
@@ -302,7 +303,10 @@ impl PairContext for UniswapPairContext {
             .flashloan_data
             .oracle_recheck_reserve
             .insert(self.pair_address);
-        Some((*next, amount_out))
+        Some((
+            *next,
+            balanceof_token!(false, next) - original_balance
+        ))
     }
 
     fn name(&self) -> String {

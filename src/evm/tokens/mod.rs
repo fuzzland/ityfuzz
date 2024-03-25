@@ -34,6 +34,7 @@ pub mod constant_pair;
 pub mod uniswap;
 pub mod v2_transformer;
 pub mod weth_transformer;
+pub mod v3_transformer;
 
 // deposit
 const SWAP_DEPOSIT: [u8; 4] = [0xd0, 0xe3, 0x0d, 0xb0];
