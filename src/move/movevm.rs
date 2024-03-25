@@ -37,6 +37,7 @@ use sui_types::{
     object::{Object, Owner},
     storage::ChildObjectResolver,
 };
+use tracing::debug;
 
 use super::types::MoveFuzzState;
 use crate::{
@@ -54,6 +55,8 @@ use crate::{
     state::HasCaller,
     state_input::StagedVMState,
 };
+use crate::r#move::corpus_initializer::{create_tx_context, MoveCorpusInitializer};
+use crate::r#move::input::FunctionDefaultable;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -464,7 +467,6 @@ where
             state.metadata_map_mut().insert(TypeTagInfoMeta::new());
         }
 
-        let meta = state.metadata_map_mut().get_mut::<TypeTagInfoMeta>().unwrap();
 
         let func_off = self.loader.module_cache.read().functions.len();
         let _module_name = module.name().to_owned();
@@ -479,6 +481,9 @@ where
                 &module,
             )
             .expect("internal deploy error");
+
+
+
         for f in &self.loader.module_cache.read().functions[func_off..] {
             // debug!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx,
             // f.name.as_str(), f.parameter_types, f.return_types());
@@ -486,11 +491,50 @@ where
                 .entry(deployed_module_idx.clone())
                 .or_default()
                 .insert(f.name.to_owned(), f.clone());
-
+            let meta = state.metadata_map_mut().get_mut::<TypeTagInfoMeta>().unwrap();
             for ty in &f.parameter_types {
                 meta.register_type_tag(ty.clone(), &self.loader);
             }
         }
+
+
+        let init_func = self.loader.module_cache.read().functions[func_off..].iter().filter(
+            |f| f.name.as_str() == "init"
+        ).map(
+            |f| f.clone()
+        ).next();
+        if let Some(init_func) = init_func {
+            let otw = &init_func.parameters;
+            debug!("init function found {:?} {_module_name} {:?}", otw, init_func.parameter_types);
+            let mut args = vec![];
+            if otw.len() == 1 {
+                args.push(
+                    create_tx_context(
+                        state.get_rand_caller(),
+                        init_func.parameter_types[0].clone()
+                    )
+                );
+            }
+
+            let move_input = MoveFunctionInput {
+                module: deployed_module_idx.clone(),
+                function: init_func.name.clone(),
+                function_info: Arc::new(FunctionDefaultable::new(init_func.clone())),
+                args: vec![],
+                ty_args: vec![],
+                caller: AccountAddress::ZERO,
+                vm_state: StagedVMState::new_with_state(MoveVMState::default()),
+                vm_state_idx: 0,
+                _deps: Default::default(),
+                _resolved: true,
+            };
+            let res = self.execute(
+                &move_input.as_any().downcast_ref::<I>().unwrap(),
+                state,
+            );
+            println!("init function found {:?}", res);
+        }
+
         Some(*deployed_module_idx.address())
     }
 
@@ -596,7 +640,7 @@ where
             // debug!("{:?}", ret);
 
             if ret.is_err() {
-                // debug!("reverted {:?}", ret);
+                debug!("reverted {:?}", ret);
                 reverted = true;
                 break;
             }

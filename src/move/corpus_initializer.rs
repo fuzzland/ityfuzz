@@ -19,6 +19,7 @@ use move_vm_types::{
 };
 use revm_primitives::HashSet;
 use sui_types::base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME};
+use tracing::{debug, info};
 
 use crate::{
     generic_vm::vm_executor::GenericVM,
@@ -62,6 +63,40 @@ pub fn is_tx_context(struct_tag: &StructTag) -> bool {
         ) &&
         struct_tag.module == TX_CONTEXT_MODULE_NAME.into() &&
         struct_tag.name == TX_CONTEXT_STRUCT_NAME.into()
+}
+
+pub fn create_tx_context(caller: AccountAddress, ty: Type) -> Value {
+    match ty {
+        Type::MutableReference(ty) | Type::Reference(ty) => {
+            if let Type::Struct(_struct_tag) = *ty {
+                // struct TxContext has drop {
+                //     /// The address of the user that signed the current transaction
+                //     sender: address,
+                //     /// Hash of the current transaction
+                //     tx_hash: vector<u8>,
+                //     /// The current epoch number
+                //     epoch: u64,
+                //     /// Timestamp that the epoch started at
+                //     epoch_timestamp_ms: u64,
+                //     /// Counter recording the number of fresh id's created while executing
+                //     /// this transaction. Always 0 at the start of a transaction
+                //     ids_created: u64
+                // }
+                let inner = Container::Struct(Rc::new(RefCell::new(vec![
+                    ValueImpl::Address(caller),
+                    ValueImpl::Container(Container::VecU8(Rc::new(RefCell::new(vec![6; 32])))),
+                    ValueImpl::U64(123213),
+                    ValueImpl::U64(2130127412),
+                    ValueImpl::U64(0),
+                ])));
+
+                return Value(ValueImpl::ContainerRef(ContainerRef::Local(inner)));
+            }
+
+        }
+        _ => unreachable!("tx context type mismatch")
+    }
+    unreachable!()
 }
 
 impl<'a, SC, ISC> MoveCorpusInitializer<'a, SC, ISC>
@@ -230,7 +265,8 @@ where
                 continue;
             }
 
-            for (_, func) in funcs {
+            for (name, func) in funcs {
+                debug!("fuzzing: {:?}::{:?}", module_id, name);
                 let input = self.build_input(&module_id, func.clone());
                 match input {
                     Some(input) => {
@@ -347,34 +383,8 @@ where
         }
     }
 
-    fn gen_tx_context(&mut self, ty: Type) -> Value {
-        if let Type::MutableReference(ty) = ty {
-            if let Type::Struct(_struct_tag) = *ty {
-                // struct TxContext has drop {
-                //     /// The address of the user that signed the current transaction
-                //     sender: address,
-                //     /// Hash of the current transaction
-                //     tx_hash: vector<u8>,
-                //     /// The current epoch number
-                //     epoch: u64,
-                //     /// Timestamp that the epoch started at
-                //     epoch_timestamp_ms: u64,
-                //     /// Counter recording the number of fresh id's created while executing
-                //     /// this transaction. Always 0 at the start of a transaction
-                //     ids_created: u64
-                // }
-                let inner = Container::Struct(Rc::new(RefCell::new(vec![
-                    ValueImpl::Address(self.state.get_rand_caller()),
-                    ValueImpl::Container(Container::VecU8(Rc::new(RefCell::new(vec![6; 32])))),
-                    ValueImpl::U64(123213),
-                    ValueImpl::U64(2130127412),
-                    ValueImpl::U64(0),
-                ])));
-
-                return Value(ValueImpl::ContainerRef(ContainerRef::Local(inner)));
-            }
-        }
-        unreachable!()
+    pub fn gen_tx_context(&mut self, ty: Type) -> Value {
+        create_tx_context(self.state.get_rand_caller(), ty)
     }
 
     fn build_input(&mut self, module_id: &ModuleId, function: Arc<Function>) -> Option<MoveFunctionInput> {
