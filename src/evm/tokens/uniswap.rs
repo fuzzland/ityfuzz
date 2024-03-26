@@ -23,6 +23,7 @@ use crate::evm::{
     onchain::endpoints::{Chain, OnChainConfig, PairData},
     types::{EVMAddress, EVMU256},
 };
+use crate::evm::tokens::v3_transformer::{slot0_parser, UniswapV3PairContext};
 
 pub struct Info {
     routes: Vec<Vec<PairData>>,
@@ -67,42 +68,70 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
         .iter()
         .map(|pairs| {
             let mut path_parsed: PathContext = Default::default();
-            pairs.iter().for_each(|pair| match pair.src.as_str() {
-                "v2" => {
-                    let inner = Rc::new(RefCell::new(UniswapPairContext {
-                        pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
-                        next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
-                        side: pair.in_ as u8,
-                        uniswap_info: Arc::new(get_uniswap_info(
-                            &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
-                            &Chain::from_str(&onchain.chain_name).unwrap(),
-                        )),
+
+            macro_rules! _gen_v2_pair_context {
+                ($pair: expr) => {{
+                    let inner = UniswapPairContext {
+                        pair_address: EVMAddress::from_str($pair.pair.as_str()).expect("failed to parse pair"),
+                        next_hop: EVMAddress::from_str($pair.next.as_str()).expect("failed to parse pair"),
+                        side: $pair.in_ as u8,
+                        uniswap_info: Arc::new(get_uniswap_info($pair.src_exact.as_str())),
                         initial_reserves: (
-                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
-                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
+                            EVMU256::try_from_be_slice(&hex::decode(&$pair.initial_reserves_0).unwrap()).unwrap(),
+                            EVMU256::try_from_be_slice(&hex::decode(&$pair.initial_reserves_1).unwrap()).unwrap(),
                         ),
-                        in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
-                    }));
-                    register_code!(inner.borrow().next_hop);
+                        in_token_address: EVMAddress::from_str($pair.in_token.as_str()).unwrap(),
+                    };
+                    register_code!(inner.next_hop);
+                    inner
+                }};
+            }
+
+            macro_rules! gen_v2_pair_context {
+                ($pair: expr) => {{
+                    let inner = Rc::new(RefCell::new(_gen_v2_pair_context!($pair)));
                     path_parsed.route.push(super::PairContextTy::Uniswap(inner));
+                }};
+            }
+
+            macro_rules! gen_v3_pair_context {
+                ($pair: expr) => {{
+                    let pair_address = EVMAddress::from_str($pair.pair.as_str()).expect("failed to parse pair");
+                    let slot0 = onchain.get_contract_slot(
+                        pair_address,
+                        EVMU256::ZERO,
+                        false
+                    );
+                    let fee = slot0_parser(slot0).get_fee();
+                    let inner = _gen_v2_pair_context!($pair);
+                    register_code!(inner.next_hop);
+                    let v3 = Rc::new(RefCell::new(UniswapV3PairContext {
+                        fee,
+                        inner,
+                    }));
+                    path_parsed.route.push(super::PairContextTy::UniswapV3(v3));
+                }};
+            }
+
+
+            pairs.iter().for_each(|pair| match pair.src.as_str() {
+                "lp" => {
+                    if pair.interface == "uniswapv2" {
+                        gen_v2_pair_context!(pair);
+                    } else if pair.interface == "uniswapv3" {
+                        gen_v3_pair_context!(pair);
+                    } else {
+                        unimplemented!("unknown interface");
+                    }
                 }
                 "pegged" => {
-                    let inner_pair = Rc::new(RefCell::new(UniswapPairContext {
-                        pair_address: EVMAddress::from_str(pair.pair.as_str()).expect("failed to parse pair"),
-                        next_hop: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
-                        side: pair.in_ as u8,
-                        uniswap_info: Arc::new(get_uniswap_info(
-                            &UniswapProvider::from_str(pair.src_exact.as_str()).unwrap(),
-                            &Chain::from_str(&onchain.chain_name).unwrap(),
-                        )),
-                        initial_reserves: (
-                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_0).unwrap()).unwrap(),
-                            EVMU256::try_from_be_slice(&hex::decode(&pair.initial_reserves_1).unwrap()).unwrap(),
-                        ),
-                        in_token_address: EVMAddress::from_str(pair.in_token.as_str()).unwrap(),
-                    }));
-                    register_code!(inner_pair.borrow().next_hop);
-                    path_parsed.route.push(super::PairContextTy::Uniswap(inner_pair));
+                    if pair.interface == "uniswapv2" {
+                        gen_v2_pair_context!(pair);
+                    } else if pair.interface == "uniswapv3" {
+                        gen_v3_pair_context!(pair);
+                    } else {
+                        unimplemented!("unknown interface");
+                    }
                     assert_eq!(pair.next, basic_info.weth);
                     let inner = Rc::new(RefCell::new(WethContext {
                         weth_address: EVMAddress::from_str(pair.next.as_str()).expect("failed to parse pair"),
@@ -265,6 +294,7 @@ fn get_pegged_next_hop(onchain: &mut OnChainConfig, token: &str, network: &str) 
             decimals_0: 0,
             decimals_1: 0,
             in_token: token.to_string(),
+            interface: "weth".to_string(),
         };
     }
     let mut peg_info = get_pair(onchain, token, network, true)

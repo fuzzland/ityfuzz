@@ -18,6 +18,7 @@ use crate::{
 };
 use crate::evm::tokens::v2_transformer::UniswapPairContext;
 
+#[derive(Debug)]
 pub struct UniswapV3PairContext {
     pub fee: u32,
     pub inner: UniswapPairContext,
@@ -49,10 +50,16 @@ impl UniswapV3PairContext {
 
 
 #[derive(Debug)]
-struct Slot0 {
-    price: EVMU256,
-    fee: u8,
-    unlocked: bool,
+pub struct Slot0 {
+    pub price: EVMU256,
+    pub fee: u8,
+    pub unlocked: bool,
+}
+
+impl Slot0 {
+    pub fn get_fee(&self) -> u32 {
+        self.fee as u32
+    }
 }
 
 pub fn slot0_parser(data: EVMU256) -> Slot0 {
@@ -132,7 +139,7 @@ pub fn exact_in_single_swap(
     Bytes::from(ret)
 }
 
-const V3_TOKEN_HOLDER: [u8; 20] = [0xa1; 20];
+pub const V3_TOKEN_HOLDER: [u8; 20] = [0xa1; 20];
 impl PairContext for UniswapV3PairContext {
     fn transform<VS, CI, SC>(
         &self,
@@ -149,7 +156,7 @@ impl PairContext for UniswapV3PairContext {
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
         let src = EVMAddress::from_slice(&V3_TOKEN_HOLDER);
-        assert_eq!(src, *_src);
+        // assert_eq!(src, *_src);
         let (in_token_address, out_token_address, side) = if reverse {
             (self.inner.next_hop, self.inner.in_token_address, 1 - self.inner.side)
         } else {
@@ -242,12 +249,13 @@ impl PairContext for UniswapV3PairContext {
         }
 
         // 1. approve the router
-        approve_token!(true, *_src, &self.inner.uniswap_info.router);
+        let router = self.inner.uniswap_info.router.expect("router not found");
+        approve_token!(true, src, &router);
         let orig_balance = balanceof_token!(false, next);
 
         // 2. use router to do the swap
         let router_code = vm.host.code.get(
-            &self.inner.uniswap_info.router,
+            &router,
         ).expect("router code not found").clone();
         let call = Contract::new_with_context_analyzed(
             exact_in_single_swap(
@@ -259,9 +267,9 @@ impl PairContext for UniswapV3PairContext {
             ),
             router_code,
             &CallContext {
-                address: self.inner.uniswap_info.router,
+                address: router,
                 caller: src,
-                code_address: self.inner.uniswap_info.router,
+                code_address: router,
                 apparent_value: EVMU256::ZERO,
                 scheme: CallScheme::Call,
             },

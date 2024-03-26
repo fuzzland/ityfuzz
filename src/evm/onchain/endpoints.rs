@@ -190,6 +190,7 @@ pub struct PairData {
     pub pair: String,
     pub in_token: String,
     pub next: String,
+    pub interface: String,
     pub src_exact: String,
     pub rate: u32,
     pub initial_reserves_0: String,
@@ -778,12 +779,13 @@ impl OnChainConfig {
                 let token0_decimals = item["token0_decimals"].as_i64().unwrap();
                 let token1_decimals = item["token1_decimals"].as_i64().unwrap();
                 let data = PairData {
-                    src: if is_pegged { "pegged" } else { "v2" }.to_string(),
+                    src: if is_pegged { "pegged" } else { "lp" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
                     pair,
                     next: if token == token0 { token1 } else { token0 },
                     in_token: token.clone(),
-                    src_exact: item["interface"].as_str().unwrap().to_string(),
+                    interface: item["interface"].as_str().unwrap().to_string(),
+                    src_exact: item["src_exact"].as_str().unwrap().to_string(),
                     rate: 0,
                     initial_reserves_0: "".to_string(),
                     initial_reserves_1: "".to_string(),
