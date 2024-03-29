@@ -7,7 +7,7 @@ use libafl::{
     corpus::Testcase,
     prelude::{CorpusId, HasMetadata, HasRand, HasTestcase, UsesInput},
     schedulers::{RemovableScheduler, Scheduler},
-    state::{HasCorpus, UsesState},
+    state::{HasCorpus, State, UsesState},
     Error,
 };
 use libafl_bolts::{impl_serdeany, prelude::Rand};
@@ -57,7 +57,7 @@ impl<S> SortedDroppingScheduler<S> {
 
 impl<S> UsesState for SortedDroppingScheduler<S>
 where
-    S: UsesInput,
+    S: UsesInput + State,
 {
     type State = S;
 }
@@ -192,7 +192,7 @@ pub static mut REMOVED_CORPUS: usize = 0;
 
 impl<S> Scheduler for SortedDroppingScheduler<S>
 where
-    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent,
+    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent + State,
 {
     /// Hooks called every time an input (or VMState) is added to the corpus
     /// Set up the metadata for the input (or VMState)
@@ -351,7 +351,7 @@ where
 
 impl<S> RemovableScheduler for SortedDroppingScheduler<S>
 where
-    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent,
+    S: HasCorpus + HasTestcase + HasRand + HasMetadata + HasParent + State,
 {
     /// Hooks called every time an input (or VMState) is removed from the corpus
     /// Update the metadata caches for the input (or VMState)

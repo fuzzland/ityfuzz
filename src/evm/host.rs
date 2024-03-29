@@ -236,6 +236,8 @@ where
     pub expected_emits: VecDeque<ExpectedEmit>,
     /// Expected calls
     pub expected_calls: ExpectedCallTracker,
+    /// Assert failed message for the cheatcode
+    pub assert_msg: Option<String>,
 }
 
 impl<SC> Debug for FuzzHost<SC>
@@ -306,6 +308,7 @@ where
             expected_emits: self.expected_emits.clone(),
             expected_revert: self.expected_revert.clone(),
             expected_calls: self.expected_calls.clone(),
+            assert_msg: self.assert_msg.clone(),
         }
     }
 }
@@ -366,6 +369,7 @@ where
             expected_revert: None,
             expected_emits: VecDeque::new(),
             expected_calls: ExpectedCallTracker::new(),
+            assert_msg: None,
         }
     }
 
@@ -815,6 +819,12 @@ where
         call: &CallInputs,
         res: (InstructionResult, Gas, Bytes),
     ) -> (InstructionResult, Gas, Bytes) {
+        // Check assert result
+        let res = self.check_assert_result(res);
+        if res.0 == Revert {
+            return res;
+        }
+
         // Check expected reverts
         let res = self.check_expected_revert(res);
         if res.0 == Revert {
@@ -827,6 +837,14 @@ where
         }
         // Check expected calls
         self.check_expected_calls(res)
+    }
+
+    fn check_assert_result(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        if let Some(ref msg) = self.assert_msg {
+            return (InstructionResult::Revert, res.1, msg.abi_encode().into());
+        }
+
+        res
     }
 
     /// Check expected reverts

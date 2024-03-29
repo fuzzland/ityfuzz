@@ -32,7 +32,7 @@ use libafl::{
     schedulers::{RemovableScheduler, Scheduler},
     stages::StagesTuple,
     start_timer,
-    state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasLastReportTime, HasMetadata, HasSolutions, UsesState},
+    state::{HasCorpus, HasExecutions, HasLastReportTime, HasMetadata, HasSolutions, State, UsesState},
     Error,
     Evaluator,
     ExecuteInputResult,
@@ -77,7 +77,7 @@ where
     IFR: Feedback<S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<S>,
-    S: HasClientPerfMonitor + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
+    S: State + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -116,7 +116,7 @@ where
     IFR: Feedback<S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<S>,
-    S: HasClientPerfMonitor + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
+    S: State + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -196,7 +196,7 @@ where
     IFR: Feedback<S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<S>,
-    S: HasClientPerfMonitor + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
+    S: State + HasCorpus + HasRand + HasMetadata + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -218,7 +218,7 @@ where
     IFR: Feedback<S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<S>,
-    S: HasClientPerfMonitor
+    S: State
         + HasExecutions
         + HasMetadata
         + HasCurrentInputIdx
@@ -260,7 +260,7 @@ where
         executor: &mut E,
         state: &mut EM::State,
         manager: &mut EM,
-    ) -> Result<CorpusId, Error> {
+    ) -> Result<(), Error> {
         // now report stats to manager every 1 sec
         let reporting_interval = Duration::from_millis(
             env::var("REPORTING_INTERVAL")
@@ -362,7 +362,7 @@ where
     EM: EventManager<E, Self, State = S>,
     I: VMInputT<VS, Loc, Addr, CI>,
     OF: Feedback<S>,
-    S: HasClientPerfMonitor
+    S: State
         + HasCorpus
         + HasSolutions
         + HasInfantStateState<Loc, Addr, VS, CI>

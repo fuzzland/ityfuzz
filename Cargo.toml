@@ -15,7 +15,7 @@ default = [
     "print_txn_corpus",
     "full_trace",
     "force_cache",
-    "real_balance"
+    "real_balance",
 ]
 evm = []
 cmp = []
@@ -55,12 +55,12 @@ serde_cbor = "0.11.2"
 clap = { version = "4.4.4", features = ["derive"] }
 sentry = "0.32.1"
 rlp = "0.5.2"
-ethers = "2.0.7"
+ethers = "2.0.14"
 
 hex = "0.4"
 primitive-types = { version = "0.12.1", features = ["rlp", "serde"] }
-libafl = "=0.11.1"
-libafl_bolts = "=0.11.1"
+libafl = "=0.11.2"
+libafl_bolts = "=0.11.2"
 rand = "0.8.5"
 nix = "0.27.1"
 serde = "1.0.147"
@@ -80,17 +80,17 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 num_cpus = "1.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "572aae6b352d3b0b3000d9aa42154498233514e8", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
@@ -118,14 +118,14 @@ sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional
 handlebars = "4.4"
 
 # for cheatcode middleware
-foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "dee41819c6e6bd1ea5419c613d226498ed7a2c59" }
-foundry-abi = { git = "https://github.com/foundry-rs/foundry.git", rev = "dee41819c6e6bd1ea5419c613d226498ed7a2c59" }
-alloy-sol-types = "0.4"
-alloy-dyn-abi = { version = "0.4", features = ["arbitrary", "eip712"] }
-alloy-primitives = "0.4"
-alloy-json-abi = "0.4"
+foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "617dfc28" }
+alloy-sol-types = "0.6"
+alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
+alloy-primitives = "0.6"
+alloy-json-abi = "0.6"
 # error handling
 anyhow = "1.0"
+thiserror = "1.0"
 # logging
 tracing = "0.1"
 tracing-subscriber = "0.3"
