@@ -7,7 +7,7 @@ use libafl::{
     corpus::Testcase,
     prelude::{CorpusId, HasMetadata, HasTestcase, UsesInput},
     schedulers::{RemovableScheduler, Scheduler},
-    state::{HasCorpus, UsesState},
+    state::{HasCorpus, State, UsesState},
     Error,
 };
 use libafl_bolts::impl_serdeany;
@@ -200,14 +200,14 @@ impl<S> PowerABIScheduler<S> {
 
 impl<S> UsesState for PowerABIScheduler<S>
 where
-    S: UsesInput,
+    S: State + UsesInput,
 {
     type State = S;
 }
 
 impl<S> Scheduler for PowerABIScheduler<S>
 where
-    S: HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
+    S: State + HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
 {
     fn on_add(&mut self, state: &mut Self::State, idx: CorpusId) -> Result<(), Error> {
         // adding power scheduling information based on code size
@@ -313,7 +313,7 @@ where
 
 impl<S> RemovableScheduler for PowerABIScheduler<S>
 where
-    S: HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
+    S: State + HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
 {
     fn on_remove(
         &mut self,
@@ -349,7 +349,7 @@ where
 
 impl<S> ABIScheduler for PowerABIScheduler<S>
 where
-    S: HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
+    S: State + HasCorpus<Input = EVMInput> + HasTestcase + HasMetadata,
 {
     fn on_add_artifacts(
         &mut self,

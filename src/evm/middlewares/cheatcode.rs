@@ -1061,7 +1061,7 @@ fn handle_expect_emit(
 
     let Some(expected) = &event_to_fill_or_check.log else {
         // Fill the event.
-        event_to_fill_or_check.log = Some(RawLog::new_unchecked(topics.to_vec(), data.clone()));
+        event_to_fill_or_check.log = Some(RawLog::new_unchecked(*address, topics.to_vec(), data.clone()));
         expected_emits.push_back(event_to_fill_or_check);
         return;
     };
@@ -1088,7 +1088,7 @@ fn handle_expect_emit(
 
         // Maybe match data
         if event_to_fill_or_check.checks[3] {
-            event_to_fill_or_check.found &= expected.data == *data;
+            event_to_fill_or_check.found &= expected.data.data.as_ref() == data.as_ref();
         }
     }
 

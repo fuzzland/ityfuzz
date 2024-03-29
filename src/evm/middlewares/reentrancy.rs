@@ -31,7 +31,7 @@ pub struct ReentrancyData {
     pub found: HashSet<(EVMAddress, EVMU256)>,
 }
 
-fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &Vec<u32>) {
+fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &[u32]) {
     // Create iterators for both vectors.
     let mut dst_iter = dst.iter();
     let mut another_iter = another_one.iter();
