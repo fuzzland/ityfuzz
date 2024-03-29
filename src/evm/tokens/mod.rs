@@ -738,80 +738,80 @@ mod tests {
     }
 
     // !!!!! Following Tests are for debugging purpose only !!!!!
-    #[test]
-    fn test_buy_single_hop() {
-        let token =
-    EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
-    unwrap();     let amount =
-    EVMU256::from_str("2000000000000000000").unwrap();     // dpr => weth
-        trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
-    }
-
-    const DPR_RICH: &str = "0x1959f0401e101620dd7e2ab5456f4b4a6e289aaf";
-
-    #[test]
-    fn test_sell_single_hop() {
-        let token = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
-        let amount = EVMU256::from_str("20000000000000000000000").unwrap();
-        // dpr => weth
-        trade(
-            "sell",
-            token,
-            amount,
-            1,
-            19044110,
-            &EVMAddress::from_str(DPR_RICH).unwrap(),
-        );
-    }
-
-    #[test]
-    fn test_buy_two_hop() {
-        let token =  EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // dpr => usdc => weth
-        trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
-    }
-
-    // https://www.tdly.co/shared/simulation/c1d5d70f-8718-4740-961a-3f789a0834c1
-    #[test]
-    fn test_buy_one_hop_with_fee() {
-        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // HarryPotterObamaSonic10Inu => weth
-        trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
-    }
-
-    // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
-    #[test]
-    fn test_buy_two_hop_with_fee() {
-        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // HarryPotterObamaSonic10Inu => OSAK => weth
-        trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
-    }
-
-    #[test]
-    fn test_buy_three_hop_with_fee() {
-        // expected to fail
-        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // HarryPotterObamaSonic10Inu => weth
-        trade("buy", token, amount, 2, 19044110, &EVMAddress::zero());
-    }
-
-    #[test]
-    fn test_buy_uni_v3() {
-        let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // weth => MINER
-        trade("buy", token, amount, 0, 19226633, &EVMAddress::zero());
-    }
-
-    #[test]
-    fn test_sell_uni_v3() {
-        let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
-        let amount = EVMU256::from_str("2000000000000000000").unwrap();
-        // weth => MINER
-        trade("sell", token, amount, 0, 19226633, &EVMAddress::from_str("0xD92Ec2123473e0E4099733b1e03405384Aa1024D").unwrap());
-    }
+    // #[test]
+    // fn test_buy_single_hop() {
+    //     let token =
+    // EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
+    // unwrap();     let amount =
+    // EVMU256::from_str("2000000000000000000").unwrap();     // dpr => weth
+    //     trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
+    // }
+    //
+    // const DPR_RICH: &str = "0x1959f0401e101620dd7e2ab5456f4b4a6e289aaf";
+    //
+    // #[test]
+    // fn test_sell_single_hop() {
+    //     let token = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+    //     let amount = EVMU256::from_str("20000000000000000000000").unwrap();
+    //     // dpr => weth
+    //     trade(
+    //         "sell",
+    //         token,
+    //         amount,
+    //         1,
+    //         19044110,
+    //         &EVMAddress::from_str(DPR_RICH).unwrap(),
+    //     );
+    // }
+    //
+    // #[test]
+    // fn test_buy_two_hop() {
+    //     let token =  EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // dpr => usdc => weth
+    //     trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
+    // }
+    //
+    // // https://www.tdly.co/shared/simulation/c1d5d70f-8718-4740-961a-3f789a0834c1
+    // #[test]
+    // fn test_buy_one_hop_with_fee() {
+    //     let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // HarryPotterObamaSonic10Inu => weth
+    //     trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
+    // }
+    //
+    // // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
+    // #[test]
+    // fn test_buy_two_hop_with_fee() {
+    //     let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // HarryPotterObamaSonic10Inu => OSAK => weth
+    //     trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
+    // }
+    //
+    // #[test]
+    // fn test_buy_three_hop_with_fee() {
+    //     // expected to fail
+    //     let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // HarryPotterObamaSonic10Inu => weth
+    //     trade("buy", token, amount, 2, 19044110, &EVMAddress::zero());
+    // }
+    //
+    // #[test]
+    // fn test_buy_uni_v3() {
+    //     let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // weth => MINER
+    //     trade("buy", token, amount, 0, 19226633, &EVMAddress::zero());
+    // }
+    //
+    // #[test]
+    // fn test_sell_uni_v3() {
+    //     let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
+    //     let amount = EVMU256::from_str("2000000000000000000").unwrap();
+    //     // weth => MINER
+    //     trade("sell", token, amount, 0, 19226633, &EVMAddress::from_str("0xD92Ec2123473e0E4099733b1e03405384Aa1024D").unwrap());
+    // }
 }
