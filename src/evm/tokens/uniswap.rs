@@ -21,9 +21,9 @@ use super::{
 };
 use crate::evm::{
     onchain::endpoints::{Chain, OnChainConfig, PairData},
+    tokens::v3_transformer::{slot0_parser, UniswapV3PairContext},
     types::{EVMAddress, EVMU256},
 };
-use crate::evm::tokens::v3_transformer::{slot0_parser, UniswapV3PairContext};
 
 pub struct Info {
     routes: Vec<Vec<PairData>>,
@@ -98,14 +98,10 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
                     let fee = onchain.get_v3_fee(pair_address);
                     let inner = _gen_v2_pair_context!($pair);
                     register_code!(inner.next_hop);
-                    let v3 = Rc::new(RefCell::new(UniswapV3PairContext {
-                        fee,
-                        inner,
-                    }));
+                    let v3 = Rc::new(RefCell::new(UniswapV3PairContext { fee, inner }));
                     path_parsed.route.push(super::PairContextTy::UniswapV3(v3));
                 }};
             }
-
 
             pairs.iter().for_each(|pair| match pair.src.as_str() {
                 "lp" => {
@@ -239,14 +235,8 @@ fn get_pair(onchain: &mut OnChainConfig, token: &str, network: &str, is_pegged: 
         weth,
     );
 
-    println!(
-        "original pairs: {:?}",
-        pairs,
-    );
-    println!(
-        "token: {:?}",
-        token,
-    );
+    println!("original pairs: {:?}", pairs,);
+    println!("token: {:?}", token,);
 
     for pair in &mut pairs {
         add_reserve_info(onchain, pair);
@@ -342,8 +332,6 @@ fn add_reserve_info(onchain: &mut OnChainConfig, pair_data: &mut PairData) {
         pair_data.initial_reserves_0 = r0;
         pair_data.initial_reserves_1 = r1;
     }
-
-
 }
 
 fn get_liquidity_cmp(pair_data: &PairData) -> EVMU256 {

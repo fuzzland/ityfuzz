@@ -303,10 +303,7 @@ impl PairContext for UniswapPairContext {
             .flashloan_data
             .oracle_recheck_reserve
             .insert(self.pair_address);
-        Some((
-            *next,
-            balanceof_token!(false, next) - original_balance
-        ))
+        Some((*next, balanceof_token!(false, next) - original_balance))
     }
 
     fn name(&self) -> String {

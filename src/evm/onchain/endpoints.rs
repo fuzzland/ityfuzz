@@ -630,10 +630,7 @@ impl OnChainConfig {
     }
 
     pub fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256 {
-        let data = format!(
-            "70a08231000000000000000000000000{:x}",
-            address
-        );
+        let data = format!("70a08231000000000000000000000000{:x}", address);
         let balance = self.eth_call(token, Bytes::from(hex::decode(data).unwrap()));
         EVMU256::from_be_slice(&balance)
     }
@@ -820,7 +817,11 @@ impl OnChainConfig {
                     src: if is_pegged { "pegged" } else { "lp" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
                     pair,
-                    next: if token == token0 { token1.clone() } else { token0.clone() },
+                    next: if token == token0 {
+                        token1.clone()
+                    } else {
+                        token0.clone()
+                    },
                     in_token: token.clone(),
                     interface: item["interface"].as_str().unwrap().to_string(),
                     src_exact: item["src_exact"].as_str().unwrap().to_string(),
@@ -969,13 +970,10 @@ mod tests {
         println!("{:?}", v);
     }
 
-
     #[test]
     fn get_v3_fee() {
         let mut config = OnChainConfig::new(BSC, 37381166);
-        let v = config.get_v3_fee(
-            EVMAddress::from_str("0x4f31fa980a675570939b737ebdde0471a4be40eb").unwrap(),
-        );
+        let v = config.get_v3_fee(EVMAddress::from_str("0x4f31fa980a675570939b737ebdde0471a4be40eb").unwrap());
         println!("{:?}", v);
     }
 

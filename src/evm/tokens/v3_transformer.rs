@@ -4,10 +4,11 @@ use bytes::Bytes;
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
 use serde::{de::DeserializeOwned, Serialize};
-use crate::evm::tokens::v2_transformer::balance_of_bytes;
+
 use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
 use crate::{
     evm::{
+        tokens::v2_transformer::{balance_of_bytes, UniswapPairContext},
         types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::{EVMExecutor, MEM_LIMIT},
     },
@@ -16,7 +17,6 @@ use crate::{
     input::ConciseSerde,
     is_call_success,
 };
-use crate::evm::tokens::v2_transformer::UniswapPairContext;
 
 #[derive(Debug)]
 pub struct UniswapV3PairContext {
@@ -38,16 +38,9 @@ impl UniswapV3PairContext {
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        self.inner.initial_transfer(
-            src,
-            next,
-            amount,
-            state,
-            vm,
-        )
+        self.inner.initial_transfer(src, next, amount, state, vm)
     }
 }
-
 
 #[derive(Debug)]
 pub struct Slot0 {
@@ -72,10 +65,10 @@ pub fn slot0_parser(data: EVMU256) -> Slot0 {
     //     uint16 observationIndex; 2
     //     // the current maximum number of observations that are being stored
     //     uint16 observationCardinality; 2
-    //     // the next maximum number of observations to store, triggered in observations.write
-    //     uint16 observationCardinalityNext; 2
-    //     // the current protocol fee as a percentage of the swap fee taken on withdrawal
-    //     // represented as an integer denominator (1/x)%
+    //     // the next maximum number of observations to store, triggered in
+    // observations.write     uint16 observationCardinalityNext; 2
+    //     // the current protocol fee as a percentage of the swap fee taken on
+    // withdrawal     // represented as an integer denominator (1/x)%
     //     uint8 feeProtocol; 1
     //     // whether the pool is locked
     //     bool unlocked; 1
@@ -85,11 +78,7 @@ pub fn slot0_parser(data: EVMU256) -> Slot0 {
     let fee = data[29];
     let unlocked = data[30] == 1;
 
-    Slot0 {
-        price,
-        fee,
-        unlocked,
-    }
+    Slot0 { price, fee, unlocked }
 }
 
 pub fn approve_bytes(dst: &EVMAddress) -> Bytes {
@@ -97,12 +86,9 @@ pub fn approve_bytes(dst: &EVMAddress) -> Bytes {
     ret.extend_from_slice(&[0x09, 0x5e, 0xa7, 0xb3]); // approve
     ret.extend_from_slice(&[0x00; 12]); // padding
     ret.extend_from_slice(&dst.0); // dst
-    ret.extend_from_slice(
-        [0xff; 32].as_ref(),
-    ); // amount
+    ret.extend_from_slice([0xff; 32].as_ref()); // amount
     Bytes::from(ret)
 }
-
 
 pub fn exact_in_single_swap(
     token_in: EVMAddress,
@@ -237,7 +223,6 @@ impl PairContext for UniswapV3PairContext {
             }};
         }
 
-
         // 0. ensure not locked, check unlock slot at 0xc
         if let Some(slots) = vm.host.evmstate.state.get(&self.inner.pair_address) {
             if let Some(slot) = slots.get(&EVMU256::from(0x0)) {
@@ -256,13 +241,7 @@ impl PairContext for UniswapV3PairContext {
         // 2. use router to do the swap
         // println!("looking for router code: {:?}", router);
         let router_code = get_code_tokens!(router, vm, state);
-        let by = exact_in_single_swap(
-            in_token_address,
-            out_token_address,
-            self.fee,
-            *next,
-            _amount,
-        );
+        let by = exact_in_single_swap(in_token_address, out_token_address, self.fee, *next, _amount);
         // println!("bytes: {:?}", hex::encode(by.clone()));
 
         let call = Contract::new_with_context_analyzed(
@@ -301,7 +280,6 @@ impl PairContext for UniswapV3PairContext {
             return None;
         }
 
-
         // 3. now we have raped the pair, setup flashloan data and transfer out
         vm.host
             .evmstate
@@ -326,18 +304,19 @@ impl PairContext for UniswapV3PairContext {
     }
 }
 
-
 mod test {
     use std::str::FromStr;
+
     use crate::evm::types::{EVMAddress, EVMU256};
 
     #[test]
     fn test_slot0_parser() {
         let data = hex::decode("0001000001000100000d89e7fffd8963efd1fc6a506488495d951d5263988d25").unwrap();
-        let slot0 = super::slot0_parser(EVMU256::from_be_slice(
-            &data,
-        ));
-        assert_eq!(slot0.price, EVMU256::from_str("0xfffd8963efd1fc6a506488495d951d5263988d25").unwrap());
+        let slot0 = super::slot0_parser(EVMU256::from_be_slice(&data));
+        assert_eq!(
+            slot0.price,
+            EVMU256::from_str("0xfffd8963efd1fc6a506488495d951d5263988d25").unwrap()
+        );
         assert_eq!(slot0.fee, 0x00);
         assert_eq!(slot0.unlocked, true);
     }
@@ -351,9 +330,6 @@ mod test {
             EVMAddress::from_str("0xf5213a6a2f0890321712520b8048D9886c1A9900").unwrap(),
             EVMU256::from_str("3619200000000000000").unwrap(),
         );
-        println!(
-            "calldata: {:?}",
-            hex::encode(calldata.as_ref())
-        );
+        println!("calldata: {:?}", hex::encode(calldata.as_ref()));
     }
 }
