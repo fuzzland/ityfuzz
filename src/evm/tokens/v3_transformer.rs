@@ -220,7 +220,7 @@ impl PairContext for UniswapV3PairContext {
                     },
                 );
 
-                // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);
+                // println!("approve {:?} for {:?} => {:?}", addr, $who, $dst);
                 // println!("pre_vm_state: {:?}", vm.host.evmstate.state);
 
                 let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
@@ -229,11 +229,11 @@ impl PairContext for UniswapV3PairContext {
                 // println!("bytes: {:?}", transfer_bytes($dst, $amt));
                 // println!("from: {:?} => {:?}, {:?}", $who, $dst, addr);
                 if !is_call_success!(ir) {
-                    // println!("transfer failed2");
-                    // println!("return value: {:?}", interp.return_value());
+                    // println!("approve failed2");
+                    // println!("return value: {:?} {:?}", interp.return_value(), ir);
                     return None;
                 }
-                // println!("transfer success");
+                // println!("approve success");
             }};
         }
 
@@ -254,17 +254,19 @@ impl PairContext for UniswapV3PairContext {
         let orig_balance = balanceof_token!(false, next);
 
         // 2. use router to do the swap
-        let router_code = vm.host.code.get(
-            &router,
-        ).expect("router code not found").clone();
+        // println!("looking for router code: {:?}", router);
+        let router_code = get_code_tokens!(router, vm, state);
+        let by = exact_in_single_swap(
+            in_token_address,
+            out_token_address,
+            self.fee,
+            *next,
+            _amount,
+        );
+        // println!("bytes: {:?}", hex::encode(by.clone()));
+
         let call = Contract::new_with_context_analyzed(
-            exact_in_single_swap(
-                in_token_address,
-                out_token_address,
-                self.fee,
-                *next,
-                _amount,
-            ),
+            by,
             router_code,
             &CallContext {
                 address: router,
@@ -281,11 +283,21 @@ impl PairContext for UniswapV3PairContext {
         let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
 
         let ir = vm.host.run_inspect(&mut interp, state);
-        // println!("bytes: {:?}", transfer_bytes($dst, $amt));
-        // println!("from: {:?} => {:?}, {:?}", $who, $dst, addr);
         if !is_call_success!(ir) {
             // println!("transfer failed2");
-            // println!("return value: {:?}", interp.return_value());
+            // println!(
+            //     "{:?}", hex::encode(
+            //         get_code_tokens!(router, vm, state).bytecode()
+            //     )
+            // );
+            // println!("return value: {:?} {:?} {:x} {:?} {:?} {:?}",
+            //          interp.return_value(),
+            //          ir,
+            //          interp.program_counter(),
+            //          interp.current_opcode(),
+            //          hex::encode(interp.return_data_buffer),
+            //          interp.contract.code_address
+            // );
             return None;
         }
 
