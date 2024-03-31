@@ -190,12 +190,14 @@ pub struct PairData {
     pub pair: String,
     pub in_token: String,
     pub next: String,
+    pub interface: String,
     pub src_exact: String,
-    pub rate: u32,
-    pub initial_reserves_0: String,
-    pub initial_reserves_1: String,
+    pub initial_reserves_0: EVMU256,
+    pub initial_reserves_1: EVMU256,
     pub decimals_0: u32,
     pub decimals_1: u32,
+    pub token0: String,
+    pub token1: String,
 }
 
 #[derive(Deserialize)]
@@ -605,6 +607,40 @@ impl OnChainConfig {
         balance
     }
 
+    pub fn eth_call(&mut self, address: EVMAddress, calldata: Bytes) -> Bytes {
+        let call = format!(
+            "\"from\": null,\"to\":\"{:?}\",\"data\":\"0x{}\"",
+            address,
+            hex::encode(calldata.to_vec())
+        );
+        let wrapped_call = format!("[{{{}}},\"{}\"]", call, self.block_number);
+        // println!("wrapped_call: {}", wrapped_call);
+        let resp_string = {
+            let resp = self._request("eth_call".to_string(), wrapped_call);
+            match resp {
+                Some(resp) => {
+                    let res = resp.as_str().unwrap();
+                    res.to_string()
+                }
+                None => "".to_string(),
+            }
+        };
+        let call_result = Bytes::from(hex::decode(resp_string.trim_start_matches("0x")).unwrap());
+        call_result
+    }
+
+    pub fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256 {
+        let data = format!("70a08231000000000000000000000000{:x}", address);
+        let balance = self.eth_call(token, Bytes::from(hex::decode(data).unwrap()));
+        EVMU256::from_be_slice(&balance)
+    }
+
+    pub fn get_v3_fee(&mut self, address: EVMAddress) -> u32 {
+        let data = "ddca3f43".to_string();
+        let fee = self.eth_call(address, Bytes::from(hex::decode(data).unwrap()));
+        u32::from_be_bytes([fee[28], fee[29], fee[30], fee[31]])
+    }
+
     pub fn fetch_blk_timestamp(&mut self) -> EVMU256 {
         if self.timestamp.is_none() {
             self.timestamp = {
@@ -761,7 +797,7 @@ impl OnChainConfig {
         let url = if is_pegged {
             format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
-            format!("https://pairs.infra.fuzz.land/pairs/{network}/{token}")
+            format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
@@ -778,15 +814,19 @@ impl OnChainConfig {
                 let token0_decimals = item["token0_decimals"].as_i64().unwrap();
                 let token1_decimals = item["token1_decimals"].as_i64().unwrap();
                 let data = PairData {
-                    src: if is_pegged { "pegged" } else { "v2" }.to_string(),
+                    src: if is_pegged { "pegged" } else { "lp" }.to_string(),
                     in_: if token == token0 { 0 } else { 1 },
                     pair,
-                    next: if token == token0 { token1 } else { token0 },
+                    next: if token == token0 {
+                        token1.clone()
+                    } else {
+                        token0.clone()
+                    },
                     in_token: token.clone(),
-                    src_exact: item["interface"].as_str().unwrap().to_string(),
-                    rate: 0,
-                    initial_reserves_0: "".to_string(),
-                    initial_reserves_1: "".to_string(),
+                    interface: item["interface"].as_str().unwrap().to_string(),
+                    src_exact: item["src_exact"].as_str().unwrap().to_string(),
+                    initial_reserves_0: EVMU256::ZERO,
+                    initial_reserves_1: EVMU256::ZERO,
                     decimals_0: if token0_decimals >= 0 {
                         token0_decimals as u32
                     } else {
@@ -797,6 +837,8 @@ impl OnChainConfig {
                     } else {
                         0
                     },
+                    token0,
+                    token1,
                 };
                 pairs.push(data);
             }
@@ -806,7 +848,7 @@ impl OnChainConfig {
         pairs
     }
 
-    pub fn fetch_reserve(&self, pair: &str) -> (String, String) {
+    pub fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
         let result = {
             let params = json!([{
             "to": pair,
@@ -824,14 +866,15 @@ impl OnChainConfig {
         if result.len() != 196 {
             let rpc = &self.endpoint_url;
             let pair_code = self.clone().get_contract_code(B160::from_str(pair).unwrap(), true);
-            warn!("rpc: {rpc}, result: {result}, pair: {pair}, pair code: {pair_code}");
-            panic!("Unexpected RPC error, consider setting env <ETH_RPC_URL> ");
+            info!("rpc: {rpc}, result: {result}, pair: {pair}, pair code: {pair_code}");
+            info!("Unexpected RPC error, consider setting env <ETH_RPC_URL> ");
+            return None;
         }
 
         let reserve1 = &result[3..67];
         let reserve2 = &result[67..131];
 
-        (reserve1.into(), reserve2.into())
+        Some((reserve1.into(), reserve2.into()))
     }
 }
 
@@ -915,6 +958,23 @@ mod tests {
             "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c".to_string(),
         );
         assert!(!v.is_empty() && v.len() < 10);
+    }
+
+    #[test]
+    fn test_get_token_balance() {
+        let mut config = OnChainConfig::new(BSC, 37381166);
+        let v = config.get_token_balance(
+            EVMAddress::from_str("0xfb5B838b6cfEEdC2873aB27866079AC55363D37E").unwrap(),
+            EVMAddress::from_str("0xf977814e90da44bfa03b6295a0616a897441acec").unwrap(),
+        );
+        println!("{:?}", v);
+    }
+
+    #[test]
+    fn get_v3_fee() {
+        let mut config = OnChainConfig::new(BSC, 37381166);
+        let v = config.get_v3_fee(EVMAddress::from_str("0x4f31fa980a675570939b737ebdde0471a4be40eb").unwrap());
+        println!("{:?}", v);
     }
 
     // #[test]

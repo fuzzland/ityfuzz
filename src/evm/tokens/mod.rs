@@ -20,6 +20,7 @@ use crate::{
     evm::{
         abi::{AArray, BoxedABI},
         onchain::endpoints::Chain,
+        tokens::v3_transformer::V3_TOKEN_HOLDER,
         types::{EVMAddress, EVMU256},
     },
     generic_vm::{
@@ -33,6 +34,7 @@ use crate::{
 pub mod constant_pair;
 pub mod uniswap;
 pub mod v2_transformer;
+pub mod v3_transformer;
 pub mod weth_transformer;
 
 // deposit
@@ -46,7 +48,8 @@ const SWAP_SELL: [u8; 4] = [0x79, 0x1a, 0xc9, 0x47];
 
 #[derive(Clone, Debug)]
 pub enum UniswapProvider {
-    PancakeSwap,
+    PancakeSwapV2,
+    PancakeSwapV3,
     SushiSwap,
     UniswapV2,
     UniswapV3,
@@ -77,8 +80,9 @@ impl FromStr for UniswapProvider {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "pancakeswap" => Ok(Self::PancakeSwap),
-            "pancakeswapv2" => Ok(Self::PancakeSwap),
+            "pancakeswap" => Ok(Self::PancakeSwapV2),
+            "pancakeswapv2" => Ok(Self::PancakeSwapV2),
+            "pancakeswapv3" => Ok(Self::PancakeSwapV3),
             "sushiswap" => Ok(Self::SushiSwap),
             "uniswapv2" => Ok(Self::UniswapV2),
             "uniswapv3" => Ok(Self::UniswapV3),
@@ -91,9 +95,7 @@ impl FromStr for UniswapProvider {
 #[derive(Clone, Debug, Default)]
 pub struct UniswapInfo {
     pub pool_fee: usize,
-    pub router: EVMAddress,
-    pub factory: EVMAddress,
-    pub init_code_hash: Vec<u8>,
+    pub router: Option<EVMAddress>,
 }
 
 pub trait PairContext {
@@ -118,6 +120,7 @@ pub trait PairContext {
 #[derive(Clone)]
 enum PairContextTy {
     Uniswap(Rc<RefCell<v2_transformer::UniswapPairContext>>),
+    UniswapV3(Rc<RefCell<v3_transformer::UniswapV3PairContext>>),
     Weth(Rc<RefCell<weth_transformer::WethContext>>),
 }
 
@@ -126,6 +129,7 @@ impl Debug for PairContextTy {
         match self {
             PairContextTy::Uniswap(ctx) => write!(f, "Uniswap({:?})", ctx.borrow()),
             PairContextTy::Weth(ctx) => write!(f, "Weth({:?})", ctx.borrow()),
+            PairContextTy::UniswapV3(ctx) => write!(f, "UniswapV3({:?})", ctx.borrow()),
         }
     }
 }
@@ -181,6 +185,7 @@ impl TokenContext {
                 } else {
                     match &path_ctx.route[path_len - nth - 2] {
                         PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
+                        PairContextTy::UniswapV3(_) => EVMAddress::from_slice(&V3_TOKEN_HOLDER),
                         PairContextTy::Weth(_ctx) => panic!("Invalid weth context"),
                     }
                 };
@@ -191,6 +196,38 @@ impl TokenContext {
                         {
                             println!("======== Uniswap ========");
                             println!("pair = {:?}", ctx.borrow().pair_address);
+                            println!(
+                                "{:?} => {:?} ({}/{:?})",
+                                current_sender, next, current_amount_in, current_amount_in
+                            );
+                        }
+                        if let Some((receiver, amount)) = ctx.deref().borrow_mut().transform(
+                            &current_sender.unwrap(),
+                            &next,
+                            current_amount_in,
+                            state,
+                            vm,
+                            true,
+                        ) {
+                            #[cfg(test)]
+                            {
+                                println!("Hop out = {}/{:?}", amount, amount);
+                            }
+                            current_amount_in = amount;
+                            current_sender = Some(receiver);
+                        } else {
+                            #[cfg(test)]
+                            {
+                                println!("!!! Uniswap Failed !!!");
+                            }
+                            return None;
+                        }
+                    }
+                    PairContextTy::UniswapV3(ctx) => {
+                        #[cfg(test)]
+                        {
+                            println!("======== Uniswap V3 ========");
+                            println!("pair = {:?}", ctx.borrow().inner.pair_address);
                             println!(
                                 "{:?} => {:?} ({}/{:?})",
                                 current_sender, next, current_amount_in, current_amount_in
@@ -280,6 +317,7 @@ impl TokenContext {
                     match &path_ctx.route[nth + 1] {
                         PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
                         PairContextTy::Weth(_ctx) => state.get_rand_caller(),
+                        PairContextTy::UniswapV3(_) => EVMAddress::from_slice(&V3_TOKEN_HOLDER),
                     }
                 };
                 match pair {
@@ -300,6 +338,50 @@ impl TokenContext {
                             ctx.deref().borrow_mut().initial_transfer(
                                 &current_sender,
                                 &pair_address,
+                                current_amount_in,
+                                state,
+                                vm,
+                            );
+                            is_first = false;
+                        }
+
+                        if let Some((receiver, amount)) = ctx.deref().borrow_mut().transform(
+                            &current_sender,
+                            &next,
+                            current_amount_in,
+                            state,
+                            vm,
+                            false,
+                        ) {
+                            #[cfg(test)]
+                            {
+                                println!("Hop out = {}/{:?}", amount, amount);
+                            }
+                            current_amount_in = amount;
+                            current_sender = receiver;
+                        } else {
+                            #[cfg(test)]
+                            {
+                                println!("!!! Uniswap Failed !!!");
+                            }
+                            return None;
+                        }
+                    }
+                    PairContextTy::UniswapV3(ctx) => {
+                        #[cfg(test)]
+                        {
+                            println!("======== Uniswap ========");
+                            println!("pair = {:?}", ctx.borrow().inner.pair_address);
+                            println!(
+                                "{:?} => {:?} ({}/{:?})",
+                                current_sender, next, current_amount_in, current_amount_in
+                            );
+                        }
+
+                        if is_first {
+                            ctx.deref().borrow_mut().initial_transfer(
+                                &current_sender,
+                                &EVMAddress::from_slice(&V3_TOKEN_HOLDER),
                                 current_amount_in,
                                 state,
                                 vm,
@@ -351,27 +433,72 @@ impl TokenContext {
     }
 }
 
-pub fn get_uniswap_info(provider: &UniswapProvider, chain: &Chain) -> UniswapInfo {
-    match (provider, chain) {
-        (&UniswapProvider::UniswapV2, &Chain::BSC) => UniswapInfo {
-            pool_fee: 25,
-            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-            init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
-        },
-        (&UniswapProvider::PancakeSwap, &Chain::BSC) => UniswapInfo {
-            pool_fee: 25,
-            router: EVMAddress::from_str("0x10ed43c718714eb63d5aa57b78b54704e256024e").unwrap(),
-            factory: EVMAddress::from_str("0xca143ce32fe78f1f7019d7d551a6402fc5350c73").unwrap(),
-            init_code_hash: hex::decode("00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5").unwrap(),
-        },
-        (&UniswapProvider::UniswapV2, &Chain::ETH) => UniswapInfo {
+pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
+    match src_exact {
+        "uniswapv2_eth" => UniswapInfo {
             pool_fee: 30,
-            router: EVMAddress::from_str("0x7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap(),
-            factory: EVMAddress::from_str("0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f").unwrap(),
-            init_code_hash: hex::decode("96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f").unwrap(),
+            router: None,
         },
-        _ => panic!("Uniswap provider {:?} @ chain {:?} not supported", provider, chain),
+        "uniswapv3_eth" | "sushiswap_v3_eth" | "pancakeswap_v3_eth" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
+        },
+        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" => UniswapInfo {
+            pool_fee: 25,
+            router: None,
+        },
+        "sushiswapv2_eth" | "sushiswapv2_arb" | "sushiswapv2_polygon" | "sushiswapv2_avax" | "sushiswapv2_base" => {
+            UniswapInfo {
+                pool_fee: 30,
+                router: None,
+            }
+        }
+        "uniswapv3_bsc" | "pancakeswap_v3_bsc" | "sushiswap_v3_bsc" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0x1b81D678ffb9C0263b24A97847620C99d213eB14").unwrap()),
+        },
+        "trader_joe_v1_bsc" | "trader_joe_v1_avax" => UniswapInfo {
+            pool_fee: 30,
+            router: None,
+        },
+        "camelotv2_arb" => UniswapInfo {
+            pool_fee: 30,
+            router: None,
+        },
+        "uniswapv3_polygon" | "sushiswap_v3_polygon" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0x0aF89E1620b96170e2a9D0b68fEebb767eD044c3").unwrap()),
+        },
+        "quickswapv2_polygon" => UniswapInfo {
+            pool_fee: 30,
+            router: None,
+        },
+        "uniswapv3_avax" | "sushiswap_v3_avax" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
+        },
+        "uniswapv3_op" | "sushiswap_v3_op" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
+        },
+        "pancakeswapv3_base" | "uniswapv3_base" | "sushiswapv3_base" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0x1b81D678ffb9C0263b24A97847620C99d213eB14").unwrap()),
+        },
+        "thruster_v3_blast" => UniswapInfo {
+            pool_fee: 0,
+            router: Some(EVMAddress::from_str("0x337827814155ECBf24D20231fCA4444F530C0555").unwrap()),
+        },
+
+        "thruster_v2_3_blast" => UniswapInfo {
+            pool_fee: 30,
+            router: None,
+        },
+        "thruster_v2_1_blast" => UniswapInfo {
+            pool_fee: 100,
+            router: None,
+        },
+        _ => panic!("Uniswap provider {:?} not supported", src_exact),
     }
 }
 
@@ -611,69 +738,82 @@ mod tests {
     }
 
     // !!!!! Following Tests are for debugging purpose only !!!!!
-    // #[test]
-    // fn test_buy_single_hop() {
-    //     let token =
-    // EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
-    // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     // dpr => weth
-    //     trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
-    // }
-    //
-    // const DPR_RICH: &str = "0x1959f0401e101620dd7e2ab5456f4b4a6e289aaf";
-    //
-    // #[test]
-    // fn test_sell_single_hop() {
-    //     let token =
-    // EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
-    // unwrap();     let amount =
-    // EVMU256::from_str("20000000000000000000000").unwrap();     // dpr =>
-    // weth     trade(
-    //         "sell",
-    //         token,
-    //         amount,
-    //         1,
-    //         19044110,
-    //         &EVMAddress::from_str(DPR_RICH).unwrap(),
-    //     );
-    // }
-    //
-    // #[test]
-    // fn test_buy_two_hop() {
-    //     let token =
-    // EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
-    // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     // dpr => usdc
-    // => weth     trade("buy", token, amount, 0, 19044110,
-    // &EVMAddress::zero()); }
-    //
-    // // https://www.tdly.co/shared/simulation/c1d5d70f-8718-4740-961a-3f789a0834c1
-    // #[test]
-    // fn test_buy_one_hop_with_fee() {
-    //     let token =
-    // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
-    // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     //
-    // HarryPotterObamaSonic10Inu => weth     trade("buy", token, amount, 0,
-    // 19044110, &EVMAddress::zero()); }
-    //
-    // // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
-    // #[test]
-    // fn test_buy_two_hop_with_fee() {
-    //     let token =
-    // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
-    // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     //
-    // HarryPotterObamaSonic10Inu => OSAK => weth     trade("buy", token,
-    // amount, 1, 19044110, &EVMAddress::zero()); }
-    //
-    // #[test]
-    // fn test_buy_three_hop_with_fee() {
-    //     // expected to fail
-    //     let token =
-    // EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").
-    // unwrap();     let amount =
-    // EVMU256::from_str("2000000000000000000").unwrap();     //
-    // HarryPotterObamaSonic10Inu => weth     trade("buy", token, amount, 2,
-    // 19044110, &EVMAddress::zero()); }
+    /*
+    #[test]
+    fn test_buy_single_hop() {
+        let token =
+    EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").
+    unwrap();     let amount =
+    EVMU256::from_str("2000000000000000000").unwrap();     // dpr => weth
+        trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
+    }
+
+    const DPR_RICH: &str = "0x1959f0401e101620dd7e2ab5456f4b4a6e289aaf";
+
+    #[test]
+    fn test_sell_single_hop() {
+        let token = EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+        let amount = EVMU256::from_str("20000000000000000000000").unwrap();
+        // dpr => weth
+        trade(
+            "sell",
+            token,
+            amount,
+            1,
+            19044110,
+            &EVMAddress::from_str(DPR_RICH).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_buy_two_hop() {
+        let token =  EVMAddress::from_str("0xf3ae5d769e153ef72b4e3591ac004e89f48107a1").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // dpr => usdc => weth
+        trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
+    }
+
+    // https://www.tdly.co/shared/simulation/c1d5d70f-8718-4740-961a-3f789a0834c1
+    #[test]
+    fn test_buy_one_hop_with_fee() {
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => weth
+        trade("buy", token, amount, 0, 19044110, &EVMAddress::zero());
+    }
+
+    // https://www.tdly.co/shared/simulation/83d283d4-b367-4893-85a4-4af19fc9a80b
+    #[test]
+    fn test_buy_two_hop_with_fee() {
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => OSAK => weth
+        trade("buy", token, amount, 1, 19044110, &EVMAddress::zero());
+    }
+
+    #[test]
+    fn test_buy_three_hop_with_fee() {
+        // expected to fail
+        let token = EVMAddress::from_str("0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // HarryPotterObamaSonic10Inu => weth
+        trade("buy", token, amount, 2, 19044110, &EVMAddress::zero());
+    }
+
+    #[test]
+    fn test_buy_uni_v3() {
+        let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // weth => MINER
+        trade("buy", token, amount, 0, 19226633, &EVMAddress::zero());
+    }
+
+    #[test]
+    fn test_sell_uni_v3() {
+        let token = EVMAddress::from_str("0xE77EC1bF3A5C95bFe3be7BDbACfe3ac1c7E454CD").unwrap();
+        let amount = EVMU256::from_str("2000000000000000000").unwrap();
+        // weth => MINER
+        trade("sell", token, amount, 0, 19226633, &EVMAddress::from_str("0xD92Ec2123473e0E4099733b1e03405384Aa1024D").unwrap());
+    }
+    */
 }

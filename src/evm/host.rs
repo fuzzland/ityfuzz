@@ -1018,9 +1018,17 @@ where
                 };
             }
             match *interp.instruction_pointer {
-                // 0xfd => {
-                //     debug!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
-                // }
+                0xfd => {
+                    println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
+                }
+                0x3b => {
+                    println!(
+                        "3b {} @ {:?} {:?}",
+                        interp.program_counter(),
+                        interp.contract.address,
+                        fast_peek!(0)
+                    );
+                }
                 // 0x31 | 0x47 => {
                 //     debug!("host setp balance");
                 //     std::thread::sleep(std::time::Duration::from_secs(3));
