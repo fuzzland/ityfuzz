@@ -93,7 +93,6 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
 
             macro_rules! gen_v3_pair_context {
                 ($pair: expr) => {{
-                    println!("pair: {:?}", $pair);
                     let pair_address = EVMAddress::from_str($pair.pair.as_str()).expect("failed to parse pair");
                     let fee = onchain.get_v3_fee(pair_address);
                     let inner = _gen_v2_pair_context!($pair);
@@ -137,10 +136,10 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
             });
             for pair in &path_parsed.route {
                 if let super::PairContextTy::UniswapV3(inner) = pair {
-                    println!(
-                        "registering code for v3 pair: {:?}",
-                        inner.borrow().inner.uniswap_info.router.unwrap()
-                    );
+                    // println!(
+                    //     "registering code for v3 pair: {:?}",
+                    //     inner.borrow().inner.uniswap_info.router.unwrap()
+                    // );
                     register_code!(inner.borrow().inner.uniswap_info.router.unwrap());
                 }
             }
@@ -235,8 +234,8 @@ fn get_pair(onchain: &mut OnChainConfig, token: &str, network: &str, is_pegged: 
         weth,
     );
 
-    println!("original pairs: {:?}", pairs,);
-    println!("token: {:?}", token,);
+    // println!("original pairs: {:?}", pairs,);
+    // println!("token: {:?}", token,);
 
     for pair in &mut pairs {
         add_reserve_info(onchain, pair);
@@ -250,7 +249,7 @@ fn get_pair(onchain: &mut OnChainConfig, token: &str, network: &str, is_pegged: 
     if pairs.len() > 3 {
         pairs = pairs[0..3].to_vec();
     }
-    println!("pairs: {:?}", pairs);
+    // println!("pairs: {:?}", pairs);
     pairs
 }
 
