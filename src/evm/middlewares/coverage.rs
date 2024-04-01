@@ -325,9 +325,10 @@ where
                 SourceCodeResult::SourceCode(source_code) => {
                     self.pc_info.insert((address, *pc), source_code.clone());
                 }
-                _ => {
+                SourceCodeResult::SourceCodeNoPcMatch(_) => {
                     skip_pcs.insert(*pc);
                 }
+                _ => {}
             },
         );
 
