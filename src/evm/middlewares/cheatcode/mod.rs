@@ -141,6 +141,7 @@ where
         let vm_call = VmCalls::abi_decode(&input, false).expect("decode cheatcode failed");
         debug!("[cheatcode] vm.{:?}", vm_call);
         let res = match vm_call {
+            // common
             VmCalls::addr(args) => self.addr(args),
             VmCalls::warp(args) => self.warp(&mut host.env, args),
             VmCalls::roll(args) => self.roll(&mut host.env, args),
@@ -164,6 +165,13 @@ where
             VmCalls::startPrank_0(args) => self.start_prank0(host, caller, args),
             VmCalls::startPrank_1(args) => self.start_prank1(host, caller, tx_origin, args),
             VmCalls::stopPrank(_) => self.stop_prank(host),
+
+            // fork
+            VmCalls::createSelectFork_0(args) => self.create_select_fork0(host, args),
+            VmCalls::createSelectFork_1(args) => self.create_select_fork1(host, args),
+            VmCalls::createSelectFork_2(args) => self.create_select_fork2(host, args),
+
+            // expect
             VmCalls::expectRevert_0(_) => self.expect_revert0(host),
             VmCalls::expectRevert_1(args) => self.expect_revert1(host, args),
             VmCalls::expectRevert_2(args) => self.expect_revert2(host, args),
@@ -179,6 +187,8 @@ where
             VmCalls::expectCall_5(args) => self.expect_call5(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_0(args) => self.expect_call_mingas0(&mut host.expected_calls, args),
             VmCalls::expectCallMinGas_1(args) => self.expect_call_mingas1(&mut host.expected_calls, args),
+
+            // assert
             VmCalls::assertTrue_0(args) => self.assert_true0(args, &mut host.assert_msg),
             VmCalls::assertTrue_1(args) => self.assert_true1(args, &mut host.assert_msg),
             VmCalls::assertFalse_0(args) => self.assert_false0(args, &mut host.assert_msg),
