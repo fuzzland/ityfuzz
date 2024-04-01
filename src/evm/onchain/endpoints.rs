@@ -9,15 +9,16 @@ use std::{
     time::Duration,
 };
 
+use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use itertools::Itertools;
-use reqwest::header::HeaderMap;
+use reqwest::{blocking, header::HeaderMap};
 use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{Bytecode, B160};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{
     cache::{Cache, FileSystemCache},
@@ -84,6 +85,48 @@ impl FromStr for Chain {
 }
 
 impl Chain {
+    pub fn new_with_rpc_url(rpc_url: &str) -> Result<Self> {
+        let client = blocking::Client::new();
+        let body = json!({"method":"eth_chainId","params":[],"id":1,"jsonrpc":"2.0"});
+        let resp: Value = client
+            .post(rpc_url)
+            .header("Content-Type", "application/json")
+            .body(body.to_string())
+            .send()?
+            .json()?;
+
+        let chain_id = resp
+            .get("result")
+            .and_then(|result| result.as_str())
+            .and_then(|result| u64::from_str_radix(result.trim_start_matches("0x"), 16).ok())
+            .ok_or_else(|| anyhow!("Unknown chain id: {}", rpc_url))?;
+
+        // Use rpc_url instead of the default one
+        env::set_var("ETH_RPC_URL", rpc_url);
+
+        Ok(match chain_id {
+            1 => Self::ETH,
+            5 => Self::GOERLI,
+            11155111 => Self::SEPOLIA,
+            56 => Self::BSC,
+            97 => Self::CHAPEL,
+            137 => Self::POLYGON,
+            80001 => Self::MUMBAI,
+            250 => Self::FANTOM,
+            43114 => Self::AVALANCHE,
+            10 => Self::OPTIMISM,
+            42161 => Self::ARBITRUM,
+            100 => Self::GNOSIS,
+            8453 => Self::BASE,
+            42220 => Self::CELO,
+            1101 => Self::ZKEVM,
+            1442 => Self::ZkevmTestnet,
+            81457 => Self::BLAST,
+            31337 => Self::LOCAL,
+            _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
+        })
+    }
+
     pub fn get_chain_id(&self) -> u32 {
         match self {
             Chain::ETH => 1,
