@@ -93,7 +93,6 @@ pub fn fetch_uniswap_path(onchain: &mut OnChainConfig, token_address: EVMAddress
 
             macro_rules! gen_v3_pair_context {
                 ($pair: expr) => {{
-                    println!("pair: {:?}", $pair);
                     let pair_address = EVMAddress::from_str($pair.pair.as_str()).expect("failed to parse pair");
                     let fee = onchain.get_v3_fee(pair_address);
                     let inner = _gen_v2_pair_context!($pair);
