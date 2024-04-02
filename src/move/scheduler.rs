@@ -164,7 +164,12 @@ where
 
     fn next(&mut self, state: &mut Self::State) -> Result<CorpusId, Error> {
         let mut next_idx = self.inner.next(state)?;
+        let mut retries = 0;
         loop {
+            retries += 1;
+            if retries > 10000 {
+                panic!("All functions depend on structs that are not available to be forged by the fuzzer. ");
+            }
             let tc = state.corpus().get(next_idx).expect("Missing testcase");
             let input = tc.borrow().input().clone().expect("Missing input");
             let meta = state
