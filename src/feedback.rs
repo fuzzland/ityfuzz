@@ -14,7 +14,7 @@ use libafl::{
     observers::ObserversTuple,
     prelude::{Feedback, HasMetadata, UsesInput},
     schedulers::Scheduler,
-    state::{HasClientPerfMonitor, HasCorpus, State},
+    state::{HasCorpus, State},
     Error,
 };
 use libafl_bolts::Named;
@@ -94,13 +94,7 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
     OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
-    S: State
-        + HasClientPerfMonitor
-        + HasExecutionResult<Loc, Addr, VS, Out, CI>
-        + HasCorpus
-        + HasMetadata
-        + UsesInput<Input = I>
-        + 'static,
+    S: State + HasExecutionResult<Loc, Addr, VS, Out, CI> + HasCorpus + HasMetadata + UsesInput<Input = I> + 'static,
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -191,13 +185,7 @@ where
 impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> Feedback<S>
     for OracleFeedback<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E>
 where
-    S: State
-        + HasClientPerfMonitor
-        + HasExecutionResult<Loc, Addr, VS, Out, CI>
-        + HasCorpus
-        + HasMetadata
-        + UsesInput<Input = I>
-        + 'static,
+    S: State + HasExecutionResult<Loc, Addr, VS, Out, CI> + HasCorpus + HasMetadata + UsesInput<Input = I> + 'static,
     I: VMInputT<VS, Loc, Addr, CI> + 'static,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -359,7 +347,7 @@ impl<'a, VS, Loc, Addr, Out, CI> DataflowFeedback<'a, VS, Loc, Addr, Out, CI> {
 impl<'a, VS, Loc, Addr, S, Out, CI, I> Feedback<S> for DataflowFeedback<'a, VS, Loc, Addr, Out, CI>
 where
     I: VMInputT<VS, Loc, Addr, CI>,
-    S: State + HasClientPerfMonitor + HasExecutionResult<Loc, Addr, VS, Out, CI> + UsesInput<Input = I>,
+    S: State + HasExecutionResult<Loc, Addr, VS, Out, CI> + UsesInput<Input = I>,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
     Loc: Serialize + DeserializeOwned + Debug + Clone,
@@ -509,7 +497,6 @@ impl<'a, VS, Addr, Code, By, Loc, SlotTy, Out, I, S, I0, S0, SC, CI> Feedback<S0
 where
     I0: Input + VMInputT<VS, Loc, Addr, CI>,
     S0: State
-        + HasClientPerfMonitor
         + HasInfantStateState<Loc, Addr, VS, CI>
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + UsesInput<Input = I0>,

@@ -9,7 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use libafl::{schedulers::Scheduler, state::HasMetadata};
+use libafl::schedulers::Scheduler;
 use revm_interpreter::{
     opcode::{INVALID, JUMPDEST, JUMPI, STOP},
     Interpreter,
@@ -325,9 +325,10 @@ where
                 SourceCodeResult::SourceCode(source_code) => {
                     self.pc_info.insert((address, *pc), source_code.clone());
                 }
-                _ => {
+                SourceCodeResult::SourceCodeNoPcMatch(_) => {
                     skip_pcs.insert(*pc);
                 }
+                _ => {}
             },
         );
 

@@ -46,6 +46,8 @@ pub enum EVMInputTy {
     Liquidate,
 }
 
+const CALL_VALUE_MAX_BYTES: usize = 21; // 309M ether
+
 /// EVM Input Trait
 pub trait EVMInputT {
     /// Set the contract and ABI
@@ -854,7 +856,7 @@ impl EVMInput {
             return res;
         }
         // make set first 16 bytes to 0
-        (0..16).for_each(|i| {
+        (0..CALL_VALUE_MAX_BYTES).for_each(|i| {
             input_vec[i] = 0;
         });
         input.set_txn_value(EVMU256::try_from_be_slice(input_vec.as_slice()).unwrap());

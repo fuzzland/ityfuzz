@@ -10,7 +10,7 @@ use libafl::{
     mutators::Mutator,
     prelude::Testcase,
     stages::{mutational::MutatedTransform, MutationalStage, Stage},
-    state::{HasClientPerfMonitor, HasCorpus, HasMetadata, HasRand, UsesState},
+    state::{HasCorpus, HasMetadata, HasRand, UsesState},
     Error,
 };
 
@@ -43,7 +43,7 @@ where
     EM: UsesState<State = E::State>,
     F: TestcaseScoreWithId<E::State>,
     M: Mutator<I, E::State>,
-    E::State: HasClientPerfMonitor + HasCorpus + HasMetadata + HasRand,
+    E::State: HasCorpus + HasMetadata + HasRand,
     Z: Evaluator<E, EM, State = E::State>,
     I: MutatedTransform<E::Input, E::State> + Clone,
 {
@@ -76,7 +76,7 @@ where
     EM: UsesState<State = E::State>,
     F: TestcaseScoreWithId<E::State>,
     M: Mutator<I, E::State>,
-    E::State: HasClientPerfMonitor + HasCorpus + HasMetadata + HasRand,
+    E::State: HasCorpus + HasMetadata + HasRand,
     Z: Evaluator<E, EM, State = E::State>,
     I: MutatedTransform<E::Input, E::State> + Clone,
 {
@@ -101,7 +101,7 @@ where
     EM: UsesState<State = E::State>,
     F: TestcaseScoreWithId<E::State>,
     M: Mutator<E::Input, E::State>,
-    E::State: HasClientPerfMonitor + HasCorpus + HasMetadata + HasRand,
+    E::State: HasCorpus + HasMetadata + HasRand,
     Z: Evaluator<E, EM, State = E::State>,
 {
     /// Creates a new [`PowerMutationalStageWithId`]
@@ -116,7 +116,7 @@ where
     EM: UsesState<State = E::State>,
     F: TestcaseScoreWithId<E::State>,
     M: Mutator<I, E::State>,
-    E::State: HasClientPerfMonitor + HasCorpus + HasMetadata + HasRand,
+    E::State: HasCorpus + HasMetadata + HasRand,
     Z: Evaluator<E, EM, State = E::State>,
 {
     /// Creates a new transforming [`PowerMutationalStageWithId`]
