@@ -92,9 +92,8 @@ pub fn create_tx_context(caller: AccountAddress, ty: Type) -> Value {
 
                 return Value(ValueImpl::ContainerRef(ContainerRef::Local(inner)));
             }
-
         }
-        _ => unreachable!("tx context type mismatch")
+        _ => unreachable!("tx context type mismatch"),
     }
     unreachable!()
 }

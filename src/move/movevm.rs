@@ -47,16 +47,14 @@ use crate::{
     },
     input::VMInputT,
     r#move::{
-        corpus_initializer::is_tx_context,
-        input::{ConciseMoveInput, MoveFunctionInput, MoveFunctionInputT},
+        corpus_initializer::{create_tx_context, is_tx_context, MoveCorpusInitializer},
+        input::{ConciseMoveInput, FunctionDefaultable, MoveFunctionInput, MoveFunctionInputT},
         types::{MoveAddress, MoveOutput},
         vm_state::{Gate, GatedValue, MoveVMState},
     },
     state::HasCaller,
     state_input::StagedVMState,
 };
-use crate::r#move::corpus_initializer::{create_tx_context, MoveCorpusInitializer};
-use crate::r#move::input::FunctionDefaultable;
 
 pub static mut MOVE_COV_MAP: [u8; MAP_SIZE] = [0u8; MAP_SIZE];
 pub static mut MOVE_CMP_MAP: [u128; MAP_SIZE] = [0; MAP_SIZE];
@@ -467,7 +465,6 @@ where
             state.metadata_map_mut().insert(TypeTagInfoMeta::new());
         }
 
-
         let func_off = self.loader.module_cache.read().functions.len();
         let _module_name = module.name().to_owned();
         let deployed_module_idx = module.self_id();
@@ -482,8 +479,6 @@ where
             )
             .expect("internal deploy error");
 
-
-
         for f in &self.loader.module_cache.read().functions[func_off..] {
             // debug!("deployed function: {:?}@{}({:?}) returns {:?}", deployed_module_idx,
             // f.name.as_str(), f.parameter_types, f.return_types());
@@ -497,23 +492,23 @@ where
             }
         }
 
-
-        let init_func = self.loader.module_cache.read().functions[func_off..].iter().filter(
-            |f| f.name.as_str() == "init"
-        ).map(
-            |f| f.clone()
-        ).next();
+        let init_func = self.loader.module_cache.read().functions[func_off..]
+            .iter()
+            .filter(|f| f.name.as_str() == "init")
+            .map(|f| f.clone())
+            .next();
         if let Some(init_func) = init_func {
             let otw = &init_func.parameters;
-            debug!("init function found {:?} {_module_name} {:?}", otw, init_func.parameter_types);
+            debug!(
+                "init function found {:?} {_module_name} {:?}",
+                otw, init_func.parameter_types
+            );
             let mut args = vec![];
             if otw.len() == 1 {
-                args.push(
-                    create_tx_context(
-                        state.get_rand_caller(),
-                        init_func.parameter_types[0].clone()
-                    )
-                );
+                args.push(create_tx_context(
+                    state.get_rand_caller(),
+                    init_func.parameter_types[0].clone(),
+                ));
             }
 
             let move_input = MoveFunctionInput {
@@ -528,10 +523,7 @@ where
                 _deps: Default::default(),
                 _resolved: true,
             };
-            let res = self.execute(
-                &move_input.as_any().downcast_ref::<I>().unwrap(),
-                state,
-            );
+            let res = self.execute(&move_input.as_any().downcast_ref::<I>().unwrap(), state);
             println!("init function found {:?}", res);
         }
 
