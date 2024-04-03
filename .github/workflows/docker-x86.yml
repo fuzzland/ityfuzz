@@ -2,7 +2,7 @@ name: Docker Build X86
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,7 +31,7 @@ jobs:
           ec2-instance-type: c5d.12xlarge
           subnet-id: subnet-0bdfed1a35eccc1fe
           security-group-id: sg-088af6a76c47f0e45
-          aws-resource-tags: > 
+          aws-resource-tags: >
             [
               {"Key": "Name", "Value": "ec2-github-runner"},
               {"Key": "GitHubRepository", "Value": "${{ github.repository }}"}
@@ -39,44 +39,44 @@ jobs:
 
   build:
     needs: start-runner
-    runs-on: ${{ needs.start-runner.outputs.label }} 
+    runs-on: ${{ needs.start-runner.outputs.label }}
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
-    - name: Set up Docker Buildx
-      id: buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Login to Github Packages
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to Github Packages
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build image and push to Docker Hub and GitHub Container Registry
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        platforms: linux/amd64
-        push: true
-        tags: |
-          fuzzland/ityfuzz:unstable-x86
-          ghcr.io/fuzzland/ityfuzz:unstable-x86
+      - name: Build image and push to Docker Hub and GitHub Container Registry
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            fuzzland/ityfuzz:unstable-x86
+            ghcr.io/fuzzland/ityfuzz:unstable-x86
 
-    - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
 
   stop-runner:
     name: Stop self-hosted EC2 runner
@@ -84,7 +84,7 @@ jobs:
       - start-runner
       - build
     runs-on: ubuntu-latest
-    if: ${{ always() }} 
+    if: ${{ always() }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -99,4 +99,3 @@ jobs:
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           label: ${{ needs.start-runner.outputs.label }}
           ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
-  
