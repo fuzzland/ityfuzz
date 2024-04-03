@@ -20,6 +20,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use super::ChainConfig;
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
@@ -318,6 +319,32 @@ impl Debug for OnChainConfig {
             .field("uniswap_path_cache", &self.uniswap_path_cache)
             .field("rpc_cache", &self.rpc_cache)
             .finish()
+    }
+}
+
+impl ChainConfig for OnChainConfig {
+    fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool, weth: String) -> Vec<PairData> {
+        self.get_pair(token, network, is_pegged, weth)
+    }
+
+    fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
+        self.fetch_reserve(pair)
+    }
+
+    fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
+        self.get_contract_code_analyzed(address, force_cache)
+    }
+
+    fn get_v3_fee(&mut self, address: EVMAddress) -> u32 {
+        self.get_v3_fee(address)
+    }
+
+    fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256 {
+        self.get_token_balance(token, address)
+    }
+
+    fn chain_name(&self) -> String {
+        self.chain_name.clone()
     }
 }
 
