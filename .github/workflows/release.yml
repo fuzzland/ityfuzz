@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: "nightly-2023-11-01"
+          toolchain: "nightly-2024-01-01"
           targets: ${{ matrix.job.target }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -183,7 +183,7 @@ jobs:
 
       # Creates the release for this specific version
       - name: Create release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: ${{ needs.prepare.outputs.release_name }}
           tag_name: ${{ needs.prepare.outputs.tag_name }}
@@ -196,7 +196,7 @@ jobs:
       # tagged `nightly` for compatibility with `ityfuzzup`
       - name: Update nightly release
         if: ${{ env.IS_NIGHTLY }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "Nightly"
           tag_name: "nightly"
