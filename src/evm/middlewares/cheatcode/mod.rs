@@ -655,12 +655,15 @@ mod tests {
             vm::{EVMExecutor, EVMState},
         },
         generic_vm::vm_executor::GenericVM,
+        logger,
         state::FuzzState,
         state_input::StagedVMState,
     };
 
     #[test]
     fn test_foundry_contract() {
+        logger::init_test();
+
         let mut state: EVMFuzzState = FuzzState::new(0);
 
         // Reverter.sol: tests/presets/cheatcode/Reverter.sol
