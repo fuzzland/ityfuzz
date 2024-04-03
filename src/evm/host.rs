@@ -822,8 +822,7 @@ where
         res: (InstructionResult, Gas, Bytes),
     ) -> (InstructionResult, Gas, Bytes) {
         // Check assert result
-        let res = self.check_assert_result(res);
-        if res.0 == Revert {
+        if let Some(res) = self.check_assert_result(&res) {
             return res;
         }
 
@@ -841,16 +840,25 @@ where
         self.check_expected_calls(res)
     }
 
-    fn check_assert_result(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+    fn check_assert_result(
+        &mut self,
+        res: &(InstructionResult, Gas, Bytes),
+    ) -> Option<(InstructionResult, Gas, Bytes)> {
+        debug!("check_assert_result: {:?}, assert_msg: {:?}", res, self.assert_msg);
         if let Some(ref msg) = self.assert_msg {
-            return (InstructionResult::Revert, res.1, msg.abi_encode().into());
+            return Some((InstructionResult::Revert, res.1, msg.abi_encode().into()));
         }
 
-        res
+        None
     }
 
     /// Check expected reverts
     fn check_expected_revert(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        debug!(
+            "check_expected_revert: {:?}, depth: {}, expected_revert: {:?}",
+            res, self.call_depth, self.expected_revert
+        );
+
         // Check if we should check for reverts
         if self.expected_revert.is_none() {
             return res;
@@ -901,6 +909,11 @@ where
         call: &CallInputs,
         res: (InstructionResult, Gas, Bytes),
     ) -> (InstructionResult, Gas, Bytes) {
+        debug!(
+            "check_expected_emits: {:?}, depth: {}, expected_emits: {:?}",
+            res, self.call_depth, self.expected_emits
+        );
+
         let should_check_emits = self
             .expected_emits
             .iter()
@@ -927,6 +940,11 @@ where
 
     /// Check expected calls
     fn check_expected_calls(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
+        debug!(
+            "check_expected_calls: {:?}, depth: {}, expected_calls: {:?}",
+            res, self.call_depth, self.expected_calls
+        );
+
         // Only check expected calls at the root call
         if self.call_depth > 0 {
             return res;
