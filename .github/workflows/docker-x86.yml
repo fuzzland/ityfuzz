@@ -4,6 +4,8 @@ on:
   push:
     branches: ["master"]
 
+permissions: write-all
+
 env:
   CARGO_TERM_COLOR: always
 
