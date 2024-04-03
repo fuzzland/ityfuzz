@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: "nightly-2023-11-01"
+          toolchain: "nightly-2024-01-01"
           targets: ${{ matrix.job.target }}
       - uses: Swatinem/rust-cache@v2
         with:
