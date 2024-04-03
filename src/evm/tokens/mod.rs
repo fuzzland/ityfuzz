@@ -443,7 +443,7 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 0,
             router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
         },
-        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" => UniswapInfo {
+        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" => UniswapInfo {
             pool_fee: 25,
             router: None,
         },
