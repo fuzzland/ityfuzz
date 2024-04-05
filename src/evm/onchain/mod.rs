@@ -146,13 +146,12 @@ impl OnChain {
     }
 }
 
-pub fn keccak_hex(data: EVMU256) -> String {
+pub fn keccak256(input: &[u8]) -> EVMU256 {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let input: [u8; 32] = data.to_be_bytes();
-    hasher.input(input.as_ref());
+    hasher.input(input);
     hasher.result(&mut output);
-    hex::encode(output)
+    EVMU256::from_be_bytes(output)
 }
 
 impl<SC> Middleware<SC> for OnChain

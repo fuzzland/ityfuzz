@@ -9,7 +9,7 @@ use alloy_primitives::hex;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
-use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Interpreter};
+use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Host, Interpreter};
 use revm_primitives::Bytecode;
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
@@ -17,12 +17,10 @@ use tracing::debug;
 use super::{endpoints::PairData, ChainConfig};
 use crate::{
     evm::{
-        tokens::uniswap::CODE_REGISTRY,
         types::{EVMAddress, EVMFuzzState, EVMU256},
         vm::{EVMExecutor, MEM_LIMIT},
     },
     generic_vm::vm_state::VMStateT,
-    get_code_tokens,
     input::ConciseSerde,
     is_call_success,
 };
@@ -30,7 +28,7 @@ use crate::{
 /// Off-chain configuration
 /// Due to the dependency on the vm executor and state when fetching data,
 /// we implement eager loading for simplification.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct OffChainConfig {
     /// Preset v2 pairs
     pub v2_pairs: HashSet<EVMAddress>,
@@ -78,26 +76,35 @@ impl OffChainConfig {
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
         debug!("Building cache for pair: {:?}", pair);
-        let pair_code = get_code_tokens!(pair, vm, state);
+        let (pair_code, _) = vm
+            .host
+            .code(pair)
+            .ok_or_else(|| anyhow!("Pair {:?} code not found", pair))?;
 
         // token0
         let res = self.call(self.token0_input(), pair_code.clone(), pair, state, vm)?;
         let token0 = EVMAddress::from_slice(&res[12..32]);
-        let token0_code = get_code_tokens!(token0, vm, state);
+        let (token0_code, _) = vm
+            .host
+            .code(token0)
+            .ok_or_else(|| anyhow!("Token0 {:?} code not found", token0))?;
         let res = self.call(self.decimals_input(), token0_code.clone(), token0, state, vm)?;
         let decimals_0 = res[31] as u32;
 
         // token1
         let res = self.call(self.token1_input(), pair_code.clone(), pair, state, vm)?;
         let token1 = EVMAddress::from_slice(&res[12..32]);
-        let token1_code = get_code_tokens!(token1, vm, state);
+        let (token1_code, _) = vm
+            .host
+            .code(token1)
+            .ok_or_else(|| anyhow!("Token1 {:?} code not found", token1))?;
         let res = self.call(self.decimals_input(), token1_code.clone(), token1, state, vm)?;
         let decimals_1 = res[31] as u32;
 
         // reserves
         let res = self.call(self.get_reserves_input(), pair_code.clone(), pair, state, vm)?;
-        let reserves0 = EVMU256::try_from_be_slice(&res[18..32]).unwrap_or_default();
-        let reserves1 = EVMU256::try_from_be_slice(&res[4..18]).unwrap_or_default();
+        let reserves0 = EVMU256::try_from_be_slice(&res[..32]).unwrap_or_default();
+        let reserves1 = EVMU256::try_from_be_slice(&res[32..64]).unwrap_or_default();
 
         // balances
         let res = self.call(self.balance_of_input(pair), token0_code.clone(), token0, state, vm)?;
@@ -163,7 +170,7 @@ impl OffChainConfig {
                 caller: EVMAddress::default(),
                 code_address: target,
                 apparent_value: EVMU256::ZERO,
-                scheme: CallScheme::Call,
+                scheme: CallScheme::StaticCall,
             },
         );
 
@@ -242,5 +249,142 @@ impl ChainConfig for OffChainConfig {
 
     fn chain_name(&self) -> String {
         String::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use libafl::schedulers::StdScheduler;
+
+    use super::*;
+    use crate::{
+        evm::{host::FuzzHost, input::ConciseEVMInput, types::generate_random_address, vm::EVMState},
+        generic_vm::vm_executor::GenericVM,
+        logger,
+    };
+
+    #[test]
+    fn test_offchain_v2_pairs() {
+        logger::init_test();
+
+        // UNI-V2: WETH-USDT
+        let pair = "0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852";
+        let pair_addr = EVMAddress::from_str(pair).unwrap();
+        // WETH
+        let weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+        let weth_addr = EVMAddress::from_str(weth).unwrap();
+        // USDT
+        let usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";
+        let usdt_addr = EVMAddress::from_str(usdt).unwrap();
+
+        // setup vm, state
+        let mut state = EVMFuzzState::default();
+        let fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+
+        // deploy contracts
+        let code_path = "tests/presets/v2_pair/UniswapV2Pair.bytecode";
+        deploy(&pair_addr, code_path, &mut state, &mut vm);
+        let code_path = "tests/presets/v2_pair/WETH9.bytecode";
+        deploy(&weth_addr, code_path, &mut state, &mut vm);
+        let code_path = "tests/presets/v2_pair/USDT.bytecode";
+        deploy(&usdt_addr, code_path, &mut state, &mut vm);
+        init_pair_tokens(&pair_addr, &weth_addr, &usdt_addr, &mut vm);
+
+        // new offchain config
+        let v2_pairs = vec![pair_addr, pair_addr];
+        let mut offchain = OffChainConfig::new(&v2_pairs, &mut state, &mut vm).unwrap();
+        assert_eq!(offchain.v2_pairs.len(), 1);
+
+        // test get_pair
+        let pairs = offchain.get_pair(weth, "", true, weth.to_string());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].token0, weth);
+        assert_eq!(pairs[0].token1, usdt);
+        assert_eq!(pairs[0].decimals_0, 18);
+        assert_eq!(pairs[0].decimals_1, 6);
+        assert_eq!(
+            pairs[0].initial_reserves_0,
+            EVMU256::from_str_radix("049f9bc137cd08508bb0", 16).unwrap()
+        );
+        assert_eq!(
+            pairs[0].initial_reserves_1,
+            EVMU256::from_str_radix("41062620fcfd", 16).unwrap()
+        );
+        assert_eq!(pairs[0].in_, 0);
+        assert_eq!(pairs[0].next, usdt);
+        assert_eq!(pairs[0].in_token, weth);
+        assert_eq!(pairs[0].interface, "uniswapv2");
+
+        // test fetch_reserve
+        let (res0, res1) = offchain.fetch_reserve(pair).unwrap();
+        assert_eq!(res0, "21833721552298530868144");
+        assert_eq!(res1, "71494665305341");
+
+        // test get_token_balance
+        let balance = offchain.get_token_balance(usdt_addr, pair_addr);
+        assert_eq!(balance, EVMU256::from(72553743663529u128));
+    }
+
+    fn deploy<VS, CI, SC>(
+        address: &EVMAddress,
+        code_path: &str,
+        state: &mut EVMFuzzState,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+    ) where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    {
+        let hex_code = fs::read_to_string(code_path)
+            .expect("bytecode not found")
+            .trim()
+            .to_string();
+        let bytecode = Bytecode::new_raw(Bytes::from(hex::decode(hex_code).unwrap()));
+
+        vm.deploy(bytecode, None, *address, state);
+    }
+
+    fn init_pair_tokens<VS, CI, SC>(
+        pair: &EVMAddress,
+        token0: &EVMAddress,
+        token1: &EVMAddress,
+        vm: &mut EVMExecutor<VS, CI, SC>,
+    ) where
+        VS: VMStateT + Default + 'static,
+        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
+        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
+    {
+        // Initialize pair
+        let slots = vm.host.evmstate.state.get_mut(pair).unwrap();
+        // slot 6: token0
+        slots.insert(EVMU256::from(6), EVMU256::from_be_slice(token0.as_slice()));
+        // slot 7: token1
+        slots.insert(EVMU256::from(7), EVMU256::from_be_slice(token1.as_slice()));
+        // slot 8: blockTimestampLast + reserve1 + reserve0
+        let slot8 =
+            EVMU256::from_str_radix("660e130b000000000000000041062620fcfd00000000049f9bc137cd08508bb0", 16).unwrap();
+        slots.insert(EVMU256::from(8), slot8);
+
+        // Initialize token0
+        let slots = vm.host.evmstate.state.get_mut(token0).unwrap();
+        // balanceOf pair
+        let slot =
+            EVMU256::from_str_radix("aced72359d8708e95d2112ba70e71fa267967a5588d15e7c78c1904e0debe410", 16).unwrap();
+        slots.insert(slot, EVMU256::from(21519275363657114356534u128));
+        // slot 2: decimals
+        slots.insert(EVMU256::from(2), EVMU256::from(18));
+
+        // Initialize token1
+        let slots = vm.host.evmstate.state.get_mut(token1).unwrap();
+        // balanceOf pair
+        let slot =
+            EVMU256::from_str_radix("45b1147656da4d940c556082f0e09e91e3d046c1c84468f8ead64d8fdc1c749a", 16).unwrap();
+        slots.insert(slot, EVMU256::from(72553743663529u128));
+        // slot 9: decimals
+        slots.insert(EVMU256::from(9), EVMU256::from(6));
     }
 }
