@@ -53,12 +53,13 @@ pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 const UNBOUND_THRESHOLD: usize = 30;
 
 pub trait ChainConfig {
-    fn get_pair(&mut self, token: &str, network: &str, is_pegged: bool, weth: String) -> Vec<PairData>;
+    fn get_pair(&mut self, token: &str, is_pegged: bool) -> Vec<PairData>;
     fn fetch_reserve(&self, pair: &str) -> Option<(String, String)>;
     fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode;
     fn get_v3_fee(&mut self, address: EVMAddress) -> u32;
     fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256;
-    fn chain_name(&self) -> String;
+    fn get_weth(&self) -> String;
+    fn get_pegged_token(&self) -> HashMap<String, String>;
 }
 
 pub struct OnChain {

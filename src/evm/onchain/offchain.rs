@@ -8,6 +8,7 @@ use std::{
 use alloy_primitives::hex;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+use itertools::Itertools;
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Host, Interpreter};
 use revm_primitives::Bytecode;
@@ -24,6 +25,8 @@ use crate::{
     input::ConciseSerde,
     is_call_success,
 };
+
+const WETH: &str = "0x4200000000000000000000000000000000000006";
 
 /// Off-chain configuration
 /// Due to the dependency on the vm executor and state when fetching data,
@@ -42,26 +45,26 @@ pub struct OffChainConfig {
 }
 
 impl OffChainConfig {
-    pub fn new<VS, CI, SC>(
-        v2_pairs: &[EVMAddress],
-        state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
-    ) -> Result<Self>
+    pub fn new(v2_pairs: &[EVMAddress]) -> Self {
+        let v2_pairs: HashSet<_> = v2_pairs.iter().cloned().collect();
+        Self {
+            v2_pairs,
+            ..Default::default()
+        }
+    }
+
+    pub fn initialize<VS, CI, SC>(&mut self, state: &mut EVMFuzzState, vm: &mut EVMExecutor<VS, CI, SC>) -> Result<()>
     where
         VS: VMStateT + Default + 'static,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        let v2_pairs: HashSet<_> = v2_pairs.iter().cloned().collect();
-        let mut offchain = Self {
-            v2_pairs: v2_pairs.clone(),
-            ..Default::default()
-        };
+        let v2_pairs = self.v2_pairs.clone();
         for pair in v2_pairs {
-            offchain.build_cache(pair, state, vm)?;
+            self.build_cache(pair, state, vm)?;
         }
 
-        Ok(offchain)
+        Ok(())
     }
 
     fn build_cache<VS, CI, SC>(
@@ -134,7 +137,6 @@ impl OffChainConfig {
         Ok(())
     }
 
-    // TODO src_exact?
     fn build_pair_cache(&mut self, token: EVMAddress, mut pair: PairData) {
         let in_token = format!("{:?}", token);
         pair.in_ = if in_token == pair.token0 { 0 } else { 1 };
@@ -143,8 +145,14 @@ impl OffChainConfig {
         } else {
             in_token.clone()
         };
-        pair.in_token = in_token;
+        pair.in_token = in_token.clone();
         pair.interface = "uniswapv2".to_string();
+        pair.src_exact = "uniswapv2_eth".to_string();
+        pair.src = if self.get_pegged_token().values().contains(&in_token) {
+            "pegged".to_string()
+        } else {
+            "lp".to_string()
+        };
 
         self.pair_cache.entry(token).or_default().push(pair);
     }
@@ -218,15 +226,9 @@ impl OffChainConfig {
 }
 
 impl ChainConfig for OffChainConfig {
-    // TODO pegged_tokens?
-    fn get_pair(&mut self, token: &str, _network: &str, is_pegged: bool, _weth: String) -> Vec<PairData> {
+    fn get_pair(&mut self, token: &str, _is_pegged: bool) -> Vec<PairData> {
         let token = EVMAddress::from_str(token).unwrap();
-        let mut pairs = self.pair_cache.get(&token).cloned().unwrap_or_default();
-        for pair in pairs.iter_mut() {
-            pair.src = if is_pegged { "pegged" } else { "lp" }.to_string();
-        }
-
-        pairs
+        self.pair_cache.get(&token).cloned().unwrap_or_default()
     }
 
     fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
@@ -247,8 +249,12 @@ impl ChainConfig for OffChainConfig {
         self.balance_cache.get(&(address, token)).cloned().unwrap_or_default()
     }
 
-    fn chain_name(&self) -> String {
-        String::new()
+    fn get_weth(&self) -> String {
+        WETH.to_string()
+    }
+
+    fn get_pegged_token(&self) -> HashMap<String, String> {
+        HashMap::from_iter([("WETH".to_string(), WETH.to_string())])
     }
 }
 
@@ -273,7 +279,7 @@ mod tests {
         let pair = "0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852";
         let pair_addr = EVMAddress::from_str(pair).unwrap();
         // WETH
-        let weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+        let weth = WETH;
         let weth_addr = EVMAddress::from_str(weth).unwrap();
         // USDT
         let usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";
@@ -288,19 +294,20 @@ mod tests {
         // deploy contracts
         let code_path = "tests/presets/v2_pair/UniswapV2Pair.bytecode";
         deploy(&pair_addr, code_path, &mut state, &mut vm);
-        let code_path = "tests/presets/v2_pair/WETH9.bytecode";
-        deploy(&weth_addr, code_path, &mut state, &mut vm);
+        // let code_path = "tests/presets/v2_pair/WETH9.bytecode";
+        // deploy(&weth_addr, code_path, &mut state, &mut vm);
         let code_path = "tests/presets/v2_pair/USDT.bytecode";
         deploy(&usdt_addr, code_path, &mut state, &mut vm);
         init_pair_tokens(&pair_addr, &weth_addr, &usdt_addr, &mut vm);
 
-        // new offchain config
+        // initialize offchain config
         let v2_pairs = vec![pair_addr, pair_addr];
-        let mut offchain = OffChainConfig::new(&v2_pairs, &mut state, &mut vm).unwrap();
+        let mut offchain = OffChainConfig::new(&v2_pairs);
+        offchain.initialize(&mut state, &mut vm).unwrap();
         assert_eq!(offchain.v2_pairs.len(), 1);
 
         // test get_pair
-        let pairs = offchain.get_pair(weth, "", true, weth.to_string());
+        let pairs = offchain.get_pair(weth, true);
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].token0, weth);
         assert_eq!(pairs[0].token1, usdt);

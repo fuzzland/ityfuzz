@@ -635,6 +635,7 @@ mod tests {
             input::ConciseEVMInput,
             onchain::{
                 endpoints::{Chain, OnChainConfig},
+                ChainConfig,
                 OnChain,
             },
             oracles::v2_pair::reserve_parser,
@@ -675,7 +676,8 @@ mod tests {
             .unwrap()
             .insert(token, onchain.get_contract_code_analyzed(token, false));
 
-        let token_ctx = fetch_uniswap_path(&mut onchain, token);
+        let mut chain: Box<dyn ChainConfig> = Box::new(onchain);
+        let token_ctx = fetch_uniswap_path(&mut chain, token);
 
         println!("======== Token Swaps ========");
         token_ctx.swaps.iter().for_each(|x| {
