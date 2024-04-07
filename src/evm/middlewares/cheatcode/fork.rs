@@ -55,7 +55,9 @@ where
             Chain::from_str(url_or_alias).ok()?
         };
         let block_number = block.map(|b| b.as_limbs()[0]).unwrap_or_default();
-        let onchain = OnChainConfig::new(chain, block_number);
+        let mut onchain = OnChainConfig::new(chain, block_number);
+        onchain.etherscan_api_key = self.etherscan_api_key.clone();
+
         let storage_fetching = StorageFetchingMode::OneByOne;
         tracing::debug!("createSelectFork(\"{url_or_alias}\", {block_number}), {onchain:?})");
 

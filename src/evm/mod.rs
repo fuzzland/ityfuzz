@@ -661,6 +661,7 @@ pub fn evm_main(mut args: EvmArgs) {
             &offchain_artifacts.expect("offchain artifacts is required for config target type"),
             args.setup_file,
             args.work_dir.clone(),
+            &etherscan_api_key,
         ),
         EVMTargetType::Address => {
             if onchain.is_none() {
@@ -751,6 +752,7 @@ pub fn evm_main(mut args: EvmArgs) {
         #[cfg(feature = "use_presets")]
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
+        etherscan_api_key,
     };
 
     let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
