@@ -49,6 +49,8 @@ pub struct Cheatcode<SC> {
     accesses: Option<RecordAccess>,
     /// Recorded logs
     recorded_logs: Option<Vec<Vm::Log>>,
+    /// Etherscan API key
+    etherscan_api_key: Vec<String>,
 
     _phantom: PhantomData<SC>,
 }
@@ -115,10 +117,11 @@ impl<SC> Cheatcode<SC>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    pub fn new() -> Self {
+    pub fn new(etherscan_api_key: &str) -> Self {
         Self {
             accesses: None,
             recorded_logs: None,
+            etherscan_api_key: etherscan_api_key.split(',').map(|s| s.to_string()).collect(),
             _phantom: PhantomData,
         }
     }
@@ -687,7 +690,7 @@ mod tests {
             std::fs::create_dir(path).unwrap();
         }
         let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
-        fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+        fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new(""))));
         fuzz_host.set_code(
             CHEATCODE_ADDRESS,
             Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),

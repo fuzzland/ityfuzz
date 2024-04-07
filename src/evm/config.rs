@@ -59,6 +59,7 @@ impl FromStr for FuzzerTypes {
 pub struct Config<VS, Addr, Code, By, Loc, SlotTy, Out, I, S, CI, E> {
     pub onchain: Option<OnChainConfig>,
     pub onchain_storage_fetching: Option<StorageFetchingMode>,
+    pub etherscan_api_key: String,
     pub flashloan: bool,
     pub concolic: bool,
     pub concolic_caller: bool,

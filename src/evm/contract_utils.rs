@@ -13,7 +13,7 @@ use bytes::Bytes;
 /// Load contract from file system or remote
 use glob::glob;
 use itertools::Itertools;
-use libafl::schedulers::StdScheduler;
+use libafl::{schedulers::StdScheduler, state::HasMetadata};
 use revm_primitives::{Bytecode, Env};
 use serde_json::Value;
 
@@ -24,7 +24,7 @@ use crate::{
         vm::{IN_DEPLOY, SETCODE_ONLY},
     },
     generic_vm::vm_executor::GenericVM,
-    state::FuzzState,
+    state::{FuzzState, HasCaller},
 };
 
 extern crate crypto;
@@ -35,7 +35,9 @@ use tracing::{debug, error, info};
 
 use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
+    abi::ABIAddressToInstanceMap,
     blaz::{is_bytecode_similar_lax, is_bytecode_similar_strict_ranking},
+    corpus_initializer::{EnvMetadata, INITIAL_BALANCE},
     host::FuzzHost,
     input::ConciseEVMInput,
     middlewares::cheatcode::{Cheatcode, CHEATCODE_ADDRESS},
@@ -721,7 +723,12 @@ impl ContractLoader {
         }
     }
 
-    pub fn from_setup(offchain_artifacts: &Vec<OffChainArtifact>, setup_file: String, work_dir: String) -> Self {
+    pub fn from_setup(
+        offchain_artifacts: &Vec<OffChainArtifact>,
+        setup_file: String,
+        work_dir: String,
+        etherscan_api_key: &str,
+    ) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
 
@@ -787,6 +794,7 @@ impl ContractLoader {
                     setup_data = Some(Self::call_setup(
                         contract_artifact.deploy_bytecode.clone(),
                         work_dir.clone(),
+                        etherscan_api_key,
                     ));
                     break 'artifacts;
                 }
@@ -836,6 +844,7 @@ impl ContractLoader {
     fn get_vm_with_cheatcode(
         deployer: EVMAddress,
         work_dir: String,
+        etherscan_api_key: &str,
     ) -> (
         EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
         EVMFuzzState,
@@ -850,18 +859,39 @@ impl ContractLoader {
             Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
             &mut state,
         );
-        executor.host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+        executor
+            .host
+            .add_middlewares(Rc::new(RefCell::new(Cheatcode::new(etherscan_api_key))));
+
+        // Initialize state
+        state
+            .metadata_map_mut()
+            .insert::<ABIAddressToInstanceMap>(ABIAddressToInstanceMap::new());
+        state.metadata_map_mut().insert::<EnvMetadata>(EnvMetadata::default());
+        let default_callers = HashSet::from([
+            fixed_address("8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd"),
+            fixed_address("35c9dfd76bf02107ff4f7128Bd69716612d31dDb"),
+            // fixed_address("5E6B78f0748ACd4Fb4868dF6eCcfE41398aE09cb"),
+        ]);
+        for caller in default_callers {
+            state.add_caller(&caller);
+            executor
+                .host
+                .evmstate
+                .set_balance(caller, EVMU256::from(INITIAL_BALANCE));
+        }
+
         (executor, state)
     }
 
     /// Deploy the contract and invoke "setUp()", returns the code, state, and
     /// environment after deployment. Foundry VM Cheatcodes and Hardhat
     /// consoles are enabled here.
-    fn call_setup(deploy_code: Bytes, work_dir: String) -> SetupData {
+    fn call_setup(deploy_code: Bytes, work_dir: String, etherscan_api_key: &str) -> SetupData {
         let deployer = EVMAddress::from_str(FOUNDRY_DEPLOYER).unwrap();
         let deployed_addr = EVMAddress::from_str(FOUNDRY_SETUP_ADDR).unwrap();
 
-        let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer, work_dir);
+        let (mut evm_executor, mut state) = Self::get_vm_with_cheatcode(deployer, work_dir, etherscan_api_key);
 
         // deploy contract
         unsafe {
