@@ -171,7 +171,7 @@ pub fn evm_fuzzer(
                 if setup_data.v2_pairs.is_empty() {
                     None
                 } else {
-                    Some(Box::new(OffChainConfig::new(&setup_data.v2_pairs)) as Box<dyn ChainConfig>)
+                    Some(Box::new(OffChainConfig::new(setup_data).unwrap()) as Box<dyn ChainConfig>)
                 }
             } else {
                 None

@@ -9,8 +9,8 @@ use alloy_primitives::hex;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::schedulers::Scheduler;
-use revm_interpreter::{BytecodeLocked, CallContext, CallScheme, Contract, Host, Interpreter};
+use libafl::schedulers::{Scheduler, StdScheduler};
+use revm_interpreter::{analysis::to_analysed, BytecodeLocked, CallContext, CallScheme, Contract, Host, Interpreter};
 use revm_primitives::Bytecode;
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
@@ -18,8 +18,11 @@ use tracing::debug;
 use super::{endpoints::PairData, ChainConfig};
 use crate::{
     evm::{
-        types::{EVMAddress, EVMFuzzState, EVMU256},
-        vm::{EVMExecutor, MEM_LIMIT},
+        contract_utils::SetupData,
+        host::FuzzHost,
+        input::ConciseEVMInput,
+        types::{generate_random_address, EVMAddress, EVMFuzzState, EVMU256},
+        vm::{EVMExecutor, EVMState, MEM_LIMIT},
     },
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
@@ -45,26 +48,31 @@ pub struct OffChainConfig {
 }
 
 impl OffChainConfig {
-    pub fn new(v2_pairs: &[EVMAddress]) -> Self {
-        let v2_pairs: HashSet<_> = v2_pairs.iter().cloned().collect();
-        Self {
+    pub fn new(setup_data: &SetupData) -> Result<Self> {
+        // setup vm, state
+        let mut state = EVMFuzzState::default();
+        let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+        fuzz_host.evmstate = setup_data.evmstate.clone();
+        fuzz_host.env = setup_data.env.clone();
+        for (addr, bytecode) in &setup_data.code {
+            let code = Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(bytecode.clone()))).unwrap());
+            fuzz_host.code.insert(*addr, code);
+        }
+        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+
+        // build offchain config
+        let v2_pairs: HashSet<_> = setup_data.v2_pairs.iter().cloned().collect();
+        let mut offchain = Self {
             v2_pairs,
             ..Default::default()
-        }
-    }
-
-    pub fn initialize<VS, CI, SC>(&mut self, state: &mut EVMFuzzState, vm: &mut EVMExecutor<VS, CI, SC>) -> Result<()>
-    where
-        VS: VMStateT + Default + 'static,
-        CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
-        SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
-    {
-        let v2_pairs = self.v2_pairs.clone();
+        };
+        let v2_pairs = offchain.v2_pairs.clone();
         for pair in v2_pairs {
-            self.build_cache(pair, state, vm)?;
+            offchain.build_cache(pair, &mut state, &mut vm)?;
         }
 
-        Ok(())
+        Ok(offchain)
     }
 
     fn build_cache<VS, CI, SC>(
@@ -285,25 +293,9 @@ mod tests {
         let usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";
         let usdt_addr = EVMAddress::from_str(usdt).unwrap();
 
-        // setup vm, state
-        let mut state = EVMFuzzState::default();
-        let fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
-        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
-            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
-
-        // deploy contracts
-        let code_path = "tests/presets/v2_pair/UniswapV2Pair.bytecode";
-        deploy(&pair_addr, code_path, &mut state, &mut vm);
-        // let code_path = "tests/presets/v2_pair/WETH9.bytecode";
-        // deploy(&weth_addr, code_path, &mut state, &mut vm);
-        let code_path = "tests/presets/v2_pair/USDT.bytecode";
-        deploy(&usdt_addr, code_path, &mut state, &mut vm);
-        init_pair_tokens(&pair_addr, &weth_addr, &usdt_addr, &mut vm);
-
-        // initialize offchain config
-        let v2_pairs = vec![pair_addr, pair_addr];
-        let mut offchain = OffChainConfig::new(&v2_pairs);
-        offchain.initialize(&mut state, &mut vm).unwrap();
+        // new offchain config
+        let setup_data = build_setup_data(pair_addr, weth_addr, usdt_addr);
+        let mut offchain = OffChainConfig::new(&setup_data).unwrap();
         assert_eq!(offchain.v2_pairs.len(), 1);
 
         // test get_pair
@@ -334,6 +326,37 @@ mod tests {
         // test get_token_balance
         let balance = offchain.get_token_balance(usdt_addr, pair_addr);
         assert_eq!(balance, EVMU256::from(72553743663529u128));
+    }
+
+    fn build_setup_data(pair: EVMAddress, weth: EVMAddress, usdt: EVMAddress) -> SetupData {
+        let mut state = EVMFuzzState::default();
+        let fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+            EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
+
+        // deploy contracts
+        let code_path = "tests/presets/v2_pair/UniswapV2Pair.bytecode";
+        deploy(&pair, code_path, &mut state, &mut vm);
+        let code_path = "tests/presets/v2_pair/WETH9.bytecode";
+        deploy(&weth, code_path, &mut state, &mut vm);
+        let code_path = "tests/presets/v2_pair/USDT.bytecode";
+        deploy(&usdt, code_path, &mut state, &mut vm);
+        init_pair_tokens(&pair, &weth, &usdt, &mut vm);
+
+        let code: HashMap<EVMAddress, Bytes> = vm
+            .host
+            .code
+            .into_iter()
+            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            .collect();
+
+        SetupData {
+            evmstate: vm.host.evmstate.clone(),
+            env: vm.host.env.clone(),
+            code,
+            v2_pairs: vec![pair],
+            ..Default::default()
+        }
     }
 
     fn deploy<VS, CI, SC>(
