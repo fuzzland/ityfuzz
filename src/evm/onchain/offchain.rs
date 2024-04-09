@@ -72,6 +72,7 @@ impl OffChainConfig {
             offchain.build_cache(pair, &mut state, &mut vm)?;
         }
 
+        debug!("🔥 OffChainConfig initialized: {:?}", offchain);
         Ok(offchain)
     }
 
