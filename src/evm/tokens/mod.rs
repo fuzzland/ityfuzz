@@ -447,10 +447,12 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 20,
             router: None,
         },
-        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" | "biswapv2_bsc" => UniswapInfo {
-            pool_fee: 25,
-            router: None,
-        },
+        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" | "biswapv2_bsc" => {
+            UniswapInfo {
+                pool_fee: 25,
+                router: None,
+            }
+        }
         "sushiswapv2_eth" | "sushiswapv2_arb" | "sushiswapv2_polygon" | "sushiswapv2_avax" | "sushiswapv2_base" => {
             UniswapInfo {
                 pool_fee: 30,
