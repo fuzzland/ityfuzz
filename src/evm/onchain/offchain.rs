@@ -44,6 +44,8 @@ pub struct OffChainConfig {
     reserves_cache: HashMap<EVMAddress, (EVMU256, EVMU256)>,
     // (pair,token) -> balance
     balance_cache: HashMap<(EVMAddress, EVMAddress), EVMU256>,
+    // addr -> code
+    code_cache: HashMap<EVMAddress, Bytecode>,
 }
 
 impl OffChainConfig {
@@ -141,6 +143,12 @@ impl OffChainConfig {
         self.reserves_cache.insert(pair, (reserves0, reserves1));
         self.balance_cache.insert((pair, token0), balance0);
         self.balance_cache.insert((pair, token1), balance1);
+        let pair_code = Bytecode::new_raw(Bytes::from(pair_code.bytecode().to_vec()));
+        self.code_cache.insert(pair, pair_code);
+        let token0_code = Bytecode::new_raw(Bytes::from(token0_code.bytecode().to_vec()));
+        self.code_cache.insert(token0, token0_code);
+        let token1_code = Bytecode::new_raw(Bytes::from(token1_code.bytecode().to_vec()));
+        self.code_cache.insert(token1, token1_code);
 
         Ok(())
     }
@@ -242,11 +250,13 @@ impl ChainConfig for OffChainConfig {
     fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
         let pair = EVMAddress::from_str(pair).unwrap();
         let (res0, res1) = self.reserves_cache.get(&pair)?;
-        Some((res0.to_string(), res1.to_string()))
+        let reserve0 = hex::encode::<[u8; 32]>(res0.to_be_bytes());
+        let reserve1 = hex::encode::<[u8; 32]>(res1.to_be_bytes());
+        Some((reserve0, reserve1))
     }
 
-    fn get_contract_code_analyzed(&mut self, _address: EVMAddress, _force_cache: bool) -> Bytecode {
-        unreachable!()
+    fn get_contract_code_analyzed(&mut self, address: EVMAddress, _force_cache: bool) -> Bytecode {
+        self.code_cache.get(&address).cloned().unwrap_or_default()
     }
 
     fn get_v3_fee(&mut self, _address: EVMAddress) -> u32 {
@@ -320,12 +330,16 @@ mod tests {
 
         // test fetch_reserve
         let (res0, res1) = offchain.fetch_reserve(pair).unwrap();
-        assert_eq!(res0, "21833721552298530868144");
-        assert_eq!(res1, "71494665305341");
+        assert_eq!(res0, "00000000000000000000000000000000000000000000049f9bc137cd08508bb0");
+        assert_eq!(res1, "000000000000000000000000000000000000000000000000000041062620fcfd");
 
         // test get_token_balance
         let balance = offchain.get_token_balance(usdt_addr, pair_addr);
         assert_eq!(balance, EVMU256::from(72553743663529u128));
+
+        // test get_contract_code_analyzed
+        let code = offchain.get_contract_code_analyzed(pair_addr, false);
+        assert!(!code.is_empty());
     }
 
     fn build_setup_data(pair: EVMAddress, weth: EVMAddress, usdt: EVMAddress) -> SetupData {

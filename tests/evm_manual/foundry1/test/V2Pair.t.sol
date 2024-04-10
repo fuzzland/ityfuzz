@@ -8,15 +8,20 @@ import {PancakePair} from "../src/UniswapV2.sol";
 import {ItyFuzzToken} from "../src/ItyFuzzToken.sol";
 
 contract V2PairTest is Test {
-    address[] public v2Pairs;
+    address[] private _v2Pairs;
     address public weth = 0x4200000000000000000000000000000000000006;
     address public usdt_weth;
+
+    // FYI: tests/evm_manual/foundry1/lib/forge-std/src/StdInvariant.sol
+    function v2Pairs() public view returns (address[] memory) {
+        return _v2Pairs;
+    }
 
     function registerUniswapV2Pair(address pair) internal {
         (bool is_token0_succ,) = pair.call(abi.encodeWithSignature("token0()"));
         (bool is_token1_succ,) = pair.call(abi.encodeWithSignature("token1()"));
         require(is_token0_succ || is_token1_succ, "not a uniswap v2 pair");
-        v2Pairs.push(pair);
+        _v2Pairs.push(pair);
     }
 
     function createUniswapV2Pair(address token1, address token2) internal returns (address) {
@@ -27,11 +32,11 @@ contract V2PairTest is Test {
     }
 
     function setUp() public {
-        address usdt = address(new ItyFuzzToken(1000000000000000000000));
+        address usdt = address(new ItyFuzzToken(type(uint112).max));
         usdt_weth = createUniswapV2Pair(usdt, weth);
     }
 
     function invariant_1() public {
-        assertEq(v2Pairs.length, 1);
+        assertEq(v2Pairs().length, 0); // bug
     }
 }
