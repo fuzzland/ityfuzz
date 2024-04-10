@@ -23,13 +23,12 @@ use crate::{
         input::ConciseEVMInput,
         types::{generate_random_address, EVMAddress, EVMFuzzState, EVMU256},
         vm::{EVMExecutor, EVMState, MEM_LIMIT},
+        PRESET_WETH,
     },
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
     is_call_success,
 };
-
-const WETH: &str = "0x4200000000000000000000000000000000000006";
 
 /// Off-chain configuration
 /// Due to the dependency on the vm executor and state when fetching data,
@@ -259,11 +258,11 @@ impl ChainConfig for OffChainConfig {
     }
 
     fn get_weth(&self) -> String {
-        WETH.to_string()
+        PRESET_WETH.to_string()
     }
 
     fn get_pegged_token(&self) -> HashMap<String, String> {
-        HashMap::from_iter([("WETH".to_string(), WETH.to_string())])
+        HashMap::from_iter([("WETH".to_string(), PRESET_WETH.to_string())])
     }
 }
 
@@ -288,7 +287,7 @@ mod tests {
         let pair = "0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852";
         let pair_addr = EVMAddress::from_str(pair).unwrap();
         // WETH
-        let weth = WETH;
+        let weth = PRESET_WETH;
         let weth_addr = EVMAddress::from_str(weth).unwrap();
         // USDT
         let usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";

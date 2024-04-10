@@ -22,6 +22,7 @@ use crate::{
         tokens::constant_pair::ConstantPairMetadata,
         types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
         vm::{IN_DEPLOY, SETCODE_ONLY},
+        PRESET_WETH,
     },
     generic_vm::vm_executor::GenericVM,
     state::{FuzzState, HasCaller},
@@ -897,6 +898,13 @@ impl ContractLoader {
         unsafe {
             SETCODE_ONLY = true;
         }
+        // Deploy preset WETH
+        let weth_addr = EVMAddress::from_str(PRESET_WETH).unwrap();
+        let hex_code = include_str!("../../tests/presets/v2_pair/WETH9.bytecode").trim();
+        let weth_code = Bytes::from(hex::decode(hex_code).unwrap());
+        let deployed_weth = evm_executor.deploy(Bytecode::new_raw(weth_code), None, weth_addr, &mut state);
+        assert!(deployed_weth.is_some(), "failed to deploy WETH");
+
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
             None,
@@ -920,7 +928,7 @@ impl ContractLoader {
         );
 
         if !res[0].1 {
-            info!("setUp() failed: {:?}", res[0].0);
+            error!("setUp() failed: {:?}", res[0].0);
         }
 
         // now get Foundry invariant test config by calling
