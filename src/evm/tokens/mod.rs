@@ -447,10 +447,12 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 20,
             router: None,
         },
-        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" | "biswapv2_bsc" => UniswapInfo {
-            pool_fee: 25,
-            router: None,
-        },
+        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" | "biswapv2_bsc" => {
+            UniswapInfo {
+                pool_fee: 25,
+                router: None,
+            }
+        }
         "sushiswapv2_eth" | "sushiswapv2_arb" | "sushiswapv2_polygon" | "sushiswapv2_avax" | "sushiswapv2_base" => {
             UniswapInfo {
                 pool_fee: 30,
@@ -639,6 +641,7 @@ mod tests {
             input::ConciseEVMInput,
             onchain::{
                 endpoints::{Chain, OnChainConfig},
+                ChainConfig,
                 OnChain,
             },
             oracles::v2_pair::reserve_parser,
@@ -679,7 +682,8 @@ mod tests {
             .unwrap()
             .insert(token, onchain.get_contract_code_analyzed(token, false));
 
-        let token_ctx = fetch_uniswap_path(&mut onchain, token);
+        let mut chain: Box<dyn ChainConfig> = Box::new(onchain);
+        let token_ctx = fetch_uniswap_path(&mut chain, token);
 
         println!("======== Token Swaps ========");
         token_ctx.swaps.iter().for_each(|x| {

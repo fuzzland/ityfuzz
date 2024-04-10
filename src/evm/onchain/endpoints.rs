@@ -18,8 +18,9 @@ use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{Bytecode, B160};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
+use super::ChainConfig;
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
@@ -318,6 +319,94 @@ impl Debug for OnChainConfig {
             .field("uniswap_path_cache", &self.uniswap_path_cache)
             .field("rpc_cache", &self.rpc_cache)
             .finish()
+    }
+}
+
+impl ChainConfig for OnChainConfig {
+    fn get_pair(&mut self, token: &str, is_pegged: bool) -> Vec<PairData> {
+        let network = self.chain_name.clone();
+        let weth = self.get_weth();
+        self.get_pair(token, &network, is_pegged, weth)
+    }
+
+    fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
+        self.fetch_reserve(pair)
+    }
+
+    fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
+        self.get_contract_code_analyzed(address, force_cache)
+    }
+
+    fn get_v3_fee(&mut self, address: EVMAddress) -> u32 {
+        self.get_v3_fee(address)
+    }
+
+    fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256 {
+        self.get_token_balance(token, address)
+    }
+
+    fn get_weth(&self) -> String {
+        let pegged_token = self.get_pegged_token();
+
+        match self.chain_name.as_str() {
+            "eth" => return pegged_token.get("WETH").unwrap().to_string(),
+            "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
+            "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "local" => return pegged_token.get("ZERO").unwrap().to_string(),
+            // "mumbai" => panic!("Not supported"),
+            _ => {
+                warn!("Unknown network");
+                "".to_string()
+            }
+        }
+    }
+
+    fn get_pegged_token(&self) -> HashMap<String, String> {
+        match self.chain_name.as_str() {
+            "eth" => [
+                ("WETH", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
+                ("USDC", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+                ("USDT", "0xdac17f958d2ee523a2206206994597c13d831ec7"),
+                ("DAI", "0x6b175474e89094c44da98b954eedeac495271d0f"),
+                ("WBTC", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"),
+                ("WMATIC", "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "bsc" => [
+                ("WBNB", "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"),
+                ("USDC", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"),
+                ("USDT", "0x55d398326f99059ff775485246999027b3197955"),
+                ("DAI", "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3"),
+                ("WBTC", "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c"),
+                ("WETH", "0x2170ed0880ac9a755fd29b2688956bd959f933f8"),
+                ("BUSD", "0xe9e7cea3dedca5984780bafc599bd69add087d56"),
+                ("CAKE", "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "polygon" => [
+                ("WMATIC", "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"),
+                ("USDC", "0x2791bca1f2de4661ed88a30c99a7a9449aa84174"),
+                ("USDT", "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"),
+                ("DAI", "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"),
+                ("WBTC", "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6"),
+                ("WETH", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "local" => [("ZERO", "0x0000000000000000000000000000000000000000")]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            _ => {
+                warn!("[Flashloan] Network is not supported");
+                HashMap::new()
+            }
+        }
     }
 }
 

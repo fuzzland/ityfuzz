@@ -63,6 +63,8 @@ use crate::{
     state::FuzzState,
 };
 
+pub const PRESET_WETH: &str = "0x4200000000000000000000000000000000000006";
+
 pub fn parse_constructor_args_string(input: String) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
 
