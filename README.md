@@ -87,3 +87,8 @@ Selected new vulnerabilities found:
 
 ItyFuzz can automatically generate exploits for >80% of previous hacks without any knowledge of the hack. 
 Refer to [backtesting](https://docs.ityfuzz.rs/tutorials/exp-known-working-hacks) for running previously hacked protocols.
+
+
+## Sponsors & Grants
+* [Manifold Finance](https://www.manifoldfinance.com/)
+* [Sui](https://sui.io/)
