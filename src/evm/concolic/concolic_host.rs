@@ -1285,6 +1285,10 @@ where
             0x5b => {
                 vec![]
             }
+            // MCOPY
+            0x5e => {
+                concrete_eval!(3, 0)
+            }
             // PUSH
             0x5f..=0x7f => {
                 // push n bytes into stack
