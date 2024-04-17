@@ -455,6 +455,7 @@ macro_rules! init_host {
         $host.jumpi_trace = 37;
         $host.current_typed_bug = vec![];
         $host.randomness = vec![9];
+        $host.transient_storage = HashMap::new();
         // Uncomment the next line if middleware is needed.
         // $host.add_middlewares(middleware.clone());
     };
@@ -556,6 +557,7 @@ where
             self.host.jumpi_trace = 37;
             self.host.current_self_destructs = vec![];
             self.host.current_arbitrary_calls = vec![];
+            self.host.transient_storage = HashMap::new();
             // Initially, there is no state change
             unsafe {
                 STATE_CHANGE = false;
@@ -1058,6 +1060,7 @@ where
         unsafe {
             IS_FAST_CALL_STATIC = true;
             self.host.evmstate = vm_state.as_any().downcast_ref_unchecked::<EVMState>().clone();
+            self.host.transient_storage = HashMap::new();
             self.host.current_self_destructs = vec![];
             self.host.current_arbitrary_calls = vec![];
             self.host.call_count = 0;

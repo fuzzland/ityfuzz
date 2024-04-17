@@ -80,17 +80,17 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 num_cpus = "1.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
+revm = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
+revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "33b46b9", features = [
+revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
     "no_gas_measuring",
     "serde",
     "memory_limit",
