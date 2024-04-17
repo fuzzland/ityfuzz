@@ -1,9 +1,9 @@
 ---
 name: Rust
 on:
-  # push:
-  #   branches:
-  #     - master
+  push:
+    branches:
+      - feat-tload-tstore-mcopy
   pull_request_target:
     branches:
       - master
