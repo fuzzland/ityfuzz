@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{HashMap, HashSet},
     fmt::{Debug, Display, Formatter},
     fs,
@@ -359,6 +360,10 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::InstructionCoverage
+    }
+
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }
 

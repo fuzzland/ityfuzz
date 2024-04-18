@@ -4,9 +4,11 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::Read,
+    ops::Deref,
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
+    sync::RwLockReadGuard,
 };
 
 use bytes::Bytes;
@@ -14,11 +16,12 @@ use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
-use revm_primitives::{Bytecode, Env};
+use revm_primitives::{bitvec::vec, Bytecode, Env};
 use serde_json::Value;
 
 use crate::{
     evm::{
+        middlewares::middleware::MiddlewareType,
         tokens::constant_pair::ConstantPairMetadata,
         types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
         vm::{IN_DEPLOY, SETCODE_ONLY},
@@ -53,13 +56,13 @@ use crate::evm::{
         offchain_config::OffchainConfig,
     },
     bytecode_iterator::all_bytecode,
-    onchain::endpoints::OnChainConfig,
+    onchain::{endpoints::OnChainConfig, OnChain},
 };
 
 // to use this address, call rand_utils::fixed_address(FIX_DEPLOYER)
 pub static FIX_DEPLOYER: &str = "8b21e662154b4bbc1ec0754d0238875fe3d22fa6";
 pub static FOUNDRY_DEPLOYER: &str = "1804c8AB1F12E6bbf3894d4083f33e07309d1f38";
-pub static FOUNDRY_SETUP_ADDR: &str = "7FA9385bE102ac3EAc297483Dd6233D62b3e1496";
+pub static FOUNDRY_SETUP_ADDR: &str = "e1A425f1AC34A8a441566f93c82dD730639c8510";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIConfig {
@@ -120,7 +123,7 @@ impl ContractLoader {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct SetupData {
     pub evmstate: EVMState,
     pub env: Env,
@@ -136,6 +139,26 @@ pub struct SetupData {
     // Flashloan specific
     pub v2_pairs: Vec<EVMAddress>,
     pub constant_pairs: Vec<ConstantPairMetadata>,
+
+    pub onchain_middleware: Option<OnChain>,
+}
+
+impl Clone for SetupData {
+    fn clone(&self) -> Self {
+        Self {
+            evmstate: self.evmstate.clone(),
+            env: self.env.clone(),
+            code: self.code.clone(),
+            excluded_contracts: self.excluded_contracts.clone(),
+            excluded_senders: self.excluded_senders.clone(),
+            target_contracts: self.target_contracts.clone(),
+            target_senders: self.target_senders.clone(),
+            target_selectors: self.target_selectors.clone(),
+            v2_pairs: self.v2_pairs.clone(),
+            constant_pairs: self.constant_pairs.clone(),
+            onchain_middleware: self.onchain_middleware.clone(),
+        }
+    }
 }
 
 pub fn set_hash(name: &str, out: &mut [u8]) {
@@ -802,7 +825,49 @@ impl ContractLoader {
             }
         }
 
+        let mut known_addr = HashSet::new();
+
+        if let Some(onchain) = setup_data.clone().unwrap().onchain_middleware {
+            debug!("Adding onchain middleware");
+            let mut onchain_config = onchain.endpoint.clone();
+
+            for addr in setup_data.clone().unwrap().target_contracts {
+                if known_addr.contains(&addr) || addr == fixed_address(FOUNDRY_SETUP_ADDR) {
+                    continue;
+                }
+                known_addr.insert(addr);
+                let code = onchain_config.get_contract_code(addr, false);
+                if code.is_empty() {
+                    error!("Failed to get code for contract at address {:?}", addr);
+                    continue;
+                }
+                let abi = Self::parse_abi_str(&onchain_config.fetch_abi(addr).unwrap());
+
+                contracts.push(ContractInfo {
+                    name: format!("{}", addr),
+                    code: hex::decode(&code).expect("code is not hex"),
+                    abi: abi.clone(),
+                    is_code_deployed: true,
+                    constructor_args: vec![],
+                    deployed_address: addr,
+                    build_artifact: None,
+                    files: vec![],
+                    source_map_replacements: None,
+                    raw_source_map: None,
+                });
+
+                abis.push(ABIInfo {
+                    source: format!("{}", addr),
+                    abi,
+                });
+            }
+        }
+
         for (addr, code) in setup_data.clone().unwrap().code {
+            if known_addr.contains(&addr) {
+                continue;
+            }
+            known_addr.insert(addr);
             let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
 
             debug!(
@@ -835,6 +900,7 @@ impl ContractLoader {
                 raw_source_map: Some(more_info.source_map.clone()),
             });
         }
+
         Self {
             contracts,
             abis,
@@ -1078,6 +1144,19 @@ impl ContractLoader {
             .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
             .collect();
 
+        let mut onchain_middleware = None;
+
+        {
+            for middleware in evm_executor.host.middlewares.read().unwrap().clone().into_iter() {
+                if middleware.borrow().get_type() == MiddlewareType::OnChain {
+                    unsafe {
+                        let onchain = middleware.borrow().as_any().downcast_ref_unchecked::<OnChain>().clone();
+                        onchain_middleware = Some(onchain);
+                    }
+                }
+            }
+        }
+
         SetupData {
             evmstate: new_vm_state,
             env: evm_executor.host.env.clone(),
@@ -1089,6 +1168,7 @@ impl ContractLoader {
             target_selectors,
             v2_pairs,
             constant_pairs,
+            onchain_middleware,
         }
     }
 }

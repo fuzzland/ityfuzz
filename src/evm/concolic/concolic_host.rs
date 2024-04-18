@@ -1,4 +1,5 @@
 use std::{
+    any,
     borrow::Borrow,
     collections::{HashMap, HashSet},
     fmt::{Debug, Display},
@@ -1397,5 +1398,9 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         Concolic
+    }
+
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }

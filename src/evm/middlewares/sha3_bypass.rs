@@ -1,4 +1,5 @@
 use std::{
+    any,
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -101,6 +102,10 @@ impl Sha3TaintAnalysis {
         self.dirty_memory = ctx.dirty_memory;
         self.dirty_storage = ctx.dirty_storage;
         self.dirty_stack = ctx.dirty_stack;
+    }
+
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }
 
@@ -386,6 +391,9 @@ where
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3TaintAnalysis
     }
+    fn as_any(&self) -> &dyn any::Any {
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -420,6 +428,9 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Sha3Bypass
+    }
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }
 

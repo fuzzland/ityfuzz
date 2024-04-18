@@ -1,4 +1,4 @@
-use std::{clone::Clone, fmt::Debug, time::Duration};
+use std::{any, clone::Clone, fmt::Debug, time::Duration};
 
 use bytes::Bytes;
 use libafl::{
@@ -113,4 +113,6 @@ where
     ) {
     }
     fn get_type(&self) -> MiddlewareType;
+
+    fn as_any(&self) -> &dyn any::Any;
 }

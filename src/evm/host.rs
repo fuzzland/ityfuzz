@@ -828,7 +828,7 @@ where
         res: (InstructionResult, Gas, Bytes),
     ) -> (InstructionResult, Gas, Bytes) {
         // Check assert result
-        if let Some(res) = self.check_assert_result(&res) {
+        if let Some(res) = self.check_assert_result() {
             return res;
         }
 
@@ -846,12 +846,9 @@ where
         self.check_expected_calls(res)
     }
 
-    fn check_assert_result(
-        &mut self,
-        res: &(InstructionResult, Gas, Bytes),
-    ) -> Option<(InstructionResult, Gas, Bytes)> {
+    pub fn check_assert_result(&mut self) -> Option<(InstructionResult, Gas, Bytes)> {
         if let Some(ref msg) = self.assert_msg {
-            return Some((InstructionResult::Revert, res.1, msg.abi_encode().into()));
+            return Some((InstructionResult::Revert, Gas::new(0), msg.abi_encode().into()));
         }
 
         None
@@ -1242,6 +1239,7 @@ where
     fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
         if let Some(account) = self.evmstate.get_mut(&address) {
             if let Some(slot) = account.get(&index) {
+                // println!("sload: {:?} -> {:?} = {:?}", address, index, slot);
                 return Some((*slot, true));
             } else {
                 account.insert(index, self.next_slot);
@@ -1251,7 +1249,7 @@ where
             account.insert(index, self.next_slot);
             self.evmstate.insert(address, account);
         }
-
+        // println!("sload(c): {:?} -> {:?} = {:?}", address, index, self.next_slot);
         Some((self.next_slot, true))
     }
 

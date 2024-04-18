@@ -108,7 +108,7 @@ impl
                 continue;
             }
             let (call_res, new_state) = ctx.call_post_batch_dyn(&[tx.clone()]);
-            let (_, succ) = &call_res[0];
+            let (msg, succ) = &call_res[0];
             if *succ &&
                 !{
                     // assertTrue in Foundry writes to slot
@@ -131,7 +131,11 @@ impl
             EVMBugResult::new(
                 "Invariant".to_string(),
                 bug_idx,
-                format!("Invariant {:?} violated", name),
+                format!(
+                    "Invariant {:?} violated, {:?}",
+                    name,
+                    String::from_utf8(msg.iter().filter(|&c| *c > 0).cloned().collect::<Vec<u8>>())
+                ),
                 ConciseEVMInput::from_input(ctx.input, ctx.fuzz_state.get_execution_result()),
                 None,
                 Some(name.clone()),
