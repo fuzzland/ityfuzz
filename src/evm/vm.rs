@@ -1122,7 +1122,11 @@ where
                     apparent_value: Default::default(),
                     scheme: CallScheme::Call,
                 };
-                execute_call_single!(ctx, self.host, state, address, by)
+                let res = execute_call_single!(ctx, self.host, state, address, by);
+                if let Some((_, _, r)) = self.host.check_assert_result() {
+                    return (r.to_vec(), false);
+                }
+                res
             })
             .collect::<Vec<(Vec<u8>, bool)>>();
 

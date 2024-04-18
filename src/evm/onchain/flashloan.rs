@@ -2,8 +2,8 @@
 // when approval, balanceof, give 2000e18 token
 // when transfer, transferFrom, and src is our, return success, add owed
 // when transfer, transferFrom, and src is not our, return success, reduce owed
-
 use std::{
+    any,
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -296,6 +296,10 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Flashloan
+    }
+
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }
 

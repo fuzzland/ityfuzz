@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{any, collections::HashMap, fmt::Debug};
 
 use bytes::Bytes;
 use itertools::Itertools;
@@ -258,5 +258,9 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::CallPrinter
+    }
+
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }

@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
@@ -181,6 +182,9 @@ where
             .for_each(|(_, depths)| {
                 depths.retain(|&x| x <= depth);
             });
+    }
+    fn as_any(&self) -> &dyn any::Any {
+        self
     }
 }
 

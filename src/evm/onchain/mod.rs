@@ -62,6 +62,7 @@ pub trait ChainConfig {
     fn get_pegged_token(&self) -> HashMap<String, String>;
 }
 
+#[derive(Clone)]
 pub struct OnChain {
     pub loaded_data: HashSet<(EVMAddress, EVMU256)>,
     pub loaded_code: HashSet<EVMAddress>,
@@ -219,6 +220,7 @@ where
                             .get_contract_slot(address, slot_idx, force_cache!(self.locs, slot_idx))
                     }
                 };
+                // println!("SLOAD {:?} {:?}", slot_idx, host.next_slot);
             }
             #[cfg(feature = "real_balance")]
             // BALANCE
@@ -300,6 +302,10 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::OnChain
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

@@ -95,7 +95,7 @@ macro_rules! cheat_call_error {
 
 impl<SC> Middleware<SC> for Cheatcode<SC>
 where
-    SC: Scheduler<State = EVMFuzzState> + Clone + Debug,
+    SC: Scheduler<State = EVMFuzzState> + Clone + Debug + 'static,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
         let op = interp.current_opcode();
@@ -110,6 +110,10 @@ where
 
     fn get_type(&self) -> MiddlewareType {
         MiddlewareType::Cheatcode
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
