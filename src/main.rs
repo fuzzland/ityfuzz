@@ -15,6 +15,7 @@ pub mod fuzzers;
 pub mod generic_vm;
 pub mod indexed_corpus;
 pub mod input;
+pub mod logger;
 pub mod minimizer;
 pub mod mutation_utils;
 pub mod oracle;
@@ -29,8 +30,6 @@ pub mod r#move;
 
 use clap::{Parser, Subcommand};
 use evm::{evm_main, EvmArgs};
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
 
 #[cfg(feature = "sui_support")]
 use crate::r#move::{move_main, MoveArgs};
@@ -62,15 +61,7 @@ enum Commands {
 
 fn main() {
     init_sentry();
-
-    // initialize logger
-    let subscriber_builder = FmtSubscriber::builder().compact().with_target(false).without_time();
-    #[cfg(debug_assertions)]
-    let subscriber = subscriber_builder.with_max_level(Level::DEBUG).finish();
-    #[cfg(not(debug_assertions))]
-    let subscriber = subscriber_builder.with_max_level(Level::INFO).finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("failed to initialize logger");
+    logger::init();
 
     let args = Cli::parse();
     match args.command {

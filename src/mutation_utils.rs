@@ -174,21 +174,9 @@ where
 {
     let mutations = tuple_list!(
         BitFlipMutator::new(),
-        ByteFlipMutator::new(),
-        ByteIncMutator::new(),
-        ByteDecMutator::new(),
-        ByteNegMutator::new(),
-        ByteRandMutator::new(),
-        ByteAddMutator::new(),
-        WordAddMutator::new(),
-        DwordAddMutator::new(),
-        QwordAddMutator::new(),
         ByteInterestingMutator::new(),
         WordInterestingMutator::new(),
         DwordInterestingMutator::new(),
-        BytesSetMutator::new(),
-        BytesRandSetMutator::new(),
-        BytesSwapMutator::new(),
         ConstantHintedMutator::new(),
     );
 
@@ -210,30 +198,17 @@ pub fn byte_mutator_with_expansion<I, S>(
     vm_slots: Option<HashMap<EVMU256, EVMU256>>,
 ) -> MutationResult
 where
-    S: State + HasRand + HasMaxSize,
+    S: State + HasRand + HasMaxSize + HasMetadata,
     I: HasBytesVec + Input,
 {
     let mutations = tuple_list!(
         BitFlipMutator::new(),
-        ByteFlipMutator::new(),
-        ByteIncMutator::new(),
-        ByteDecMutator::new(),
-        ByteNegMutator::new(),
-        ByteRandMutator::new(),
-        ByteAddMutator::new(),
-        WordAddMutator::new(),
-        DwordAddMutator::new(),
-        QwordAddMutator::new(),
         ByteInterestingMutator::new(),
         WordInterestingMutator::new(),
         DwordInterestingMutator::new(),
         BytesExpandMutator::new(),
         BytesInsertMutator::new(),
-        BytesRandInsertMutator::new(),
-        BytesSetMutator::new(),
-        BytesRandSetMutator::new(),
-        BytesCopyMutator::new(),
-        BytesSwapMutator::new(),
+        ConstantHintedMutator::new(),
     );
 
     if let Some(vm_slots) = vm_slots {

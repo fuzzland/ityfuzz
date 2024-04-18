@@ -435,7 +435,7 @@ impl TokenContext {
 
 pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
     match src_exact {
-        "uniswapv2_eth" => UniswapInfo {
+        "uniswapv2_eth" | "sushiswapv2_bsc" => UniswapInfo {
             pool_fee: 30,
             router: None,
         },
@@ -443,10 +443,16 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 0,
             router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
         },
-        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" => UniswapInfo {
-            pool_fee: 25,
+        "pancakev1" => UniswapInfo {
+            pool_fee: 20,
             router: None,
         },
+        "pancakeswapv2_eth" | "pancakeswapv2_arb" | "pancakeswapv2_base" | "pancakeswapv2_bsc" | "biswapv2_bsc" => {
+            UniswapInfo {
+                pool_fee: 25,
+                router: None,
+            }
+        }
         "sushiswapv2_eth" | "sushiswapv2_arb" | "sushiswapv2_polygon" | "sushiswapv2_avax" | "sushiswapv2_base" => {
             UniswapInfo {
                 pool_fee: 30,
@@ -457,7 +463,7 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 0,
             router: Some(EVMAddress::from_str("0x1b81D678ffb9C0263b24A97847620C99d213eB14").unwrap()),
         },
-        "trader_joe_v1_bsc" | "trader_joe_v1_avax" => UniswapInfo {
+        "trader_joe_v1_bsc" | "trader_joe_v1_avax" | "trader_joe_v1_arb" => UniswapInfo {
             pool_fee: 30,
             router: None,
         },
@@ -477,7 +483,7 @@ pub fn get_uniswap_info(src_exact: &str) -> UniswapInfo {
             pool_fee: 0,
             router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
         },
-        "uniswapv3_op" | "sushiswap_v3_op" => UniswapInfo {
+        "uniswapv3_op" | "sushiswap_v3_op" | "uniswapv3_arb" | "sushiswap_v3_arb" => UniswapInfo {
             pool_fee: 0,
             router: Some(EVMAddress::from_str("0xe592427a0aece92de3edee1f18e0157c05861564").unwrap()),
         },
@@ -635,6 +641,7 @@ mod tests {
             input::ConciseEVMInput,
             onchain::{
                 endpoints::{Chain, OnChainConfig},
+                ChainConfig,
                 OnChain,
             },
             oracles::v2_pair::reserve_parser,
@@ -675,7 +682,8 @@ mod tests {
             .unwrap()
             .insert(token, onchain.get_contract_code_analyzed(token, false));
 
-        let token_ctx = fetch_uniswap_path(&mut onchain, token);
+        let mut chain: Box<dyn ChainConfig> = Box::new(onchain);
+        let token_ctx = fetch_uniswap_path(&mut chain, token);
 
         println!("======== Token Swaps ========");
         token_ctx.swaps.iter().for_each(|x| {

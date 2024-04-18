@@ -9,9 +9,10 @@ use std::{
     time::Duration,
 };
 
+use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use itertools::Itertools;
-use reqwest::header::HeaderMap;
+use reqwest::{blocking, header::HeaderMap};
 use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{Bytecode, B160};
@@ -19,6 +20,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
 
+use super::ChainConfig;
 use crate::{
     cache::{Cache, FileSystemCache},
     evm::{
@@ -59,31 +61,73 @@ impl FromStr for Chain {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ETH" | "eth" => Ok(Self::ETH),
-            "GOERLI" | "goerli" => Ok(Self::GOERLI),
-            "SEPOLIA" | "sepolia" => Ok(Self::SEPOLIA),
-            "BSC" | "bsc" => Ok(Self::BSC),
-            "CHAPEL" | "chapel" => Ok(Self::CHAPEL),
-            "POLYGON" | "polygon" => Ok(Self::POLYGON),
-            "MUMBAI" | "mumbai" => Ok(Self::MUMBAI),
-            "FANTOM" | "fantom" => Ok(Self::FANTOM),
-            "AVALANCHE" | "avalanche" => Ok(Self::AVALANCHE),
-            "OPTIMISM" | "optimism" => Ok(Self::OPTIMISM),
-            "ARBITRUM" | "arbitrum" => Ok(Self::ARBITRUM),
-            "GNOSIS" | "gnosis" => Ok(Self::GNOSIS),
-            "BASE" | "base" => Ok(Self::BASE),
-            "CELO" | "celo" => Ok(Self::CELO),
-            "ZKEVM" | "zkevm" => Ok(Self::ZKEVM),
-            "ZKEVM_TESTNET" | "zkevm_testnet" => Ok(Self::ZkevmTestnet),
-            "BLAST" | "blast" => Ok(Self::BLAST),
-            "LOCAL" | "local" => Ok(Self::LOCAL),
+        match s.to_lowercase().as_str() {
+            "eth" | "mainnet" => Ok(Self::ETH),
+            "goerli" => Ok(Self::GOERLI),
+            "sepolia" => Ok(Self::SEPOLIA),
+            "bsc" => Ok(Self::BSC),
+            "chapel" => Ok(Self::CHAPEL),
+            "polygon" => Ok(Self::POLYGON),
+            "mumbai" => Ok(Self::MUMBAI),
+            "fantom" => Ok(Self::FANTOM),
+            "avalanche" => Ok(Self::AVALANCHE),
+            "optimism" => Ok(Self::OPTIMISM),
+            "arbitrum" => Ok(Self::ARBITRUM),
+            "gnosis" => Ok(Self::GNOSIS),
+            "base" => Ok(Self::BASE),
+            "celo" => Ok(Self::CELO),
+            "zkevm" => Ok(Self::ZKEVM),
+            "zkevm_testnet" => Ok(Self::ZkevmTestnet),
+            "blast" => Ok(Self::BLAST),
+            "local" => Ok(Self::LOCAL),
             _ => Err(()),
         }
     }
 }
 
 impl Chain {
+    pub fn new_with_rpc_url(rpc_url: &str) -> Result<Self> {
+        let client = blocking::Client::new();
+        let body = json!({"method":"eth_chainId","params":[],"id":1,"jsonrpc":"2.0"});
+        let resp: Value = client
+            .post(rpc_url)
+            .header("Content-Type", "application/json")
+            .body(body.to_string())
+            .send()?
+            .json()?;
+
+        let chain_id = resp
+            .get("result")
+            .and_then(|result| result.as_str())
+            .and_then(|result| u64::from_str_radix(result.trim_start_matches("0x"), 16).ok())
+            .ok_or_else(|| anyhow!("Unknown chain id: {}", rpc_url))?;
+
+        // Use rpc_url instead of the default one
+        env::set_var("ETH_RPC_URL", rpc_url);
+
+        Ok(match chain_id {
+            1 => Self::ETH,
+            5 => Self::GOERLI,
+            11155111 => Self::SEPOLIA,
+            56 => Self::BSC,
+            97 => Self::CHAPEL,
+            137 => Self::POLYGON,
+            80001 => Self::MUMBAI,
+            250 => Self::FANTOM,
+            43114 => Self::AVALANCHE,
+            10 => Self::OPTIMISM,
+            42161 => Self::ARBITRUM,
+            100 => Self::GNOSIS,
+            8453 => Self::BASE,
+            42220 => Self::CELO,
+            1101 => Self::ZKEVM,
+            1442 => Self::ZkevmTestnet,
+            81457 => Self::BLAST,
+            31337 => Self::LOCAL,
+            _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
+        })
+    }
+
     pub fn get_chain_id(&self) -> u32 {
         match self {
             Chain::ETH => 1,
@@ -275,6 +319,94 @@ impl Debug for OnChainConfig {
             .field("uniswap_path_cache", &self.uniswap_path_cache)
             .field("rpc_cache", &self.rpc_cache)
             .finish()
+    }
+}
+
+impl ChainConfig for OnChainConfig {
+    fn get_pair(&mut self, token: &str, is_pegged: bool) -> Vec<PairData> {
+        let network = self.chain_name.clone();
+        let weth = self.get_weth();
+        self.get_pair(token, &network, is_pegged, weth)
+    }
+
+    fn fetch_reserve(&self, pair: &str) -> Option<(String, String)> {
+        self.fetch_reserve(pair)
+    }
+
+    fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode {
+        self.get_contract_code_analyzed(address, force_cache)
+    }
+
+    fn get_v3_fee(&mut self, address: EVMAddress) -> u32 {
+        self.get_v3_fee(address)
+    }
+
+    fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256 {
+        self.get_token_balance(token, address)
+    }
+
+    fn get_weth(&self) -> String {
+        let pegged_token = self.get_pegged_token();
+
+        match self.chain_name.as_str() {
+            "eth" => return pegged_token.get("WETH").unwrap().to_string(),
+            "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
+            "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "local" => return pegged_token.get("ZERO").unwrap().to_string(),
+            // "mumbai" => panic!("Not supported"),
+            _ => {
+                warn!("Unknown network");
+                "".to_string()
+            }
+        }
+    }
+
+    fn get_pegged_token(&self) -> HashMap<String, String> {
+        match self.chain_name.as_str() {
+            "eth" => [
+                ("WETH", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
+                ("USDC", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+                ("USDT", "0xdac17f958d2ee523a2206206994597c13d831ec7"),
+                ("DAI", "0x6b175474e89094c44da98b954eedeac495271d0f"),
+                ("WBTC", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"),
+                ("WMATIC", "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "bsc" => [
+                ("WBNB", "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"),
+                ("USDC", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"),
+                ("USDT", "0x55d398326f99059ff775485246999027b3197955"),
+                ("DAI", "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3"),
+                ("WBTC", "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c"),
+                ("WETH", "0x2170ed0880ac9a755fd29b2688956bd959f933f8"),
+                ("BUSD", "0xe9e7cea3dedca5984780bafc599bd69add087d56"),
+                ("CAKE", "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "polygon" => [
+                ("WMATIC", "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"),
+                ("USDC", "0x2791bca1f2de4661ed88a30c99a7a9449aa84174"),
+                ("USDT", "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"),
+                ("DAI", "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"),
+                ("WBTC", "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6"),
+                ("WETH", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "local" => [("ZERO", "0x0000000000000000000000000000000000000000")]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            _ => {
+                warn!("[Flashloan] Network is not supported");
+                HashMap::new()
+            }
+        }
     }
 }
 

@@ -25,6 +25,7 @@ use revm_interpreter::Interpreter;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+use super::ChainConfig;
 use crate::{
     evm::{
         contract_utils::ABIConfig,
@@ -33,7 +34,6 @@ use crate::{
         input::{ConciseEVMInput, EVMInput, EVMInputT, EVMInputTy},
         middlewares::middleware::{Middleware, MiddlewareType},
         mutator::AccessPattern,
-        onchain::endpoints::OnChainConfig,
         oracles::erc20::IERC20OracleFlashloan,
         tokens::{uniswap::fetch_uniswap_path, TokenContext},
         types::{convert_u256_to_h160, EVMAddress, EVMFuzzState, EVMU256, EVMU512},
@@ -54,7 +54,7 @@ macro_rules! scale {
 pub struct Flashloan {
     use_contract_value: bool,
     known_addresses: HashSet<EVMAddress>,
-    endpoint: Option<OnChainConfig>,
+    chain_cfg: Option<Box<dyn ChainConfig>>,
     erc20_address: HashSet<EVMAddress>,
     pair_address: HashSet<EVMAddress>,
     pub unbound_tracker: HashMap<usize, HashSet<EVMAddress>>, // pc -> [address called]
@@ -118,13 +118,13 @@ where
 impl Flashloan {
     pub fn new(
         use_contract_value: bool,
-        endpoint: Option<OnChainConfig>,
+        chain_cfg: Option<Box<dyn ChainConfig>>,
         flashloan_oracle: Rc<RefCell<IERC20OracleFlashloan>>,
     ) -> Self {
         Self {
             use_contract_value,
             known_addresses: Default::default(),
-            endpoint,
+            chain_cfg,
             erc20_address: Default::default(),
             pair_address: Default::default(),
             unbound_tracker: Default::default(),
@@ -134,7 +134,7 @@ impl Flashloan {
     }
 
     fn get_token_context(&mut self, addr: EVMAddress) -> Option<TokenContext> {
-        self.endpoint.as_mut().map(|config| fetch_uniswap_path(config, addr))
+        self.chain_cfg.as_mut().map(|config| fetch_uniswap_path(config, addr))
     }
 
     pub fn on_contract_insertion(

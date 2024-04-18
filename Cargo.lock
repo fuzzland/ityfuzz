@@ -10812,7 +10812,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "3.3.0"
-source = "git+https://github.com/fuzzland/revm?rev=33b46b9#33b46b91e7189a6c378f31ceaaf288d59a97aebf"
+source = "git+https://github.com/fuzzland/revm?rev=1dead51#1dead511260119867b220b38298ddca07f406357"
 dependencies = [
  "auto_impl",
  "revm-interpreter 1.1.2",
@@ -10856,7 +10856,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "1.1.2"
-source = "git+https://github.com/fuzzland/revm?rev=33b46b9#33b46b91e7189a6c378f31ceaaf288d59a97aebf"
+source = "git+https://github.com/fuzzland/revm?rev=1dead51#1dead511260119867b220b38298ddca07f406357"
 dependencies = [
  "derive_more",
  "enumn",
@@ -10878,7 +10878,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "2.0.3"
-source = "git+https://github.com/fuzzland/revm?rev=33b46b9#33b46b91e7189a6c378f31ceaaf288d59a97aebf"
+source = "git+https://github.com/fuzzland/revm?rev=1dead51#1dead511260119867b220b38298ddca07f406357"
 dependencies = [
  "k256 0.13.3",
  "num 0.4.1",
@@ -10911,7 +10911,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "1.1.2"
-source = "git+https://github.com/fuzzland/revm?rev=33b46b9#33b46b91e7189a6c378f31ceaaf288d59a97aebf"
+source = "git+https://github.com/fuzzland/revm?rev=1dead51#1dead511260119867b220b38298ddca07f406357"
 dependencies = [
  "auto_impl",
  "bitflags 2.5.0",

@@ -48,7 +48,7 @@ use crate::{
         },
         minimizer::EVMMinimizer,
         mutator::FuzzMutator,
-        onchain::{flashloan::Flashloan, OnChain, WHITELIST_ADDR},
+        onchain::{flashloan::Flashloan, offchain::OffChainConfig, ChainConfig, OnChain, WHITELIST_ADDR},
         oracles::{
             arb_call::ArbitraryCallOracle,
             echidna::EchidnaOracle,
@@ -110,7 +110,7 @@ pub fn evm_fuzzer(
     // **Note**: cheatcode should be the first middleware because it consumes the
     // step if it is a call to cheatcode_address, and this step should not be
     // visible to other middlewares.
-    fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new())));
+    fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new(&config.etherscan_api_key))));
 
     let onchain_middleware = match config.onchain.clone() {
         Some(onchain) => {
@@ -165,7 +165,19 @@ pub fn evm_fuzzer(
         // we should use real balance of tokens in the contract instead of providing
         // flashloan to contract as well for on chain env
         {
-            fuzz_host.add_flashloan_middleware(Flashloan::new(true, config.onchain.clone(), config.flashloan_oracle));
+            let chain_cfg: Option<Box<dyn ChainConfig>> = if let Some(onchain) = config.onchain.clone() {
+                Some(Box::new(onchain) as Box<dyn ChainConfig>)
+            } else if let Some(ref setup_data) = config.contract_loader.setup_data {
+                if setup_data.v2_pairs.is_empty() {
+                    None
+                } else {
+                    Some(Box::new(OffChainConfig::new(setup_data).unwrap()) as Box<dyn ChainConfig>)
+                }
+            } else {
+                None
+            };
+
+            fuzz_host.add_flashloan_middleware(Flashloan::new(true, chain_cfg, config.flashloan_oracle));
         }
     }
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));

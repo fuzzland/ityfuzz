@@ -1,6 +1,7 @@
 pub mod abi_decompiler;
 pub mod endpoints;
 pub mod flashloan;
+pub mod offchain;
 
 use std::{
     cell::RefCell,
@@ -20,6 +21,7 @@ use revm_interpreter::{analysis::to_analysed, Interpreter};
 use revm_primitives::Bytecode;
 use tracing::debug;
 
+use self::endpoints::PairData;
 use super::{corpus_initializer::EnvMetadata, types::EVMFuzzState};
 use crate::{
     evm::{
@@ -49,6 +51,16 @@ pub static mut BLACKLIST_ADDR: Option<HashSet<EVMAddress>> = None;
 pub static mut WHITELIST_ADDR: Option<HashSet<EVMAddress>> = None;
 
 const UNBOUND_THRESHOLD: usize = 30;
+
+pub trait ChainConfig {
+    fn get_pair(&mut self, token: &str, is_pegged: bool) -> Vec<PairData>;
+    fn fetch_reserve(&self, pair: &str) -> Option<(String, String)>;
+    fn get_contract_code_analyzed(&mut self, address: EVMAddress, force_cache: bool) -> Bytecode;
+    fn get_v3_fee(&mut self, address: EVMAddress) -> u32;
+    fn get_token_balance(&mut self, token: EVMAddress, address: EVMAddress) -> EVMU256;
+    fn get_weth(&self) -> String;
+    fn get_pegged_token(&self) -> HashMap<String, String>;
+}
 
 pub struct OnChain {
     pub loaded_data: HashSet<(EVMAddress, EVMU256)>,
@@ -135,13 +147,12 @@ impl OnChain {
     }
 }
 
-pub fn keccak_hex(data: EVMU256) -> String {
+pub fn keccak256(input: &[u8]) -> EVMU256 {
     let mut hasher = Sha3::keccak256();
     let mut output = [0u8; 32];
-    let input: [u8; 32] = data.to_be_bytes();
-    hasher.input(input.as_ref());
+    hasher.input(input);
     hasher.result(&mut output);
-    hex::encode(output)
+    EVMU256::from_be_bytes(output)
 }
 
 impl<SC> Middleware<SC> for OnChain
