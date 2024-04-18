@@ -38,6 +38,7 @@ use revm_primitives::{
     BerlinSpec,
     Bytecode,
     ByzantiumSpec,
+    CancunSpec,
     Env,
     FrontierSpec,
     HomesteadSpec,
@@ -164,6 +165,8 @@ where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     pub evmstate: EVMState,
+    /// [EIP-1153[(https://eips.ethereum.org/EIPS/eip-1153) transient storage that is discarded after every transactions
+    pub transient_storage: HashMap<(EVMAddress, EVMU256), EVMU256>,
     // these are internal to the host
     pub env: Env,
     pub code: HashMap<EVMAddress, Arc<BytecodeLocked>>,
@@ -270,6 +273,7 @@ where
     fn clone(&self) -> Self {
         Self {
             evmstate: self.evmstate.clone(),
+            transient_storage: self.transient_storage.clone(),
             env: self.env.clone(),
             code: self.code.clone(),
             hash_to_address: self.hash_to_address.clone(),
@@ -331,6 +335,7 @@ where
     pub fn new(scheduler: SC, workdir: String) -> Self {
         Self {
             evmstate: EVMState::new(),
+            transient_storage: HashMap::new(),
             env: Env::default(),
             code: HashMap::new(),
             hash_to_address: HashMap::new(),
@@ -400,6 +405,7 @@ where
             SpecId::LONDON => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LondonSpec>(self, state),
             SpecId::MERGE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, MergeSpec>(self, state),
             SpecId::SHANGHAI => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ShanghaiSpec>(self, state),
+            SpecId::CANCUN => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, CancunSpec>(self, state),
             _ => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LatestSpec>(self, state),
         }
     }
@@ -1267,6 +1273,19 @@ where
         };
 
         Some((EVMU256::from(0), EVMU256::from(0), EVMU256::from(0), true))
+    }
+
+    fn tload(&mut self, address: EVMAddress, index: EVMU256) -> EVMU256 {
+        if let Some(slot) = self.transient_storage.get(&(address, index)) {
+            *slot
+        } else {
+            self.transient_storage.insert((address, index), self.next_slot);
+            self.next_slot
+        }
+    }
+
+    fn tstore(&mut self, address: EVMAddress, index: EVMU256, value: EVMU256) {
+        self.transient_storage.insert((address, index), value);
     }
 
     fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
