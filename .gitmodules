@@ -4,6 +4,3 @@
 [submodule "tests/evm_manual/foundry1/lib/openzeppelin-contracts"]
 	path = tests/evm_manual/foundry1/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "test/lib/forge-std"]
-	path = test/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
