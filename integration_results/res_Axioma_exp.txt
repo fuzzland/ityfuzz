@@ -1,0 +1,14 @@
+thread 'main' panicked at src/evm/onchain/endpoints.rs:791:29:
+fail to get block timestamp
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: ityfuzz::evm::onchain::endpoints::OnChainConfig::fetch_blk_timestamp
+   3: ityfuzz::evm::contract_utils::ContractLoader::from_address
+   4: ityfuzz::evm::evm_main
+   5: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 5m ./target/release/ityfuzz evm -t 0x2C25aEe99ED08A61e7407A5674BC2d1A72B5D8E3,0xB6CF5b77B92a722bF34f6f5D6B1Fe4700908935E,0x6a3Fa7D2C71fd7D44BF3a2890aA257F34083c90f -c bsc -b 27620320 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_Axioma_exp
+[31mERROR[0m failed to fetch from https://bscrpc.com
