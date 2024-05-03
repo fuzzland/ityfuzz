@@ -260,13 +260,13 @@ where
             // detect whether it mutates token balance
             0xf1 | 0xfa => {}
             0x55 => {
-                if self.pair_address.contains(&interp.contract.address) {
+                if self.pair_address.contains(&interp.contract.target_address) {
                     let key = interp.stack.peek(0).unwrap();
                     if key == EVMU256::from(8) {
                         host.evmstate
                             .flashloan_data
                             .oracle_recheck_reserve
-                            .insert(interp.contract.address);
+                            .insert(interp.contract.target_address);
                     }
                 }
                 return;

@@ -95,7 +95,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .reads
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
 
                 let mut found_smaller = Vec::new();
@@ -126,7 +126,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .need_writes
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
                 merge_sorted_vec_dedup(write_entry, &found_smaller);
             }
@@ -138,7 +138,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .need_writes
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
                 for i in write_entry.iter() {
                     if depth == *i {
@@ -146,7 +146,7 @@ where
                         host.evmstate
                             .reentrancy_metadata
                             .found
-                            .insert((interp.contract.address, slot_idx));
+                            .insert((interp.contract.target_address, slot_idx));
                         return;
                     }
                 }

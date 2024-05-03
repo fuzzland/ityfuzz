@@ -19,10 +19,7 @@ use itertools::Itertools;
 use libafl::prelude::{HasMetadata, Scheduler};
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{
-    analysis::to_analysed,
     return_ok,
-    BytecodeLocked,
-    CallContext,
     CallInputs,
     CallScheme,
     Contract,
@@ -169,7 +166,8 @@ where
     pub transient_storage: HashMap<(EVMAddress, EVMU256), EVMU256>,
     // these are internal to the host
     pub env: Env,
-    pub code: HashMap<EVMAddress, Arc<BytecodeLocked>>,
+    // unsure pub code: HashMap<EVMAddress, Arc<LegacyAnalyzedBytecode>>,
+    pub code: HashMap<EVMAddress, Arc<Bytecode>>,
     pub hash_to_address: HashMap<[u8; 4], HashSet<EVMAddress>>,
     pub address_to_hash: HashMap<EVMAddress, Vec<[u8; 4]>>,
     pub _pc: usize,
@@ -506,7 +504,7 @@ where
             invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
         self.code
-            .insert(address, Arc::new(BytecodeLocked::try_from(to_analysed(code)).unwrap()));
+            .insert(address, Arc::new(revm_primitives::Bytecode::from(code)));
     }
 
     pub fn find_static_call_read_slot(
@@ -580,7 +578,9 @@ where
         }
 
         if unsafe { WRITE_RELATIONSHIPS } {
-            self.write_relations(input.transfer.source, input.contract, input.input.clone());
+            // self.write_relations(input.transfer.source, input.target_address,
+            // input.input.clone());
+            self.write_relations(input.caller, input.target_address, input.input.clone().into());
         }
 
         let mut hash = input.input.to_vec();
@@ -623,16 +623,14 @@ where
 
         let is_target_address_unbounded = {
             assert_ne!(self._pc, 0);
-            self.pc_to_addresses
-                .entry((input.context.caller, self._pc))
-                .or_default();
-            let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.context.caller, self._pc)).unwrap();
-            addresses_at_pc.insert(input.contract);
+            self.pc_to_addresses.entry((input.caller, self._pc)).or_default();
+            let addresses_at_pc = self.pc_to_addresses.get_mut(&(input.caller, self._pc)).unwrap();
+            addresses_at_pc.insert(input.target_address);
             addresses_at_pc.len() > CONTROL_LEAK_THRESHOLD
         };
 
-        if input.context.scheme == CallScheme::StaticCall &&
-            (state.has_caller(&input.contract) || is_target_address_unbounded)
+        if input.scheme == CallScheme::StaticCall &&
+            (state.has_caller(&input.target_address) || is_target_address_unbounded)
         {
             record_func_hash!();
             push_interp!();
@@ -645,9 +643,9 @@ where
             return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
         }
 
-        if input.context.scheme == CallScheme::Call {
+        if input.scheme == CallScheme::Call {
             // if calling sender, then definitely control leak
-            if state.has_caller(&input.contract) || is_target_address_unbounded {
+            if state.has_caller(&input.target_address) || is_target_address_unbounded {
                 record_func_hash!();
                 push_interp!();
                 // println!(
@@ -660,25 +658,22 @@ where
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
             self.pc_to_call_hash
-                .entry((input.context.caller, self._pc, self.jumpi_trace))
+                .entry((input.caller, self._pc, self.jumpi_trace))
                 .or_default();
             self.pc_to_call_hash
-                .get_mut(&(input.context.caller, self._pc, self.jumpi_trace))
+                .get_mut(&(input.caller, self._pc, self.jumpi_trace))
                 .unwrap()
                 .insert(hash.to_vec());
             if self
                 .pc_to_call_hash
-                .get(&(input.context.caller, self._pc, self.jumpi_trace))
+                .get(&(input.caller, self._pc, self.jumpi_trace))
                 .unwrap()
                 .len() >
                 UNBOUND_CALL_THRESHOLD &&
                 input_seq.len() >= 4
             {
-                self.current_arbitrary_calls.push((
-                    input.context.caller,
-                    input.context.address,
-                    interp.program_counter(),
-                ));
+                self.current_arbitrary_calls
+                    .push((input.caller, input.target_address, interp.program_counter()));
                 // println!(
                 //     "ub leak {:?} -> {:?} with {:?} {}",
                 //     input.context.caller,
@@ -688,10 +683,15 @@ where
                 // );
                 push_interp!();
                 return (
+                    // InstructionResult::ArbitraryExternalCallAddressBounded(
+                    //     input.context.caller,
+                    //     input.context.address,
+                    //     input.transfer.value,
+                    // ),
                     InstructionResult::ArbitraryExternalCallAddressBounded(
-                        input.context.caller,
-                        input.context.address,
-                        input.transfer.value,
+                        input.caller,
+                        input.target_address,
+                        input.call_value(),
                     ),
                     Gas::new(0),
                     Bytes::new(),
@@ -706,24 +706,31 @@ where
         if unsafe { ACTIVE_MATCH_EXT_CALL } {
             if let Some(loc) = contract_loc_option {
                 // if there is such a location known, then we can use exact call
-                if !loc.contains(&input.contract) {
+                // if !loc.contains(&input.contract) {
+                if !loc.contains(&input.target_address) {
                     // todo(@shou): resolve multi locs
                     if loc.len() != 1 {
                         panic!("more than one contract found for the same hash");
                     }
-                    let mut interp = Interpreter::new_with_memory_limit(
-                        Contract::new_with_context_analyzed(
-                            input_bytes,
-                            self.code.get(loc.iter().next().unwrap()).unwrap().clone(),
-                            &input.context,
+                    let mut interp = Interpreter::new(
+                        // Contract::new_with_context_analyzed(
+                        //     input_bytes,
+                        //     self.code.get(loc.iter().next().unwrap()).unwrap().clone(),
+                        //     &input.context,
+                        // ),
+                        Contract::new_with_context(
+                            input_bytes.into(),
+                            *self.code.get(loc.iter().next().unwrap()).unwrap().clone(),
+                            None,
+                            &input,
                         ),
                         1e10 as u64,
                         false,
-                        MEM_LIMIT,
                     );
 
                     let ret = self.run_inspect(&mut interp, state);
-                    return (ret, Gas::new(0), interp.return_value());
+                    // return (ret, Gas::new(0), interp.return_value());
+                    return (ret, Gas::new(0), interp.return_data_buffer.into());
                 }
             }
         }
@@ -750,16 +757,17 @@ where
         let mut hash = input.input.to_vec();
         hash.resize(4, 0);
         // if there is code, then call the code
-        if let Some(code) = self.code.get(&input.context.code_address) {
-            let mut interp = Interpreter::new_with_memory_limit(
-                Contract::new_with_context_analyzed(Bytes::from(input.input.to_vec()), code.clone(), &input.context),
+        if let Some(code) = self.code.get(&input.bytecode_address) {
+            let mut interp = Interpreter::new(
+                // Contract::new_with_context_analyzed(Bytes::from(input.input.to_vec()), code.clone(),
+                // &input.context),
+                Contract::new_with_context(Bytes::from(input.input.to_vec()).into(), *code.clone(), None, &input),
                 1e10 as u64,
                 false,
-                MEM_LIMIT,
             );
 
             let ret = self.run_inspect(&mut interp, state);
-            return (ret, Gas::new(0), interp.return_value());
+            return (ret, Gas::new(0), interp.return_data_buffer.into());
         }
 
         // transfer txn and fallback provided
@@ -776,10 +784,10 @@ where
     ) -> (InstructionResult, Gas, Bytes) {
         let precompile = self
             .precompiles
-            .get(&input.contract)
+            .get(&input.target_address)
             .expect("Check for precompile should be already done");
         let out = match precompile {
-            Precompile::Standard(fun) => fun(input.input.to_vec().as_slice(), u64::MAX),
+            Precompile::Standard(fun) => fun(&input.input, u64::MAX),
             Precompile::Custom(fun) => fun(input.input.to_vec().as_slice(), u64::MAX),
         };
         match out {
@@ -794,7 +802,7 @@ where
             if self.call_depth >= prank.depth && contract_caller == &prank.old_caller {
                 // At the target depth we set `msg.sender`
                 if self.call_depth == prank.depth {
-                    input.context.caller = prank.new_caller;
+                    input.caller = prank.new_caller;
                     input.transfer.source = prank.new_caller;
                 }
 
@@ -1007,7 +1015,9 @@ macro_rules! invoke_middlewares {
     };
 }
 
-impl<SC> Host<EVMFuzzState> for FuzzHost<SC>
+// todo 这里
+// impl<SC> Host<EVMFuzzState> for FuzzHost<SC>
+impl<SC> Host for FuzzHost<SC>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -1061,30 +1071,33 @@ where
                         CMP_MAP[idx] = br;
                     }
 
-                    add_branch((interp.contract.address, interp.program_counter(), jump_dest != 1));
+                    add_branch((interp.contract.target_address, interp.program_counter(), jump_dest != 1));
                 }
 
                 #[cfg(any(feature = "dataflow", feature = "cmp"))]
                 0x55 => {
                     // SSTORE
                     let pc = interp.program_counter();
-                    if !self.mapping_sstore_pcs.contains(&(interp.contract.address, pc)) {
+                    if !self.mapping_sstore_pcs.contains(&(interp.contract.target_address, pc)) {
                         let mut key = fast_peek!(0);
                         let slots = self
                             .mapping_sstore_pcs_to_slot
-                            .entry((interp.contract.address, pc))
+                            .entry((interp.contract.target_address, pc))
                             .or_default();
                         slots.insert(key);
                         if slots.len() > 10 {
-                            self.mapping_sstore_pcs.insert((interp.contract.address, pc));
+                            self.mapping_sstore_pcs.insert((interp.contract.target_address, pc));
                         }
 
                         let value = fast_peek!(1);
                         let compressed_value = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
-                        let res =
-                            <FuzzHost<SC> as Host<EVMFuzzState>>::sload(self, interp.contract.address, fast_peek!(0));
+                        let res = <FuzzHost<SC> as Host<EVMFuzzState>>::sload(
+                            self,
+                            interp.contract.target_address,
+                            fast_peek!(0),
+                        );
                         let value_changed = res.expect("sload failed").0 != value;
 
                         let idx = interp.program_counter() % MAP_SIZE;
@@ -1183,16 +1196,20 @@ where
         Continue
     }
 
-    fn step_end(
-        &mut self,
-        _interp: &mut Interpreter,
-        _ret: InstructionResult,
-        _: &mut EVMFuzzState,
-    ) -> InstructionResult {
-        Continue
-    }
+    // fn step_end(
+    //     &mut self,
+    //     _interp: &mut Interpreter,
+    //     _ret: InstructionResult,
+    //     _: &mut EVMFuzzState,
+    // ) -> InstructionResult {
+    //     Continue
+    // }
 
-    fn env(&mut self) -> &mut Env {
+    // fn env(&mut self) -> &mut Env {
+    //     &mut self.env
+    // }
+
+    fn env_mut(&mut self) -> &mut Env {
         &mut self.env
     }
 
@@ -1203,7 +1220,8 @@ where
     }
 
     fn block_hash(&mut self, _number: EVMU256) -> Option<B256> {
-        Some(B256::zero())
+        // Some(B256::zero())
+        Some(B256::ZERO)
     }
 
     fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
@@ -1221,11 +1239,11 @@ where
         }
     }
 
-    fn code(&mut self, address: EVMAddress) -> Option<(Arc<BytecodeLocked>, bool)> {
+    fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
         // debug!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
-            None => Some((Arc::new(BytecodeLocked::default()), true)),
+            None => Some((Arc::new(Bytecode::default()), true)),
         }
     }
 
@@ -1446,9 +1464,11 @@ where
         self.apply_prank(&interp.contract().caller, input);
         self.call_depth += 1;
 
-        let value = EVMU256::from(input.transfer.value);
+        // let value = EVMU256::from(input.transfer.value);
+        let value = EVMU256::from(input.call_value());
         if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
-            let sender = input.transfer.source;
+            // let sender = input.transfer.source;
+            let sender = input.caller;
             debug!("call sender: {:?}", sender);
             let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
                 *balance
@@ -1462,15 +1482,16 @@ where
             }
             self.evmstate.set_balance(sender, current - value);
 
-            let receiver = input.transfer.target;
+            // let receiver = input.transfer.target;
+            let receiver = input.target_address;
             if let Some(balance) = self.evmstate.get_balance(&receiver) {
                 self.evmstate.set_balance(receiver, *balance + value);
             } else {
                 self.evmstate.set_balance(receiver, self.next_slot + value);
             };
         }
-
-        let mut res = if is_precompile(input.contract, self.precompiles.len()) {
+        // chao  input.contract == target_address
+        let mut res = if is_precompile(input.target_address, self.precompiles.len()) {
             self.call_precompile(input, state)
         } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
             self.call_forbid_control_leak(input, state)

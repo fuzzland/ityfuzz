@@ -9,13 +9,13 @@ use std::{
     time::Duration,
 };
 
+use alloy_primitives::Address;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use itertools::Itertools;
 use reqwest::{blocking, header::HeaderMap};
 use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
-use revm_primitives::{Bytecode, B160};
+use revm_primitives::Bytecode;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
@@ -875,7 +875,7 @@ impl OnChainConfig {
         }
 
         let code = self.get_contract_code(address, force_cache);
-        let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(
+        let contract_code = to_analysed(Bytecode::new_raw(revm_primitives::Bytes::from(
             hex::decode(code).expect("fail to decode contract code"),
         )));
         let contract_code = to_analysed(contract_code);
@@ -997,7 +997,7 @@ impl OnChainConfig {
 
         if result.len() != 196 {
             let rpc = &self.endpoint_url;
-            let pair_code = self.clone().get_contract_code(B160::from_str(pair).unwrap(), true);
+            let pair_code = self.clone().get_contract_code(Address::from_str(pair).unwrap(), true);
             info!("rpc: {rpc}, result: {result}, pair: {pair}, pair code: {pair_code}");
             info!("Unexpected RPC error, consider setting env <ETH_RPC_URL> ");
             return None;

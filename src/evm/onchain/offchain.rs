@@ -10,8 +10,8 @@ use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::schedulers::{Scheduler, StdScheduler};
-use revm_interpreter::{analysis::to_analysed, BytecodeLocked, CallContext, CallScheme, Contract, Host, Interpreter};
-use revm_primitives::Bytecode;
+use revm_interpreter::{Contract, Host, Interpreter};
+use revm_primitives::{keccak256, Bytecode, B256};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
@@ -22,7 +22,7 @@ use crate::{
         host::FuzzHost,
         input::ConciseEVMInput,
         types::{generate_random_address, EVMAddress, EVMFuzzState, EVMU256},
-        vm::{EVMExecutor, EVMState, MEM_LIMIT},
+        vm::{EVMExecutor, EVMState},
         PRESET_WETH,
     },
     generic_vm::vm_state::VMStateT,
@@ -56,7 +56,7 @@ impl OffChainConfig {
         fuzz_host.evmstate = setup_data.evmstate.clone();
         fuzz_host.env = setup_data.env.clone();
         for (addr, bytecode) in &setup_data.code {
-            let code = Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(bytecode.clone()))).unwrap());
+            let code = Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(bytecode.clone())));
             fuzz_host.code.insert(*addr, code);
         }
         let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
@@ -95,34 +95,48 @@ impl OffChainConfig {
             .ok_or_else(|| anyhow!("Pair {:?} code not found", pair))?;
 
         // token0
-        let res = self.call(self.token0_input(), pair_code.clone(), pair, state, vm)?;
+        // let res = self.call(self.token0_input(), pair_code.clone(), pair, state,
+        // vm)?;
+        let res = self.call(self.token0_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
         let token0 = EVMAddress::from_slice(&res[12..32]);
         let (token0_code, _) = vm
             .host
             .code(token0)
             .ok_or_else(|| anyhow!("Token0 {:?} code not found", token0))?;
-        let res = self.call(self.decimals_input(), token0_code.clone(), token0, state, vm)?;
+        let res = self.call(self.decimals_input(), Arc::new(token0_code.clone()), token0, state, vm)?;
         let decimals_0 = res[31] as u32;
 
         // token1
-        let res = self.call(self.token1_input(), pair_code.clone(), pair, state, vm)?;
+        let res = self.call(self.token1_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
         let token1 = EVMAddress::from_slice(&res[12..32]);
         let (token1_code, _) = vm
             .host
             .code(token1)
             .ok_or_else(|| anyhow!("Token1 {:?} code not found", token1))?;
-        let res = self.call(self.decimals_input(), token1_code.clone(), token1, state, vm)?;
+        let res = self.call(self.decimals_input(), Arc::new(token1_code.clone()), token1, state, vm)?;
         let decimals_1 = res[31] as u32;
 
         // reserves
-        let res = self.call(self.get_reserves_input(), pair_code.clone(), pair, state, vm)?;
+        let res = self.call(self.get_reserves_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
         let reserves0 = EVMU256::try_from_be_slice(&res[..32]).unwrap_or_default();
         let reserves1 = EVMU256::try_from_be_slice(&res[32..64]).unwrap_or_default();
 
         // balances
-        let res = self.call(self.balance_of_input(pair), token0_code.clone(), token0, state, vm)?;
+        let res = self.call(
+            self.balance_of_input(pair),
+            Arc::new(token0_code.clone()),
+            token0,
+            state,
+            vm,
+        )?;
         let balance0 = EVMU256::try_from_be_slice(res.to_vec().as_slice()).unwrap_or_default();
-        let res = self.call(self.balance_of_input(pair), token1_code.clone(), token1, state, vm)?;
+        let res = self.call(
+            self.balance_of_input(pair),
+            Arc::new(token1_code.clone()),
+            token1,
+            state,
+            vm,
+        )?;
         let balance1 = EVMU256::try_from_be_slice(res.to_vec().as_slice()).unwrap_or_default();
 
         let pair_data = PairData {
@@ -143,11 +157,13 @@ impl OffChainConfig {
         self.reserves_cache.insert(pair, (reserves0, reserves1));
         self.balance_cache.insert((pair, token0), balance0);
         self.balance_cache.insert((pair, token1), balance1);
-        let pair_code = Bytecode::new_raw(Bytes::from(pair_code.bytecode().to_vec()));
+        // let pair_code =
+        // Bytecode::new_raw(Bytes::from(pair_code.bytecode().to_vec()));
+        let pair_code = Bytecode::new_raw(revm_primitives::Bytes::from(pair_code.bytecode_bytes().to_vec()));
         self.code_cache.insert(pair, pair_code);
-        let token0_code = Bytecode::new_raw(Bytes::from(token0_code.bytecode().to_vec()));
+        let token0_code = Bytecode::new_raw(revm_primitives::Bytes::from(token0_code.bytecode_bytes().to_vec()));
         self.code_cache.insert(token0, token0_code);
-        let token1_code = Bytecode::new_raw(Bytes::from(token1_code.bytecode().to_vec()));
+        let token1_code = Bytecode::new_raw(revm_primitives::Bytes::from(token1_code.bytecode_bytes().to_vec()));
         self.code_cache.insert(token1, token1_code);
 
         Ok(())
@@ -176,7 +192,7 @@ impl OffChainConfig {
     fn call<VS, CI, SC>(
         &self,
         input: Bytes,
-        code: Arc<BytecodeLocked>,
+        code: Arc<Bytecode>,
         target: EVMAddress,
         state: &mut EVMFuzzState,
         vm: &mut EVMExecutor<VS, CI, SC>,
@@ -186,25 +202,35 @@ impl OffChainConfig {
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
         SC: Scheduler<State = EVMFuzzState> + Clone + 'static,
     {
-        let call = Contract::new_with_context_analyzed(
-            input,
-            code,
-            &CallContext {
-                address: target,
-                caller: EVMAddress::default(),
-                code_address: target,
-                apparent_value: EVMU256::ZERO,
-                scheme: CallScheme::StaticCall,
-            },
+        // let call = Contract::new_with_context_analyzed(
+        //     input,
+        //     code,
+        //     &CallContext {
+        //         address: target,
+        //         caller: EVMAddress::default(),
+        //         code_address: target,
+        //         apparent_value: EVMU256::ZERO,
+        //         scheme: CallScheme::StaticCall,
+        //     },
+        // );
+        let code_hash = hex::encode(keccak256(code.bytecode_bytes()));
+
+        let call = Contract::new(
+            input.into(),
+            *code,
+            Some(B256::from_str(&code_hash)?),
+            target,
+            EVMAddress::default(),
+            EVMU256::ZERO,
         );
 
-        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, true, MEM_LIMIT);
+        let mut interp = Interpreter::new(call, 1e10 as u64, true);
         let ir = vm.host.run_inspect(&mut interp, state);
         if !is_call_success!(ir) {
             return Err(anyhow!("Call failed: {:?}", ir));
         }
 
-        Ok(interp.return_value())
+        Ok(interp.return_data_buffer.into())
     }
 
     // token0()
@@ -236,7 +262,8 @@ impl OffChainConfig {
     fn balance_of_input(&self, addr: EVMAddress) -> Bytes {
         let mut input = hex!("70a08231").to_vec(); // balanceOf
         input.extend_from_slice(&[0x00; 12]); // padding
-        input.extend_from_slice(&addr.0); // addr
+                                              // input.extend_from_slice(&addr.0); // addr
+        input.extend_from_slice(addr.as_slice()); // addr
         Bytes::from(input)
     }
 }
@@ -361,7 +388,8 @@ mod tests {
             .host
             .code
             .into_iter()
-            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            // .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode_bytes().iter().cloned())))
             .collect();
 
         SetupData {
@@ -387,7 +415,7 @@ mod tests {
             .expect("bytecode not found")
             .trim()
             .to_string();
-        let bytecode = Bytecode::new_raw(Bytes::from(hex::decode(hex_code).unwrap()));
+        let bytecode = Bytecode::new_raw(revm_primitives::Bytes::from(hex::decode(hex_code).unwrap()));
 
         vm.deploy(bytecode, None, *address, state);
     }

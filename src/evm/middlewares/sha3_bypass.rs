@@ -300,11 +300,11 @@ where
                 if v {
                     debug!(
                         "new tainted jumpi: {:x} {:x}",
-                        interp.contract.address,
+                        interp.contract.target_address,
                         interp.program_counter()
                     );
                     self.tainted_jumpi
-                        .insert((interp.contract.address, interp.program_counter()));
+                        .insert((interp.contract.target_address, interp.program_counter()));
                 }
             }
             // PC
@@ -418,10 +418,12 @@ where
                 .sha3_taints
                 .borrow()
                 .tainted_jumpi
-                .contains(&(interp.contract.address, jumpi))
+                .contains(&(interp.contract.target_address, jumpi))
             {
                 let stack_len = interp.stack.len();
-                interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                // interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0]
+                // as usize) % 2);
+                interp.stack.data()[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
     }
@@ -441,12 +443,7 @@ mod tests {
     use bytes::Bytes;
     use itertools::Itertools;
     use libafl::schedulers::StdScheduler;
-    use revm_interpreter::{
-        analysis::to_analysed,
-        opcode::{ADD, EQ, JUMPDEST, JUMPI, MSTORE, PUSH0, PUSH1, SHA3, STOP},
-        BytecodeLocked,
-    };
-    use revm_primitives::Bytecode;
+    use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, KECCAK256, MSTORE, PUSH0, PUSH1, STOP};
 
     use super::*;
     use crate::{
@@ -475,7 +472,8 @@ mod tests {
         let target_addr = generate_random_address(&mut state);
         evm_executor.host.code.insert(
             target_addr,
-            Arc::new(BytecodeLocked::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
+            // Arc::new(LegacyAnalyzedBytecode::try_from(to_analysed(Bytecode::new_raw(code))).unwrap()),
+            Arc::new(revm_primitives::Bytecode::new_raw(revm_primitives::Bytes::from(code))),
         );
 
         let sha3 = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
@@ -524,7 +522,7 @@ mod tests {
     #[test]
     fn test_hash_simple() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI, JUMPDEST, STOP,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, KECCAK256, PUSH1, 0x2, EQ, PUSH1, 0xe, JUMPI, JUMPDEST, STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 1);
@@ -534,8 +532,8 @@ mod tests {
     #[test]
     fn test_hash_simple_none() {
         let bys = vec![
-            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, SHA3, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf, JUMPI, JUMPDEST,
-            STOP,
+            PUSH0, PUSH1, 0x42, MSTORE, PUSH0, PUSH1, 0x1, KECCAK256, PUSH1, 0x2, EQ, PUSH0, PUSH1, 0xf, JUMPI,
+            JUMPDEST, STOP,
         ];
         let taints = execute(Bytes::new(), Bytes::from(bys));
         assert_eq!(taints.len(), 0);

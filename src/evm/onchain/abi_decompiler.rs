@@ -1,17 +1,9 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    error::Error,
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use evmole::{function_arguments, function_selectors};
-use heimdall_core::decompile::{decompile, out::abi::ABIStructure, DecompilerArgsBuilder};
 use tracing::debug;
 
-use crate::{
-    cache::{Cache, FileSystemCache},
-    evm::contract_utils::ABIConfig,
-};
+use crate::evm::contract_utils::ABIConfig;
 
 pub fn fetch_abi_evmole(bytecode: String) -> Vec<ABIConfig> {
     let code = hex::decode(bytecode.trim_start_matches("0x")).unwrap();

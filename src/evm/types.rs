@@ -1,9 +1,11 @@
+use alloy_primitives::Address;
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use libafl::prelude::HasRand;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
 use primitive_types::H160;
-use revm_primitives::{ruint::aliases::U512, Bytecode, B160, U256};
+use rand::{thread_rng, Rng};
+use revm_primitives::{ruint::aliases::U512, Bytecode, U256};
 
 /// Common generic types for EVM fuzzing
 use crate::evm::input::{ConciseEVMInput, EVMInput};
@@ -21,7 +23,7 @@ use crate::{
     state_input::StagedVMState,
 };
 
-pub type EVMAddress = B160;
+pub type EVMAddress = Address;
 pub type EVMU256 = U256;
 pub type EVMU512 = U512;
 pub type EVMFuzzState = FuzzState<EVMInput, EVMState, EVMAddress, EVMAddress, Vec<u8>, ConciseEVMInput>;
@@ -95,13 +97,17 @@ pub fn generate_random_address<S>(s: &mut S) -> EVMAddress
 where
     S: HasRand,
 {
-    let mut rand_seed: RomuDuoJrRand = RomuDuoJrRand::with_seed(s.rand_mut().next());
-    EVMAddress::random_using(&mut rand_seed)
+    // let mut rand_seed: RomuDuoJrRand =
+    // RomuDuoJrRand::with_seed(s.rand_mut().next()); EVMAddress::random_using(&
+    // mut rand_seed)
+    let mut rng = thread_rng();
+    let bytes: [u8; 20] = rng.gen();
+    EVMAddress::from_slice(&bytes)
 }
 
 /// Generate a fixed H160 address from a hex string.
 pub fn fixed_address(s: &str) -> EVMAddress {
-    let mut address = EVMAddress::zero();
+    let mut address = EVMAddress::ZERO;
     address.0.copy_from_slice(&hex::decode(s).unwrap());
     address
 }

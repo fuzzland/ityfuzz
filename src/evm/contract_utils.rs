@@ -4,11 +4,9 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::Read,
-    ops::Deref,
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
-    sync::RwLockReadGuard,
 };
 
 use bytes::Bytes;
@@ -16,7 +14,7 @@ use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
-use revm_primitives::{bitvec::vec, Bytecode, Env};
+use revm_primitives::{Bytecode, Env};
 use serde_json::Value;
 
 use crate::{
@@ -923,7 +921,7 @@ impl ContractLoader {
         );
         executor.host.set_code(
             CHEATCODE_ADDRESS,
-            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+            Bytecode::new_raw(revm_primitives::Bytes::from(vec![0xfd, 0x00])),
             &mut state,
         );
         executor
@@ -968,11 +966,16 @@ impl ContractLoader {
         let weth_addr = EVMAddress::from_str(PRESET_WETH).unwrap();
         let hex_code = include_str!("../../tests/presets/v2_pair/WETH9.bytecode").trim();
         let weth_code = Bytes::from(hex::decode(hex_code).unwrap());
-        let deployed_weth = evm_executor.deploy(Bytecode::new_raw(weth_code), None, weth_addr, &mut state);
+        let deployed_weth = evm_executor.deploy(
+            Bytecode::new_raw(revm_primitives::Bytes::from(weth_code)),
+            None,
+            weth_addr,
+            &mut state,
+        );
         assert!(deployed_weth.is_some(), "failed to deploy WETH");
 
         let addr = evm_executor.deploy(
-            Bytecode::new_raw(deploy_code),
+            Bytecode::new_raw(revm_primitives::Bytes::from(deploy_code)),
             None,
             deployed_addr, // todo: change to foundry default address
             &mut state,
@@ -1141,7 +1144,8 @@ impl ContractLoader {
             .host
             .code
             .into_iter()
-            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            // .map(|(k, v)| (k, Bytes::from_iter(v.bytecode().iter().cloned())))
+            .map(|(k, v)| (k, Bytes::from_iter(v.bytecode_bytes().iter().cloned())))
             .collect();
 
         let mut onchain_middleware = None;

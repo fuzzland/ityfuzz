@@ -39,7 +39,6 @@ use crate::{
         middlewares::cheatcode::CHEATCODE_ADDRESS,
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_heimdall, flashloan::register_borrow_txn, BLACKLIST_ADDR},
-        presets::Preset,
         types::{
             fixed_address,
             EVMAddress,
@@ -203,7 +202,7 @@ where
             info!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
                 match self.executor.deploy(
-                    Bytecode::new_raw(Bytes::from(contract.code.clone())),
+                    Bytecode::new_raw(revm_primitives::Bytes::from(contract.code.clone())),
                     Some(Bytes::from(contract.constructor_args.clone())),
                     contract.deployed_address,
                     self.state,
@@ -218,7 +217,7 @@ where
             } else {
                 debug!("Contract {} is already deployed", contract.name);
                 // directly set bytecode
-                let contract_code = Bytecode::new_raw(Bytes::from(contract.code.clone()));
+                let contract_code = Bytecode::new_raw(revm_primitives::Bytes::from(contract.code.clone()));
                 bytecode_analyzer::add_analysis_result_to_state(&contract_code, self.state);
                 self.executor
                     .host
@@ -251,13 +250,21 @@ where
             }
 
             if let Some(srcmap) = &contract.raw_source_map {
+                // let runtime_bytecode = self
+                //     .executor
+                //     .host
+                //     .code
+                //     .get(&contract.deployed_address)
+                //     .expect("get runtime bytecode failed")
+                //     .bytecode()
+                //     .to_vec();
                 let runtime_bytecode = self
                     .executor
                     .host
                     .code
                     .get(&contract.deployed_address)
                     .expect("get runtime bytecode failed")
-                    .bytecode()
+                    .bytecode_bytes()
                     .to_vec();
                 SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
                     &contract.deployed_address,
@@ -334,11 +341,12 @@ where
                 .insert(contract.deployed_address, contract.abi.clone());
             let mut code = vec![];
             if let Some(c) = self.executor.host.code.clone().get(&contract.deployed_address) {
-                code.extend_from_slice(c.bytecode());
+                code.extend_from_slice(c.original_byte_slice());
             }
-            artifacts
-                .address_to_bytecode
-                .insert(contract.deployed_address, Bytecode::new_raw(Bytes::from(code)));
+            artifacts.address_to_bytecode.insert(
+                contract.deployed_address,
+                Bytecode::new_raw(revm_primitives::Bytes::from(code)),
+            );
 
             let mut name = contract.name.clone().trim_end_matches('*').to_string();
             if name != format!("{:?}", contract.deployed_address) {
@@ -478,9 +486,11 @@ where
         ]);
         for caller in contract_callers {
             self.state.add_caller(&caller);
-            self.executor
-                .host
-                .set_code(caller, Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])), self.state);
+            self.executor.host.set_code(
+                caller,
+                Bytecode::new_raw(revm_primitives::Bytes::from(vec![0xfd, 0x00])),
+                self.state,
+            );
             self.executor
                 .host
                 .evmstate
@@ -491,7 +501,7 @@ where
     pub fn init_cheatcode_contract(&mut self) {
         self.executor.host.set_code(
             CHEATCODE_ADDRESS,
-            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+            Bytecode::new_raw(revm_primitives::Bytes::from(vec![0xfd, 0x00])),
             self.state,
         );
     }

@@ -821,7 +821,8 @@ where
             debug!("[concolic] stack: {:?}", interp.stack);
             debug!("[concolic] symbolic_stack: {:?}", self.symbolic_stack);
             for idx in 0..interp.stack.len() {
-                let real = interp.stack.data[idx];
+                // sure
+                let real = interp.stack.data()[idx];
                 let sym = self.symbolic_stack[idx].clone();
                 if sym.is_some() {
                     if let ConcolicOp::EVMU256(v) = sym.unwrap().op {
@@ -1211,7 +1212,7 @@ where
                     need_solve = false;
                 } else {
                     let pc = interp.program_counter();
-                    let address = &interp.contract.address;
+                    let address = &interp.contract.target_address;
 
                     match SOURCE_MAP_PROVIDER.lock().unwrap().get_source_code(address, pc) {
                         SourceCodeResult::SourceCode(_) => {

@@ -80,18 +80,19 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 num_cpus = "1.0"
 
-revm = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
-    "no_gas_measuring",
+revm = { git = "https://github.com/nick199910/revm", rev = "c929048", features = [
+    # "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
-revm-primitives = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
-    "no_gas_measuring",
+revm-primitives = { git = "https://github.com/nick199910/revm", rev = "c929048", features = [
+    # "no_gas_measuring",
     "serde",
     "memory_limit",
+    "hashbrown",
 ] }
-revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "1dead51", features = [
-    "no_gas_measuring",
+revm-interpreter = { git = "https://github.com/nick199910/revm", rev = "c929048", features = [
+    # "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
@@ -119,9 +120,10 @@ handlebars = "4.4"
 
 # for cheatcode middleware
 foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "617dfc28" }
+# foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "cafc260" }
 alloy-sol-types = "0.6"
 alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
-alloy-primitives = "0.6"
+alloy-primitives = "0.7.1"
 alloy-json-abi = "0.6"
 # error handling
 anyhow = "1.0"
