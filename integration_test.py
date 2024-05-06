@@ -11,7 +11,7 @@ crashed_any = False
 
 def read_onchain_tests():
     tests = ""
-    with open("test.txt", "r") as file:
+    with open("onchain_tests_new.txt", "r") as file:
         tests = file.read().strip()
 
     tests = tests.strip().split("\n")
