@@ -11,11 +11,11 @@ crashed_any = False
 
 def read_onchain_tests():
     tests = ""
-    with open("onchain_tests.txt", "r") as file:
+    with open("test.txt", "r") as file:
         tests = file.read().strip()
 
     tests = tests.strip().split("\n")
-    tests = [test.split("\t") for test in tests]
+    tests = [test.split(";") for test in tests]
     return tests
 
 
