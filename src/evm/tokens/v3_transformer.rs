@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
+use revm::DBBox;
 use revm_interpreter::{Contract, Interpreter};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -25,13 +26,13 @@ pub struct UniswapV3PairContext {
 }
 
 impl UniswapV3PairContext {
-    pub fn initial_transfer<VS, CI, SC>(
+    pub fn initial_transfer<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) -> Option<()>
     where
         VS: VMStateT + Default + 'static,
@@ -127,13 +128,13 @@ pub fn exact_in_single_swap(
 
 pub const V3_TOKEN_HOLDER: [u8; 20] = [0xa1; 20];
 impl PairContext for UniswapV3PairContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         _src: &EVMAddress,
         next: &EVMAddress,
         _amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where

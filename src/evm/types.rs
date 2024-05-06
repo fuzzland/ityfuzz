@@ -5,6 +5,10 @@ use libafl::prelude::HasRand;
 use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
 use primitive_types::H160;
 use rand::{thread_rng, Rng};
+use revm::{
+    db::{CacheDB, EmptyDB},
+    Database,
+};
 use revm_primitives::{ruint::aliases::U512, Bytecode, U256};
 
 /// Common generic types for EVM fuzzing
@@ -69,7 +73,7 @@ pub type EVMFuzzExecutor<OT> = FuzzExecutor<
     ConciseEVMInput,
 >;
 
-pub type EVMQueueExecutor = EVMExecutor<EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>>;
+pub type EVMQueueExecutor = EVMExecutor<EVMState, ConciseEVMInput, PowerABIScheduler<EVMFuzzState>, CacheDB<EmptyDB>>;
 
 /// convert array of 20x u8 to H160
 pub fn convert_h160(v: [u8; 20]) -> H160 {

@@ -729,11 +729,11 @@ impl ConcolicHost {
     }
 }
 
-impl<SC> Middleware<SC> for ConcolicHost
+impl<SC, DB> Middleware<SC, DB> for ConcolicHost
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         macro_rules! fast_peek {
             ($idx:expr) => {
                 interp.stack.data()[interp.stack.len() - 1 - $idx]
@@ -1389,7 +1389,7 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         _by: &Bytes,
     ) {

@@ -155,11 +155,11 @@ pub fn keccak256(input: &[u8]) -> EVMU256 {
     EVMU256::from_be_bytes(output)
 }
 
-impl<SC> Middleware<SC> for OnChain
+impl<SC, DB> Middleware<SC, DB> for OnChain
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, state: &mut EVMFuzzState) {
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {{
@@ -311,10 +311,10 @@ where
 
 impl OnChain {
     #[allow(clippy::too_many_arguments)]
-    pub fn load_code<SC>(
+    pub fn load_code<SC, DB>(
         &mut self,
         address_h160: EVMAddress,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         force_cache: bool,
         _should_setup_abi: bool,
         is_proxy_call: bool,

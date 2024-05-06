@@ -61,7 +61,7 @@ pub enum MiddlewareOp {
     MakeSubsequentCallSuccess(Bytes),
 }
 
-pub fn add_corpus<SC>(host: &mut FuzzHost<SC>, state: &mut EVMFuzzState, input: &EVMInput)
+pub fn add_corpus<SC, DB>(host: &mut FuzzHost<SC, DB>, state: &mut EVMFuzzState, input: &EVMInput)
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -73,18 +73,18 @@ where
         .expect("failed to call scheduler on_add");
 }
 
-pub trait Middleware<SC>: Debug
+pub trait Middleware<SC, DB>: Debug
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     #[allow(clippy::missing_safety_doc)]
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState);
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, state: &mut EVMFuzzState);
 
     #[allow(clippy::missing_safety_doc)]
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         _ret: &Bytes,
     ) {
@@ -94,7 +94,7 @@ where
     unsafe fn before_execute(
         &mut self,
         _interp: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         _is_step: bool,
         _data: &mut Bytes,
@@ -106,7 +106,7 @@ where
     unsafe fn on_insert(
         &mut self,
         _interp: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         _bytecode: &mut Bytecode,
         _address: EVMAddress,

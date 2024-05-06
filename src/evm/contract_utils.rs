@@ -14,6 +14,10 @@ use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
+use revm::{
+    db::{CacheDB, EmptyDB},
+    Database,
+};
 use revm_primitives::{Bytecode, Env};
 use serde_json::Value;
 
@@ -911,7 +915,7 @@ impl ContractLoader {
         work_dir: String,
         etherscan_api_key: &str,
     ) -> (
-        EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>>,
+        EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<EmptyDB>>,
         EVMFuzzState,
     ) {
         let mut state: EVMFuzzState = FuzzState::new(0);

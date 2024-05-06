@@ -76,13 +76,13 @@ pub fn balance_of_bytes(addr: &EVMAddress) -> Bytes {
 }
 
 impl UniswapPairContext {
-    pub fn initial_transfer<VS, CI, SC>(
+    pub fn initial_transfer<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) -> Option<()>
     where
         VS: VMStateT + Default + 'static,
@@ -123,13 +123,13 @@ impl UniswapPairContext {
 }
 
 impl PairContext for UniswapPairContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         _src: &EVMAddress,
         next: &EVMAddress,
         _amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where

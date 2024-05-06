@@ -10,6 +10,7 @@ use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::schedulers::{Scheduler, StdScheduler};
+use revm::db::{CacheDB, EmptyDB};
 use revm_interpreter::{Contract, Host, Interpreter};
 use revm_primitives::{keccak256, Bytecode, B256};
 use serde::{de::DeserializeOwned, Serialize};
@@ -59,7 +60,7 @@ impl OffChainConfig {
             let code = Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(bytecode.clone())));
             fuzz_host.code.insert(*addr, code);
         }
-        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<EmptyDB>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         // build offchain config
@@ -77,11 +78,11 @@ impl OffChainConfig {
         Ok(offchain)
     }
 
-    fn build_cache<VS, CI, SC>(
+    fn build_cache<VS, CI, SC, DB>(
         &mut self,
         pair: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) -> Result<()>
     where
         VS: VMStateT + Default + 'static,
@@ -189,13 +190,13 @@ impl OffChainConfig {
         self.pair_cache.entry(token).or_default().push(pair);
     }
 
-    fn call<VS, CI, SC>(
+    fn call<VS, CI, SC, DB>(
         &self,
         input: Bytes,
         code: Arc<Bytecode>,
         target: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) -> Result<Bytes>
     where
         VS: VMStateT + Default + 'static,
@@ -401,11 +402,11 @@ mod tests {
         }
     }
 
-    fn deploy<VS, CI, SC>(
+    fn deploy<VS, CI, SC, DB>(
         address: &EVMAddress,
         code_path: &str,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) where
         VS: VMStateT + Default + 'static,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,
@@ -420,11 +421,11 @@ mod tests {
         vm.deploy(bytecode, None, *address, state);
     }
 
-    fn init_pair_tokens<VS, CI, SC>(
+    fn init_pair_tokens<VS, CI, SC, DB>(
         pair: &EVMAddress,
         token0: &EVMAddress,
         token1: &EVMAddress,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) where
         VS: VMStateT + Default + 'static,
         CI: Serialize + DeserializeOwned + Debug + Clone + ConciseSerde + 'static,

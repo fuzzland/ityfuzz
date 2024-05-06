@@ -110,11 +110,11 @@ impl CallPrinter {
     }
 }
 
-impl<SC> Middleware<SC> for CallPrinter
+impl<SC, DB> Middleware<SC, DB> for CallPrinter
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if self.entry {
             self.entry = false;
             let code_address = interp.contract.target_address;
@@ -252,7 +252,7 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         by: &Bytes,
     ) {

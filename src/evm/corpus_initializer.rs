@@ -19,6 +19,7 @@ use libafl::{
     state::HasCorpus,
 };
 use libafl_bolts::impl_serdeany;
+use revm::Database;
 use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
@@ -59,12 +60,12 @@ use crate::{
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
-pub struct EVMCorpusInitializer<'a, SC, ISC>
+pub struct EVMCorpusInitializer<'a, SC, ISC, DB>
 where
     SC: ABIScheduler<State = EVMFuzzState> + Clone,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
-    executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
+    executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC, DB>,
     scheduler: SC,
     infant_scheduler: ISC,
     state: &'a mut EVMFuzzState,
@@ -155,13 +156,13 @@ macro_rules! add_input_to_corpus {
     };
 }
 
-impl<'a, SC, ISC> EVMCorpusInitializer<'a, SC, ISC>
+impl<'a, SC, ISC, DB> EVMCorpusInitializer<'a, SC, ISC, DB>
 where
     SC: ABIScheduler<State = EVMFuzzState> + Clone + 'static,
     ISC: Scheduler<State = EVMInfantStateState>,
 {
     pub fn new(
-        executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC>,
+        executor: &'a mut EVMExecutor<EVMState, ConciseEVMInput, SC, DB>,
         scheduler: SC,
         infant_scheduler: ISC,
         state: &'a mut EVMFuzzState,

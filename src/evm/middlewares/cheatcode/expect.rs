@@ -73,13 +73,13 @@ pub enum ExpectedCallType {
 }
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     /// Expects an error on next call with any revert data.
     #[inline]
-    pub fn expect_revert0(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn expect_revert0(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         host.expected_revert = Some(ExpectedRevert {
             reason: None,
             depth: host.call_depth,
@@ -89,7 +89,7 @@ where
 
     /// Expects an error on next call that starts with the revert data.
     #[inline]
-    pub fn expect_revert1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+    pub fn expect_revert1(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call { revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
         host.expected_revert = Some(ExpectedRevert {
@@ -101,7 +101,7 @@ where
 
     /// Expects an error on next call that exactly matches the revert data.
     #[inline]
-    pub fn expect_revert2(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+    pub fn expect_revert2(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call { revertData } = args;
         let reason = Some(Bytes::from(revertData));
         host.expected_revert = Some(ExpectedRevert {
@@ -117,7 +117,7 @@ where
     /// logs were emitted in the expected order with the expected topics and
     /// data (as specified by the booleans).
     #[inline]
-    pub fn expect_emit0(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+    pub fn expect_emit0(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_0Call {
             checkTopic1,
             checkTopic2,
@@ -136,7 +136,7 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    pub fn expect_emit1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+    pub fn expect_emit1(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_1Call {
             checkTopic1,
             checkTopic2,
@@ -160,7 +160,7 @@ where
     /// after the call, we check if logs were emitted in the expected order
     /// with the expected topics and data.
     #[inline]
-    pub fn expect_emit2(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn expect_emit2(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         let expected = ExpectedEmit {
             depth: host.call_depth,
             checks: [true, true, true, true],
@@ -173,7 +173,7 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    pub fn expect_emit3(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+    pub fn expect_emit3(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_3Call { emitter } = args;
         let expected = ExpectedEmit {
             depth: host.call_depth,

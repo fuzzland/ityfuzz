@@ -41,7 +41,7 @@ pub struct RecordAccess {
 }
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -157,7 +157,7 @@ where
 
     /// Sets an address' code.
     #[inline]
-    pub fn etch(&self, host: &mut FuzzHost<SC>, args: Vm::etchCall) -> Option<Vec<u8>> {
+    pub fn etch(&self, host: &mut FuzzHost<SC, DB>, args: Vm::etchCall) -> Option<Vec<u8>> {
         let Vm::etchCall {
             target,
             newRuntimeBytecode,
@@ -260,7 +260,7 @@ where
     #[inline]
     pub fn prank0(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         args: Vm::prank_0Call,
     ) -> Option<Vec<u8>> {
@@ -283,7 +283,7 @@ where
     #[inline]
     pub fn prank1(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::prank_1Call,
@@ -306,7 +306,7 @@ where
     #[inline]
     pub fn start_prank0(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         args: Vm::startPrank_0Call,
     ) -> Option<Vec<u8>> {
@@ -328,7 +328,7 @@ where
     #[inline]
     pub fn start_prank1(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::startPrank_1Call,
@@ -348,7 +348,7 @@ where
 
     /// Resets subsequent calls' `msg.sender` to be `address(this)`.
     #[inline]
-    pub fn stop_prank(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn stop_prank(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         let _ = host.prank.take();
         None
     }

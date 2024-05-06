@@ -14,7 +14,7 @@ use crate::{
 
 pub struct PairPreset;
 
-impl<I, VS, SC> Preset<I, VS, SC> for PairPreset
+impl<I, VS, SC, DB> Preset<I, VS, SC, DB> for PairPreset
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
@@ -24,7 +24,7 @@ where
         &self,
         function_sig: [u8; 4],
         input: &EVMInput,
-        _evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC>,
+        _evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC, DB>,
     ) -> Vec<EVMInput> {
         let mut res = vec![];
         if let [0xbc, 0x25, 0xcf, 0x77] = function_sig {

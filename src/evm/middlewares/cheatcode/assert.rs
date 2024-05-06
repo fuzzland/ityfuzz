@@ -12,7 +12,7 @@ use crate::evm::types::EVMFuzzState;
 const EQ_REL_DELTA_RESOLUTION: U256 = U256::from_limbs([18, 0, 0, 0]);
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {

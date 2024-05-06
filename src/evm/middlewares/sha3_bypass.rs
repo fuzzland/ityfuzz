@@ -109,11 +109,11 @@ impl Sha3TaintAnalysis {
     }
 }
 
-impl<SC> Middleware<SC> for Sha3TaintAnalysis
+impl<SC, DB> Middleware<SC, DB> for Sha3TaintAnalysis
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         // skip taint analysis if call depth is too deep
         if host.call_depth > MAX_CALL_DEPTH {
             return;
@@ -381,7 +381,7 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         _by: &Bytes,
     ) {
@@ -407,11 +407,11 @@ impl Sha3Bypass {
     }
 }
 
-impl<SC> Middleware<SC> for Sha3Bypass
+impl<SC, DB> Middleware<SC, DB> for Sha3Bypass
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
             if self

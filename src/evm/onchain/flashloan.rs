@@ -204,7 +204,7 @@ impl Flashloan {
         (is_erc20, is_pair)
     }
 
-    pub fn on_pair_insertion<SC>(&mut self, host: &FuzzHost<SC>, state: &mut EVMFuzzState, pair: EVMAddress)
+    pub fn on_pair_insertion<SC, DB>(&mut self, host: &FuzzHost<SC, DB>, state: &mut EVMFuzzState, pair: EVMAddress)
     where
         SC: Scheduler<State = EVMFuzzState> + Clone,
     {
@@ -246,11 +246,11 @@ impl Flashloan {
     }
 }
 
-impl<SC> Middleware<SC> for Flashloan
+impl<SC, DB> Middleware<SC, DB> for Flashloan
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, s: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, s: &mut EVMFuzzState) {
         // if simply static call, we dont care
         // if unsafe { IS_FAST_CALL_STATIC } {
         //     return;

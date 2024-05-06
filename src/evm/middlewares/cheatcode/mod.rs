@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     clone::Clone,
     cmp::min,
@@ -45,7 +46,7 @@ pub const REVERT_PREFIX: [u8; 4] = [8, 195, 121, 160];
 pub const ERROR_PREFIX: [u8; 4] = [11, 196, 69, 3];
 
 #[derive(Clone, Debug, Default)]
-pub struct Cheatcode<SC> {
+pub struct Cheatcode<SC, DB> {
     /// Recorded storage reads and writes
     accesses: Option<RecordAccess>,
     /// Recorded logs
@@ -53,7 +54,7 @@ pub struct Cheatcode<SC> {
     /// Etherscan API key
     etherscan_api_key: Vec<String>,
 
-    _phantom: PhantomData<SC>,
+    _phantom: PhantomData<(SC, DB)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,11 +95,11 @@ macro_rules! cheat_call_error {
     }};
 }
 
-impl<SC> Middleware<SC> for Cheatcode<SC>
+impl<SC, DB: fmt::Debug> Middleware<SC, DB> for Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone + Debug + 'static,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         let op = interp.current_opcode();
         match get_opcode_type(op, interp) {
             OpcodeType::CheatCall => self.cheat_call(interp, host),
@@ -118,7 +119,7 @@ where
     }
 }
 
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -132,7 +133,7 @@ where
     }
 
     /// Call cheatcode address
-    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>) {
+    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>) {
         let op = interp.current_opcode();
         let calldata = unsafe { pop_cheatcall_stack(interp, op) };
         if let Err(err) = calldata {
@@ -663,10 +664,12 @@ mod tests {
 
     use bytes::Bytes;
     use libafl::prelude::StdScheduler;
+    use revm::db::{CacheDB, EmptyDB};
     use revm_primitives::Bytecode;
 
     use super::*;
     use crate::{
+        cache::Cache,
         evm::{
             host::FuzzHost,
             input::{ConciseEVMInput, EVMInput, EVMInputTy},
@@ -714,7 +717,7 @@ mod tests {
             &mut state,
         );
 
-        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<EmptyDB>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let mut deploy_state = FuzzState::new(0);

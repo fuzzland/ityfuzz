@@ -33,13 +33,13 @@ pub fn withdraw_bytes(amount: EVMU256) -> Bytes {
 }
 
 impl PairContext for WethContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where

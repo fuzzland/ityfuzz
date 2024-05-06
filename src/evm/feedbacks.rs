@@ -26,7 +26,7 @@ use crate::{
 /// A wrapper around a feedback that also performs sha3 taint analysis
 /// when the feedback is interesting.
 #[allow(clippy::type_complexity)]
-pub struct Sha3WrappedFeedback<VS, F, SC>
+pub struct Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT,
     F: Feedback<EVMFuzzState>,
@@ -34,11 +34,11 @@ where
 {
     pub inner_feedback: Box<F>,
     pub sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-    pub evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC>>>,
+    pub evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC, DB>>>,
     pub enabled: bool,
 }
 
-impl<VS, F, SC> Feedback<EVMFuzzState> for Sha3WrappedFeedback<VS, F, SC>
+impl<VS, F, SC, DB> Feedback<EVMFuzzState> for Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT + 'static,
     F: Feedback<EVMFuzzState>,
@@ -99,7 +99,7 @@ where
     }
 }
 
-impl<VS, F, SC> Sha3WrappedFeedback<VS, F, SC>
+impl<VS, F, SC, DB> Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT,
     F: Feedback<EVMFuzzState>,
@@ -109,7 +109,7 @@ where
     pub(crate) fn new(
         inner_feedback: F,
         sha3_taints: Rc<RefCell<Sha3TaintAnalysis>>,
-        evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC>>>,
+        evm_executor: Rc<RefCell<EVMExecutor<VS, ConciseEVMInput, SC, DB>>>,
         enabled: bool,
     ) -> Self {
         Self {
@@ -121,7 +121,7 @@ where
     }
 }
 
-impl<VS, F, SC> Named for Sha3WrappedFeedback<VS, F, SC>
+impl<VS, F, SC, DB> Named for Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT,
     F: Feedback<EVMFuzzState>,
@@ -132,7 +132,7 @@ where
     }
 }
 
-impl<VS, F, SC> Debug for Sha3WrappedFeedback<VS, F, SC>
+impl<VS, F, SC, DB> Debug for Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT,
     F: Feedback<EVMFuzzState>,

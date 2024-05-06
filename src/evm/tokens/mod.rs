@@ -93,14 +93,14 @@ pub struct UniswapInfo {
 }
 
 pub trait PairContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
 
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where
@@ -143,12 +143,12 @@ pub struct TokenContext {
 static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 
 impl TokenContext {
-    pub fn buy<VS, CI, SC>(
+    pub fn buy<VS, CI, SC, DB>(
         &self,
         amount_in: EVMU256,
         to: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         seed: &[u8],
     ) -> Option<()>
     where
@@ -272,12 +272,12 @@ impl TokenContext {
     }
 
     // swapExactTokensForETHSupportingFeeOnTransferTokens
-    pub fn sell<VS, CI, SC>(
+    pub fn sell<VS, CI, SC, DB>(
         &self,
         amount_in: EVMU256,
         src: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         seed: &[u8],
     ) -> Option<()>
     where

@@ -293,11 +293,11 @@ impl Coverage {
     }
 }
 
-impl<SC> Middleware<SC> for Coverage
+impl<SC, DB> Middleware<SC, DB> for Coverage
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if IN_DEPLOY || !EVAL_COVERAGE {
             return;
         }
@@ -317,7 +317,7 @@ where
     unsafe fn on_insert(
         &mut self,
         _: Option<&mut Interpreter>,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         bytecode: &mut Bytecode,
         address: EVMAddress,
