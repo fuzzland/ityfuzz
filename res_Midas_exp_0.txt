@@ -1,0 +1,18 @@
+thread 'main' panicked at src/evm/onchain/endpoints.rs:791:29:
+fail to get block timestamp
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: ityfuzz::evm::onchain::endpoints::OnChainConfig::fetch_blk_timestamp
+   3: ityfuzz::evm::contract_utils::ContractLoader::from_address
+   4: ityfuzz::evm::evm_main
+   5: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 15m ./target/release/ityfuzz evm -t 0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf,0xBA12222222228d8Ba445958a75a0704d566BF2C8,0xa1219DBE76eEcBf7571Fed6b020Dd9154396B70e,0xbb2d00675B775E0F8acd590e08DA081B2a36D3a6,0xbD1463F02f61676d53fd183C2B19282BFF93D099,0x23F43c1002EEB2b146F286105a9a2FC75Bf770A4,0x62Bdc203403e7d44b75f357df0897f2e71F607F3,0xa0f330F5Fc47eE7A3297DBD6Be6Fe60cd0346B26,0x65752C54D9102BDFD69d351E1838A1Be83C924C6,0x0000000000000000000000000000000000001010,0xe7CEA2F6d7b120174BF3A9Bc98efaF1fF72C997d,0x4e3Decbb3645551B8A19f0eA1678079FCB33fB4c,0xE0B52e49357Fd4DAf2c15e02058DCE6BC0057db4,0xD265ff7e5487E9DD556a4BB900ccA6D087Eb3AD2,0x7ADf374Fa8b636420D41356b1f714F18228e7ae2,0x3Fa147D6309abeb5C1316f7d8a7d8bD023e0cd80,0x767058F11800FBA6A682E73A6e79ec5eB74Fac8c,0xFb6FE7802bA9290ef8b00CA16Af4Bc26eb663a28,0x9633E0749faa6eC6d992265368B88698d6a93Ac0,0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4,0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270,0xe150e792e0a18C9984a0630f051a607dEe3c265d,0x31890c2009E79f6540eF210Eb491db8cF5119a8e,0xE0570ddFca69E5E90d83Ea04bb33824D3BbE6a85,0x5aa0197D0d3E05c4aA070dfA2f54Cd67A447173A,0xA374094527e1673A86dE625aa59517c5dE346d32,0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174,0x8dF3aad3a84da6b69A4DA8aeC3eA40d9091B2Ac4,0x794a61358D6845594F94dc1DB02A252b5b4814aD,0xC3C7d422809852031b44ab29EEC9F1EfF2A58756,0x2fFbCE9099cBed86984286A54e5932414aF4B717,0x439E6A13a5ce7FdCA2CC03bF31Fb631b3f5EF157,0xeAA782fA732FEf5A5B127EA70d1b656216717353 -c polygon -b 38118347 -f --onchain-etherscan-api-key GDV24F5FNPUVW9UJCQKY256RKI7ZZVPM6K --work-dir w_Midas_exp_0
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: did not succeed within 3 tries
+[31mERROR[0m failed to fetch from https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd

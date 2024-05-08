@@ -1,0 +1,49 @@
+thread 'main' panicked at src/evm/tokens/uniswap.rs:233:10:
+Unexpected RPC error, consider setting env <ETH_RPC_URL> 
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: core::panicking::panic_display
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:196:5
+   3: core::panicking::panic_str
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:171:5
+   4: core::option::expect_failed
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/option.rs:1980:5
+   5: ityfuzz::evm::tokens::uniswap::get_pegged_next_hop
+   6: ityfuzz::evm::tokens::uniswap::dfs
+   7: ityfuzz::evm::tokens::uniswap::dfs
+   8: ityfuzz::evm::onchain::flashloan::Flashloan::on_contract_insertion
+   9: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize_corpus
+  10: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize
+  11: ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer
+  12: ityfuzz::evm::evm_main
+  13: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 15m ./target/release/ityfuzz evm -t 0x9fa69536d1cda4A04cFB50688294de75B505a9aE -c eth -b 13155349 -f --onchain-etherscan-api-key ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY --work-dir w_DaoMaker_exp_0
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x7a250d5630b4cf539739df2c5dacb4c659f2488d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 7a250d5630b4cf539739df2c5dacb4c659f2488d
+Contract loaded: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x9fa69536d1cda4a04cfb50688294de75b505a9ae&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 9fa69536d1cda4a04cfb50688294de75b505a9ae
+Contract loaded: 0x9fa69536d1cda4a04cfb50688294de75b505a9ae
+[32m INFO[0m 
+
+ ================ EVM Fuzzer Start ===================
+
+
+[32m INFO[0m Deploying contract: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Contract 0x7a250d5630b4cf539739df2c5dacb4c659f2488d deployed to: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Deploying contract: 0x9fa69536d1cda4a04cfb50688294de75b505a9ae
+[32m INFO[0m Contract 0x9fa69536d1cda4a04cfb50688294de75b505a9ae deployed to: 0x9fa69536d1cda4a04cfb50688294de75b505a9ae
+[32m INFO[0m Deployed all contracts
+
+[32m INFO[0m fetching pairs for 0x9fa69536d1cda4a04cfb50688294de75b505a9ae
+[32m INFO[0m fetching pairs for 0x9fa69536d1cda4a04cfb50688294de75b505a9ae
+[32m INFO[0m fetching code from c88ac988a655b91b70def427c8778b4d43f2048d
+[32m INFO[0m fetching code from d2b0964ca46a4f3401ef65bbf9c616ed2f43f01b
+[32m INFO[0m fetching code from 7497d67616d5be92537321f40c80275252394c4f
+[32m INFO[0m fetching code from 82359fb56dbbfbfaa3e35359cbced9974eb1e334
+[32m INFO[0m fetching pairs for 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m fetching pairs for 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48

@@ -1,0 +1,18 @@
+thread 'main' panicked at src/evm/onchain/endpoints.rs:791:29:
+fail to get block timestamp
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: ityfuzz::evm::onchain::endpoints::OnChainConfig::fetch_blk_timestamp
+   3: ityfuzz::evm::contract_utils::ContractLoader::from_address
+   4: ityfuzz::evm::evm_main
+   5: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 15m ./target/release/ityfuzz evm -t 0xd0289082cf4c5c2ba448B4B9c67232729aa75EfA,0x0B72bBb6E4eB5baF8E130b3E7A809DD50F17f437,0x853Ee4b2A13f8a742d64C8F088bE7bA2131f670d,0x0000000000000000000000000000000000001010,0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174,0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619,0x511436aD000920C61C9e910e73bE699A89E6517e,0x65BaF1DC6fA0C7E459A36E2E310836B396D1B1de -c polygon -b 40067322 -f --onchain-etherscan-api-key GDV24F5FNPUVW9UJCQKY256RKI7ZZVPM6K --work-dir w_Phoenix_exp_0
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: error sending request for url (https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd): error trying to connect: error:14094438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../ssl/record/rec_layer_s3.c:1543:SSL alert number 80
+[31mERROR[0m Error: did not succeed within 3 tries
+[31mERROR[0m failed to fetch from https://silent-patient-film.matic.quiknode.pro/55997887f5182e76f24d87a8e573bf5851d46fbd

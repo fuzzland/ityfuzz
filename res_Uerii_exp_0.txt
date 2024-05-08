@@ -1,0 +1,67 @@
+thread 'main' panicked at src/evm/tokens/uniswap.rs:233:10:
+Unexpected RPC error, consider setting env <ETH_RPC_URL> 
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: core::panicking::panic_display
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:196:5
+   3: core::panicking::panic_str
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:171:5
+   4: core::option::expect_failed
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/option.rs:1980:5
+   5: ityfuzz::evm::tokens::uniswap::get_pegged_next_hop
+   6: ityfuzz::evm::tokens::uniswap::dfs
+   7: ityfuzz::evm::tokens::uniswap::dfs
+   8: ityfuzz::evm::onchain::flashloan::Flashloan::on_contract_insertion
+   9: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize_corpus
+  10: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize
+  11: ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer
+  12: ityfuzz::evm::evm_main
+  13: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 15m ./target/release/ityfuzz evm -t 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,0x5FFaf1B4Da96D6Cfd4045035A94A924fC39631dC,0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640,0x418C24191aE947A78C99fDc0e45a1f96Afb254BE -c eth -b 15767837 -f --onchain-etherscan-api-key ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY --work-dir w_Uerii_exp_0
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x7a250d5630b4cf539739df2c5dacb4c659f2488d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 7a250d5630b4cf539739df2c5dacb4c659f2488d
+Contract loaded: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 88e6a0c2ddd26feeb64f039a2c41296fcb3f5640
+Contract loaded: 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+Contract loaded: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x418c24191ae947a78c99fdc0e45a1f96afb254be&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 418c24191ae947a78c99fdc0e45a1f96afb254be
+Contract loaded: 0x418c24191ae947a78c99fdc0e45a1f96afb254be
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x5ffaf1b4da96d6cfd4045035a94a924fc39631dc&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 5ffaf1b4da96d6cfd4045035a94a924fc39631dc
+Contract loaded: 0x5ffaf1b4da96d6cfd4045035a94a924fc39631dc
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+Contract loaded: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m 
+
+ ================ EVM Fuzzer Start ===================
+
+
+[32m INFO[0m Deploying contract: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Contract 0x7a250d5630b4cf539739df2c5dacb4c659f2488d deployed to: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Deploying contract: 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640
+[32m INFO[0m Contract 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640 deployed to: 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640
+[32m INFO[0m Deploying contract: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m Contract 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 deployed to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m Deploying contract: 0x418c24191ae947a78c99fdc0e45a1f96afb254be
+[32m INFO[0m Contract 0x418c24191ae947a78c99fdc0e45a1f96afb254be deployed to: 0x418c24191ae947a78c99fdc0e45a1f96afb254be
+[32m INFO[0m Deploying contract: 0x5ffaf1b4da96d6cfd4045035a94a924fc39631dc
+[32m INFO[0m Contract 0x5ffaf1b4da96d6cfd4045035a94a924fc39631dc deployed to: 0x5ffaf1b4da96d6cfd4045035a94a924fc39631dc
+[32m INFO[0m Deploying contract: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m Contract 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 deployed to: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m Deployed all contracts
+
+[32m INFO[0m Contract 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640 has no abi
+[32m INFO[0m Too many unknown function signature for "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", we are going to decompile this contract using Heimdall
+[32m INFO[0m fetching pairs for 0x418c24191ae947a78c99fdc0e45a1f96afb254be
+[32m INFO[0m fetching pairs for 0x418c24191ae947a78c99fdc0e45a1f96afb254be
+[32m INFO[0m fetching pairs for 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m fetching pairs for 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48

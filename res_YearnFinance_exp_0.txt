@@ -1,0 +1,165 @@
+thread 'main' panicked at src/evm/onchain/endpoints.rs:767:9:
+Value too large for Uint
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: <ityfuzz::evm::onchain::endpoints::OnChainConfig as ityfuzz::evm::onchain::ChainConfig>::get_token_balance
+   3: ityfuzz::evm::tokens::uniswap::add_reserve_info
+   4: ityfuzz::evm::tokens::uniswap::get_pair
+   5: ityfuzz::evm::tokens::uniswap::get_all_hops
+   6: ityfuzz::evm::onchain::flashloan::Flashloan::on_contract_insertion
+   7: ityfuzz::evm::onchain::OnChain::load_code
+   8: <ityfuzz::evm::onchain::OnChain as ityfuzz::evm::middlewares::middleware::Middleware<SC>>::on_step
+   9: <ityfuzz::evm::host::FuzzHost<SC> as revm_interpreter::host::Host<ityfuzz::state::FuzzState<ityfuzz::evm::input::EVMInput,ityfuzz::evm::vm::EVMState,revm_primitives::bits::B160,revm_primitives::bits::B160,alloc::vec::Vec<u8>,ityfuzz::evm::input::ConciseEVMInput>>>::step
+  10: revm_interpreter::interpreter::Interpreter::run_inspect
+  11: ityfuzz::evm::host::FuzzHost<SC>::run_inspect
+  12: ityfuzz::evm::host::FuzzHost<SC>::call_forbid_control_leak
+  13: <ityfuzz::evm::host::FuzzHost<SC> as revm_interpreter::host::Host<ityfuzz::state::FuzzState<ityfuzz::evm::input::EVMInput,ityfuzz::evm::vm::EVMState,revm_primitives::bits::B160,revm_primitives::bits::B160,alloc::vec::Vec<u8>,ityfuzz::evm::input::ConciseEVMInput>>>::call
+  14: revm_interpreter::instructions::host::call_inner
+  15: revm_interpreter::interpreter::Interpreter::run_inspect
+  16: ityfuzz::evm::host::FuzzHost<SC>::run_inspect
+  17: ityfuzz::evm::host::FuzzHost<SC>::call_forbid_control_leak
+  18: <ityfuzz::evm::host::FuzzHost<SC> as revm_interpreter::host::Host<ityfuzz::state::FuzzState<ityfuzz::evm::input::EVMInput,ityfuzz::evm::vm::EVMState,revm_primitives::bits::B160,revm_primitives::bits::B160,alloc::vec::Vec<u8>,ityfuzz::evm::input::ConciseEVMInput>>>::call
+  19: revm_interpreter::instructions::host::call_inner
+  20: revm_interpreter::interpreter::Interpreter::run_inspect
+  21: ityfuzz::evm::host::FuzzHost<SC>::run_inspect
+  22: ityfuzz::evm::vm::EVMExecutor<VS,CI,SC>::execute_from_pc
+  23: ityfuzz::evm::vm::EVMExecutor<VS,CI,SC>::execute_abi
+  24: <ityfuzz::evm::vm::EVMExecutor<VS,CI,SC> as ityfuzz::generic_vm::vm_executor::GenericVM<VS,revm_primitives::bytecode::Bytecode,bytes::bytes::Bytes,revm_primitives::bits::B160,revm_primitives::bits::B160,ruint::Uint<256_usize,4_usize>,alloc::vec::Vec<u8>,ityfuzz::evm::input::EVMInput,ityfuzz::state::FuzzState<ityfuzz::evm::input::EVMInput,ityfuzz::evm::vm::EVMState,revm_primitives::bits::B160,revm_primitives::bits::B160,alloc::vec::Vec<u8>,ityfuzz::evm::input::ConciseEVMInput>,CI>>::execute
+  25: <(Head,Tail) as libafl::stages::StagesTuple<E,EM,<Head as libafl::state::UsesState>::State,Z>>::perform_all
+  26: <(Head,Tail) as libafl::stages::StagesTuple<E,EM,<Head as libafl::state::UsesState>::State,Z>>::perform_all
+  27: <ityfuzz::fuzzer::ItyFuzzer<VS,Loc,Addr,Out,CS,IS,F,IF,IFR,I,OF,S,OT,CI,SM> as libafl::fuzzer::Fuzzer<E,EM,ST>>::fuzz_loop
+  28: ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer
+  29: ityfuzz::evm::evm_main
+  30: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 15m ./target/release/ityfuzz evm -t 0x83f798e925BcD4017Eb265844FDDAbb448f1707D,0x398eC7346DcD622eDc5ae82352F02bE94C62d119,0xE6354ed5bC4b393a5Aad09f21c46E101e692d447,0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852,0x1bE5d71F2dA660BFdee8012dDc58D024448A0A59,0x3dfd23A6c5E8BbcFc9581d2E864a68feb6a076d3,0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc,0x6B175474E89094C44Da98b954EedeAC495271d0F,0xF013406A0B1d544238083DF0B93ad0d2cBE0f65f,0xdAC17F958D2ee523a2206206994597C13D831ec7 -c eth -b 17036774 -f --onchain-etherscan-api-key ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY --work-dir w_YearnFinance_exp_0
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x83f798e925bcd4017eb265844fddabb448f1707d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 83f798e925bcd4017eb265844fddabb448f1707d
+Contract loaded: 0x83f798e925bcd4017eb265844fddabb448f1707d
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+Contract loaded: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from b4e16d0168e52d35cacd2c6185b44281ec28c9dc
+Contract loaded: 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x6b175474e89094c44da98b954eedeac495271d0f&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 6b175474e89094c44da98b954eedeac495271d0f
+Contract loaded: 0x6b175474e89094c44da98b954eedeac495271d0f
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xf013406a0b1d544238083df0b93ad0d2cbe0f65f&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from f013406a0b1d544238083df0b93ad0d2cbe0f65f
+Contract loaded: 0xf013406a0b1d544238083df0b93ad0d2cbe0f65f
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+Contract loaded: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xe6354ed5bc4b393a5aad09f21c46e101e692d447&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from e6354ed5bc4b393a5aad09f21c46e101e692d447
+Contract loaded: 0xe6354ed5bc4b393a5aad09f21c46e101e692d447
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+Contract loaded: 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xdac17f958d2ee523a2206206994597c13d831ec7&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from dac17f958d2ee523a2206206994597c13d831ec7
+Contract loaded: 0xdac17f958d2ee523a2206206994597c13d831ec7
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x1be5d71f2da660bfdee8012ddc58d024448a0a59&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 1be5d71f2da660bfdee8012ddc58d024448a0a59
+Contract loaded: 0x1be5d71f2da660bfdee8012ddc58d024448a0a59
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x7a250d5630b4cf539739df2c5dacb4c659f2488d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 7a250d5630b4cf539739df2c5dacb4c659f2488d
+Contract loaded: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x398ec7346dcd622edc5ae82352f02be94c62d119&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 398ec7346dcd622edc5ae82352f02be94c62d119
+Contract loaded: 0x398ec7346dcd622edc5ae82352f02be94c62d119
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3
+Contract loaded: 0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3
+[32m INFO[0m 
+
+ ================ EVM Fuzzer Start ===================
+
+
+[32m INFO[0m Deploying contract: 0x83f798e925bcd4017eb265844fddabb448f1707d
+[32m INFO[0m Contract 0x83f798e925bcd4017eb265844fddabb448f1707d deployed to: 0x83f798e925bcd4017eb265844fddabb448f1707d
+[32m INFO[0m Deploying contract: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m Contract 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 deployed to: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+[32m INFO[0m Deploying contract: 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+[32m INFO[0m Contract 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc deployed to: 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+[32m INFO[0m Deploying contract: 0x6b175474e89094c44da98b954eedeac495271d0f
+[32m INFO[0m Contract 0x6b175474e89094c44da98b954eedeac495271d0f deployed to: 0x6b175474e89094c44da98b954eedeac495271d0f
+[32m INFO[0m Deploying contract: 0xf013406a0b1d544238083df0b93ad0d2cbe0f65f
+[32m INFO[0m Contract 0xf013406a0b1d544238083df0b93ad0d2cbe0f65f deployed to: 0xf013406a0b1d544238083df0b93ad0d2cbe0f65f
+[32m INFO[0m Deploying contract: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m Contract 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 deployed to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+[32m INFO[0m Deploying contract: 0xe6354ed5bc4b393a5aad09f21c46e101e692d447
+[32m INFO[0m Contract 0xe6354ed5bc4b393a5aad09f21c46e101e692d447 deployed to: 0xe6354ed5bc4b393a5aad09f21c46e101e692d447
+[32m INFO[0m Deploying contract: 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+[32m INFO[0m Contract 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852 deployed to: 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+[32m INFO[0m Deploying contract: 0xdac17f958d2ee523a2206206994597c13d831ec7
+[32m INFO[0m Contract 0xdac17f958d2ee523a2206206994597c13d831ec7 deployed to: 0xdac17f958d2ee523a2206206994597c13d831ec7
+[32m INFO[0m Deploying contract: 0x1be5d71f2da660bfdee8012ddc58d024448a0a59
+[32m INFO[0m Contract 0x1be5d71f2da660bfdee8012ddc58d024448a0a59 deployed to: 0x1be5d71f2da660bfdee8012ddc58d024448a0a59
+[32m INFO[0m Deploying contract: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Contract 0x7a250d5630b4cf539739df2c5dacb4c659f2488d deployed to: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Deploying contract: 0x398ec7346dcd622edc5ae82352f02be94c62d119
+[32m INFO[0m Contract 0x398ec7346dcd622edc5ae82352f02be94c62d119 deployed to: 0x398ec7346dcd622edc5ae82352f02be94c62d119
+[32m INFO[0m Deploying contract: 0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3
+[32m INFO[0m Contract 0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3 deployed to: 0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3
+[32m INFO[0m Deployed all contracts
+
+[32m INFO[0m fetching pairs for 0x83f798e925bcd4017eb265844fddabb448f1707d
+[32m INFO[0m fetching pairs for 0x83f798e925bcd4017eb265844fddabb448f1707d
+[32m INFO[0m fetching pairs for 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+[32m INFO[0m fetching pairs for 0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+[32m INFO[0m fetching pairs for 0x6b175474e89094c44da98b954eedeac495271d0f
+[32m INFO[0m fetching pairs for 0x6b175474e89094c44da98b954eedeac495271d0f
+[32m INFO[0m fetching code from a478c2975ab1ea89e8196811f51a7b7ade33eb11
+[32m INFO[0m fetching pairs for 0xe6354ed5bc4b393a5aad09f21c46e101e692d447
+[32m INFO[0m fetching pairs for 0xe6354ed5bc4b393a5aad09f21c46e101e692d447
+[32m INFO[0m fetching pairs for 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+[32m INFO[0m fetching pairs for 0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852
+[32m INFO[0m fetching code from cdf5b207f9eee415ed7d68afbf717286cb9ac6e2
+[32m INFO[0m fetching code from dd367d8c7f735c5258ae9042cd14f8d9ffe55495
+[32m INFO[0m fetching pairs for 0x5ac13261c181a9c3938bfe1b649e65d10f98566b
+[32m INFO[0m fetching pairs for 0x5ac13261c181a9c3938bfe1b649e65d10f98566b
+[32m INFO[0m fetching code from 7361089739160c3fe987a06bf50283487b671219
+[32m INFO[0m fetching pairs for 0xd3d2e2692501a5c9ca623199d38826e513033a17
+[32m INFO[0m fetching pairs for 0xd3d2e2692501a5c9ca623199d38826e513033a17
+[32m INFO[0m fetching code from f5e4feb999b5f345b160606e3701f3d8aeced900
+[32m INFO[0m fetching code from ca0b203e716fa2c7e864d87f319191b80a06fff6
+[32m INFO[0m fetching code from 5ac13261c181a9c3938bfe1b649e65d10f98566b
+[32m INFO[0m fetching code from d3d2e2692501a5c9ca623199d38826e513033a17
+[32m INFO[0m fetching pairs for 0xdac17f958d2ee523a2206206994597c13d831ec7
+[32m INFO[0m fetching pairs for 0xdac17f958d2ee523a2206206994597c13d831ec7
+[32m INFO[0m fetching pairs for 0x1be5d71f2da660bfdee8012ddc58d024448a0a59
+[32m INFO[0m fetching pairs for 0x1be5d71f2da660bfdee8012ddc58d024448a0a59
+[32m INFO[0m fetching code from dd6d648c991f7d47454354f4ef326b04025a48a8
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xdd6d648c991f7d47454354f4ef326b04025a48a8&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from a1787206d5b1be0f432c4c4f96dc4d1257a1dd14
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xa1787206d5b1be0f432c4c4f96dc4d1257a1dd14&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching pairs for 0xa1787206d5b1be0f432c4c4f96dc4d1257a1dd14
+[32m INFO[0m fetching pairs for 0xa1787206d5b1be0f432c4c4f96dc4d1257a1dd14
+[32m INFO[0m fetching code from 71fc860f7d3a592a4a98740e39db31d25db65ae8
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x71fc860f7d3a592a4a98740e39db31d25db65ae8&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching pairs for 0x71fc860f7d3a592a4a98740e39db31d25db65ae8
+[32m INFO[0m fetching pairs for 0x71fc860f7d3a592a4a98740e39db31d25db65ae8
+[32m INFO[0m fetching code from 2847a5d7ce69790cb40471d454feb21a0be1f2e3
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x2847a5d7ce69790cb40471d454feb21a0be1f2e3&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 1e0447b19bb6ecfdae1e4ae1694b0c3659614e4e
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x1e0447b19bb6ecfdae1e4ae1694b0c3659614e4e&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 0eed07ced0c8c36d4a5bff44f2536422bb09be45
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x0eed07ced0c8c36d4a5bff44f2536422bb09be45&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 39aa39c021dfbae8fac545936693ac917d5e7563
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x39aa39c021dfbae8fac545936693ac917d5e7563&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching pairs for 0x39aa39c021dfbae8fac545936693ac917d5e7563
+[32m INFO[0m fetching pairs for 0x39aa39c021dfbae8fac545936693ac917d5e7563
+[32m INFO[0m fetching code from 6d9cf27f19cdf7dc9fb0f66a9ccb5a183c4ec0fd
+[32m INFO[0m fetching code from 941c75b164f5ad1ba6f91bbf22881aabc5e2f833
+[32m INFO[0m fetching code from 477fa5406598f8eb1945291867e1654c4d931659
+[32m INFO[0m fetching code from a2a118303ad63b255e72130bc7242093856176ed
+[32m INFO[0m fetching code from c6b167ff6c18ccdd12b0d8db2bf39b9dcaca2318
+[32m INFO[0m fetching code from 30eb5e15476e6a80f4f3cd8479749b4881dab1b8
+[32m INFO[0m fetching code from c412958c663eaccab5000ff554d614e10737f116
+[32m INFO[0m fetching code from 3d61c8c42d6cda9cefbebe6e322597ddc37692ff
+[32m INFO[0m fetching code from d3822e0cfc8c785d6e185532a4961aecc1ecdb5e
