@@ -97,7 +97,7 @@ impl PairContext for WethContext {
                 // sell
                 withdraw_bytes(amount).into()
             },
-            *code,
+            code,
             None,
             addr,
             if reverse { *next } else { *src },

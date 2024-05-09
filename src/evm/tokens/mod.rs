@@ -625,6 +625,7 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use libafl::{schedulers::StdScheduler, state::HasMetadata};
+    use revm::db::EmptyDB;
 
     use super::*;
     use crate::{
@@ -686,7 +687,7 @@ mod tests {
         });
         println!("selected route: {:?}", token_ctx.swaps[nth].route);
 
-        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, EmptyDB> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let res = if direction == "buy" {

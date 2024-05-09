@@ -162,7 +162,9 @@ where
             target,
             newRuntimeBytecode,
         } = args;
-        let bytecode = to_analysed(Bytecode::new_raw(revm_primitives::Bytes::from(newRuntimeBytecode)));
+        let bytecode = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
+            newRuntimeBytecode,
+        ))));
 
         // set code but don't invoke middlewares
         host.code
@@ -203,15 +205,9 @@ where
                 origin = new_origin;
             }
         }
-
-        Some(
-            (
-                mode,
-                alloy_primitives::Address::from_slice(sender.as_slice()),
-                alloy_primitives::Address::from_slice(origin.as_slice()),
-            )
-                .abi_encode_params(),
-        )
+        // todo! error
+        Some(Vec::new())
+        // Some((mode, sender, origin).abi_encode_params())
     }
 
     /// Records all storage reads and writes.

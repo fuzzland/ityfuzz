@@ -99,6 +99,7 @@ use crate::{
     generic_vm::vm_executor::MAP_SIZE,
     handle_contract_insertion,
     invoke_middlewares,
+    process_rw_key,
     state::{HasCaller, HasHashToAddress},
     state_input::StagedVMState,
     u256_to_u8,
@@ -357,8 +358,11 @@ where
                         let compressed_value = u256_to_u8!(value) + 1;
                         WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
-                        let res =
-                            <FuzzHost<SC, DB> as Host>::sload(self, interp.contract.target_address, fast_peek!(0));
+                        let res = <FuzzHost<SC, DB> as Host<EVMFuzzState>>::sload(
+                            self,
+                            interp.contract.target_address,
+                            fast_peek!(0),
+                        );
                         let value_changed = res.expect("sload failed").0 != value;
 
                         let idx = interp.program_counter() % MAP_SIZE;
@@ -484,7 +488,7 @@ where
             let mut interp = Interpreter::new(
                 Contract::new(
                     revm_primitives::Bytes::new(),
-                    Bytecode::new_raw(inputs.init_code.clone()),
+                    Arc::new(Bytecode::new_raw(inputs.init_code.clone())),
                     None,
                     r_addr,
                     inputs.caller,
@@ -637,11 +641,11 @@ where
     }
 }
 
-impl<SC, DB: Database> Inspector<DB> for FuzzHost<SC, DB>
+impl<T, SC, DB: Database> Inspector<T, DB> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<DB>) {
+    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<DB>, additional_data: &mut T) {
         let _ = interp;
         let _ = context;
     }
@@ -771,68 +775,28 @@ where
     }
 
     /// custom spec id run_inspect
-    // pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut
-    // EVMFuzzState) -> InstructionResult { match self.spec_id {
-    //     SpecId::LATEST => interp.run_inspect::<EVMFuzzState,
-    // FuzzHost<SC>, LatestSpec>(self, state),     SpecId::FRONTIER
-    // => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>,
-    // FrontierSpec>(self, state),     SpecId::HOMESTEAD =>
-    // interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, HomesteadSpec>(self,
-    // state),     SpecId::TANGERINE =>
-    // interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, TangerineSpec>(self,
-    // state),     SpecId::SPURIOUS_DRAGON => {
-    //         interp.run_inspect::<EVMFuzzState, FuzzHost<SC>,
-    // SpuriousDragonSpec>(self, state)     }
-    //     SpecId::BYZANTIUM => interp.run_inspect::<EVMFuzzState,
-    // FuzzHost<SC>, ByzantiumSpec>(self, state),
-    //     SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-    //         interp.run_inspect::<EVMFuzzState, FuzzHost<SC>,
-    // PetersburgSpec>(self, state)     }
-    //     SpecId::ISTANBUL => interp.run_inspect::<EVMFuzzState,
-    // FuzzHost<SC>, IstanbulSpec>(self, state),
-    //     SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-    //         interp.run_inspect::<EVMFuzzState, FuzzHost<SC>,
-    // BerlinSpec>(self, state)     }
-    //     SpecId::LONDON => interp.run_inspect::<EVMFuzzState,
-    // FuzzHost<SC>, LondonSpec>(self, state),     SpecId::MERGE =>
-    // interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, MergeSpec>(self,
-    // state),     SpecId::SHANGHAI =>
-    // interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ShanghaiSpec>(self,
-    // state),     SpecId::CANCUN =>
-    // interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, CancunSpec>(self,
-    // state),     _ => interp.run_inspect::<EVMFuzzState,
-    // FuzzHost<SC>, LatestSpec>(self, state), }
-    // }
-
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
-        let share_memory = SharedMemory::new_with_memory_limit(u64::MAX);
-        let table: InstructionTable<dyn Host> = opcode::make_instruction_table::<dyn Host, CancunSpec>();
-
-        // todo! error impl
-        let mut host = DummyHost::default();
-        let host: &mut dyn Host = &mut host as &mut dyn Host;
-        interp.run(share_memory, &table, host);
         match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LatestSpec>(self, state),
-            SpecId::FRONTIER => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, FrontierSpec>(self, state),
-            SpecId::HOMESTEAD => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, HomesteadSpec>(self, state),
-            SpecId::TANGERINE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, TangerineSpec>(self, state),
+            SpecId::LATEST => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state),
+            SpecId::FRONTIER => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>(self, state),
+            SpecId::HOMESTEAD => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>(self, state),
+            SpecId::TANGERINE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, state),
             SpecId::SPURIOUS_DRAGON => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, SpuriousDragonSpec>(self, state)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, state)
             }
-            SpecId::BYZANTIUM => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ByzantiumSpec>(self, state),
+            SpecId::BYZANTIUM => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>(self, state),
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, PetersburgSpec>(self, state)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(self, state)
             }
-            SpecId::ISTANBUL => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, IstanbulSpec>(self, state),
+            SpecId::ISTANBUL => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>(self, state),
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, BerlinSpec>(self, state)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>(self, state)
             }
-            SpecId::LONDON => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LondonSpec>(self, state),
-            SpecId::MERGE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, MergeSpec>(self, state),
-            SpecId::SHANGHAI => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, ShanghaiSpec>(self, state),
-            SpecId::CANCUN => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, CancunSpec>(self, state),
-            _ => interp.run_inspect::<EVMFuzzState, FuzzHost<SC>, LatestSpec>(self, state),
+            SpecId::LONDON => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>(self, state),
+            SpecId::MERGE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>(self, state),
+            SpecId::SHANGHAI => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state),
+            SpecId::CANCUN => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>(self, state),
+            _ => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state),
         }
     }
 
@@ -1140,6 +1104,10 @@ where
                     if loc.len() != 1 {
                         panic!("more than one contract found for the same hash");
                     }
+                    let bytecode_arc = self
+                        .code
+                        .get(loc.iter().next().unwrap())
+                        .expect("Expected bytecode not found");
                     let mut interp = Interpreter::new(
                         // Contract::new_with_context_analyzed(
                         //     input_bytes,
@@ -1148,7 +1116,7 @@ where
                         // ),
                         Contract::new_with_context(
                             input_bytes.into(),
-                            *self.code.get(loc.iter().next().unwrap()).unwrap().clone(),
+                            self.code.get(loc.iter().next().unwrap()).unwrap().clone(),
                             None,
                             &input,
                         ),
@@ -1189,7 +1157,7 @@ where
             let mut interp = Interpreter::new(
                 // Contract::new_with_context_analyzed(Bytes::from(input.input.to_vec()), code.clone(),
                 // &input.context),
-                Contract::new_with_context(Bytes::from(input.input.to_vec()).into(), *code.clone(), None, &input),
+                Contract::new_with_context(Bytes::from(input.input.to_vec()).into(), code.clone(), None, &input),
                 1e10 as u64,
                 false,
             );
@@ -1451,7 +1419,7 @@ macro_rules! invoke_middlewares {
 
 // todo 这里
 // impl<SC> Host<EVMFuzzState> for FuzzHost<SC>
-impl<SC, DB> Host for FuzzHost<SC, DB>
+impl<SC, DB> Host<EVMFuzzState> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -1694,11 +1662,11 @@ where
     //     }
     // }
 
-    fn code(&mut self, address: EVMAddress) -> Option<(Bytecode, bool)> {
+    fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
         // debug!("code");
         match self.code.get(&address) {
-            Some(code) => Some((*code.clone(), true)),
-            None => Some((Bytecode::default(), true)),
+            Some(code) => Some((code.clone(), true)),
+            None => Some((Arc::new(Bytecode::default()), true)),
         }
     }
 

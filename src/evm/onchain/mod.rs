@@ -325,7 +325,7 @@ impl OnChain {
     {
         let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
         let code = hex::decode(contract_code).unwrap();
-        let contract_code = to_analysed(Bytecode::new_raw(revm_primitives::Bytes::from(code)));
+        let contract_code = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(code))));
 
         if contract_code.is_empty() || force_cache {
             self.loaded_code.insert(address_h160);

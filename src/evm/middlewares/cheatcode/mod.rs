@@ -6,10 +6,11 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     ops::{BitAnd, Not},
+    str::FromStr,
 };
 
-use alloy_primitives::{Address, Bytes as AlloyBytes, Log as RawLog, B256};
-use alloy_sol_types::SolInterface;
+use alloy_primitives::{address, Address, Bytes as AlloyBytes, Log as RawLog, Uint, B256};
+use alloy_sol_types::{sol_data::FixedBytes, SolInterface};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls};
 use libafl::schedulers::Scheduler;
@@ -31,9 +32,11 @@ pub use expect::{ExpectedCallData, ExpectedCallTracker, ExpectedCallType, Expect
 /// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
 /// address(bytes20(uint160(uint256(keccak256('hevm cheat code')))))
 // pub const CHEATCODE_ADDRESS: Address = Address();
-pub const CHEATCODE_ADDRESS: Address = Address::from_slice(&[
-    113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
-]);
+// pub const CHEATCODE_ADDRESS: Address = Address::from_slice(&[
+//     0x71, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246,
+// 127, 91, 29, 209, 45, ]);
+
+pub const CHEATCODE_ADDRESS: Address = address!("7109709ECfa91a80626fF3989D68f67F5b1DD12D");
 
 /// Solidity revert prefix.
 ///
@@ -95,7 +98,7 @@ macro_rules! cheat_call_error {
     }};
 }
 
-impl<SC, DB: fmt::Debug> Middleware<SC, DB> for Cheatcode<SC, DB>
+impl<SC, DB: 'static + fmt::Debug> Middleware<SC, DB> for Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone + Debug + 'static,
 {
@@ -411,6 +414,7 @@ where
     }
 
     /// Check emits / Record logs
+    // todo! @chao
     pub fn log(&mut self, interp: &mut Interpreter, expected_emits: &mut VecDeque<ExpectedEmit>) {
         if expected_emits.is_empty() && self.recorded_logs.is_none() {
             return;
@@ -431,10 +435,16 @@ where
         }
 
         // Stores this log if `recordLogs` has been called
-        // let tt = topics;
+
         if let Some(storage_recorded_logs) = &mut self.recorded_logs {
+            // storage_recorded_logs.push(Vm::Log {
+            //     topics,
+            //     data: data.to_vec(),
+            //     emitter:
+            // alloy_sol_types::private::Address::from_slice(address.as_slice()),
+            // });
             storage_recorded_logs.push(Vm::Log {
-                topics,
+                topics: todo!(),
                 data: data.to_vec(),
                 emitter: alloy_sol_types::private::Address::from_slice(address.as_slice()),
             });

@@ -98,46 +98,34 @@ impl OffChainConfig {
         // token0
         // let res = self.call(self.token0_input(), pair_code.clone(), pair, state,
         // vm)?;
-        let res = self.call(self.token0_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
+        let res = self.call(self.token0_input(), pair_code.clone(), pair, state, vm)?;
         let token0 = EVMAddress::from_slice(&res[12..32]);
         let (token0_code, _) = vm
             .host
             .code(token0)
             .ok_or_else(|| anyhow!("Token0 {:?} code not found", token0))?;
-        let res = self.call(self.decimals_input(), Arc::new(token0_code.clone()), token0, state, vm)?;
+        let res = self.call(self.decimals_input(), token0_code.clone(), token0, state, vm)?;
         let decimals_0 = res[31] as u32;
 
         // token1
-        let res = self.call(self.token1_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
+        let res = self.call(self.token1_input(), pair_code.clone(), pair, state, vm)?;
         let token1 = EVMAddress::from_slice(&res[12..32]);
         let (token1_code, _) = vm
             .host
             .code(token1)
             .ok_or_else(|| anyhow!("Token1 {:?} code not found", token1))?;
-        let res = self.call(self.decimals_input(), Arc::new(token1_code.clone()), token1, state, vm)?;
+        let res = self.call(self.decimals_input(), token1_code.clone(), token1, state, vm)?;
         let decimals_1 = res[31] as u32;
 
         // reserves
-        let res = self.call(self.get_reserves_input(), Arc::new(pair_code.clone()), pair, state, vm)?;
+        let res = self.call(self.get_reserves_input(), pair_code.clone(), pair, state, vm)?;
         let reserves0 = EVMU256::try_from_be_slice(&res[..32]).unwrap_or_default();
         let reserves1 = EVMU256::try_from_be_slice(&res[32..64]).unwrap_or_default();
 
         // balances
-        let res = self.call(
-            self.balance_of_input(pair),
-            Arc::new(token0_code.clone()),
-            token0,
-            state,
-            vm,
-        )?;
+        let res = self.call(self.balance_of_input(pair), token0_code.clone(), token0, state, vm)?;
         let balance0 = EVMU256::try_from_be_slice(res.to_vec().as_slice()).unwrap_or_default();
-        let res = self.call(
-            self.balance_of_input(pair),
-            Arc::new(token1_code.clone()),
-            token1,
-            state,
-            vm,
-        )?;
+        let res = self.call(self.balance_of_input(pair), token1_code.clone(), token1, state, vm)?;
         let balance1 = EVMU256::try_from_be_slice(res.to_vec().as_slice()).unwrap_or_default();
 
         let pair_data = PairData {
@@ -218,7 +206,7 @@ impl OffChainConfig {
 
         let call = Contract::new(
             input.into(),
-            *code,
+            code,
             Some(B256::from_str(&code_hash)?),
             target,
             EVMAddress::default(),
@@ -373,7 +361,7 @@ mod tests {
     fn build_setup_data(pair: EVMAddress, weth: EVMAddress, usdt: EVMAddress) -> SetupData {
         let mut state = EVMFuzzState::default();
         let fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
-        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        let mut vm: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, EmptyDB> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         // deploy contracts
@@ -402,7 +390,7 @@ mod tests {
         }
     }
 
-    fn deploy<VS, CI, SC, DB>(
+    fn deploy<VS, CI, SC, DB: 'static>(
         address: &EVMAddress,
         code_path: &str,
         state: &mut EVMFuzzState,

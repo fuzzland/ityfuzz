@@ -38,7 +38,7 @@ where
     pub enabled: bool,
 }
 
-impl<VS, F, SC, DB> Feedback<EVMFuzzState> for Sha3WrappedFeedback<VS, F, SC, DB>
+impl<VS, F, SC, DB: 'static> Feedback<EVMFuzzState> for Sha3WrappedFeedback<VS, F, SC, DB>
 where
     VS: VMStateT + 'static,
     F: Feedback<EVMFuzzState>,

@@ -156,7 +156,7 @@ macro_rules! add_input_to_corpus {
     };
 }
 
-impl<'a, SC, ISC, DB> EVMCorpusInitializer<'a, SC, ISC, DB>
+impl<'a, SC, ISC, DB: 'static> EVMCorpusInitializer<'a, SC, ISC, DB>
 where
     SC: ABIScheduler<State = EVMFuzzState> + Clone + 'static,
     ISC: Scheduler<State = EVMInfantStateState>,

@@ -174,9 +174,9 @@ impl PairContext for UniswapV3PairContext {
                 let call = Contract::new(
                     balance_of_bytes($who).into(),
                     if $dir {
-                        *in_token_code.clone()
+                        in_token_code.clone()
                     } else {
-                        *out_token_code.clone()
+                        out_token_code.clone()
                     },
                     None,
                     addr,
@@ -223,9 +223,9 @@ impl PairContext for UniswapV3PairContext {
                 let call = Contract::new(
                     approve_bytes($dst).into(),
                     if $dir {
-                        *in_token_code.clone()
+                        in_token_code.clone()
                     } else {
-                        *out_token_code.clone()
+                        out_token_code.clone()
                     },
                     None,
                     addr,
@@ -283,7 +283,7 @@ impl PairContext for UniswapV3PairContext {
         //     },
         // );
 
-        let call = Contract::new(by.into(), *router_code, None, router, src, EVMU256::ZERO);
+        let call = Contract::new(by.into(), router_code, None, router, src, EVMU256::ZERO);
 
         // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);
         // println!("pre_vm_state: {:?}", vm.host.evmstate.state);

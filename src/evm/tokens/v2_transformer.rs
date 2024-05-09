@@ -102,7 +102,7 @@ impl UniswapPairContext {
         // );
         let call = Contract::new(
             transfer_bytes(next, amount).into(),
-            *get_code_tokens!(self.in_token_address, vm, state),
+            get_code_tokens!(self.in_token_address, vm, state),
             None,
             self.in_token_address,
             *src,
@@ -153,9 +153,9 @@ impl PairContext for UniswapPairContext {
                 let call = Contract::new(
                     balance_of_bytes($who).into(),
                     if $dir {
-                        *in_token_code.clone()
+                        in_token_code.clone()
                     } else {
-                        *out_token_code.clone()
+                        out_token_code.clone()
                     },
                     None,
                     addr,
@@ -204,9 +204,9 @@ impl PairContext for UniswapPairContext {
                 let call = Contract::new(
                     transfer_bytes($dst, $amt).into(),
                     if $dir {
-                        *in_token_code.clone()
+                        in_token_code.clone()
                     } else {
-                        *out_token_code.clone()
+                        out_token_code.clone()
                     },
                     None,
                     addr,

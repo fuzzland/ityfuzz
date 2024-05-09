@@ -423,7 +423,7 @@ where
                 let stack_len = interp.stack.len();
                 // interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0]
                 // as usize) % 2);
-                interp.stack.data()[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
+                interp.stack.data_mut()[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0] as usize) % 2);
             }
         }
     }
@@ -438,11 +438,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+    use std::{cell::RefCell, io::Empty, path::Path, rc::Rc, sync::Arc};
 
     use bytes::Bytes;
     use itertools::Itertools;
     use libafl::schedulers::StdScheduler;
+    use revm::db::CacheDB;
     use revm_interpreter::opcode::{ADD, EQ, JUMPDEST, JUMPI, KECCAK256, MSTORE, PUSH0, PUSH1, STOP};
 
     use super::*;
@@ -464,10 +465,11 @@ mod tests {
         if !path.exists() {
             let _ = std::fs::create_dir(path);
         }
-        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> = EVMExecutor::new(
-            FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
-            generate_random_address(&mut state),
-        );
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<Empty>> =
+            EVMExecutor::new(
+                FuzzHost::new(StdScheduler::new(), "work_dir".to_string()),
+                generate_random_address(&mut state),
+            );
 
         let target_addr = generate_random_address(&mut state);
         evm_executor.host.code.insert(

@@ -875,10 +875,10 @@ impl OnChainConfig {
         }
 
         let code = self.get_contract_code(address, force_cache);
-        let contract_code = to_analysed(Bytecode::new_raw(revm_primitives::Bytes::from(
+        let contract_code = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
             hex::decode(code).expect("fail to decode contract code"),
-        )));
-        let contract_code = to_analysed(contract_code);
+        ))));
+        let contract_code = to_analysed(Arc::new(contract_code));
         self.code_cache_analyzed.insert(address, contract_code.clone());
         contract_code
     }
