@@ -1,29 +1,29 @@
-timeout 15m ./target/release/ityfuzz evm -t 0xF375709DbdE84D800642168c2e8bA751368e8D32,0x32B166e082993Af6598a89397E82e123ca44e74E,0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c -c bsc -b 22337425 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_HEALTH_exp_0
-[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x32b166e082993af6598a89397e82e123ca44e74e&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
-[32m INFO[0m fetching code from 32b166e082993af6598a89397e82e123ca44e74e
-Contract loaded: 0x32b166e082993af6598a89397e82e123ca44e74e
-[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
-[32m INFO[0m fetching code from bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
-Contract loaded: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
+timeout 5m ./target/release/ityfuzz evm -t 0x32B166e082993Af6598a89397E82e123ca44e74E,0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c,0xF375709DbdE84D800642168c2e8bA751368e8D32 -c bsc -b 22337425 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_HEALTH_exp_0
 [32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x10ed43c718714eb63d5aa57b78b54704e256024e&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
 [32m INFO[0m fetching code from 10ed43c718714eb63d5aa57b78b54704e256024e
 Contract loaded: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x32b166e082993af6598a89397e82e123ca44e74e&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 32b166e082993af6598a89397e82e123ca44e74e
+Contract loaded: 0x32b166e082993af6598a89397e82e123ca44e74e
 [32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0xf375709dbde84d800642168c2e8ba751368e8d32&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
 [32m INFO[0m fetching code from f375709dbde84d800642168c2e8ba751368e8d32
 Contract loaded: 0xf375709dbde84d800642168c2e8ba751368e8d32
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
+Contract loaded: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
 [32m INFO[0m 
 
  ================ EVM Fuzzer Start ===================
 
 
-[32m INFO[0m Deploying contract: 0x32b166e082993af6598a89397e82e123ca44e74e
-[32m INFO[0m Contract 0x32b166e082993af6598a89397e82e123ca44e74e deployed to: 0x32b166e082993af6598a89397e82e123ca44e74e
-[32m INFO[0m Deploying contract: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
-[32m INFO[0m Contract 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c deployed to: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
 [32m INFO[0m Deploying contract: 0x10ed43c718714eb63d5aa57b78b54704e256024e
 [32m INFO[0m Contract 0x10ed43c718714eb63d5aa57b78b54704e256024e deployed to: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m Deploying contract: 0x32b166e082993af6598a89397e82e123ca44e74e
+[32m INFO[0m Contract 0x32b166e082993af6598a89397e82e123ca44e74e deployed to: 0x32b166e082993af6598a89397e82e123ca44e74e
 [32m INFO[0m Deploying contract: 0xf375709dbde84d800642168c2e8ba751368e8d32
 [32m INFO[0m Contract 0xf375709dbde84d800642168c2e8ba751368e8d32 deployed to: 0xf375709dbde84d800642168c2e8ba751368e8d32
+[32m INFO[0m Deploying contract: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
+[32m INFO[0m Contract 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c deployed to: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
 [32m INFO[0m Deployed all contracts
 
 [32m INFO[0m fetching pairs for 0x32b166e082993af6598a89397e82e123ca44e74e
@@ -34,8 +34,8 @@ Contract loaded: 0xf375709dbde84d800642168c2e8ba751368e8d32
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   └─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 
 [32m INFO[0m ==========================================
 [32m INFO[0m [Testcase #0] run time: 0h-0m-0s, clients: 1, corpus: 34, objectives: 0, executions: 1, exec/sec: 0.000
@@ -43,313 +43,337 @@ Contract loaded: 0xf375709dbde84d800642168c2e8ba751368e8d32
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 14401}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-0s, clients: 1, corpus: 35, objectives: 0, executions: 5, exec/sec: 0.000
-[32m INFO[0m fetching code from 8ef508aca04b32ff3ba5003177cb18bfa6cd79dd
+[32m INFO[0m [Testcase #0] run time: 0h-0m-0s, clients: 1, corpus: 35, objectives: 0, executions: 8, exec/sec: 0.000
 [32m INFO[0m fetching code from ca143ce32fe78f1f7019d7d551a6402fc5350c73
-[32m INFO[0m fetching code from 68dd4f5ac792eaaa5e36f4f4e0474e0625dc9024
+[32m INFO[0m fetching code from e1a425f1ac34a8a441566f93c82dd730639c8510
+[32m INFO[0m fetching code from 35c9dfd76bf02107ff4f7128bd69716612d31ddb
 [32m INFO[0m ============= Coverage Summary =============
-[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 46.29% Instruction Covered, 38.24% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 35, objectives: 0, executions: 5, exec/sec: 0.000
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 46.29% Instruction Covered, 38.24% Branch Covered
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 35, objectives: 0, executions: 8, exec/sec: 0.000
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 280375465083063}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 6257}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 3450873173395281893717377931138512726225554487291757.9136 ether)
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0)
    │  └─ ← 0x01
 
 [32m INFO[0m ==========================================
 [32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 56, objectives: 0, executions: 33, exec/sec: 0.000
 [32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 56, objectives: 0, executions: 33, exec/sec: 0.000
 [32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xF375709DbdE84D800642168c2e8bA751368e8D32, 37714057306925736537727337196910129575336924242351790113041.1644 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 57, objectives: 0, executions: 34, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 57, objectives: 0, executions: 34, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 6050}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 153533579.9105 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 5000.1441 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 1932}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 5380}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
    ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x0000000000000000000000000000000000000000, 0)
    │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002245524332303a20617070726f766520746f20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000000000
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 57, objectives: 0, executions: 35, exec/sec: 0.000
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 58, objectives: 0, executions: 36, exec/sec: 0.000
 [32m INFO[0m fetching code from 64d868f307263f8566172fc42d75ea03a5690271
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 57, objectives: 0, executions: 35, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 58, objectives: 0, executions: 36, exec/sec: 0.000
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] Router.swapExactETHForTokens{value: 280375465083063}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 10601081756798125241590657637304037030589931752970438562.5980 ether)
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0)
    │  └─ ← 0x01
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 68, objectives: 0, executions: 39, exec/sec: 0.000
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 69, objectives: 0, executions: 53, exec/sec: 0.000
 [32m INFO[0m ============= Coverage Summary =============
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 47.73% Instruction Covered, 38.60% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 68, objectives: 0, executions: 39, exec/sec: 0.000
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 47.73% Instruction Covered, 38.60% Branch Covered
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 69, objectives: 0, executions: 53, exec/sec: 0.000
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 46.8934 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.decreaseAllowance(0x10ED43C718714eb63d5aA57B78B54704E256024E, 37994293084529193588805712384705660458443406247882683918432.5596 ether)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 5000.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 9671406.5569 ether)
+   │  └─ ← 0x01
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.decreaseAllowance(0x10ED43C718714eb63d5aA57B78B54704E256024E, 12855504354071922204335696738729300829849030.5071 ether)
    │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001e536166654d6174683a207375627472616374696f6e206f766572666c6f770000
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 69, objectives: 0, executions: 65, exec/sec: 0.000
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 69, objectives: 0, executions: 65, exec/sec: 0.000
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 70, objectives: 0, executions: 65, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 70, objectives: 0, executions: 65, exec/sec: 0.000
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.decreaseAllowance(0x0000000000000000000000000000000000000000, 182687704666362864775463550774.6393 ether)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.decreaseAllowance(0x0000000000000000000000000000000000000000, 1456361162395671499875104388379856691655181.1908 ether)
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 70, objectives: 0, executions: 66, exec/sec: 0.000
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 71, objectives: 0, executions: 66, exec/sec: 0.000
 [32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 51.15% Instruction Covered, 40.44% Branch Covered
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 51.15% Instruction Covered, 40.44% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 70, objectives: 0, executions: 66, exec/sec: 64.11
-[32m INFO[0m ============= New Corpus Item =============
-[32m INFO[0m Reverted? false 
- Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 1208925.7835 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 309480287.4548 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 0)
-   │  └─ ← 0x01
-
-[32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 71, objectives: 0, executions: 97, exec/sec: 94.21
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 71, objectives: 0, executions: 97, exec/sec: 94.21
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 71, objectives: 0, executions: 66, exec/sec: 63.98
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 17927}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
    └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0x0000000000000000000000000000000000000000, 0)
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 72, objectives: 0, executions: 98, exec/sec: 95.18
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 72, objectives: 0, executions: 98, exec/sec: 92.84
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 72, objectives: 0, executions: 97, exec/sec: 94.02
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 72, objectives: 0, executions: 97, exec/sec: 91.77
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 3450873173395281893717377931138512726225554487291757.9136 ether)
-   │  └─ ← 0x01
 [Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0x10ED43C718714eb63d5aA57B78B54704E256024E, 12.8545 ether)
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0xF375709DbdE84D800642168c2e8bA751368e8D32, 156124039515794854952.9720 ether)
    │  └─ ← 0x01
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 73, objectives: 0, executions: 99, exec/sec: 93.77
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 73, objectives: 0, executions: 99, exec/sec: 87.28
-[32m INFO[0m ============= New Corpus Item =============
-[32m INFO[0m Reverted? false 
- Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 1208925.7835 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 309480287.4548 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 110859300695323437061433895096507437587022341068888621.3771 ether)
-   │  └─ ← 0x01
-
-[32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 74, objectives: 0, executions: 112, exec/sec: 98.72
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 73, objectives: 0, executions: 100, exec/sec: 94.60
 [32m INFO[0m ============= Coverage Summary =============
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 74, objectives: 0, executions: 112, exec/sec: 94.21
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 73, objectives: 0, executions: 100, exec/sec: 88.22
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 14401}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
    ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.renounceOwnership()
    │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 75, objectives: 0, executions: 129, exec/sec: 108.5
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 74, objectives: 0, executions: 129, exec/sec: 113.8
 [32m INFO[0m ============= Coverage Summary =============
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 75, objectives: 0, executions: 129, exec/sec: 108.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 74, objectives: 0, executions: 129, exec/sec: 113.7
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setFee(2923003274661805837675020265661.9483 ether, 0, 0)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 75, objectives: 0, executions: 160, exec/sec: 141.0
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 75, objectives: 0, executions: 160, exec/sec: 140.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0xF375709DbdE84D800642168c2e8bA751368e8D32, 156124039515794854952.9720 ether)
+   │  └─ ← 0x01
 [Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x10ED43C718714eb63d5aA57B78B54704E256024E, 205688069665150766687352689467347940817296956.9843 ether)
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setJgTime(36357173923337153564130051825119238430049595563941166321282.9349 ether)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 76, objectives: 0, executions: 192, exec/sec: 169.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 76, objectives: 0, executions: 192, exec/sec: 168.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 411376139330301510538742295639337626245683966.4083 ether)
    │  └─ ← 0x01
 [Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setFee(0, 0, 174224571863520493293247.7990 ether)
-   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
-
-[32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 76, objectives: 0, executions: 161, exec/sec: 135.3
-[32m INFO[0m ============= Coverage Summary =============
-[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 76, objectives: 0, executions: 161, exec/sec: 135.2
-[32m INFO[0m ============= New Corpus Item =============
-[32m INFO[0m Reverted? true 
- Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 1208925.7835 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 309480287.4548 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 421249166674228746792028922657858219245999695599.4694 ether)
+   │  └─ ← 0x01
 [Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setJgTime(36915179608476140209269408623470777585647562694100410531249.7404 ether)
-   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
-
-[32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 77, objectives: 0, executions: 193, exec/sec: 162.0
-[32m INFO[0m ============= Coverage Summary =============
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
-[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 77, objectives: 0, executions: 193, exec/sec: 161.9
-[32m INFO[0m ============= New Corpus Item =============
-[32m INFO[0m Reverted? true 
- Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 14401}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
    ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setNumTokensSellToAddToLiquidity(0)
    │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 78, objectives: 0, executions: 225, exec/sec: 188.7
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 77, objectives: 0, executions: 224, exec/sec: 197.1
 [32m INFO[0m ============= Coverage Summary =============
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 78, objectives: 0, executions: 225, exec/sec: 188.6
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 77, objectives: 0, executions: 224, exec/sec: 196.9
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
    └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 4214)
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xF375709DbdE84D800642168c2e8bA751368e8D32, 37714057306925736537727337196910129575336924242351790113041.1644 ether)
    │  └─ ← 0x01
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 900)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 10)
    │  └─ ← 0x01
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setPairStartTime(0)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setPairStartTime(20978)
    │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 79, objectives: 0, executions: 257, exec/sec: 215.4
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 78, objectives: 0, executions: 256, exec/sec: 225.0
 [32m INFO[0m ============= Coverage Summary =============
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 79, objectives: 0, executions: 257, exec/sec: 215.2
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 78, objectives: 0, executions: 256, exec/sec: 224.8
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 1208925.7835 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 309480287.4548 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
 [Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
    ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setSwapAndLiquifyEnabled(true)
    │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 80, objectives: 0, executions: 289, exec/sec: 242.0
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 79, objectives: 0, executions: 288, exec/sec: 252.9
 [32m INFO[0m ============= Coverage Summary =============
-[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
 [32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
 [32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 80, objectives: 0, executions: 289, exec/sec: 241.8
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 79, objectives: 0, executions: 288, exec/sec: 252.7
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 18.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 257489849.4614 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setUniswapV2Pair(0xe1A425f1AC34A8a441566f93c82dD730639c8510)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.setUniswapV2Pair(0x0000000000000000000000000000000000000000)
    │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 81, objectives: 0, executions: 321, exec/sec: 268.5
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 80, objectives: 0, executions: 320, exec/sec: 280.8
 [32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
 [32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
 [32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 53.49% Instruction Covered, 40.81% Branch Covered
-[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
-[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
-[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 81, objectives: 0, executions: 321, exec/sec: 257.3
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 80, objectives: 0, executions: 320, exec/sec: 280.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x0000000000000000000000000000000000000000, 1684996666697010768135138065606962394029711334098.8322 ether)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 81, objectives: 0, executions: 352, exec/sec: 308.6
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 81, objectives: 0, executions: 352, exec/sec: 308.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.approve(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 411376139330301510538742295639337626245683966.4083 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.increaseAllowance(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 421249166674228746792028922657858219245999695599.4694 ether)
+   │  └─ ← 0x01
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x0000000000000000000000000000000000000000, 0)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 82, objectives: 0, executions: 356, exec/sec: 312.1
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 82, objectives: 0, executions: 356, exec/sec: 292.3
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? false 
  Txn:
 [Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
-   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x32B166e082993Af6598a89397E82e123ca44e74E, 0)
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x10ED43C718714eb63d5aA57B78B54704E256024E, 0)
    │  └─ ← 0x01
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 82, objectives: 0, executions: 353, exec/sec: 282.9
-[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 82, objectives: 0, executions: 353, exec/sec: 282.9
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 83, objectives: 0, executions: 376, exec/sec: 308.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xca143ce32fe78f1f7019d7d551a6402fc5350c73: 0.79% Instruction Covered, 1.06% Branch Covered
+[32m INFO[0m 0x32b166e082993af6598a89397e82e123ca44e74e: 59.67% Instruction Covered, 42.65% Branch Covered
+[32m INFO[0m 0xf375709dbde84d800642168c2e8ba751368e8d32: 45.80% Instruction Covered, 36.02% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 54.34% Instruction Covered, 40.79% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-1s, clients: 1, corpus: 83, objectives: 0, executions: 376, exec/sec: 302.1
 [32m INFO[0m ============= New Corpus Item =============
 [32m INFO[0m Reverted? true 
  Txn:
-[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   ├─[1] Router.swapExactETHForTokens{value: 122641746.9416 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   ├─[1] Router.swapExactETHForTokens{value: 77371252.4553 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-   └─[1] Router.swapExactETHForTokens{value: 46.8934 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
-   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x32B166e082993Af6598a89397E82e123ca44e74E, 160)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 16597}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 6289}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transferFrom(0x32B166e082993Af6598a89397E82e123ca44e74E, 0x0000000000000000000000000000000000000000, 2417833.1924 ether)
 
 [32m INFO[0m ==========================================
-[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 83, objectives: 0, executions: 354, exec/sec: 283.7
+[32m INFO[0m [Testcase #0] run time: 0h-0m-1s, clients: 1, corpus: 84, objectives: 0, executions: 390, exec/sec: 313.3
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 84, objectives: 0, executions: 390, exec/sec: 284.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] Router.swapExactETHForTokens{value: 309484991.3746 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10370}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transferFrom(0x0000000000000000000000000000000000000000, 0xF375709DbdE84D800642168c2e8bA751368e8D32, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 85, objectives: 0, executions: 397, exec/sec: 289.4
 
 
 
@@ -357,12 +381,12 @@ Contract loaded: 0xf375709dbde84d800642168c2e8ba751368e8d32
 
 
 ================ Description ================
-[Imbalanced Uniswap Pair]: In Uniswap pair 0xf375709dbde84d800642168c2e8ba751368e8d32, reserves has changed from (0x000000000000000000000000000000000000000000000000a5776f4692c65a32_U256, 0x000000000000000000000000000000000000000000a788f4b150ab069d15ef88_U256) to (0x000000000000000000000000000000000000000000000000a5a1d62554a6c66c_U256, 0x000000000000000000000000000000000000000000a788f4b150ab069d15ef88_U256). It is likely the token contract has incorrectly burned that token in the pair.
+[Imbalanced Uniswap Pair]: In Uniswap pair 0xf375709dbde84d800642168c2e8ba751368e8d32, reserves has changed from (0x0000000000000000000000000000000000000000000001041c2f64c4ccb45103_U256, 0x000000000000000000000000000000000000000000006a8611ea26ff557baaea_U256) to (0x0000000000000000000000000000000000000000000001045ed7085c71ae9a61_U256, 0x000000000000000000000000000000000000000000006a8611ea26ff557baaea_U256). It is likely the token contract has incorrectly burned that token in the pair.
 
 ================ Trace ================
 [Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
-   └─[1] Router.swapExactETHForTokens{value: 79895582.5531 ether}(0, path:(WETH → 0x32B166e082993Af6598a89397E82e123ca44e74E), address(this), block.timestamp);
-[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
-   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transfer(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 0)
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transferFrom(0x0000000000000000000000000000000000000000, 0xF375709DbdE84D800642168c2e8bA751368e8D32, 0)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   └─[1] 0x32B166e082993Af6598a89397E82e123ca44e74E.transferFrom(0x0000000000000000000000000000000000000000, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0)
 
 

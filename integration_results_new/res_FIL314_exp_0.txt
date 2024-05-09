@@ -16,4 +16,4 @@ stack backtrace:
    7: ityfuzz::evm::evm_main
    8: ityfuzz::main
 note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
-timeout 15m ./target/release/ityfuzz evm -t 0xE8A290c6Fc6Fa6C0b79C9cfaE1878d195aeb59aF -c bsc -b 37795991 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_FIL314_exp_0
+timeout 5m ./target/release/ityfuzz evm -t 0xE8A290c6Fc6Fa6C0b79C9cfaE1878d195aeb59aF -c bsc -b 37795991 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_FIL314_exp_0

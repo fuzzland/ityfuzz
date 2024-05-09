@@ -1,0 +1,1632 @@
+timeout 5m ./target/release/ityfuzz evm -t 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de,0x55d398326f99059fF775485246999027B3197955 -c bsc -b 33527744 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_LinkDao_exp_0
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+Contract loaded: 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x10ed43c718714eb63d5aa57b78b54704e256024e&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 10ed43c718714eb63d5aa57b78b54704e256024e
+Contract loaded: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x55d398326f99059ff775485246999027b3197955&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 55d398326f99059ff775485246999027b3197955
+Contract loaded: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m 
+
+ ================ EVM Fuzzer Start ===================
+
+
+[32m INFO[0m Deploying contract: 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+[32m INFO[0m Contract 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de deployed to: 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+[32m INFO[0m Deploying contract: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m Contract 0x10ed43c718714eb63d5aa57b78b54704e256024e deployed to: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m Deploying contract: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m Contract 0x55d398326f99059ff775485246999027b3197955 deployed to: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m Deployed all contracts
+
+[32m INFO[0m Contract 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de has no abi
+[32m INFO[0m Too many unknown function signature for "0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de", we are going to decompile this contract using Heimdall
+[32m INFO[0m fetching pairs for 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+[32m INFO[0m fetching pairs for 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de
+[32m INFO[0m fetching pairs for 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching pairs for 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching code from 16b9a82891338f9ba80e2d6970fdda79d1eb0dae
+[32m INFO[0m fetching code from 8840c6252e2e86e545defb6da98b2a0e26d8c1ba
+[32m INFO[0m fetching code from bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c
+[32m INFO[0m fetching code from af027427dc6d31a3e7e162a710a5fe27e63e275f
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0xaf027427dc6d31a3e7e162a710a5fe27e63e275f&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching pairs for 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f
+[32m INFO[0m fetching pairs for 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f
+[32m INFO[0m fetching code from e31e936abd41670bfcc2054a6b5e636a5e8ec9c5
+[32m INFO[0m fetching code from 940160e1f22d0c01b0739de14d9b702c237cb74f
+[32m INFO[0m fetching code from 523e4c1f41dfa88e2a5d6761d022f4c6d4ceae9d
+[32m INFO[0m fetching pairs for 0xe9e7cea3dedca5984780bafc599bd69add087d56
+[32m INFO[0m fetching pairs for 0xe9e7cea3dedca5984780bafc599bd69add087d56
+[32m INFO[0m fetching code from 58f876857a02d6762e0101bb5c46a8c1ed44dc16
+[32m INFO[0m fetching code from acaac9311b0096e04dfe96b6d87dec867d3883dc
+[32m INFO[0m fetching pairs for 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching code from e9e7cea3dedca5984780bafc599bd69add087d56
+[32m INFO[0m fetching code from 717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 0000000000000000000000000000000000000001
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.83% Instruction Covered, 43.41% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 0, objectives: 0, executions: 0, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call{value: 101941725.2747 ether}(abi.encodeWithSelector(0x7ecebe00, 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd))
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 68, objectives: 0, executions: 33, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 68, objectives: 0, executions: 33, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x7ecebe00, 0x10ED43C718714eb63d5aA57B78B54704E256024E))
+   │  └─ ← 0x00
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 69, objectives: 0, executions: 34, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 69, objectives: 0, executions: 34, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x89afcb44, 0x0000000000000000000000000000000000000000))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000294c696e6b64616f4465783a20494e53554646494349454e545f4c49515549444954595f4255524e45440000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 70, objectives: 0, executions: 66, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 70, objectives: 0, executions: 66, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x95d89b41)
+   │  └─ ← 0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000074c4b445041495200000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 71, objectives: 0, executions: 99, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 71, objectives: 0, executions: 99, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.transfer(0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, 356811923176489970264571492.3623 ether)
+   │  └─ ← 0x4e487b710000000000000000000000000000000000000000000000000000000000000011
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 72, objectives: 0, executions: 128, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 72, objectives: 0, executions: 128, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.transfer(0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 73, objectives: 0, executions: 136, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 73, objectives: 0, executions: 136, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x6a627842, 0x10ED43C718714eb63d5aA57B78B54704E256024E))
+   │  └─ ← 0x4e487b710000000000000000000000000000000000000000000000000000000000000011
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 74, objectives: 0, executions: 160, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 74, objectives: 0, executions: 160, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x70a08231, 0x55d398326f99059fF775485246999027B3197955))
+   │  └─ ← 0x00
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 75, objectives: 0, executions: 194, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 75, objectives: 0, executions: 194, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x7464fc3d)
+   │  └─ ← 0x00
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 76, objectives: 0, executions: 226, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 76, objectives: 0, executions: 226, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xba9a7a56)
+   │  └─ ← 0x03e8
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 77, objectives: 0, executions: 256, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 77, objectives: 0, executions: 256, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0xbc25cf77, 0x10ED43C718714eb63d5aA57B78B54704E256024E))
+   │  └─ ← 0x4e487b710000000000000000000000000000000000000000000000000000000000000011
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 78, objectives: 0, executions: 288, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 78, objectives: 0, executions: 288, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xc45a0155)
+   │  └─ ← 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 79, objectives: 0, executions: 321, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 79, objectives: 0, executions: 321, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xd21220a7)
+   │  └─ ← 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 80, objectives: 0, executions: 353, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 47.88% Instruction Covered, 43.80% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 80, objectives: 0, executions: 353, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0xd505accf, 0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 0, 0, 0, 0, 2967))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000134c696e6b64616f4465783a204558504952454400000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 81, objectives: 0, executions: 383, exec/sec: 0.000
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 81, objectives: 0, executions: 383, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0xd505accf, 0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 0, 226156424291633194186662080095093570025917938800079302197.4304 ether, 0, 0, 0))
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001d4c696e6b64616f4465783a20494e56414c49445f5349474e4154555245000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 82, objectives: 0, executions: 384, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-2s, clients: 1, corpus: 82, objectives: 0, executions: 384, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0xdd62ed3e, 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024))
+   │  └─ ← 0x00
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-2s, clients: 1, corpus: 83, objectives: 0, executions: 415, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 83, objectives: 0, executions: 415, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 84, objectives: 0, executions: 447, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 84, objectives: 0, executions: 447, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x3644e515)
+   │  └─ ← 0x6fce419dc51300c645d4edfa6c3f62ba7b7bd214541ac63d2223b15da8ce2b2b
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 85, objectives: 0, executions: 480, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 85, objectives: 0, executions: 480, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x485cc955, 0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154c696e6b64616f4465783a20464f5242494444454e0000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 86, objectives: 0, executions: 510, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 86, objectives: 0, executions: 510, exec/sec: 0.000
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x5a3d5493)
+   │  └─ ← 0x03ab64e3b267ac0b72cd6f9f53004d74
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 87, objectives: 0, executions: 577, exec/sec: 0.000
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 87, objectives: 0, executions: 577, exec/sec: 576.7
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.transferFrom(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 0x0000000000000000000000000000000000000000, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 88, objectives: 0, executions: 603, exec/sec: 602.6
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 88, objectives: 0, executions: 634, exec/sec: 561.0
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 88, objectives: 0, executions: 634, exec/sec: 560.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x30adf81f)
+   │  └─ ← 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 89, objectives: 0, executions: 636, exec/sec: 562.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 89, objectives: 0, executions: 636, exec/sec: 562.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x313ce567)
+   │  └─ ← 0x12
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 90, objectives: 0, executions: 669, exec/sec: 591.2
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 53.04% Instruction Covered, 45.74% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 90, objectives: 0, executions: 669, exec/sec: 590.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 0, 0, 0xe1A425f1AC34A8a441566f93c82dD730639c8510, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000264c696e6b64616f4465783a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 91, objectives: 0, executions: 699, exec/sec: 617.1
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 91, objectives: 0, executions: 699, exec/sec: 617.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 6129982163463555772386527033755993250.7653 ether, 26959946667150639795156998018006465811321631080531.1281 ether, 0x0000000000000000000000000000000000000000, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000224c696e6b64616f4465783a20494e53554646494349454e545f4c4951554944495459000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 92, objectives: 0, executions: 704, exec/sec: 621.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 92, objectives: 0, executions: 704, exec/sec: 621.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 0, 1725449750740229499036230546195106952759972444224237.6856 ether, 0x0000000000000000000000000000000000000000, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000224c696e6b64616f4465783a20494e53554646494349454e545f4c4951554944495459000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 93, objectives: 0, executions: 712, exec/sec: 628.3
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 93, objectives: 0, executions: 712, exec/sec: 627.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x06fdde03)
+   │  └─ ← 0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c4c696e6b64616f20506169720000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 94, objectives: 0, executions: 732, exec/sec: 645.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 94, objectives: 0, executions: 732, exec/sec: 644.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x0902f1ac)
+   │  └─ ← 0x0000000000000000000000000000000000000000000006584bf6384be2710000000000000000000000000000000000000000000000000a3920e60dc70e584d0400000000000000000000000000000000000000000000000000000000655557d6
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 95, objectives: 0, executions: 767, exec/sec: 675.6
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 95, objectives: 0, executions: 767, exec/sec: 675.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 96, objectives: 0, executions: 795, exec/sec: 699.6
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 96, objectives: 0, executions: 795, exec/sec: 698.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x0dfe1681)
+   │  └─ ← 0x55d398326f99059fF775485246999027B3197955
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 97, objectives: 0, executions: 827, exec/sec: 726.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 97, objectives: 0, executions: 827, exec/sec: 726.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0x18160ddd)
+   │  └─ ← 0x080dcaf0ee139fe887c1
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 98, objectives: 0, executions: 860, exec/sec: 754.9
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 98, objectives: 0, executions: 860, exec/sec: 692.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 295.1479 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 99, objectives: 0, executions: 891, exec/sec: 716.9
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 46.53% Instruction Covered, 44.26% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 99, objectives: 0, executions: 891, exec/sec: 715.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 5986800689438365188099977561463885.8041 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0x0000000000000000000000000000000000000000, 13165637119512171940834531586761721994798022988.6929 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002242455032303a20617070726f766520746f20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 100, objectives: 0, executions: 923, exec/sec: 740.6
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 100, objectives: 0, executions: 923, exec/sec: 740.5
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 115790323279929657055463186045946985331596086132762797946484.3614 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 34562057521513727669938575193332120878061066210944063317873.8891 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 101, objectives: 0, executions: 925, exec/sec: 742.1
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 101, objectives: 0, executions: 925, exec/sec: 727.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 41538374868278621.2824 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 102, objectives: 0, executions: 930, exec/sec: 730.8
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 48.82% Instruction Covered, 45.08% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 102, objectives: 0, executions: 930, exec/sec: 729.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 115790323279929657055463186045946985331596086132762797946484.3614 ether)
+   │  └─ ← 0x01
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.burn(29962.9860 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002242455032303a206275726e20616d6f756e7420657863656564732062616c616e6365000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 103, objectives: 0, executions: 955, exec/sec: 749.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 103, objectives: 0, executions: 955, exec/sec: 749.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.burn(0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 104, objectives: 0, executions: 959, exec/sec: 752.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 104, objectives: 0, executions: 959, exec/sec: 752.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 295.1479 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.burn(73745.7145 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 105, objectives: 0, executions: 974, exec/sec: 764.0
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 105, objectives: 0, executions: 974, exec/sec: 763.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 2520.6158 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.decreaseAllowance(0x0000000000000000000000000000000000000000, 0)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002242455032303a20617070726f766520746f20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 106, objectives: 0, executions: 987, exec/sec: 773.5
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 106, objectives: 0, executions: 987, exec/sec: 664.7
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.increaseAllowance(0x0000000000000000000000000000000000000000, 4695)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002242455032303a20617070726f766520746f20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 107, objectives: 0, executions: 1019, exec/sec: 686.2
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 107, objectives: 0, executions: 1019, exec/sec: 584.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F, 68089007677629465778457594491775996595988983397069585397566.1386 ether)
+   │  └─ ← 0x01
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] Router.swapExactETHForTokens{value: 15615}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.increaseAllowance(0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A, 883423532389192164791648750371459257913741948445967367.4569 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 108, objectives: 0, executions: 1038, exec/sec: 595.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 108, objectives: 0, executions: 1038, exec/sec: 578.4
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.mint(51422017416287711653305870250275300213286016.2520 ether)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 109, objectives: 0, executions: 1051, exec/sec: 585.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 109, objectives: 0, executions: 1051, exec/sec: 585.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x10ED43C718714eb63d5aA57B78B54704E256024E, 2089)
+   │  └─ ← 0x01
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.renounceOwnership()
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 110, objectives: 0, executions: 1083, exec/sec: 603.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 110, objectives: 0, executions: 1083, exec/sec: 602.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 295.1479 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.burn(73745.7145 ether)
+   │  └─ ← 0x01
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transfer(0x0000000000000000000000000000000000000000, 0)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002342455032303a207472616e7366657220746f20746865207a65726f20616464726573730000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 111, objectives: 0, executions: 1113, exec/sec: 619.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 111, objectives: 0, executions: 1113, exec/sec: 601.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 0.2814 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transfer(0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A, 7.9708 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 112, objectives: 0, executions: 1127, exec/sec: 609.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 52.92% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 112, objectives: 0, executions: 1127, exec/sec: 608.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 295.1479 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 73745.7145 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 270213176.4028 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 862718293348820473429344482784628181566529826324102.2934 ether)
+   │  └─ ← 0x01
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.increaseAllowance(0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd, 6901746346790563787436217363914356355693831211870455.3845 ether)
+   │  └─ ← 0x01
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transferFrom(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 0x0000000000000000000000000000000000000000, 41137620185611981170726968960436324656787189265.8234 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002342455032303a207472616e7366657220746f20746865207a65726f20616464726573730000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 113, objectives: 0, executions: 1145, exec/sec: 618.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-3s, clients: 1, corpus: 113, objectives: 0, executions: 1145, exec/sec: 618.4
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transferFrom(0x0000000000000000000000000000000000000000, 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 105312291668557186697918027683670432319204580410.3704 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002542455032303a207472616e736665722066726f6d20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-3s, clients: 1, corpus: 114, objectives: 0, executions: 1146, exec/sec: 618.9
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 114, objectives: 0, executions: 1146, exec/sec: 593.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transferFrom(0x55d398326f99059fF775485246999027B3197955, 0x10ED43C718714eb63d5aA57B78B54704E256024E, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 115, objectives: 0, executions: 1152, exec/sec: 596.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 115, objectives: 0, executions: 1152, exec/sec: 588.1
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transferOwnership(0x0000000000000000000000000000000000000000)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 116, objectives: 0, executions: 1177, exec/sec: 600.8
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 116, objectives: 0, executions: 1336, exec/sec: 600.0
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 116, objectives: 0, executions: 1336, exec/sec: 563.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 117, objectives: 0, executions: 1496, exec/sec: 631.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 40.42% Instruction Covered, 35.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 117, objectives: 0, executions: 1496, exec/sec: 603.1
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 5986800689438365188099977561463885.8041 ether)
+   │  └─ ← 0x01
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.approve(0x0000000000000000000000000000000000000000, 93536104789177788793910735851705.2318 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002242455032303a20617070726f766520746f20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 118, objectives: 0, executions: 1528, exec/sec: 616.0
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 118, objectives: 0, executions: 1528, exec/sec: 616.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] Router.swapExactETHForTokens{value: 21471}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.approve(0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 119, objectives: 0, executions: 1529, exec/sec: 616.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 119, objectives: 0, executions: 1529, exec/sec: 616.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 48277.4998 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 120, objectives: 0, executions: 1536, exec/sec: 619.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 41.77% Instruction Covered, 36.00% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 120, objectives: 0, executions: 1536, exec/sec: 618.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.decreaseAllowance(0x0000000000000000000000000000000000000000, 224389577226855443832004297661583077383990216259972036272.6995 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002542455032303a2064656372656173656420616c6c6f77616e63652062656c6f77207a65726f000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 121, objectives: 0, executions: 1560, exec/sec: 628.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.19% Instruction Covered, 38.00% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 121, objectives: 0, executions: 1560, exec/sec: 581.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 122, objectives: 0, executions: 1592, exec/sec: 592.9
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 122, objectives: 0, executions: 1592, exec/sec: 592.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0x0000000000000000000000000000000000000000)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 123, objectives: 0, executions: 1594, exec/sec: 593.6
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 123, objectives: 0, executions: 1594, exec/sec: 576.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 115790323279929657055463186045946985331596086132762797946484.3614 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 34562057521513727669938575193332120878061066210944063317873.8891 ether)
+   │  └─ ← 0x01
+   └─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegateBySig(0x0000000000000000000000000000000000000000, 0, 0, 0, 0x0000000000000000000000000000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000000000000000000000000000)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000254c4b443a3a64656c656761746542795369673a20696e76616c6964207369676e6174757265000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 124, objectives: 0, executions: 1624, exec/sec: 586.8
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-4s, clients: 1, corpus: 124, objectives: 0, executions: 1624, exec/sec: 581.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0x10ED43C718714eb63d5aA57B78B54704E256024E)
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.increaseAllowance(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 3359)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-4s, clients: 1, corpus: 125, objectives: 0, executions: 1656, exec/sec: 592.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 125, objectives: 0, executions: 1656, exec/sec: 550.5
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+   ├─[1] Router.swapExactETHForTokens{value: 24}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.increaseAllowance(0x10ED43C718714eb63d5aA57B78B54704E256024E, 2417851.6692 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 126, objectives: 0, executions: 1677, exec/sec: 557.5
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 126, objectives: 0, executions: 1677, exec/sec: 552.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F, 68089007677629465778457594491775996595988983397069585397566.1386 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.mint(0x0000000000000000000000000000000000000000, 0)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 127, objectives: 0, executions: 1688, exec/sec: 555.8
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 127, objectives: 0, executions: 1688, exec/sec: 555.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] Router.swapExactETHForTokens{value: 21471}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.approve(0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd, 210624583337114373395836055367673171636736419769.3241 ether)
+   │  └─ ← 0x01
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.approve(0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, 1208925.8196 ether)
+   │  └─ ← 0x01
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.mint(982460977350810041529277414294671132252240019385445539691.8546 ether)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 128, objectives: 0, executions: 1720, exec/sec: 566.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 128, objectives: 0, executions: 1720, exec/sec: 565.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 5986800689438365188099977561463885.8041 ether)
+   │  └─ ← 0x01
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.renounceOwnership()
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 129, objectives: 0, executions: 1752, exec/sec: 576.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 129, objectives: 0, executions: 1752, exec/sec: 576.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.transfer(0x0000000000000000000000000000000000000000, 107840198038464787744797616167069519982758310921335.3852 ether)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002342455032303a207472616e7366657220746f20746865207a65726f20616464726573730000000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 130, objectives: 0, executions: 1787, exec/sec: 587.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 130, objectives: 0, executions: 1787, exec/sec: 571.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.transferFrom(0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 0)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002542455032303a207472616e736665722066726f6d20746865207a65726f2061646472657373000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 131, objectives: 0, executions: 1816, exec/sec: 581.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 131, objectives: 0, executions: 1816, exec/sec: 576.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 9.2235 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.transferOwnership(0x0000000000000000000000000000000000000000)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000204f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 132, objectives: 0, executions: 1848, exec/sec: 586.2
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 6.53% Instruction Covered, 10.12% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 132, objectives: 0, executions: 1848, exec/sec: 586.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 29962.9862 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.createPair(0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb, 0x0000000000000000000000000000000000000000)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184c696e6b64616f4465783a205a45524f5f414444524553530000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 133, objectives: 0, executions: 1880, exec/sec: 596.1
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 133, objectives: 0, executions: 1880, exec/sec: 596.1
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.createPair(0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000)
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001f4c696e6b64616f4465783a204944454e544943414c5f41444452455353455300
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 134, objectives: 0, executions: 1882, exec/sec: 596.7
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 134, objectives: 0, executions: 1882, exec/sec: 596.7
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.createPair(0x0000000000000000000000000000000000000000, 0x55d398326f99059fF775485246999027B3197955)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184c696e6b64616f4465783a205a45524f5f414444524553530000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 135, objectives: 0, executions: 1886, exec/sec: 597.9
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 135, objectives: 0, executions: 1886, exec/sec: 593.1
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   └─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.delegate(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.createPair(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F, 0xe1A425f1AC34A8a441566f93c82dD730639c8510)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 136, objectives: 0, executions: 1890, exec/sec: 594.3
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 136, objectives: 0, executions: 1911, exec/sec: 571.9
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 136, objectives: 0, executions: 1911, exec/sec: 571.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 29962.9862 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.renounceOwnership()
+   │  └─ ← 0x118cdaa700000000000000000000000068dd4f5ac792eaaa5e36f4f4e0474e0625dc9024
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 137, objectives: 0, executions: 1912, exec/sec: 572.2
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 137, objectives: 0, executions: 1912, exec/sec: 572.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F, 68089007677629465778457594491775996595988983397069585397566.1386 ether)
+   │  └─ ← 0x01
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.setBuyBackLkdPercentage(1298074214633706.9071 ether)
+   │  └─ ← 0x118cdaa7000000000000000000000000e1a425f1ac34a8a441566f93c82dd730639c8510
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 138, objectives: 0, executions: 1941, exec/sec: 580.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 138, objectives: 0, executions: 1941, exec/sec: 580.5
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.setFeePercentage(3496781343)
+   │  └─ ← 0x118cdaa700000000000000000000000035c9dfd76bf02107ff4f7128bd69716612d31ddb
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 139, objectives: 0, executions: 1973, exec/sec: 590.0
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 139, objectives: 0, executions: 1973, exec/sec: 589.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.setFeeTo(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154c696e6b64616f4465783a20464f5242494444454e0000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 140, objectives: 0, executions: 2005, exec/sec: 599.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 140, objectives: 0, executions: 2005, exec/sec: 599.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x0000000000000000000000000000000000000000, 115790323279929657055463186045946985331596086132762797946484.3614 ether)
+   │  └─ ← 0x01
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.approve(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 34562057521513727669938575193332120878061066210944063317873.8891 ether)
+   │  └─ ← 0x01
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.setFeeToSetter(0x55d398326f99059fF775485246999027B3197955)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154c696e6b64616f4465783a20464f5242494444454e0000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 141, objectives: 0, executions: 2037, exec/sec: 608.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 141, objectives: 0, executions: 2037, exec/sec: 608.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] Router.swapExactETHForTokens{value: 295.1479 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.setTreasuryPercentage(102844034832575377634685579226746390010564770.6721 ether)
+   │  └─ ← 0x118cdaa7000000000000000000000000e1a425f1ac34a8a441566f93c82dd730639c8510
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 142, objectives: 0, executions: 2069, exec/sec: 618.1
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 54.29% Instruction Covered, 47.67% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 142, objectives: 0, executions: 2069, exec/sec: 617.1
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.approve(0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024, 1)
+   │  └─ ← 0x01
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x6a627842, 0x10ED43C718714eb63d5aA57B78B54704E256024E))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000294c696e6b64616f4465783a20494e53554646494349454e545f4c49515549444954595f4d494e5445440000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 143, objectives: 0, executions: 2328, exec/sec: 694.3
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 56.48% Instruction Covered, 48.84% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 143, objectives: 0, executions: 2328, exec/sec: 688.4
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 10.0 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   └─[1] Router.swapExactETHForTokens{value: 2520.6158 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+[Sender] 0xe1A425f1AC34A8a441566f93c82dD730639c8510
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0xbc25cf77, 0x10ED43C718714eb63d5aA57B78B54704E256024E))
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 144, objectives: 0, executions: 2450, exec/sec: 724.4
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 61.07% Instruction Covered, 51.16% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 144, objectives: 0, executions: 2450, exec/sec: 661.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] Router.swapExactETHForTokens{value: 604462.9098 ether}(0, path:(WETH → 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F), address(this), block.timestamp);
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 145, objectives: 0, executions: 2647, exec/sec: 714.7
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 145, objectives: 0, executions: 2647, exec/sec: 714.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 146, objectives: 0, executions: 2662, exec/sec: 718.6
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 61.07% Instruction Covered, 52.33% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 146, objectives: 0, executions: 2662, exec/sec: 698.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 0, 18402, 0xe1A425f1AC34A8a441566f93c82dD730639c8510, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000254c696e6b64616f4465783a20494e53554646494349454e545f494e5055545f414d4f554e54000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 147, objectives: 0, executions: 2871, exec/sec: 753.4
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 147, objectives: 0, executions: 2871, exec/sec: 753.4
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0xe1A425f1AC34A8a441566f93c82dD730639c8510, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000254c696e6b64616f4465783a20494e53554646494349454e545f494e5055545f414d4f554e54000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 148, objectives: 0, executions: 2872, exec/sec: 753.6
+[32m INFO[0m [Stats #0] run time: 0h-0m-5s, clients: 1, corpus: 148, objectives: 0, executions: 2872, exec/sec: 753.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 15291, 0, 0xe1A425f1AC34A8a441566f93c82dD730639c8510, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000254c696e6b64616f4465783a20494e53554646494349454e545f494e5055545f414d4f554e54000000000000000000000000000000000000000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-5s, clients: 1, corpus: 149, objectives: 0, executions: 2884, exec/sec: 756.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 66.62% Instruction Covered, 57.75% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-6s, clients: 1, corpus: 149, objectives: 0, executions: 2884, exec/sec: 693.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] Router.swapExactETHForTokens{value: 0.2814 ether}(0, path:(WETH → 0x55d398326f99059fF775485246999027B3197955), address(this), block.timestamp);
+   ├─[1] 0x55d398326f99059fF775485246999027B3197955.transfer(0xe1A425f1AC34A8a441566f93c82dD730639c8510, 7.9708 ether)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-6s, clients: 1, corpus: 150, objectives: 0, executions: 3532, exec/sec: 848.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 44.28% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 66.62% Instruction Covered, 57.75% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-6s, clients: 1, corpus: 150, objectives: 0, executions: 3849, exec/sec: 864.2
+[32m INFO[0m [Stats #0] run time: 0h-0m-6s, clients: 1, corpus: 150, objectives: 0, executions: 3849, exec/sec: 829.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x8EF508Aca04B32Ff3ba5003177cb18BfA6Cd79dd
+   ├─[1] 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F.transferFrom(0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, 0x10ED43C718714eb63d5aA57B78B54704E256024E, 0)
+   │  └─ ← 0x01
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-6s, clients: 1, corpus: 151, objectives: 0, executions: 4138, exec/sec: 891.5
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.17% Instruction Covered, 12.14% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 66.62% Instruction Covered, 57.75% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 151, objectives: 0, executions: 4138, exec/sec: 786.0
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   ├─[1] 0x717D0A192F4C5F9Bc8A2D45b01D696Dab2bD1b7A.createPair(0x55d398326f99059fF775485246999027B3197955, 0xaF027427DC6d31A3e7e162A710a5Fe27e63E275F)
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000174c696e6b64616f4465783a20504149525f455849535453000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 152, objectives: 0, executions: 4306, exec/sec: 817.9
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.54% Instruction Covered, 12.43% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 66.62% Instruction Covered, 57.75% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 152, objectives: 0, executions: 4306, exec/sec: 815.6
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x0000000000000000000000000000000000000000, ""))
+   │  └─ ← 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001b4c696e6b64616f4465783a205452414e534645525f4641494c45440000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 153, objectives: 0, executions: 4686, exec/sec: 887.6
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 153, objectives: 0, executions: 4686, exec/sec: 887.5
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? true 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x55d398326f99059fF775485246999027B3197955, ""))
+   │  └─ ← 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000164c696e6b64616f4465783a20494e56414c49445f544f00000000000000000000
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 154, objectives: 0, executions: 4690, exec/sec: 888.3
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 67.61% Instruction Covered, 59.30% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 9.54% Instruction Covered, 12.43% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 154, objectives: 0, executions: 4690, exec/sec: 854.8
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, ""))
+   │  └─ ← 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028f5c3d70a8eb8
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 155, objectives: 0, executions: 4850, exec/sec: 884.0
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 76.90% Instruction Covered, 62.79% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 10.09% Instruction Covered, 14.45% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 155, objectives: 0, executions: 4871, exec/sec: 887.5
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 155, objectives: 0, executions: 4871, exec/sec: 887.3
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, ""))
+   │  └─ ← 0x00000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000028f5c3d70a8eb8
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 156, objectives: 0, executions: 4904, exec/sec: 893.3
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 156, objectives: 0, executions: 4904, exec/sec: 893.2
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, ""))
+   │  └─ ← 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028f5c3d70a8eb8
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 157, objectives: 0, executions: 4914, exec/sec: 895.0
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 77.54% Instruction Covered, 63.95% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 10.09% Instruction Covered, 14.45% Branch Covered
+[32m INFO[0m [Stats #0] run time: 0h-0m-7s, clients: 1, corpus: 157, objectives: 0, executions: 4914, exec/sec: 893.9
+[32m INFO[0m ============= New Corpus Item =============
+[32m INFO[0m Reverted? false 
+ Txn:
+[Sender] 0x68Dd4F5AC792eAaa5e36f4f4e0474E0625dc9024
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, ""))
+   │  └─ ← 0x00000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000028f5c3d70a8eb8
+
+[32m INFO[0m ==========================================
+[32m INFO[0m [Testcase #0] run time: 0h-0m-7s, clients: 1, corpus: 158, objectives: 0, executions: 4968, exec/sec: 903.7
+[32m INFO[0m ============= Coverage Summary =============
+[32m INFO[0m 0xaf027427dc6d31a3e7e162a710a5fe27e63e275f: 46.07% Instruction Covered, 38.50% Branch Covered
+[32m INFO[0m 0x717d0a192f4c5f9bc8a2d45b01d696dab2bd1b7a: 10.09% Instruction Covered, 14.45% Branch Covered
+[32m INFO[0m 0xe9e7cea3dedca5984780bafc599bd69add087d56: 14.04% Instruction Covered, 13.93% Branch Covered
+[32m INFO[0m 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de: 77.54% Instruction Covered, 63.95% Branch Covered
+[32m INFO[0m 0x55d398326f99059ff775485246999027b3197955: 56.03% Instruction Covered, 48.36% Branch Covered
+[32m INFO[0m 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c: 11.03% Instruction Covered, 13.16% Branch Covered
+
+
+
+😊😊 Found vulnerabilities! 
+
+
+================ Description ================
+[Imbalanced Uniswap Pair]: In Uniswap pair 0x6524a5fd3fec179db3b3c1d21f700da7abe6b0de, reserves has changed from (0x0000000000000000000000000000000000000000000006584bf6384be2710000_U256, 0x000000000000000000000000000000000000000000000a3920d5ab78b85413ee_U256) to (0x0000000000000000000000000000000000000000000006584bf6384be2710000_U256, 0x000000000000000000000000000000000000000000000a3920e60dc70e584d04_U256). It is likely the token contract has incorrectly burned that token in the pair.
+
+================ Trace ================
+[Sender] 0x35c9dfd76bf02107ff4f7128Bd69716612d31dDb
+   ├─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(abi.encodeWithSelector(0x022c0d9f, 1664, 4.6116 ether, 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de, ""))
+   └─[1] 0x6524a5Fd3FEc179Db3b3C1d21F700Da7aBE6B0de.call(0xfff6cae9)
+
+

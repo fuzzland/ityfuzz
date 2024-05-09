@@ -1,0 +1,19 @@
+thread 'main' panicked at src/evm/onchain/endpoints.rs:787:30:
+fail to find block timestamp
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
+   1: core::panicking::panic_fmt
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:72:14
+   2: core::panicking::panic_display
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:196:5
+   3: core::panicking::panic_str
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:171:5
+   4: core::option::expect_failed
+             at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/option.rs:1980:5
+   5: ityfuzz::evm::onchain::endpoints::OnChainConfig::fetch_blk_timestamp
+   6: ityfuzz::evm::contract_utils::ContractLoader::from_address
+   7: ityfuzz::evm::evm_main
+   8: ityfuzz::main
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+timeout 5m ./target/release/ityfuzz evm -t 0x36696169C63e42cd08ce11f5deeBbCeBae652050,0xa5957E0E2565dc93880da7be32AbCBdF55788888,0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x1F5b26DCC6721c21b9c156Bf6eF68f51c0D075b7,0x55d398326f99059fF775485246999027B3197955,0x6A6f27522aB99731e2D396b951E0749ACFbbB180,0xdb1Dcb5A6f91741B9FbB55a746265700D45F5077,0x5E001BF02B83c708597075B189741f6F788E360f,0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c -c bsc -b 37483300 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_ATM_exp_0
