@@ -1,5 +1,5 @@
-thread 'main' panicked at src/evm/onchain/endpoints.rs:787:30:
-fail to find block timestamp
+thread 'main' panicked at src/evm/tokens/uniswap.rs:233:10:
+Unexpected RPC error, consider setting env <ETH_RPC_URL> 
 stack backtrace:
    0: rust_begin_unwind
              at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/std/src/panicking.rs:645:5
@@ -11,9 +11,67 @@ stack backtrace:
              at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/panicking.rs:171:5
    4: core::option::expect_failed
              at /rustc/e51e98dde6a60637b6a71b8105245b629ac3fe77/library/core/src/option.rs:1980:5
-   5: ityfuzz::evm::onchain::endpoints::OnChainConfig::fetch_blk_timestamp
-   6: ityfuzz::evm::contract_utils::ContractLoader::from_address
-   7: ityfuzz::evm::evm_main
-   8: ityfuzz::main
+   5: ityfuzz::evm::tokens::uniswap::get_pegged_next_hop
+   6: ityfuzz::evm::onchain::flashloan::Flashloan::on_contract_insertion
+   7: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize_corpus
+   8: ityfuzz::evm::corpus_initializer::EVMCorpusInitializer<SC,ISC>::initialize
+   9: ityfuzz::fuzzers::evm_fuzzer::evm_fuzzer
+  10: ityfuzz::evm::evm_main
+  11: ityfuzz::main
 note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
-timeout 5m ./target/release/ityfuzz evm -t 0xcAbAcfCcA362E365132be54619278B129413cF7b,0x7c82a1a73b1da4a3daA398fc9e1A0053D2d5D695,0x55d398326f99059fF775485246999027B3197955,0x7265553986a81c838867aA6B3625ABA97B961f00,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x1AC5Fac863c0a026e029B173f2AE4D33938AB473 -c bsc -b 36934258 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_IT_exp_0
+timeout 10m ./target/release/ityfuzz evm -t 0x55d398326f99059fF775485246999027B3197955,0x92b7807bF19b7DDdf89b706143896d05228f3121,0xcAbAcfCcA362E365132be54619278B129413cF7b,0x1AC5Fac863c0a026e029B173f2AE4D33938AB473,0x7c82a1a73b1da4a3daA398fc9e1A0053D2d5D695,0x7265553986a81c838867aA6B3625ABA97B961f00 -c bsc -b 36934258 -f --onchain-etherscan-api-key HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2 --work-dir w_IT_exp_0
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x55d398326f99059ff775485246999027b3197955&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 55d398326f99059ff775485246999027b3197955
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x10ed43c718714eb63d5aa57b78b54704e256024e&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 10ed43c718714eb63d5aa57b78b54704e256024e
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0xcabacfcca362e365132be54619278b129413cf7b&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from cabacfcca362e365132be54619278b129413cf7b
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0xcabacfcca362e365132be54619278b129413cf7b
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x1ac5fac863c0a026e029b173f2ae4d33938ab473&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 1ac5fac863c0a026e029b173f2ae4d33938ab473
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x1ac5fac863c0a026e029b173f2ae4d33938ab473
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x92b7807bf19b7dddf89b706143896d05228f3121&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 92b7807bf19b7dddf89b706143896d05228f3121
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x92b7807bf19b7dddf89b706143896d05228f3121
+[32m INFO[0m fetching abi from https://api.bscscan.com/api?module=contract&action=getabi&address=0x7265553986a81c838867aa6b3625aba97b961f00&format=json&apikey=HZF74EH51PK2W1N84BE6W8YYATDP6UEFC2
+[32m INFO[0m fetching code from 7265553986a81c838867aa6b3625aba97b961f00
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+Contract loaded: 0x7265553986a81c838867aa6b3625aba97b961f00
+[32m INFO[0m 
+
+ ================ EVM Fuzzer Start ===================
+
+
+[32m INFO[0m Deploying contract: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m Contract 0x55d398326f99059ff775485246999027b3197955 deployed to: 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m Deploying contract: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m Contract 0x10ed43c718714eb63d5aa57b78b54704e256024e deployed to: 0x10ed43c718714eb63d5aa57b78b54704e256024e
+[32m INFO[0m Deploying contract: 0xcabacfcca362e365132be54619278b129413cf7b
+[32m INFO[0m Contract 0xcabacfcca362e365132be54619278b129413cf7b deployed to: 0xcabacfcca362e365132be54619278b129413cf7b
+[32m INFO[0m Deploying contract: 0x7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695
+[32m INFO[0m Contract 0x7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695 deployed to: 0x7c82a1a73b1da4a3daa398fc9e1a0053d2d5d695
+[32m INFO[0m Deploying contract: 0x1ac5fac863c0a026e029b173f2ae4d33938ab473
+[32m INFO[0m Contract 0x1ac5fac863c0a026e029b173f2ae4d33938ab473 deployed to: 0x1ac5fac863c0a026e029b173f2ae4d33938ab473
+[32m INFO[0m Deploying contract: 0x92b7807bf19b7dddf89b706143896d05228f3121
+[32m INFO[0m Contract 0x92b7807bf19b7dddf89b706143896d05228f3121 deployed to: 0x92b7807bf19b7dddf89b706143896d05228f3121
+[32m INFO[0m Deploying contract: 0x7265553986a81c838867aa6b3625aba97b961f00
+[32m INFO[0m Contract 0x7265553986a81c838867aa6b3625aba97b961f00 deployed to: 0x7265553986a81c838867aa6b3625aba97b961f00
+[32m INFO[0m Deployed all contracts
+
+[32m INFO[0m fetching pairs for 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching pairs for 0x55d398326f99059ff775485246999027b3197955
+[32m INFO[0m fetching code from 16b9a82891338f9ba80e2d6970fdda79d1eb0dae
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org
+[32m INFO[0m fetching code from 8840c6252e2e86e545defb6da98b2a0e26d8c1ba
+[31mERROR[0m failed to fetch from https://bsc-dataseed.bnbchain.org

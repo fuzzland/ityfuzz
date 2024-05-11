@@ -114,7 +114,7 @@ def test_onchain(test):
 
     contract_addresses, block_number, chain, name = test[3], test[2], test[1], test[0]
 
-    if chain not in ["eth", "bsc", "polygon"]:
+    if chain not in ["arbitrum", "optimism", "eth", "bsc", "polygon"]:
         print(f"=== Unsupported chain: {chain}")
         crashed_any = True
         return
@@ -131,7 +131,7 @@ def test_onchain(test):
     cmd = [
         TIMEOUT_BIN,
         # set timeout to 5m because it takes longer time to sync the chain
-        "15m",
+        "10m",
         "./target/release/ityfuzz",
         "evm",
         "-t",

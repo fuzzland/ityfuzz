@@ -1,19 +1,19 @@
-timeout 15m ./target/release/ityfuzz evm -t 0xFC7599cfFea9De127a9f9C748CCb451a34d2F063 -c eth -b 19771058 -f --onchain-etherscan-api-key ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY --work-dir w_PikeFinance_exp_0
-[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x7a250d5630b4cf539739df2c5dacb4c659f2488d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
-[32m INFO[0m fetching code from 7a250d5630b4cf539739df2c5dacb4c659f2488d
-Contract loaded: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+timeout 10m ./target/release/ityfuzz evm -t 0xFC7599cfFea9De127a9f9C748CCb451a34d2F063 -c eth -b 19771058 -f --onchain-etherscan-api-key ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY --work-dir w_PikeFinance_exp_0
 [32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0xfc7599cffea9de127a9f9c748ccb451a34d2f063&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
 [32m INFO[0m fetching code from fc7599cffea9de127a9f9c748ccb451a34d2f063
 Contract loaded: 0xfc7599cffea9de127a9f9c748ccb451a34d2f063
+[32m INFO[0m fetching abi from https://api.etherscan.io/api?module=contract&action=getabi&address=0x7a250d5630b4cf539739df2c5dacb4c659f2488d&format=json&apikey=ASW5YSPWJJI8MYHEGP31UVCU2EQJRFFSKY
+[32m INFO[0m fetching code from 7a250d5630b4cf539739df2c5dacb4c659f2488d
+Contract loaded: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
 [32m INFO[0m 
 
  ================ EVM Fuzzer Start ===================
 
 
-[32m INFO[0m Deploying contract: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
-[32m INFO[0m Contract 0x7a250d5630b4cf539739df2c5dacb4c659f2488d deployed to: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
 [32m INFO[0m Deploying contract: 0xfc7599cffea9de127a9f9c748ccb451a34d2f063
 [32m INFO[0m Contract 0xfc7599cffea9de127a9f9c748ccb451a34d2f063 deployed to: 0xfc7599cffea9de127a9f9c748ccb451a34d2f063
+[32m INFO[0m Deploying contract: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
+[32m INFO[0m Contract 0x7a250d5630b4cf539739df2c5dacb4c659f2488d deployed to: 0x7a250d5630b4cf539739df2c5dacb4c659f2488d
 [32m INFO[0m Deployed all contracts
 
 [32m INFO[0m Contract 0xfc7599cffea9de127a9f9c748ccb451a34d2f063 has no abi
