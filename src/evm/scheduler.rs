@@ -4,6 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
+// use std::collections::HashSet;
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
 use libafl::corpus::Corpus;
