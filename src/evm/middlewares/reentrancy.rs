@@ -80,16 +80,11 @@ fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &[u32]) {
 }
 
 // Reentrancy: Read, Read, Write
-impl<SC,   DB> Middleware<SC,   DB> for ReentrancyTracer
+impl<SC, DB> Middleware<SC, DB> for ReentrancyTracer
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(
-        &mut self,
-        interp: &mut Interpreter,
-        host: &mut FuzzHost<SC,   DB>,
-        _state: &mut EVMFuzzState,
-    ) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         match *interp.instruction_pointer {
             0x54 => {
                 let depth = host.evmstate.post_execution.len() as u32;
@@ -168,7 +163,7 @@ where
     unsafe fn before_execute(
         &mut self,
         interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<SC,   DB>,
+        host: &mut FuzzHost<SC, DB>,
         state: &mut EVMFuzzState,
         is_step: bool,
         data: &mut Bytes,

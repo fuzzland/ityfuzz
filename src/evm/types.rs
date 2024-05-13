@@ -163,10 +163,23 @@ pub fn checksum(address: &EVMAddress) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::evm::types::{as_u64, EVMU256};
+
+    use super::{generate_random_address, EVMFuzzState};
+    use crate::{
+        evm::types::{as_u64, EVMU256},
+        state::FuzzState,
+    };
 
     #[test]
     fn test_as_u64() {
         assert_eq!(as_u64(EVMU256::from(100)), 100)
+    }
+
+    #[test]
+    fn test_generate_random_address() {
+        let mut state: EVMFuzzState = FuzzState::new(0);
+
+        let address = generate_random_address(&mut state);
+        println!("{}", address);
     }
 }

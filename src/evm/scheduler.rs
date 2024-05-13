@@ -1,5 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
-// use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    marker::PhantomData,
+};
 
 /// Corpus schedulers for ItyFuzz
 /// Used to determine which input / VMState to fuzz next
@@ -12,7 +15,7 @@ use libafl::{
     Error,
 };
 use libafl_bolts::impl_serdeany;
-use revm_primitives::HashSet;
+// use revm_primitives::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::{

@@ -35,7 +35,6 @@ use revm_interpreter::{
     CallScheme,
     Contract,
     CreateInputs,
-    DummyHost,
     Gas,
     Host,
     InstructionResult::{self, Continue, ControlLeak, Revert},
