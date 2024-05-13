@@ -94,7 +94,7 @@ impl OffChainConfig {
             .host
             .code(pair)
             .ok_or_else(|| anyhow!("Pair {:?} code not found", pair))?;
-
+        println!("{:?}", pair_code);
         // token0
         // let res = self.call(self.token0_input(), pair_code.clone(), pair, state,
         // vm)?;
@@ -203,7 +203,6 @@ impl OffChainConfig {
         //     },
         // );
         let code_hash = hex::encode(keccak256(code.bytecode_bytes()));
-
         let call = Contract::new(
             input.into(),
             code,
@@ -215,11 +214,19 @@ impl OffChainConfig {
 
         let mut interp = Interpreter::new(call, 1e10 as u64, true);
         let ir = vm.host.run_inspect(&mut interp, state);
+        // if interp.next_action.is_return() {
+        //     println!(
+        //         "return data is: {:?}",
+        //         interp.next_action.into_result_return().unwrap().output
+        //     );
+        // }
+        println!(" ===============: {:?}", ir);
         if !is_call_success!(ir) {
             return Err(anyhow!("Call failed: {:?}", ir));
         }
 
-        Ok(interp.return_data_buffer.into())
+        // Ok(interp.return_data_buffer.into())
+        Ok(interp.next_action.into_result_return().unwrap().output.0)
     }
 
     // token0()

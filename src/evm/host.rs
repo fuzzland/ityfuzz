@@ -35,6 +35,7 @@ use revm_interpreter::{
     CallScheme,
     Contract,
     CreateInputs,
+    DummyHost,
     Gas,
     Host,
     InstructionResult::{self, Continue, ControlLeak, Revert},
@@ -773,29 +774,88 @@ where
         self.spec_id = SpecId::from(spec_id.as_str());
     }
 
+    pub fn get_some() {
+        let table: InstructionTable<dyn Host<u32>> =
+            revm_interpreter::opcode::make_instruction_table::<u32, dyn Host<u32>, CancunSpec>();
+    }
+
     /// custom spec id run_inspect
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         match self.spec_id {
-            SpecId::LATEST => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state),
-            SpecId::FRONTIER => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>(self, state),
-            SpecId::HOMESTEAD => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>(self, state),
-            SpecId::TANGERINE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, state),
+            SpecId::LATEST => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state, &table)
+            }
+            SpecId::FRONTIER => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>(self, state, &table)
+            }
+            SpecId::HOMESTEAD => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>(self, state, &table)
+            }
+            SpecId::TANGERINE => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, state, &table)
+            }
             SpecId::SPURIOUS_DRAGON => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, state)
+                let table: InstructionTable<FuzzHost<SC, DB>> = revm_interpreter::opcode::make_instruction_table::<
+                    EVMFuzzState,
+                    FuzzHost<SC, DB>,
+                    SpuriousDragonSpec,
+                >();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, state, &table)
             }
-            SpecId::BYZANTIUM => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>(self, state),
+            SpecId::BYZANTIUM => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>(self, state, &table)
+            }
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(self, state)
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(
+                    );
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(self, state, &table)
             }
-            SpecId::ISTANBUL => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>(self, state),
+            SpecId::ISTANBUL => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>(self, state, &table)
+            }
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>(self, state)
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>(self, state, &table)
             }
-            SpecId::LONDON => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>(self, state),
-            SpecId::MERGE => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>(self, state),
-            SpecId::SHANGHAI => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state),
-            SpecId::CANCUN => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>(self, state),
-            _ => interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state),
+            SpecId::LONDON => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>(self, state, &table)
+            }
+            SpecId::MERGE => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>(self, state, &table)
+            }
+            SpecId::SHANGHAI => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state, &table)
+            }
+            SpecId::CANCUN => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>(self, state, &table)
+            }
+            _ => {
+                let table: InstructionTable<FuzzHost<SC, DB>> =
+                    revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>();
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state, &table)
+            }
         }
     }
 
@@ -1422,184 +1482,178 @@ impl<SC, DB> Host<EVMFuzzState> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    // fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) ->
-    // InstructionResult {     unsafe {
-    //         // debug!("pc: {}", interp.program_counter());
-    //         // debug!("{:?}", *interp.instruction_pointer);
-    //         invoke_middlewares!(self, interp, state, on_step);
-    //         if IS_FAST_CALL_STATIC {
-    //             return Continue;
-    //         }
+    fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
+        unsafe {
+            // debug!("pc: {}", interp.program_counter());
+            // debug!("{:?}", *interp.instruction_pointer);
+            invoke_middlewares!(self, interp, state, on_step);
+            if IS_FAST_CALL_STATIC {
+                return Continue;
+            }
 
-    //         macro_rules! fast_peek {
-    //             ($idx:expr) => {
-    //                 interp.stack.data()[interp.stack.len() - 1 - $idx]
-    //             };
-    //         }
-    //         match *interp.instruction_pointer {
-    //             // 0xfd => {
-    //             //     println!("fd {} @ {:?}", interp.program_counter(),
-    // interp.contract.address);             // }
-    //             // 0x3b => {
-    //             //     println!(
-    //             //         "3b {} @ {:?} {:?}",
-    //             //         interp.program_counter(),
-    //             //         interp.contract.address,
-    //             //         fast_peek!(0)
-    //             //     );
-    //             // }
-    //             // 0x31 | 0x47 => {
-    //             //     debug!("host setp balance");
-    //             //     std::thread::sleep(std::time::Duration::from_secs(3));
-    //             // }
-    //             0x57 => {
-    //                 // JUMPI counter cond
-    //                 let br = fast_peek!(1);
-    //                 let jump_dest = if is_zero(br) { 1 } else {
-    // as_u64(fast_peek!(0)) };                 let _pc =
-    // interp.program_counter();
+            macro_rules! fast_peek {
+                ($idx:expr) => {
+                    interp.stack.data()[interp.stack.len() - 1 - $idx]
+                };
+            }
+            match *interp.instruction_pointer {
+                // 0xfd => {
+                //     println!("fd {} @ {:?}", interp.program_counter(),
+                // interp.contract.address);             // }
+                // 0x3b => {
+                //     println!(
+                //         "3b {} @ {:?} {:?}",
+                //         interp.program_counter(),
+                //         interp.contract.address,
+                //         fast_peek!(0)
+                //     );
+                // }
+                // 0x31 | 0x47 => {
+                //     debug!("host setp balance");
+                //     std::thread::sleep(std::time::Duration::from_secs(3));
+                0x57 => {
+                    // JUMPI counter cond
+                    let br = fast_peek!(1);
+                    let jump_dest = if is_zero(br) { 1 } else { as_u64(fast_peek!(0)) };
+                    let _pc = interp.program_counter();
 
-    //                 let (shash, _) = self.jumpi_trace.overflowing_mul(54059);
-    //                 self.jumpi_trace = (shash) ^ (_pc * 76963);
-    //                 let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
-    //                 if JMP_MAP[idx] == 0 {
-    //                     self.coverage_changed = true;
-    //                 }
-    //                 JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);
+                    let (shash, _) = self.jumpi_trace.overflowing_mul(54059);
+                    self.jumpi_trace = (shash) ^ (_pc * 76963);
+                    let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
+                    if JMP_MAP[idx] == 0 {
+                        self.coverage_changed = true;
+                    }
+                    JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);
 
-    //                 #[cfg(feature = "cmp")]
-    //                 {
-    //                     let idx = (interp.program_counter()) % MAP_SIZE;
-    //                     CMP_MAP[idx] = br;
-    //                 }
+                    #[cfg(feature = "cmp")]
+                    {
+                        let idx = (interp.program_counter()) % MAP_SIZE;
+                        CMP_MAP[idx] = br;
+                    }
 
-    //                 add_branch((interp.contract.target_address,
-    // interp.program_counter(), jump_dest != 1));             }
+                    add_branch((interp.contract.target_address, interp.program_counter(), jump_dest != 1));
+                }
 
-    //             #[cfg(any(feature = "dataflow", feature = "cmp"))]
-    //             0x55 => {
-    //                 // SSTORE
-    //                 let pc = interp.program_counter();
-    //                 if
-    // !self.mapping_sstore_pcs.contains(&(interp.contract.target_address, pc)) {
-    //                     let mut key = fast_peek!(0);
-    //                     let slots = self
-    //                         .mapping_sstore_pcs_to_slot
-    //                         .entry((interp.contract.target_address, pc))
-    //                         .or_default();
-    //                     slots.insert(key);
-    //                     if slots.len() > 10 {
-    //
-    // self.mapping_sstore_pcs.insert((interp.contract.target_address, pc));
-    //                     }
+                #[cfg(any(feature = "dataflow", feature = "cmp"))]
+                0x55 => {
+                    // SSTORE
+                    let pc = interp.program_counter();
+                    if !self.mapping_sstore_pcs.contains(&(interp.contract.target_address, pc)) {
+                        let mut key = fast_peek!(0);
+                        let slots = self
+                            .mapping_sstore_pcs_to_slot
+                            .entry((interp.contract.target_address, pc))
+                            .or_default();
+                        slots.insert(key);
+                        if slots.len() > 10 {
+                            self.mapping_sstore_pcs.insert((interp.contract.target_address, pc));
+                        }
 
-    //                     let value = fast_peek!(1);
-    //                     let compressed_value = u256_to_u8!(value) + 1;
-    //                     WRITE_MAP[process_rw_key!(key)] = compressed_value;
+                        let value = fast_peek!(1);
+                        let compressed_value = u256_to_u8!(value) + 1;
+                        WRITE_MAP[process_rw_key!(key)] = compressed_value;
 
-    //                     let res = <FuzzHost<SC> as Host<EVMFuzzState>>::sload(
-    //                         self,
-    //                         interp.contract.target_address,
-    //                         fast_peek!(0),
-    //                     );
-    //                     let value_changed = res.expect("sload failed").0 !=
-    // value;
+                        let res = <FuzzHost<SC, DB> as Host<EVMFuzzState>>::sload(
+                            self,
+                            interp.contract.target_address,
+                            fast_peek!(0),
+                        );
+                        let value_changed = res.expect("sload failed").0 != value;
 
-    //                     let idx = interp.program_counter() % MAP_SIZE;
-    //                     JMP_MAP[idx] = if value_changed { 1 } else { 0 };
+                        let idx = interp.program_counter() % MAP_SIZE;
+                        JMP_MAP[idx] = if value_changed { 1 } else { 0 };
 
-    //                     STATE_CHANGE |= value_changed;
-    //                 }
-    //             }
+                        STATE_CHANGE |= value_changed;
+                    }
+                }
 
-    //             #[cfg(feature = "dataflow")]
-    //             0x54 => {
-    //                 // SLOAD
-    //                 let mut key = fast_peek!(0);
-    //                 READ_MAP[process_rw_key!(key)] = true;
-    //             }
+                #[cfg(feature = "dataflow")]
+                0x54 => {
+                    // SLOAD
+                    let mut key = fast_peek!(0);
+                    READ_MAP[process_rw_key!(key)] = true;
+                }
 
-    //             // todo(shou): support signed checking
-    //             #[cfg(feature = "cmp")]
-    //             0x10 | 0x12 => {
-    //                 // LT, SLT
-    //                 let v1 = fast_peek!(0);
-    //                 let v2 = fast_peek!(1);
-    //                 let abs_diff = if v1 >= v2 {
-    //                     if v1 - v2 != EVMU256::ZERO {
-    //                         v1 - v2
-    //                     } else {
-    //                         EVMU256::from(1)
-    //                     }
-    //                 } else {
-    //                     EVMU256::ZERO
-    //                 };
-    //                 let idx = interp.program_counter() % MAP_SIZE;
-    //                 if abs_diff < CMP_MAP[idx] {
-    //                     CMP_MAP[idx] = abs_diff;
-    //                 }
-    //             }
+                // todo(shou): support signed checking
+                #[cfg(feature = "cmp")]
+                0x10 | 0x12 => {
+                    // LT, SLT
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 >= v2 {
+                        if v1 - v2 != EVMU256::ZERO {
+                            v1 - v2
+                        } else {
+                            EVMU256::from(1)
+                        }
+                    } else {
+                        EVMU256::ZERO
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
 
-    //             #[cfg(feature = "cmp")]
-    //             0x11 | 0x13 => {
-    //                 // GT, SGT
-    //                 let v1 = fast_peek!(0);
-    //                 let v2 = fast_peek!(1);
-    //                 let abs_diff = if v1 <= v2 {
-    //                     if v2 - v1 != EVMU256::ZERO {
-    //                         v2 - v1
-    //                     } else {
-    //                         EVMU256::from(1)
-    //                     }
-    //                 } else {
-    //                     EVMU256::ZERO
-    //                 };
-    //                 let idx = interp.program_counter() % MAP_SIZE;
-    //                 if abs_diff < CMP_MAP[idx] {
-    //                     CMP_MAP[idx] = abs_diff;
-    //                 }
-    //             }
+                #[cfg(feature = "cmp")]
+                0x11 | 0x13 => {
+                    // GT, SGT
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 <= v2 {
+                        if v2 - v1 != EVMU256::ZERO {
+                            v2 - v1
+                        } else {
+                            EVMU256::from(1)
+                        }
+                    } else {
+                        EVMU256::ZERO
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
 
-    //             #[cfg(feature = "cmp")]
-    //             0x14 => {
-    //                 // EQ
-    //                 let v1 = fast_peek!(0);
-    //                 let v2 = fast_peek!(1);
-    //                 let abs_diff = if v1 < v2 {
-    //                     (v2 - v1) % (EVMU256::MAX - EVMU256::from(1)) +
-    // EVMU256::from(1)                 } else {
-    //                     (v1 - v2) % (EVMU256::MAX - EVMU256::from(1)) +
-    // EVMU256::from(1)                 };
-    //                 let idx = interp.program_counter() % MAP_SIZE;
-    //                 if abs_diff < CMP_MAP[idx] {
-    //                     CMP_MAP[idx] = abs_diff;
-    //                 }
-    //             }
+                #[cfg(feature = "cmp")]
+                0x14 => {
+                    // EQ
+                    let v1 = fast_peek!(0);
+                    let v2 = fast_peek!(1);
+                    let abs_diff = if v1 < v2 {
+                        (v2 - v1) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
+                    } else {
+                        (v1 - v2) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
+                    };
+                    let idx = interp.program_counter() % MAP_SIZE;
+                    if abs_diff < CMP_MAP[idx] {
+                        CMP_MAP[idx] = abs_diff;
+                    }
+                }
 
-    //             0xf1 | 0xf2 | 0xf4 | 0xfa => {
-    //                 let offset_of_ret_size: usize = match
-    // *interp.instruction_pointer {                     0xf1 | 0xf2 => 6,
-    //                     0xf4 | 0xfa => 5,
-    //                     _ => unreachable!(),
-    //                 };
-    //                 {
-    //                     RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1))
-    // as usize;                     // debug!("RET_OFFSET: {}", RET_OFFSET);
-    //                     RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as
-    // usize;                 }
-    //                 self._pc = interp.program_counter();
-    //             }
-    //             0xf0 | 0xf5 | 0xa0..=0xa4 | 0xff => {
-    //                 // CREATE, CREATE2
-    //                 self._pc = interp.program_counter();
-    //             }
-    //             _ => {}
-    //         }
+                0xf1 | 0xf2 | 0xf4 | 0xfa => {
+                    let offset_of_ret_size: usize = match *interp.instruction_pointer {
+                        0xf1 | 0xf2 => 6,
+                        0xf4 | 0xfa => 5,
+                        _ => unreachable!(),
+                    };
+                    {
+                        RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1)) as usize; // debug!("RET_OFFSET: {}", RET_OFFSET);
+                        RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as usize;
+                    }
+                    self._pc = interp.program_counter();
+                }
+                0xf0 | 0xf5 | 0xa0..=0xa4 | 0xff => {
+                    // CREATE, CREATE2
+                    self._pc = interp.program_counter();
+                }
+                _ => {}
+            }
 
-    //         self.access_pattern.deref().borrow_mut().decode_instruction(interp);
-    //     }
-    //     Continue
-    // }
+            self.access_pattern.deref().borrow_mut().decode_instruction(interp);
+        }
+        Continue
+    }
 
     // fn step_end(
     //     &mut self,

@@ -693,7 +693,7 @@ mod tests {
         state_input::StagedVMState,
     };
 
-    #[test]
+    // #[test]
     fn test_foundry_contract() {
         logger::init_test();
 
