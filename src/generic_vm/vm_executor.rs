@@ -81,5 +81,3 @@ pub trait GenericVM<VS, Code, By, Loc, Addr, SlotTy, Out, I, S, CI> {
 
     fn as_any(&mut self) -> &mut dyn std::any::Any;
 }
-
-

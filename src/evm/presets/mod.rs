@@ -16,7 +16,7 @@ use crate::{
     input::VMInputT,
 };
 
-pub trait Preset<I, VS, SC,   DB>
+pub trait Preset<I, VS, SC, DB>
 where
     I: VMInputT<VS, EVMAddress, EVMAddress, ConciseEVMInput> + EVMInputT,
     VS: VMStateT,
@@ -26,7 +26,7 @@ where
         &self,
         function_sig: [u8; 4],
         input: &EVMInput,
-        evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC,   DB>,
+        evm_executor: &EVMExecutor<VS, ConciseEVMInput, SC, DB>,
     ) -> Vec<EVMInput>;
 }
 
