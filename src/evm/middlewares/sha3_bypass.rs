@@ -409,17 +409,12 @@ impl Sha3Bypass {
 
 impl<SC, DB> Middleware<SC, DB> for Sha3Bypass
 where
-    SC: Scheduler<State = EVMFuzzState> + Clone,
+    SC: Scheduler<State = EVMFuzzState> + Clone
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
-            if self
-                .sha3_taints
-                .borrow()
-                .tainted_jumpi
-                .contains(&(interp.contract.target_address, jumpi))
-            {
+            if self.sha3_taints.borrow().tainted_jumpi.contains(&(interp.contract.target_address, jumpi)) {
                 let stack_len = interp.stack.len();
                 // interp.stack.data[stack_len - 2] = EVMU256::from((jumpi + host.randomness[0]
                 // as usize) % 2);
