@@ -412,7 +412,6 @@ where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
-
         if *interp.instruction_pointer == JUMPI {
             let jumpi = interp.program_counter();
             if self
