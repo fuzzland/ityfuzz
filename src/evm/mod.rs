@@ -29,8 +29,6 @@ pub mod vm;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
-    io::Write,
     path::Path,
     rc::Rc,
     str::FromStr,

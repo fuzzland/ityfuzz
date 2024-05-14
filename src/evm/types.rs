@@ -2,13 +2,9 @@ use alloy_primitives::Address;
 use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use libafl::prelude::HasRand;
-use libafl_bolts::bolts_prelude::{Rand, RomuDuoJrRand};
 use primitive_types::H160;
 use rand::{thread_rng, Rng};
-use revm::{
-    db::{CacheDB, EmptyDB},
-    Database,
-};
+use revm::db::{CacheDB, EmptyDB};
 use revm_primitives::{ruint::aliases::U512, Bytecode, U256};
 
 /// Common generic types for EVM fuzzing

@@ -1,5 +1,6 @@
-use core::{fmt, panic};
+use core::panic;
 use std::{
+    self,
     cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter},
@@ -9,7 +10,6 @@ use std::{
     rc::Rc,
     str::FromStr,
     sync::{Arc, RwLock},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use alloy_dyn_abi::DynSolType;
@@ -18,28 +18,25 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasMetadata, Scheduler};
 use revm::{
-    handler,
     precompile::{Precompile, Precompiles},
     Database,
-    DatabaseRef,
-    Evm,
     EvmContext,
-    Handler,
     Inspector,
 };
 use revm_interpreter::{
-    interpreter,
-    opcode::{self, InstructionTable},
+    opcode::InstructionTable,
     return_ok,
     CallInputs,
+    CallOutcome,
     CallScheme,
     Contract,
     CreateInputs,
-    DummyHost,
+    CreateOutcome,
     Gas,
     Host,
     InstructionResult::{self, Continue, ControlLeak, Revert},
     Interpreter,
+    InterpreterResult,
     LoadAccountResult,
     SStoreResult,
     SelfDestructResult,
@@ -79,7 +76,7 @@ use super::{
         REVERT_PREFIX,
     },
     types::EVMFuzzState,
-    vm::{IS_FAST_CALL, MEM_LIMIT, SETCODE_ONLY},
+    vm::{IS_FAST_CALL, SETCODE_ONLY},
 };
 use crate::{
     evm::{
@@ -281,366 +278,6 @@ where
             .finish()
     }
 }
-
-impl<SC, DB: Database> FuzzHost<SC, DB>
-where
-    SC: Scheduler<State = EVMFuzzState> + Clone,
-{
-    fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
-        unsafe {
-            // debug!("pc: {}", interp.program_counter());
-            // debug!("{:?}", *interp.instruction_pointer);
-            invoke_middlewares!(self, interp, state, on_step);
-            if IS_FAST_CALL_STATIC {
-                return Continue;
-            }
-
-            macro_rules! fast_peek {
-                ($idx:expr) => {
-                    interp.stack.data()[interp.stack.len() - 1 - $idx]
-                };
-            }
-            match *interp.instruction_pointer {
-                // 0xfd => {
-                //     println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
-                // }
-                // 0x3b => {
-                //     println!(
-                //         "3b {} @ {:?} {:?}",
-                //         interp.program_counter(),
-                //         interp.contract.address,
-                //         fast_peek!(0)
-                //     );
-                // }
-                // 0x31 | 0x47 => {
-                //     debug!("host setp balance");
-                //     std::thread::sleep(std::time::Duration::from_secs(3));
-                // }
-                0x57 => {
-                    // JUMPI counter cond
-                    let br = fast_peek!(1);
-                    let jump_dest = if is_zero(br) { 1 } else { as_u64(fast_peek!(0)) };
-                    let _pc = interp.program_counter();
-
-                    let (shash, _) = self.jumpi_trace.overflowing_mul(54059);
-                    self.jumpi_trace = (shash) ^ (_pc * 76963);
-                    let idx = (_pc * (jump_dest as usize)) % MAP_SIZE;
-                    if JMP_MAP[idx] == 0 {
-                        self.coverage_changed = true;
-                    }
-                    JMP_MAP[idx] = JMP_MAP[idx].saturating_add(1);
-
-                    #[cfg(feature = "cmp")]
-                    {
-                        let idx = (interp.program_counter()) % MAP_SIZE;
-                        CMP_MAP[idx] = br;
-                    }
-
-                    add_branch((interp.contract.target_address, interp.program_counter(), jump_dest != 1));
-                }
-
-                #[cfg(any(feature = "dataflow", feature = "cmp"))]
-                0x55 => {
-                    // SSTORE
-                    let pc = interp.program_counter();
-                    if !self.mapping_sstore_pcs.contains(&(interp.contract.target_address, pc)) {
-                        let mut key = fast_peek!(0);
-                        let slots = self
-                            .mapping_sstore_pcs_to_slot
-                            .entry((interp.contract.target_address, pc))
-                            .or_default();
-                        slots.insert(key);
-                        if slots.len() > 10 {
-                            self.mapping_sstore_pcs.insert((interp.contract.target_address, pc));
-                        }
-
-                        let value = fast_peek!(1);
-                        let compressed_value = u256_to_u8!(value) + 1;
-                        WRITE_MAP[process_rw_key!(key)] = compressed_value;
-
-                        let res = <FuzzHost<SC, DB> as Host<EVMFuzzState>>::sload(
-                            self,
-                            interp.contract.target_address,
-                            fast_peek!(0),
-                        );
-                        let value_changed = res.expect("sload failed").0 != value;
-
-                        let idx = interp.program_counter() % MAP_SIZE;
-                        JMP_MAP[idx] = if value_changed { 1 } else { 0 };
-
-                        STATE_CHANGE |= value_changed;
-                    }
-                }
-
-                #[cfg(feature = "dataflow")]
-                0x54 => {
-                    // SLOAD
-                    let mut key = fast_peek!(0);
-                    READ_MAP[process_rw_key!(key)] = true;
-                }
-
-                // todo(shou): support signed checking
-                #[cfg(feature = "cmp")]
-                0x10 | 0x12 => {
-                    // LT, SLT
-                    let v1 = fast_peek!(0);
-                    let v2 = fast_peek!(1);
-                    let abs_diff = if v1 >= v2 {
-                        if v1 - v2 != EVMU256::ZERO {
-                            v1 - v2
-                        } else {
-                            EVMU256::from(1)
-                        }
-                    } else {
-                        EVMU256::ZERO
-                    };
-                    let idx = interp.program_counter() % MAP_SIZE;
-                    if abs_diff < CMP_MAP[idx] {
-                        CMP_MAP[idx] = abs_diff;
-                    }
-                }
-
-                #[cfg(feature = "cmp")]
-                0x11 | 0x13 => {
-                    // GT, SGT
-                    let v1 = fast_peek!(0);
-                    let v2 = fast_peek!(1);
-                    let abs_diff = if v1 <= v2 {
-                        if v2 - v1 != EVMU256::ZERO {
-                            v2 - v1
-                        } else {
-                            EVMU256::from(1)
-                        }
-                    } else {
-                        EVMU256::ZERO
-                    };
-                    let idx = interp.program_counter() % MAP_SIZE;
-                    if abs_diff < CMP_MAP[idx] {
-                        CMP_MAP[idx] = abs_diff;
-                    }
-                }
-
-                #[cfg(feature = "cmp")]
-                0x14 => {
-                    // EQ
-                    let v1 = fast_peek!(0);
-                    let v2 = fast_peek!(1);
-                    let abs_diff = if v1 < v2 {
-                        (v2 - v1) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
-                    } else {
-                        (v1 - v2) % (EVMU256::MAX - EVMU256::from(1)) + EVMU256::from(1)
-                    };
-                    let idx = interp.program_counter() % MAP_SIZE;
-                    if abs_diff < CMP_MAP[idx] {
-                        CMP_MAP[idx] = abs_diff;
-                    }
-                }
-
-                0xf1 | 0xf2 | 0xf4 | 0xfa => {
-                    let offset_of_ret_size: usize = match *interp.instruction_pointer {
-                        0xf1 | 0xf2 => 6,
-                        0xf4 | 0xfa => 5,
-                        _ => unreachable!(),
-                    };
-                    {
-                        RET_OFFSET = as_u64(fast_peek!(offset_of_ret_size - 1)) as usize;
-                        // debug!("RET_OFFSET: {}", RET_OFFSET);
-                        RET_SIZE = as_u64(fast_peek!(offset_of_ret_size)) as usize;
-                    }
-                    self._pc = interp.program_counter();
-                }
-                0xf0 | 0xf5 | 0xa0..=0xa4 | 0xff => {
-                    // CREATE, CREATE2
-                    self._pc = interp.program_counter();
-                }
-                _ => {}
-            }
-
-            self.access_pattern.deref().borrow_mut().decode_instruction(interp);
-        }
-        Continue
-    }
-
-    fn create(
-        &mut self,
-        inputs: &mut CreateInputs,
-        state: &mut EVMFuzzState,
-    ) -> (InstructionResult, Option<EVMAddress>, Gas, Bytes) {
-        if unsafe { IN_DEPLOY } {
-            // todo: use nonce + hash instead
-            let r_addr = generate_random_address(state);
-            // let mut interp = Interpreter::new_with_memory_limit(
-            //     Contract::new_with_context(
-            //         revm_primitives::Bytes::new(),
-            //         Bytecode::new_raw(inputs.init_code.clone()),
-            //         &CallContext {
-            //             address: r_addr,
-            //             caller: inputs.caller,
-            //             code_address: r_addr,
-            //             apparent_value: inputs.value,
-            //             scheme: CallScheme::Call,
-            //         },
-            //     ),
-            //     1e10 as u64,
-            //     false,
-            //     MEM_LIMIT,
-            // );
-            let mut interp = Interpreter::new(
-                Contract::new(
-                    revm_primitives::Bytes::new(),
-                    Arc::new(Bytecode::new_raw(inputs.init_code.clone())),
-                    None,
-                    r_addr,
-                    inputs.caller,
-                    inputs.value,
-                ),
-                1e10 as u64,
-                false,
-            );
-            let ret = self.run_inspect(&mut interp, state);
-            debug!("create: {:?} -> {:?} = {:?}", inputs.caller, r_addr, ret);
-            if !is_reverted_or_control_leak(&ret) {
-                let runtime_code = interp.return_data_buffer;
-                self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), state);
-                if !unsafe { SETCODE_ONLY } {
-                    // now we build & insert abi
-                    let contract_code_str = hex::encode(runtime_code.clone());
-                    let sigs = extract_sig_from_contract(&contract_code_str);
-                    let mut unknown_sigs: usize = 0;
-                    let mut parsed_abi = vec![];
-                    for sig in &sigs {
-                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
-                            parsed_abi.push(abi.clone());
-                        } else {
-                            unknown_sigs += 1;
-                        }
-                    }
-
-                    if unknown_sigs >= sigs.len() / 30 {
-                        debug!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
-                        let abis = fetch_abi_heimdall(contract_code_str)
-                            .iter()
-                            .map(|abi| {
-                                if let Some(known_abi) =
-                                    state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
-                                {
-                                    known_abi
-                                } else {
-                                    abi
-                                }
-                            })
-                            .cloned()
-                            .collect_vec();
-                        parsed_abi = abis;
-                    }
-                    // notify flashloan and blacklisting flashloan addresses
-                    handle_contract_insertion!(state, self, r_addr, parsed_abi);
-
-                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
-                        #[cfg(not(feature = "fuzz_static"))]
-                        if abi.is_static {
-                            return;
-                        }
-
-                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
-                        abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
-                        register_abi_instance(r_addr, abi_instance.clone(), state);
-
-                        let input = EVMInput {
-                            caller: state.get_rand_caller(),
-                            contract: r_addr,
-                            data: Some(abi_instance),
-                            sstate: StagedVMState::new_uninitialized(),
-                            sstate_idx: 0,
-                            txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
-                            step: false,
-                            env: Default::default(),
-                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
-                            liquidation_percent: 0,
-                            input_type: EVMInputTy::ABI,
-                            direct_data: Default::default(),
-                            randomness: vec![0],
-                            repeat: 1,
-                            swap_data: HashMap::new(),
-                        };
-                        add_corpus(self, state, &input);
-                    });
-                }
-                (Continue, Some(r_addr), Gas::new(0), Bytes::from(runtime_code))
-            } else {
-                (ret, Some(r_addr), Gas::new(0), Bytes::new())
-            }
-        } else {
-            (InstructionResult::Revert, None, Gas::new(0), Bytes::new())
-        }
-    }
-
-    fn call(
-        &mut self,
-        input: &mut CallInputs,
-        interp: &mut Interpreter,
-        output_info: (usize, usize),
-        state: &mut EVMFuzzState,
-    ) -> (InstructionResult, Gas, Bytes) {
-        self.apply_prank(&interp.contract().caller, input);
-        self.call_depth += 1;
-
-        // let value = EVMU256::from(input.transfer.value);
-        let value = EVMU256::from(input.call_value());
-        if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
-            // let sender = input.transfer.source;
-            let sender = input.caller;
-            debug!("call sender: {:?}", sender);
-            let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
-                *balance
-            } else {
-                self.evmstate.set_balance(sender, self.next_slot);
-                self.next_slot
-            };
-            // debug!("call sender balance: {}", current);
-            if current < value {
-                return (Revert, Gas::new(0), Bytes::new());
-            }
-            self.evmstate.set_balance(sender, current - value);
-
-            // let receiver = input.transfer.target;
-            let receiver = input.target_address;
-            if let Some(balance) = self.evmstate.get_balance(&receiver) {
-                self.evmstate.set_balance(receiver, *balance + value);
-            } else {
-                self.evmstate.set_balance(receiver, self.next_slot + value);
-            };
-        }
-        // chao  input.contract == target_address
-        let mut res = if is_precompile(input.target_address, self.precompiles.len()) {
-            self.call_precompile(input, state)
-        } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
-            self.call_forbid_control_leak(input, state)
-        } else {
-            self.call_allow_control_leak(input, interp, output_info, state)
-        };
-
-        let ret_buffer = res.2.clone();
-
-        self.call_depth -= 1;
-        res = self.check_expected(input, res);
-        self.clean_prank();
-
-        unsafe {
-            if self.middlewares_enabled {
-                let mut middlewares = self.middlewares.read().unwrap().clone();
-                for middleware in middlewares.iter_mut() {
-                    middleware
-                        .deref()
-                        .borrow_mut()
-                        .on_return(interp, self, state, &ret_buffer);
-                }
-            }
-        }
-        res
-    }
-}
-
 impl<T, SC, DB: Database> Inspector<T, DB> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
@@ -772,11 +409,6 @@ where
 
     pub fn set_spec_id(&mut self, spec_id: String) {
         self.spec_id = SpecId::from(spec_id.as_str());
-    }
-
-    pub fn get_some() {
-        let table: InstructionTable<dyn Host<u32>> =
-            revm_interpreter::opcode::make_instruction_table::<u32, dyn Host<u32>, CancunSpec>();
     }
 
     /// custom spec id run_inspect
@@ -1653,6 +1285,217 @@ where
             self.access_pattern.deref().borrow_mut().decode_instruction(interp);
         }
         Continue
+    }
+
+    fn create(&mut self, inputs: &mut CreateInputs, state: &mut EVMFuzzState) -> CreateOutcome {
+        if unsafe { IN_DEPLOY } {
+            // todo: use nonce + hash instead
+            let r_addr = generate_random_address(state);
+            // let mut interp = Interpreter::new_with_memory_limit(
+            //     Contract::new_with_context(
+            //         revm_primitives::Bytes::new(),
+            //         Bytecode::new_raw(inputs.init_code.clone()),
+            //         &CallContext {
+            //             address: r_addr,
+            //             caller: inputs.caller,
+            //             code_address: r_addr,
+            //             apparent_value: inputs.value,
+            //             scheme: CallScheme::Call,
+            //         },
+            //     ),
+            //     1e10 as u64,
+            //     false,
+            //     MEM_LIMIT,
+            // );
+            let mut interp = Interpreter::new(
+                Contract::new(
+                    revm_primitives::Bytes::new(),
+                    Arc::new(Bytecode::new_raw(inputs.init_code.clone())),
+                    None,
+                    r_addr,
+                    inputs.caller,
+                    inputs.value,
+                ),
+                1e10 as u64,
+                false,
+            );
+            let ret = self.run_inspect(&mut interp, state);
+            debug!("create: {:?} -> {:?} = {:?}", inputs.caller, r_addr, ret);
+            if !is_reverted_or_control_leak(&ret) {
+                let runtime_code = interp.return_data_buffer;
+                self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), state);
+                if !unsafe { SETCODE_ONLY } {
+                    // now we build & insert abi
+                    let contract_code_str = hex::encode(runtime_code.clone());
+                    let sigs = extract_sig_from_contract(&contract_code_str);
+                    let mut unknown_sigs: usize = 0;
+                    let mut parsed_abi = vec![];
+                    for sig in &sigs {
+                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
+                            parsed_abi.push(abi.clone());
+                        } else {
+                            unknown_sigs += 1;
+                        }
+                    }
+
+                    if unknown_sigs >= sigs.len() / 30 {
+                        debug!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
+                        let abis = fetch_abi_heimdall(contract_code_str)
+                            .iter()
+                            .map(|abi| {
+                                if let Some(known_abi) =
+                                    state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
+                                {
+                                    known_abi
+                                } else {
+                                    abi
+                                }
+                            })
+                            .cloned()
+                            .collect_vec();
+                        parsed_abi = abis;
+                    }
+                    // notify flashloan and blacklisting flashloan addresses
+                    handle_contract_insertion!(state, self, r_addr, parsed_abi);
+
+                    parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
+                        #[cfg(not(feature = "fuzz_static"))]
+                        if abi.is_static {
+                            return;
+                        }
+
+                        let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                        abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                        register_abi_instance(r_addr, abi_instance.clone(), state);
+
+                        let input = EVMInput {
+                            caller: state.get_rand_caller(),
+                            contract: r_addr,
+                            data: Some(abi_instance),
+                            sstate: StagedVMState::new_uninitialized(),
+                            sstate_idx: 0,
+                            txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
+                            step: false,
+                            env: Default::default(),
+                            access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                            liquidation_percent: 0,
+                            input_type: EVMInputTy::ABI,
+                            direct_data: Default::default(),
+                            randomness: vec![0],
+                            repeat: 1,
+                            swap_data: HashMap::new(),
+                        };
+                        add_corpus(self, state, &input);
+                    });
+                }
+                CreateOutcome {
+                    result: InterpreterResult {
+                        result: Continue,
+                        output: revm_primitives::Bytes::from(runtime_code),
+                        gas: Gas::new(0),
+                    },
+                    address: Some(r_addr),
+                }
+            } else {
+                CreateOutcome {
+                    result: InterpreterResult {
+                        result: ret,
+                        output: revm_primitives::Bytes::new(),
+                        gas: Gas::new(0),
+                    },
+                    address: Some(r_addr),
+                }
+            }
+        } else {
+            CreateOutcome {
+                result: InterpreterResult {
+                    result: Revert,
+                    output: revm_primitives::Bytes::new(),
+                    gas: Gas::new(0),
+                },
+                address: None,
+            }
+        }
+    }
+
+    fn call(
+        &mut self,
+        input: &mut CallInputs,
+        interp: &mut Interpreter,
+        output_info: (usize, usize),
+        state: &mut EVMFuzzState,
+    ) -> CallOutcome {
+        self.apply_prank(&interp.contract().caller, input);
+        self.call_depth += 1;
+
+        // let value = EVMU256::from(input.transfer.value);
+        let value = EVMU256::from(input.call_value());
+        if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
+            // let sender = input.transfer.source;
+            let sender = input.caller;
+            debug!("call sender: {:?}", sender);
+            let current = if let Some(balance) = self.evmstate.get_balance(&sender) {
+                *balance
+            } else {
+                self.evmstate.set_balance(sender, self.next_slot);
+                self.next_slot
+            };
+            // debug!("call sender balance: {}", current);
+            if current < value {
+                return CallOutcome {
+                    result: InterpreterResult {
+                        result: Revert,
+                        output: revm_primitives::Bytes::new(),
+                        gas: Gas::new(0),
+                    },
+                    memory_offset: (0..0),
+                };
+            }
+            self.evmstate.set_balance(sender, current - value);
+
+            // let receiver = input.transfer.target;
+            let receiver = input.target_address;
+            if let Some(balance) = self.evmstate.get_balance(&receiver) {
+                self.evmstate.set_balance(receiver, *balance + value);
+            } else {
+                self.evmstate.set_balance(receiver, self.next_slot + value);
+            };
+        }
+        // chao  input.contract == target_address
+        let mut res = if is_precompile(input.target_address, self.precompiles.len()) {
+            self.call_precompile(input, state)
+        } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {
+            self.call_forbid_control_leak(input, state)
+        } else {
+            self.call_allow_control_leak(input, interp, output_info, state)
+        };
+
+        let ret_buffer = res.2.clone();
+
+        self.call_depth -= 1;
+        res = self.check_expected(input, res);
+        self.clean_prank();
+
+        unsafe {
+            if self.middlewares_enabled {
+                let mut middlewares = self.middlewares.read().unwrap().clone();
+                for middleware in middlewares.iter_mut() {
+                    middleware
+                        .deref()
+                        .borrow_mut()
+                        .on_return(interp, self, state, &ret_buffer);
+                }
+            }
+        }
+        return CallOutcome {
+            result: InterpreterResult {
+                result: res.0,
+                output: res.2.into(),
+                gas: res.1,
+            },
+            memory_offset: todo!(),
+        };
+        // res
     }
 
     // fn step_end(

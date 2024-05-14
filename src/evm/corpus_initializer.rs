@@ -19,7 +19,6 @@ use libafl::{
     state::HasCorpus,
 };
 use libafl_bolts::impl_serdeany;
-use revm::Database;
 use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};

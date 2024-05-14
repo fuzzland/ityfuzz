@@ -1,14 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use libafl::{
-    feedbacks::Feedback,
-    prelude::{MapFeedback, MaxMapFeedback, QueueScheduler, SimpleEventManager, SimpleMonitor, StdMapObserver},
-    stages::StdMutationalStage,
-    Fuzzer,
-};
-use libafl_bolts::tuples::tuple_list;
-use tracing::info;
-
 #[cfg(feature = "sui_support")]
 use crate::r#move::corpus_initializer::MoveCorpusInitializer;
 #[cfg(feature = "sui_support")]

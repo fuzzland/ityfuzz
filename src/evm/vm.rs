@@ -15,7 +15,6 @@ use std::{
 
 use alloy_primitives::Address;
 use bytes::Bytes;
-use ethers::core::k256::sha2::digest::KeyInit;
 /// EVM executor implementation
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;

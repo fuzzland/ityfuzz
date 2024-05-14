@@ -68,7 +68,7 @@ use crate::{
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
     oracle::BugMetadata,
     scheduler::SortedDroppingScheduler,
-    state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
+    state::{FuzzState, HasExecutionResult},
 };
 
 #[allow(clippy::type_complexity)]

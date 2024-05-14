@@ -121,7 +121,7 @@ impl<E: libafl::executors::HasObservers>
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
         assert!(!txs.is_empty());
         let mut minimized = false;
-        let mut initial_state = txs[0].0.sstate.clone();
+        let initial_state = txs[0].0.sstate.clone();
         while !minimized {
             minimized = true;
             for try_skip in 0..(txs.len()) {

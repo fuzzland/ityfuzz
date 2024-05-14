@@ -14,10 +14,7 @@ use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
-use revm::{
-    db::{CacheDB, EmptyDB},
-    Database,
-};
+use revm::db::{CacheDB, EmptyDB};
 use revm_primitives::{Bytecode, Env};
 use serde_json::Value;
 
@@ -37,7 +34,7 @@ extern crate crypto;
 
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use self::crypto::{digest::Digest, sha3::Sha3};
 use super::{
