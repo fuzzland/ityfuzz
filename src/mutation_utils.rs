@@ -60,6 +60,74 @@ impl ConstantPoolMetadata {
 
 impl_serdeany!(ConstantPoolMetadata);
 
+/// [`IncDecValue`] is a mutator that mutates the input by overflowing_add 1 or
+/// overflowing_sub 1
+///
+/// When paired with [`ConstantHintedMutator`], it allows us to increase test
+/// coverage by passing `<input> <CONSTANT> gt` and `<input> <CONSTANT> lt` in
+/// the contract
+#[derive(Default)]
+pub struct IncDecValue;
+
+impl Named for IncDecValue {
+    fn name(&self) -> &str {
+        "IncDecValue"
+    }
+}
+
+impl IncDecValue {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl<I, S> Mutator<I, S> for IncDecValue
+where
+    S: State + HasRand + HasMetadata,
+    I: Input + HasBytesVec,
+{
+    /// Mutate the input by adding 1 to the last byte, with carry propagation
+    fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
+        trace!("incrementing input {:?}", hex::encode(input.bytes()));
+        let input_bytes = input.bytes_mut();
+        match state.rand_mut().below(2) {
+            0 => {
+                // increment input by 1
+                let mut carry = true;
+                for byte in input_bytes.iter_mut().rev() {
+                    if carry {
+                        let (new_byte, new_carry) = byte.overflowing_add(1);
+                        *byte = new_byte;
+                        carry = new_carry;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(MutationResult::Mutated)
+            }
+            1 => {
+                // decrement input by 1
+                let mut borrow = true;
+                for byte in input_bytes.iter_mut().rev() {
+                    if borrow {
+                        let (new_byte, new_borrow) = byte.overflowing_sub(1);
+                        *byte = new_byte;
+                        borrow = new_borrow;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(MutationResult::Mutated)
+            }
+            _ => {
+                // Should be unreachable. If here, rand.below didn't work as expected.
+                // unreachable!()
+                Ok(MutationResult::Skipped)
+            }
+        }
+    }
+}
+
 /// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant
 /// in the contract
 ///
@@ -178,6 +246,7 @@ where
         WordInterestingMutator::new(),
         DwordInterestingMutator::new(),
         ConstantHintedMutator::new(),
+        IncDecValue::new(),
     );
 
     if let Some(vm_slots) = vm_slots {
@@ -209,6 +278,7 @@ where
         BytesExpandMutator::new(),
         BytesInsertMutator::new(),
         ConstantHintedMutator::new(),
+        IncDecValue::new(),
     );
 
     if let Some(vm_slots) = vm_slots {
