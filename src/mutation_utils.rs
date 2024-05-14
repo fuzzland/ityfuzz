@@ -88,7 +88,6 @@ where
 {
     /// Mutate the input by adding 1 to the last byte, with carry propagation
     fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
-        trace!("incrementing input {:?}", hex::encode(input.bytes()));
         let input_bytes = input.bytes_mut();
         match state.rand_mut().below(2) {
             0 => {
