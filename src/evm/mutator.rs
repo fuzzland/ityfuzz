@@ -374,7 +374,7 @@ where
                     }
                 }
                 LIQUIDATE_CHOICE..=RANDOMNESS_CHOICE_2 => {
-                    let rand_u8 = state.rand_mut().below(255) as u8;
+                    let rand_u8 = state.rand_mut().below(256) as u8;
                     input.set_randomness(vec![rand_u8; 1]);
                     MutationResult::Mutated
                 }

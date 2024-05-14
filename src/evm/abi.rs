@@ -345,7 +345,7 @@ where
         match state.rand_mut().below(100) % 4 {
             // dynamic
             0 => BoxedABI::new(Box::new(ADynamic {
-                data: vec![state.rand_mut().below(255) as u8; vec_size],
+                data: vec![state.rand_mut().below(256) as u8; vec_size],
                 multiplier: 32,
             })),
             // tuple
