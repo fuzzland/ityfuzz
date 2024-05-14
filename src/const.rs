@@ -36,6 +36,8 @@ pub const SAMPLE_MAX: u64 = 100;
 pub const MUTATE_CHOICE_MAX: u64 = 80;
 /// Maximum value of the expand choice. Related to [SAMPLE_MAX]
 pub const EXPAND_CHOICE_MAX: u64 = 90;
+/// Maximum value of the random address choice. Related to [SAMPLE_MAX]
+pub const RANDOM_ADDRESS_CHOICE: u64 = 90;
 
 // src/evm/corpus_initializer.rs
 /// If there are more than 1/UNKNOWN_SIGS_DIVISOR unknown sigs, we will
