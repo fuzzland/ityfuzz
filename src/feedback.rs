@@ -29,12 +29,10 @@ use crate::{
     generic_vm::vm_state::VMStateT,
     input::{ConciseSerde, VMInputT},
     oracle::{BugMetadata, Oracle, OracleCtx, Producer},
+    r#const::{INFANT_STATE_INITIAL_VOTES, KNOWN_STATE_MAX_SIZE, KNOWN_STATE_SKIP_SIZE},
     scheduler::HasVote,
     state::{HasExecutionResult, HasInfantStateState, InfantStateState},
 };
-
-const KNOWN_STATE_MAX_SIZE: usize = 1000;
-const KNOWN_STATE_SKIP_SIZE: usize = 500;
 
 /// OracleFeedback is a wrapper around a set of oracles and producers.
 /// It executes the producers and then oracles after each successful execution.
@@ -541,16 +539,22 @@ where
         // if the current distance is smaller than the min_map, vote for the state
         if cmp_interesting {
             debug!("Voted for {} because of CMP", input.get_state_idx());
-            self.scheduler
-                .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
+            self.scheduler.vote(
+                state.get_infant_state_state(),
+                input.get_state_idx(),
+                INFANT_STATE_INITIAL_VOTES,
+            );
         }
 
         // if coverage has increased, vote for the state
         if cov_interesting {
             debug!("Voted for {} because of COV", input.get_state_idx());
 
-            self.scheduler
-                .vote(state.get_infant_state_state(), input.get_state_idx(), 3);
+            self.scheduler.vote(
+                state.get_infant_state_state(),
+                input.get_state_idx(),
+                INFANT_STATE_INITIAL_VOTES,
+            );
         }
 
         if self.vm.deref().borrow_mut().state_changed() ||

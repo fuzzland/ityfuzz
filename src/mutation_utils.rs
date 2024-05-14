@@ -35,7 +35,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, prelude::Rand, tuples::tuple_list, Named};
 use serde::{Deserialize, Serialize};
 
-use crate::evm::types::EVMU256;
+use crate::{evm::types::EVMU256, r#const::MAX_STACK_POW};
 
 /// Constants in the contracts
 ///
@@ -181,10 +181,13 @@ where
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(
+            (VMStateHintedMutator::new(&vm_slots), mutations),
+            MAX_STACK_POW as u64,
+        );
         mutator.mutate(state, input, 0).unwrap()
     } else {
-        let mut mutator = StdScheduledMutator::new(mutations);
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(mutations, MAX_STACK_POW as u64);
         mutator.mutate(state, input, 0).unwrap()
     }
 }
@@ -212,10 +215,13 @@ where
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(
+            (VMStateHintedMutator::new(&vm_slots), mutations),
+            MAX_STACK_POW as u64,
+        );
         mutator.mutate(state, input, 0).unwrap()
     } else {
-        let mut mutator = StdScheduledMutator::new(mutations);
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(mutations, MAX_STACK_POW as u64);
         mutator.mutate(state, input, 0).unwrap()
     }
 }

@@ -29,13 +29,9 @@ use crate::{
     evm::{abi::BoxedABI, presets::ExploitTemplate, types::EVMAddress},
     generic_vm::{vm_executor::ExecutionResult, vm_state::VMStateT},
     input::{ConciseSerde, VMInputT},
+    r#const::{ACCOUNT_AMT, CONTRACT_AMT, MAX_INPUT_SIZE},
     state_input::StagedVMState,
 };
-
-/// Amount of accounts and contracts that can be caller during fuzzing.
-/// We will generate random addresses for these accounts and contracts.
-pub const ACCOUNT_AMT: u8 = 2;
-pub const CONTRACT_AMT: u8 = 2;
 
 /// Trait providing state functions needed by ItyFuzz
 pub trait HasItyState<Loc, Addr, VS, CI>
@@ -285,7 +281,7 @@ where
             callers_pool: Vec::new(),
             addresses_pool: Vec::new(),
             rand_generator: RomuDuoJrRand::with_seed(seed),
-            max_size: 20,
+            max_size: MAX_INPUT_SIZE,
             hash_to_address: Default::default(),
             last_report_time: None,
             phantom: Default::default(),

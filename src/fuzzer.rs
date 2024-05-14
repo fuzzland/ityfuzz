@@ -47,6 +47,7 @@ use crate::{
     input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
     oracle::BugMetadata,
+    r#const::INFANT_STATE_INITIAL_VOTES,
     scheduler::HasReportCorpus,
     state::{HasCurrentInputIdx, HasExecutionResult, HasInfantStateState, HasItyState, InfantStateState},
 };
@@ -444,8 +445,11 @@ where
                 .infant_result_feedback
                 .is_interesting(state, manager, &input, observers, &exitkind)?
             {
-                self.infant_scheduler
-                    .sponsor_state(state.get_infant_state_state(), state_idx, 3)
+                self.infant_scheduler.sponsor_state(
+                    state.get_infant_state_state(),
+                    state_idx,
+                    INFANT_STATE_INITIAL_VOTES,
+                )
             }
         }
 

@@ -27,6 +27,7 @@ use crate::{
     },
     input::VMInputT,
     power_sched::{PowerMutationalStageWithId, TestcaseScoreWithId},
+    r#const::{MAX_POWER, MIN_POWER, POWER_MULTIPLIER},
 };
 
 /// The status of the branch, whether it is covered on true, false or both
@@ -394,14 +395,15 @@ where
             meta.testcase_to_uncovered_branches.get(&idx).unwrap_or(&0).to_owned() + 1
         };
 
-        let mut power = uncov_branch as f64 * 32.0;
-
-        if power >= 3200.0 {
-            power = 3200.0;
+        let mut power = uncov_branch as f64 * POWER_MULTIPLIER;
+        // we score based on how a test case uncovered branches. 100 is cap, 1 is always
+        // min
+        if power >= MAX_POWER {
+            power = MAX_POWER;
         }
 
-        if power <= 32.0 {
-            power = 32.0;
+        if power <= MIN_POWER {
+            power = MIN_POWER;
         }
 
         Ok(power)

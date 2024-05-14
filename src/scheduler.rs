@@ -15,7 +15,10 @@ use rand::random;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::state::HasParent;
+use crate::{
+    r#const::{CORPUS_INITIAL_VOTES, DROP_THRESHOLD, PRUNE_AMT, VISIT_IGNORE_THRESHOLD},
+    state::HasParent,
+};
 
 /// A trait providing functions necessary for voting mechanisms
 pub trait HasVote<S>
@@ -24,15 +27,6 @@ where
 {
     fn vote(&self, state: &mut S, idx: usize, amount: usize);
 }
-
-/// The maximum number of inputs (or VMState) to keep in the corpus before
-/// pruning
-pub const DROP_THRESHOLD: usize = 500;
-/// The number of inputs (or VMState) to prune each time the corpus is pruned
-pub const PRUNE_AMT: usize = 250;
-/// If inputs (or VMState) has not been visited this many times, it will be
-/// ignored during pruning
-pub const VISIT_IGNORE_THRESHOLD: usize = 2;
 
 /// A scheduler that drops inputs (or VMState) based on a voting mechanism
 #[derive(Debug, Clone)]
@@ -172,7 +166,7 @@ where
     S: HasCorpus + HasRand + HasMetadata + HasParent,
 {
     fn report_corpus(&self, state: &mut S, state_idx: usize) {
-        self.vote(state, state_idx, 3);
+        self.vote(state, state_idx, CORPUS_INITIAL_VOTES);
         let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
 
         #[cfg(feature = "full_trace")]
@@ -215,9 +209,9 @@ where
         {
             let parent_idx = state.get_parent_idx();
             let data = state.metadata_map_mut().get_mut::<VoteData>().unwrap();
-            data.votes_and_visits.insert(idx, (3, 1));
+            data.votes_and_visits.insert(idx, (CORPUS_INITIAL_VOTES, 1));
             data.visits_total += 1;
-            data.votes_total += 3;
+            data.votes_total += CORPUS_INITIAL_VOTES;
             data.sorted_votes.push(idx);
 
             #[cfg(feature = "full_trace")]

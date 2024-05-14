@@ -24,6 +24,21 @@ use crate::{
     },
     generic_vm::vm_state::VMStateT,
     input::{ConciseSerde, VMInputT},
+    r#const::{
+        ABI_MUTATE_CHOICE,
+        EXPLOIT_PRESET_CHOICE,
+        HAVOC_CHOICE,
+        HAVOC_MAX_ITERS,
+        LIQUIDATE_CHOICE,
+        LIQ_PERCENT,
+        LIQ_PERCENT_CHOICE,
+        MUTATE_CALLER_CHOICE,
+        MUTATION_RETRIES,
+        MUTATOR_SAMPLE_MAX,
+        RANDOMNESS_CHOICE,
+        RANDOMNESS_CHOICE_2,
+        TURN_TO_STEP_CHOICE,
+    },
     state::{HasCaller, HasItyState, HasPresets, InfantStateState},
 };
 
@@ -149,15 +164,21 @@ where
                 }
                 Constraint::Contract(target) => {
                     let rand_int = state.rand_mut().next();
-                    let always_none = state.rand_mut().next() % 30 == 0;
+                    let always_none = state.rand_mut().below(MUTATOR_SAMPLE_MAX);
                     let abis = state
                         .metadata_map()
                         .get::<ABIAddressToInstanceMap>()
                         .expect("ABIAddressToInstanceMap not found");
                     let abi = match abis.map.get(&target) {
                         Some(abi) => {
-                            if !abi.is_empty() && !always_none {
+                            if !abi.is_empty() {
+                                match always_none {
+                                    0..=ABI_MUTATE_CHOICE => {
+                                        // we return a random abi
                                 Some((*abi)[rand_int as usize % abi.len()].clone())
+                                    }
+                                    _ => None,
+                                }
                             } else {
                                 None
                             }
@@ -216,7 +237,7 @@ where
         }
 
         // use exploit template
-        if state.has_preset() && state.rand_mut().below(100) < 20 {
+        if state.has_preset() && state.rand_mut().below(MUTATOR_SAMPLE_MAX) < EXPLOIT_PRESET_CHOICE {
             // if flashloan_v2, we don't mutate if it's a borrow
             if input.get_input_type() != Borrow {
                 match state.get_next_call() {
@@ -237,11 +258,13 @@ where
         // abi.b.get_size()).unwrap_or(0) / 32 + 1; if amount_of_args > 6 {
         //     amount_of_args = 6;
         // }
-        let should_havoc = state.rand_mut().below(100) < 60; // (amount_of_args * 10) as u64;
+        let should_havoc = state.rand_mut().below(MUTATOR_SAMPLE_MAX) < HAVOC_CHOICE;
 
         // determine how many times we should mutate the input
         let havoc_times = if should_havoc {
-            state.rand_mut().below(10) + 1
+            state.rand_mut().below(HAVOC_MAX_ITERS) + 1 // (amount_of_args *
+                                                        // HAVOC_MAX_ITERS) as
+                                                        // u64;
         } else {
             1
         };
@@ -249,7 +272,7 @@ where
         let mut mutated = false;
 
         {
-            if !input.is_step() && state.rand_mut().below(100) < 20_u64 {
+            if !input.is_step() && state.rand_mut().below(MUTATOR_SAMPLE_MAX) < MUTATE_CALLER_CHOICE {
                 let old_idx = input.get_state_idx();
                 let (idx, new_state) = state.get_infant_state(&mut self.infant_scheduler).unwrap();
                 if idx != old_idx {
@@ -266,7 +289,7 @@ where
 
             if input.get_staged_state().state.has_post_execution() &&
                 !input.is_step() &&
-                state.rand_mut().below(100) < 60_u64
+                state.rand_mut().below(MUTATOR_SAMPLE_MAX) < TURN_TO_STEP_CHOICE
             {
                 macro_rules! turn_to_step {
                     () => {
@@ -292,12 +315,18 @@ where
             // if the input is a step input (resume execution from a control leak)
             // we should not mutate the VM state, but only mutate the bytes
             if input.is_step() {
-                let res = match state.rand_mut().below(100) {
-                    0..=5 => {
+                let res = match state.rand_mut().below(MUTATOR_SAMPLE_MAX) {
+                    0..=LIQUIDATE_CHOICE => {
                         // only when there are more than one liquidation path, we attempt to liquidate
                         if unsafe { CAN_LIQUIDATE } {
                             let prev_percent = input.get_liquidation_percent();
-                            input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
+                            input.set_liquidation_percent(if state.rand_mut().below(MUTATOR_SAMPLE_MAX) <
+                                LIQ_PERCENT_CHOICE
+                            {
+                                LIQ_PERCENT
+                            } else {
+                                0
+                            } as u8);
                             if prev_percent != input.get_liquidation_percent() {
                                 MutationResult::Mutated
                             } else {
@@ -316,9 +345,9 @@ where
             // if the input is to borrow token, we should mutate the randomness
             // (use to select the paths to buy token), VM state, and bytes
             if input.get_input_type() == Borrow {
-                let rand_u8 = state.rand_mut().below(255) as u8;
-                return match state.rand_mut().below(3) {
-                    0 => {
+                let rand_u8 = state.rand_mut().below(256) as u8;
+                return match state.rand_mut().below(MUTATOR_SAMPLE_MAX) {
+                    0..=RANDOMNESS_CHOICE => {
                         // mutate the randomness
                         input.set_randomness(vec![rand_u8; 1]);
                         MutationResult::Mutated
@@ -330,17 +359,21 @@ where
 
             // mutate the bytes or VM state or liquidation percent (percentage of token to
             // liquidate) by default
-            match state.rand_mut().below(100) {
-                6..=10 => {
+            match state.rand_mut().below(MUTATOR_SAMPLE_MAX) {
+                0..=LIQUIDATE_CHOICE => {
                     let prev_percent = input.get_liquidation_percent();
-                    input.set_liquidation_percent(if state.rand_mut().below(100) < 80 { 10 } else { 0 } as u8);
+                    input.set_liquidation_percent(if state.rand_mut().below(MUTATOR_SAMPLE_MAX) < LIQ_PERCENT_CHOICE {
+                        LIQ_PERCENT
+                    } else {
+                        0
+                    } as u8);
                     if prev_percent != input.get_liquidation_percent() {
                         MutationResult::Mutated
                     } else {
                         MutationResult::Skipped
                     }
                 }
-                11 => {
+                LIQUIDATE_CHOICE..=RANDOMNESS_CHOICE_2 => {
                     let rand_u8 = state.rand_mut().below(255) as u8;
                     input.set_randomness(vec![rand_u8; 1]);
                     MutationResult::Mutated
@@ -356,10 +389,10 @@ where
         };
         let mut tries = 0;
 
-        // try to mutate the input for [`havoc_times`] times with 20 retries if
-        // the input is not mutated
-        while res != MutationResult::Mutated && tries < 20 {
-            for _ in 0..havoc_times {
+        // try to mutate the input for [`havoc_times`] times with MUTATION_RETRIES
+        // retries if the input is not mutated
+        while res != MutationResult::Mutated && tries < MUTATION_RETRIES {
+            for i in 0..havoc_times {
                 if mutator() == MutationResult::Mutated {
                     res = MutationResult::Mutated;
                 }
