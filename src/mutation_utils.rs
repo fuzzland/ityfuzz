@@ -232,6 +232,10 @@ where
         ConstantHintedMutator::new(),
     );
 
+    if !state.has_metadata::<MutatorMetadata>() {
+        state.metadata_map_mut().insert(MutatorMetadata::default());
+    }
+
     let mut res = MutationResult::Skipped;
     if let Some(vm_slots) = vm_slots {
         let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
@@ -271,6 +275,10 @@ where
         BytesInsertMutator::new(),
         ConstantHintedMutator::new(),
     );
+
+    if !state.has_metadata::<MutatorMetadata>() {
+        state.metadata_map_mut().insert(MutatorMetadata::default());
+    }
 
     let mut res = MutationResult::Skipped;
     if let Some(vm_slots) = vm_slots {
