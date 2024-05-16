@@ -61,23 +61,23 @@ impl ConstantPoolMetadata {
 impl_serdeany!(ConstantPoolMetadata);
 /// [`GaussianNoiseMutator`] is a mutator that adds Gaussian noise to the input
 /// value.
-/// 
+///
 /// This mutator scales the input by a factor derived from a Gaussian
 /// distribution, with varying ranges based on randomly chosen percentages. The
 /// goal is to mutate the input within a general range of itself, independent of
 /// its potential size.
-/// 
+///
 /// The Gaussian mutator will modify the input to be anywhere in the space of
 /// `input +- {10%, 25%, 50%, 100%, 200%, ..., 1000%}`. For example, a uint256
 /// of 10,000 can be mutated to become somewhere between 7,500-12,500 if the 25%
-/// multiplier is chosen. These percentages were chosen to be able to both focus 
-/// close to the input value but also be able to explore the space around it 
+/// multiplier is chosen. These percentages were chosen to be able to both focus
+/// close to the input value but also be able to explore the space around it
 /// aggressively.
-/// 
+///
 /// This probably isn't useful for signed integers, since the bytes
 /// representation is treated as a uint and negative values will always be
 /// scaled according to the max size.
-/// 
+///
 /// It clamps the mutated value between 0 and the maximum value for the size of
 /// the input.
 #[derive(Default)]
@@ -130,12 +130,12 @@ where
         let mut scale_factor = {
             let num_samples = 8; // 8 is chosen to be performant and still provide a reasonable distribution
             let mut sum = 0.0;
-        
+
             // Generate uniformly distributed random variables and sum them up
             for _ in 0..num_samples {
                 sum += state.rand_mut().next() as f64 / u64::MAX as f64;
             }
-        
+
             // Normalize the sum to approximate a standard normal distribution
             let standard_normal = (sum - (num_samples as f64 / 2.0));
             chosen_3rd_sigma / 3.0 * standard_normal // Adjust 3rd sigma to std,
@@ -163,7 +163,7 @@ where
             // Skip mutation
             return Ok(MutationResult::Skipped);
         } else {
-            // iterate in normal order byte by byte, if underflow, set all to 0. 
+            // iterate in normal order byte by byte, if underflow, set all to 0.
             let input_bytes = input.bytes_mut();
             let mut carry_down = 0.0;
             let mut carry_up = 0.0;
