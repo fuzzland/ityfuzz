@@ -175,7 +175,7 @@ where
                                 match always_none {
                                     0..=ABI_MUTATE_CHOICE => {
                                         // we return a random abi
-                                Some((*abi)[rand_int as usize % abi.len()].clone())
+                                        Some((*abi)[rand_int as usize % abi.len()].clone())
                                     }
                                     _ => None,
                                 }

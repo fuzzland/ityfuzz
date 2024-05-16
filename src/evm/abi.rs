@@ -33,7 +33,7 @@ use crate::{
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
     mutation_utils::{byte_mutator, byte_mutator_with_expansion},
-    r#const::{EXPAND_CHOICE_MAX, MUTATE_CHOICE_MAX, SAMPLE_MAX, RANDOM_ADDRESS_CHOICE},
+    r#const::{EXPAND_CHOICE_MAX, MUTATE_CHOICE_MAX, RANDOM_ADDRESS_CHOICE, SAMPLE_MAX},
     state::{HasCaller, HasItyState},
 };
 
