@@ -77,7 +77,6 @@ impl MutatorMetadata {
 
 impl_serdeany!(MutatorMetadata);
 
-
 /// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant
 /// in the contract
 ///
