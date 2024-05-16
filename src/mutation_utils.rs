@@ -234,6 +234,7 @@ where
 
     let mut res = MutationResult::Skipped;
     if let Some(vm_slots) = vm_slots {
+        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
         res = mutator.mutate(state, input, 0).unwrap()
     } else {
         let mut mutator = StdScheduledMutator::new(mutations);
