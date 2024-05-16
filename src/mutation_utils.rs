@@ -60,6 +60,24 @@ impl ConstantPoolMetadata {
 
 impl_serdeany!(ConstantPoolMetadata);
 
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct MutatorMetadata {
+    pub full_overwrite_performed: bool,
+}
+
+impl MutatorMetadata {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn set_full_overwrite_performed(&mut self, full_overwrite_performed: bool) {
+        self.full_overwrite_performed = full_overwrite_performed;
+    }
+}
+
+impl_serdeany!(MutatorMetadata);
+
+
 /// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant
 /// in the contract
 ///
@@ -86,7 +104,15 @@ where
     I: Input + HasBytesVec,
 {
     /// Mutate the input to a constant in the contract
+    /// This always entirely overwrites the input (unless it skips mutation)
     fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
+        // if full_overwrite_performed is true, we skip mutation
+        if let Some(metadata) = state.metadata_map().get::<MutatorMetadata>() {
+            if metadata.full_overwrite_performed {
+                return Ok(MutationResult::Skipped);
+            }
+        }
+
         let idx = state.rand_mut().next() as usize;
 
         let constant = match state.metadata_map().get::<ConstantPoolMetadata>() {
@@ -105,6 +131,16 @@ where
         } else {
             input_bytes.copy_from_slice(&[vec![0; input_len - constant_len], constant.clone()].concat());
         }
+
+        // prevent fully overwriting the input on this mutation cycle again
+        if let Some(metadata) = state.metadata_map_mut().get_mut::<MutatorMetadata>() {
+            metadata.set_full_overwrite_performed(true);
+        } else {
+            let mut metadata = MutatorMetadata::new();
+            metadata.set_full_overwrite_performed(true);
+            state.metadata_map_mut().insert(metadata);
+        }
+
         Ok(MutationResult::Mutated)
     }
 }
@@ -146,11 +182,19 @@ pub fn mutate_with_vm_slot<S: State + HasRand>(vm_slots: &HashMap<EVMU256, EVMU2
 
 impl<'a, I, S> Mutator<I, S> for VMStateHintedMutator<'a>
 where
-    S: State + HasRand,
+    S: State + HasRand + HasMetadata,
     I: Input + HasBytesVec,
 {
     /// Mutate the input to a value in the VM state
+    /// This always entirely overwrites the input (unless it skips mutation)
     fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
+        // if full_overwrite_performed is true, we skip mutation
+        if let Some(metadata) = state.metadata_map().get::<MutatorMetadata>() {
+            if metadata.full_overwrite_performed {
+                return Ok(MutationResult::Skipped);
+            }
+        }
+
         let input_len = input.bytes().len();
         if input_len < 8 {
             return Ok(MutationResult::Skipped);
@@ -160,6 +204,15 @@ where
         let data: [u8; 32] = new_val.to_be_bytes();
 
         input.bytes_mut().copy_from_slice(&data[(32 - input_len)..]);
+
+        // prevent fully overwriting the input on this mutation cycle again
+        if let Some(metadata) = state.metadata_map_mut().get_mut::<MutatorMetadata>() {
+            metadata.set_full_overwrite_performed(true);
+        } else {
+            let mut metadata = MutatorMetadata::new();
+            metadata.set_full_overwrite_performed(true);
+            state.metadata_map_mut().insert(metadata);
+        }
         Ok(MutationResult::Mutated)
     }
 }
@@ -180,13 +233,21 @@ where
         ConstantHintedMutator::new(),
     );
 
+    let mut res = MutationResult::Skipped;
     if let Some(vm_slots) = vm_slots {
-        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
-        mutator.mutate(state, input, 0).unwrap()
+        res = mutator.mutate(state, input, 0).unwrap()
     } else {
         let mut mutator = StdScheduledMutator::new(mutations);
-        mutator.mutate(state, input, 0).unwrap()
+        res = mutator.mutate(state, input, 0).unwrap()
     }
+
+    state
+        .metadata_map_mut()
+        .get_mut::<MutatorMetadata>()
+        .unwrap()
+        .set_full_overwrite_performed(false);
+
+    res
 }
 
 /// Mutator that mutates the `VARIABLE SIZE` input bytes (e.g., string) in
@@ -211,11 +272,18 @@ where
         ConstantHintedMutator::new(),
     );
 
+    let mut res = MutationResult::Skipped;
     if let Some(vm_slots) = vm_slots {
         let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
-        mutator.mutate(state, input, 0).unwrap()
+        res = mutator.mutate(state, input, 0).unwrap();
     } else {
         let mut mutator = StdScheduledMutator::new(mutations);
-        mutator.mutate(state, input, 0).unwrap()
+        res = mutator.mutate(state, input, 0).unwrap();
     }
+    state
+        .metadata_map_mut()
+        .get_mut::<MutatorMetadata>()
+        .unwrap()
+        .set_full_overwrite_performed(false);
+    res
 }
