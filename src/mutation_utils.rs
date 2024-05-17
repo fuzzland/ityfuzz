@@ -208,6 +208,7 @@ where
         DwordInterestingMutator::new(),
         BytesExpandMutator::new(),
         BytesInsertMutator::new(),
+        BytesRandInsertMutator::new(),
         ConstantHintedMutator::new(),
     );
 
