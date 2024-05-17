@@ -53,7 +53,6 @@ where
         let address: Address = privateKey.to_be_bytes::<{ U256::BYTES }>()[..20].try_into().unwrap();
         debug!("[cheatcode vm.addr got address] {:?}", address.into_word());
         Some(address.into_word().0.to_vec())
-
     }
 
     /// Sets `block.timestamp`.
@@ -165,12 +164,11 @@ where
             target,
             newRuntimeBytecode,
         } = args;
-        // let bytecode = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
+        // let bytecode =
+        // to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
         //     newRuntimeBytecode,
         // ))));
-        let bytecode = Bytecode::new_raw(revm_primitives::Bytes::from(
-            newRuntimeBytecode,
-        ));
+        let bytecode = Bytecode::new_raw(revm_primitives::Bytes::from(newRuntimeBytecode));
         // set code but don't invoke middlewares
         host.code
             // .insert(Address(target.into()), Arc::new(Bytecode::new_raw(bytecode)));

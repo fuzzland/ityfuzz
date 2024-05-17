@@ -10,8 +10,8 @@ use std::{
     rc::Rc,
     str::FromStr,
     sync::{Arc, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolValue;
@@ -436,11 +436,12 @@ where
                 interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, &table, state)
             }
             SpecId::SPURIOUS_DRAGON => {
-                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> = revm_interpreter::opcode::make_instruction_table::<
-                    EVMFuzzState,
-                    FuzzHost<SC, DB>,
-                    SpuriousDragonSpec,
-                >();
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
+                    revm_interpreter::opcode::make_instruction_table::<
+                        EVMFuzzState,
+                        FuzzHost<SC, DB>,
+                        SpuriousDragonSpec,
+                    >();
                 interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, &table, state)
             }
             SpecId::BYZANTIUM => {
@@ -492,11 +493,12 @@ where
         }
     }
 
-    // pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
-    //     let table: InstructionTable<FuzzHost<SC, DB>> =
-    //         revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>();
-    //     interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state, &table)
-    // }
+    // pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut
+    // EVMFuzzState) -> InstructionResult {     let table:
+    // InstructionTable<FuzzHost<SC, DB>> =
+    //         revm_interpreter::opcode::make_instruction_table::<EVMFuzzState,
+    // FuzzHost<SC, DB>, ShanghaiSpec>();     interp.run_inspect::<EVMFuzzState,
+    // FuzzHost<SC, DB>, ShanghaiSpec>(self, state, &table) }
 
     pub fn remove_all_middlewares(&mut self) {
         self.middlewares_enabled = false;
@@ -596,7 +598,7 @@ where
 
         self.code
             .insert(address, Arc::new(revm_primitives::Bytecode::from(code)));
-        debug!("get code: {:?}" ,self.code.get(&address).unwrap());
+        debug!("get code: {:?}", self.code.get(&address).unwrap());
     }
 
     pub fn find_static_call_read_slot(
@@ -1121,7 +1123,6 @@ impl<SC, DB> Host<EVMFuzzState> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-
     fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         unsafe {
             // debug!("pc: {}", interp.program_counter());
@@ -1296,7 +1297,6 @@ where
     }
 
     fn create(&mut self, inputs: &mut CreateInputs, state: &mut EVMFuzzState) -> CreateOutcome {
-
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
@@ -1710,7 +1710,6 @@ where
                 ));
             }
         }
-
 
         #[cfg(feature = "print_logs")]
         {

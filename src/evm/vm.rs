@@ -84,7 +84,6 @@ macro_rules! is_call_success {
             $ret == revm_interpreter::InstructionResult::ControlLeak ||
             $ret == revm_interpreter::InstructionResult::SelfDestruct ||
             $ret == revm_interpreter::InstructionResult::ReturnContract
-
     };
 }
 
