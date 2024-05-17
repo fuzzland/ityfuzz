@@ -82,7 +82,9 @@ macro_rules! is_call_success {
         $ret == revm_interpreter::InstructionResult::Return ||
             $ret == revm_interpreter::InstructionResult::Stop ||
             $ret == revm_interpreter::InstructionResult::ControlLeak ||
-            $ret == revm_interpreter::InstructionResult::SelfDestruct
+            $ret == revm_interpreter::InstructionResult::SelfDestruct ||
+            $ret == revm_interpreter::InstructionResult::ReturnContract
+
     };
 }
 
@@ -838,7 +840,7 @@ where
                         input: revm_primitives::Bytes(data.clone()),
                         return_memory_offset: Default::default(),
                         // unsure
-                        gas_limit: 0,
+                        gas_limit: u64::MAX,
                         bytecode_address: contract_address,
                         target_address: contract_address,
                         caller,
@@ -1108,11 +1110,11 @@ where
         //     hex::encode(self.deployer),
         //     hex::encode(interp.return_value())
         // );
-        // debug!(
-        //     "deployer = 0x{} contract = {:?}",
-        //     hex::encode(self.deployer),
-        //     hex::encode(interp.return_data_buffer)
-        // );
+        debug!(
+            "deployer = 0x{} contract = {:?}",
+            hex::encode(self.deployer),
+            hex::encode(interp.clone().return_data_buffer)
+        );
         // let mut contract_code = Bytecode::new_raw(interp.return_value());
         let mut contract_code = Bytecode::new_raw(interp.clone().return_data_buffer);
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
@@ -1250,7 +1252,7 @@ where
                     Default::default(),
                 );
 
-                let mut interp = Interpreter::new(call, 1e10 as u64, false);
+                let mut interp = Interpreter::new(call, 1e10 as u64, true);
 
                 let ret = self.host.run_inspect(&mut interp, state);
                 if is_call_success!(ret) {

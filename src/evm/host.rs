@@ -11,6 +11,7 @@ use std::{
     str::FromStr,
     sync::{Arc, RwLock},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolValue;
@@ -415,81 +416,87 @@ where
     pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         match self.spec_id {
             SpecId::LATEST => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, &table, state)
             }
             SpecId::FRONTIER => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, FrontierSpec>(self, &table, state)
             }
             SpecId::HOMESTEAD => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, HomesteadSpec>(self, &table, state)
             }
             SpecId::TANGERINE => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, TangerineSpec>(self, &table, state)
             }
             SpecId::SPURIOUS_DRAGON => {
-                let table: InstructionTable<FuzzHost<SC, DB>> = revm_interpreter::opcode::make_instruction_table::<
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> = revm_interpreter::opcode::make_instruction_table::<
                     EVMFuzzState,
                     FuzzHost<SC, DB>,
                     SpuriousDragonSpec,
                 >();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, SpuriousDragonSpec>(self, &table, state)
             }
             SpecId::BYZANTIUM => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ByzantiumSpec>(self, &table, state)
             }
             SpecId::CONSTANTINOPLE | SpecId::PETERSBURG => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(
                     );
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, PetersburgSpec>(self, &table, state)
             }
             SpecId::ISTANBUL => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, IstanbulSpec>(self, &table, state)
             }
             SpecId::MUIR_GLACIER | SpecId::BERLIN => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, BerlinSpec>(self, &table, state)
             }
             SpecId::LONDON => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LondonSpec>(self, &table, state)
             }
             SpecId::MERGE => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, MergeSpec>(self, &table, state)
             }
             SpecId::SHANGHAI => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, &table, state)
             }
             SpecId::CANCUN => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, CancunSpec>(self, &table, state)
             }
             _ => {
-                let table: InstructionTable<FuzzHost<SC, DB>> =
+                let table: InstructionTable<FuzzHost<SC, DB>, EVMFuzzState> =
                     revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>();
-                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, state, &table)
+                interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, LatestSpec>(self, &table, state)
             }
         }
     }
+
+    // pub fn run_inspect(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
+    //     let table: InstructionTable<FuzzHost<SC, DB>> =
+    //         revm_interpreter::opcode::make_instruction_table::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>();
+    //     interp.run_inspect::<EVMFuzzState, FuzzHost<SC, DB>, ShanghaiSpec>(self, state, &table)
+    // }
 
     pub fn remove_all_middlewares(&mut self) {
         self.middlewares_enabled = false;
@@ -586,8 +593,10 @@ where
         unsafe {
             invoke_middlewares!(self, None, state, on_insert, &mut code, address);
         }
+
         self.code
             .insert(address, Arc::new(revm_primitives::Bytecode::from(code)));
+        debug!("get code: {:?}" ,self.code.get(&address).unwrap());
     }
 
     pub fn find_static_call_read_slot(
@@ -1108,12 +1117,11 @@ macro_rules! invoke_middlewares {
     };
 }
 
-// todo 这里
-// impl<SC> Host<EVMFuzzState> for FuzzHost<SC>
 impl<SC, DB> Host<EVMFuzzState> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
+
     fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         unsafe {
             // debug!("pc: {}", interp.program_counter());
@@ -1288,6 +1296,7 @@ where
     }
 
     fn create(&mut self, inputs: &mut CreateInputs, state: &mut EVMFuzzState) -> CreateOutcome {
+
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
@@ -1487,13 +1496,14 @@ where
                 }
             }
         }
+        let (start, end) = output_info;
         return CallOutcome {
             result: InterpreterResult {
                 result: res.0,
                 output: res.2.into(),
                 gas: res.1,
             },
-            memory_offset: todo!(),
+            memory_offset: start..end,
         };
         // res
     }
@@ -1701,10 +1711,11 @@ where
             }
         }
 
+
         #[cfg(feature = "print_logs")]
         {
             let mut hasher = DefaultHasher::new();
-            _data.to_vec().hash(&mut hasher);
+            log.data.to_vec().hash(&mut hasher);
             let h = hasher.finish();
             if self.logs.contains(&h) {
                 return;
@@ -1714,7 +1725,7 @@ where
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards");
             let timestamp = now.as_nanos();
-            debug!("log@{} {:?}", timestamp, hex::encode(_data));
+            // debug!("log@{} {:?}", timestamp, hex::encode(_data));
         }
     }
 

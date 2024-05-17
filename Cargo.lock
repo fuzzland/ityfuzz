@@ -10848,7 +10848,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "8.0.0"
-source = "git+https://github.com/nick199910/revm?rev=6c45c35#6c45c35ffc9759207d7bd832cc24b81a21ae131a"
+source = "git+https://github.com/nick199910/revm?rev=7fef7ee#7fef7ee2e070059a27b39b8977b6a312ea1fcc34"
 dependencies = [
  "auto_impl",
  "cfg-if 1.0.0",
@@ -10889,7 +10889,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "4.0.0"
-source = "git+https://github.com/nick199910/revm?rev=6c45c35#6c45c35ffc9759207d7bd832cc24b81a21ae131a"
+source = "git+https://github.com/nick199910/revm?rev=7fef7ee#7fef7ee2e070059a27b39b8977b6a312ea1fcc34"
 dependencies = [
  "revm-primitives 3.1.1",
  "serde",
@@ -10915,7 +10915,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "6.0.0"
-source = "git+https://github.com/nick199910/revm?rev=6c45c35#6c45c35ffc9759207d7bd832cc24b81a21ae131a"
+source = "git+https://github.com/nick199910/revm?rev=7fef7ee#7fef7ee2e070059a27b39b8977b6a312ea1fcc34"
 dependencies = [
  "aurora-engine-modexp",
  "c-kzg",
@@ -10950,7 +10950,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "3.1.1"
-source = "git+https://github.com/nick199910/revm?rev=6c45c35#6c45c35ffc9759207d7bd832cc24b81a21ae131a"
+source = "git+https://github.com/nick199910/revm?rev=7fef7ee#7fef7ee2e070059a27b39b8977b6a312ea1fcc34"
 dependencies = [
  "alloy-primitives 0.7.1",
  "auto_impl",

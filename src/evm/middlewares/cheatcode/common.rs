@@ -6,6 +6,7 @@ use foundry_cheatcodes::Vm::{self, CallerMode};
 use libafl::schedulers::Scheduler;
 use revm_interpreter::analysis::to_analysed;
 use revm_primitives::{handler_cfg, Bytecode, Env, U256};
+use tracing::debug;
 
 use super::Cheatcode;
 use crate::evm::{
@@ -50,7 +51,9 @@ where
     pub fn addr(&self, args: Vm::addrCall) -> Option<Vec<u8>> {
         let Vm::addrCall { privateKey } = args;
         let address: Address = privateKey.to_be_bytes::<{ U256::BYTES }>()[..20].try_into().unwrap();
-        Some(address.abi_encode())
+        debug!("[cheatcode vm.addr got address] {:?}", address.into_word());
+        Some(address.into_word().0.to_vec())
+
     }
 
     /// Sets `block.timestamp`.
@@ -162,10 +165,12 @@ where
             target,
             newRuntimeBytecode,
         } = args;
-        let bytecode = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
+        // let bytecode = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
+        //     newRuntimeBytecode,
+        // ))));
+        let bytecode = Bytecode::new_raw(revm_primitives::Bytes::from(
             newRuntimeBytecode,
-        ))));
-
+        ));
         // set code but don't invoke middlewares
         host.code
             // .insert(Address(target.into()), Arc::new(Bytecode::new_raw(bytecode)));

@@ -334,6 +334,8 @@ where
         interp
             .shared_memory
             .set(out_offset, &interp.return_data_buffer[..target_len]);
+        // let interper_ret = interp.stack.pop().unwrap();
+        // debug!("[interper_ret] vm {:?}", interper_ret);
         let _ = interp.stack.push(U256::from(1));
         // step over the instruction
         interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
@@ -673,9 +675,11 @@ mod tests {
     use std::{cell::RefCell, collections::HashMap, fs, path::Path, rc::Rc, str::FromStr};
 
     use bytes::Bytes;
+    // use ethers::core::k256::elliptic_curve::bigint::fuzz;
     use libafl::prelude::StdScheduler;
     use revm::db::{CacheDB, EmptyDB};
     use revm_primitives::Bytecode;
+    use tracing::field::debug;
 
     use super::*;
     use crate::{
@@ -693,7 +697,7 @@ mod tests {
         state_input::StagedVMState,
     };
 
-    // #[test]
+    #[test]
     fn test_foundry_contract() {
         logger::init_test();
 
@@ -720,13 +724,15 @@ mod tests {
             std::fs::create_dir(path).unwrap();
         }
         let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new(""))));
         fuzz_host.set_code(
             CHEATCODE_ADDRESS,
             Bytecode::new_raw(revm_primitives::Bytes::from(vec![0xfd, 0x00])),
             &mut state,
         );
-
+        // fuzz_host.set_spec_id("SHANGHAI".to_string());
+        // println!("{:?}", fuzz_host.spec_id);
         let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<EmptyDB>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
@@ -803,7 +809,7 @@ mod tests {
         assert_fn_success!("0b324ebf");
         // testExpectRevertCustomError()
         assert_fn_success!("10fca384");
-        // testExpectRevertNested()
+        // testExpectRevertNested() ====
         assert_fn_success!("cc017d5c");
         // testExpectEmitMultiple()
         assert_fn_success!("8795d87a");
