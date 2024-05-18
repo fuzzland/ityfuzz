@@ -54,6 +54,7 @@ use crate::{
     fuzzer::REPLAY,
     generic_vm::vm_executor::GenericVM,
     input::ConciseSerde,
+    r#const::UNKNOWN_SIGS_DIVISOR,
     state::HasCaller,
     state_input::StagedVMState,
 };
@@ -310,7 +311,7 @@ where
                     }
                 }
 
-                if unknown_sigs >= sigs.len() / 30 {
+                if unknown_sigs >= sigs.len() / UNKNOWN_SIGS_DIVISOR {
                     info!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
                     let abis = fetch_abi_heimdall(contract_code)
                         .iter()
