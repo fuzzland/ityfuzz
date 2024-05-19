@@ -20,3 +20,4 @@ combined.json
 Move.lock
 /w_**/
 /venv
+src/.DS_Store
