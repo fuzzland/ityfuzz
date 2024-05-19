@@ -102,6 +102,7 @@ impl PairContext for WethContext {
             addr,
             if reverse { *next } else { *src },
             if reverse { amount } else { EVMU256::ZERO },
+            addr
         );
         let mut interp = Interpreter::new(call.clone(), 1e10 as u64, false);
         let ir = vm.host.run_inspect(&mut interp, state);

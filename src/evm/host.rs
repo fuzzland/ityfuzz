@@ -354,7 +354,6 @@ const UNBOUND_CALL_THRESHOLD: usize = 50;
 // unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 50;
 
-// impl<SC> FuzzHost<SC>
 impl<SC, DB> FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
@@ -1123,6 +1122,188 @@ impl<SC, DB> Host<EVMFuzzState> for FuzzHost<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
+    fn env(&self) -> &Env {
+        &self.env
+    }
+
+    fn env_mut(&mut self) -> &mut Env {
+        &mut self.env
+    }
+
+    // fn load_account(&mut self, _address: EVMAddress) -> Option<(bool, bool)> {
+    //     Some((
+    //         true, true, // self.data.contains_key(&address) ||
+    // self.code.contains_key(&address),     ))
+    // }
+    fn load_account(&mut self, _address: EVMAddress) -> Option<LoadAccountResult> {
+        Some(LoadAccountResult {
+            is_cold: true,
+            is_empty: true,
+        })
+        // Some((
+        //     true, true, // self.data.contains_key(&address) ||
+        // self.code.contains_key(&address), ))
+    }
+
+    // fn step_end(
+    //     &mut self,
+    //     _interp: &mut Interpreter,
+    //     _ret: InstructionResult,
+    //     _: &mut EVMFuzzState,
+    // ) -> InstructionResult {
+    //     Continue
+    // }
+
+    fn block_hash(&mut self, _number: EVMU256) -> Option<B256> {
+        // Some(B256::zero())
+        Some(B256::ZERO)
+    }
+
+    fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
+        #[cfg(feature = "real_balance")]
+        {
+            if let Some(balance) = self.evmstate.get_balance(&address) {
+                return Some((*balance, true));
+            }
+            self.evmstate.set_balance(address, self.next_slot);
+            Some((self.next_slot, true))
+        }
+        #[cfg(not(feature = "real_balance"))]
+        {
+            Some((EVMU256::MAX, true))
+        }
+    }
+
+    fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
+        // debug!("code");
+        match self.code.get(&address) {
+            Some(code) => Some((code.clone(), true)),
+            None => Some((Arc::new(Bytecode::default()), true)),
+        }
+    }
+
+    fn code_hash(&mut self, _address: EVMAddress) -> Option<(B256, bool)> {
+        Some((
+            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
+            true,
+        ))
+    }
+
+    fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
+        if let Some(account) = self.evmstate.get_mut(&address) {
+            if let Some(slot) = account.get(&index) {
+                // println!("sload: {:?} -> {:?} = {:?}", address, index, slot);
+                return Some((*slot, true));
+            } else {
+                account.insert(index, self.next_slot);
+            }
+        } else {
+            let mut account = HashMap::new();
+            account.insert(index, self.next_slot);
+            self.evmstate.insert(address, account);
+        }
+        // println!("sload(c): {:?} -> {:?} = {:?}", address, index, self.next_slot);
+        Some((self.next_slot, true))
+    }
+
+    // fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
+    //     // debug!("code");
+    //     match self.code.get(&address) {
+    //         Some(code) => Some((code.clone(), true)),
+    //         None => Some((Arc::new(Bytecode::default()), true)),
+    //     }
+    // }
+
+    fn sstore(
+        &mut self,
+        address: EVMAddress,
+        index: EVMU256,
+        value: EVMU256,
+        // ) -> Option<(EVMU256, EVMU256, EVMU256, bool)> {
+    ) -> Option<SStoreResult> {
+        match self.evmstate.get_mut(&address) {
+            Some(account) => {
+                account.insert(index, value);
+            }
+            None => {
+                let mut account = HashMap::new();
+                account.insert(index, value);
+                self.evmstate.insert(address, account);
+            }
+        };
+        Some(SStoreResult {
+            original_value: EVMU256::from(0),
+            present_value: EVMU256::from(0),
+            new_value: EVMU256::from(0),
+            is_cold: true,
+        })
+
+        // Some((EVMU256::from(0), EVMU256::from(0), EVMU256::from(0), true))
+    }
+
+    fn tload(&mut self, address: EVMAddress, index: EVMU256) -> EVMU256 {
+        if let Some(slot) = self.transient_storage.get(&(address, index)) {
+            *slot
+        } else {
+            self.transient_storage.insert((address, index), self.next_slot);
+            self.next_slot
+        }
+    }
+
+    fn tstore(&mut self, address: EVMAddress, index: EVMU256, value: EVMU256) {
+        self.transient_storage.insert((address, index), value);
+    }
+
+    fn log(&mut self, log: Log) {
+        let _topics = log.topics();
+        if _topics.len() == 1 {
+            let current_flag = _topics.last().unwrap().0;
+            // hex is "fuzzland"
+            if current_flag[0] == 0x66 &&
+                current_flag[1] == 0x75 &&
+                current_flag[2] == 0x7a &&
+                current_flag[3] == 0x7a &&
+                current_flag[4] == 0x6c &&
+                current_flag[5] == 0x61 &&
+                current_flag[6] == 0x6e &&
+                current_flag[7] == 0x64 &&
+                current_flag[8] == 0x00 &&
+                current_flag[9] == 0x00 ||
+                current_flag == SCRIBBLE_EVENT_HEX
+            {
+                let data_string = String::from_utf8(log.data.data[64..].to_vec()).unwrap();
+                if unsafe { PANIC_ON_BUG } {
+                    panic!("target bug found: {}", data_string);
+                }
+                self.current_typed_bug.push((
+                    data_string.trim_end_matches('\u{0}').to_string(),
+                    (log.address, self._pc),
+                ));
+            }
+        }
+
+        #[cfg(feature = "print_logs")]
+        {
+            let mut hasher = DefaultHasher::new();
+            log.data.to_vec().hash(&mut hasher);
+            let h = hasher.finish();
+            if self.logs.contains(&h) {
+                return;
+            }
+            self.logs.insert(h);
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
+            let timestamp = now.as_nanos();
+            // debug!("log@{} {:?}", timestamp, hex::encode(_data));
+        }
+    }
+
+    fn selfdestruct(&mut self, _address: EVMAddress, _target: EVMAddress) -> Option<SelfDestructResult> {
+        self.current_self_destructs.push((_address, self._pc));
+        Some(SelfDestructResult::default())
+    }
+
     fn step(&mut self, interp: &mut Interpreter, state: &mut EVMFuzzState) -> InstructionResult {
         unsafe {
             // debug!("pc: {}", interp.program_counter());
@@ -1296,6 +1477,49 @@ where
         Continue
     }
 
+    // fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
+    //     // flag check
+    //     if _topics.len() == 1 {
+    //         let current_flag = _topics.last().unwrap().0;
+    //         // hex is "fuzzland"
+    //         if current_flag[0] == 0x66 &&
+    //             current_flag[1] == 0x75 &&
+    //             current_flag[2] == 0x7a &&
+    //             current_flag[3] == 0x7a &&
+    //             current_flag[4] == 0x6c &&
+    //             current_flag[5] == 0x61 &&
+    //             current_flag[6] == 0x6e &&
+    //             current_flag[7] == 0x64 &&
+    //             current_flag[8] == 0x00 &&
+    //             current_flag[9] == 0x00 ||
+    //             current_flag == SCRIBBLE_EVENT_HEX
+    //         {
+    //             let data_string =
+    // String::from_utf8(_data[64..].to_vec()).unwrap();             if unsafe {
+    // PANIC_ON_BUG } {                 panic!("target bug found: {}",
+    // data_string);             }
+    //             self.current_typed_bug
+    //                 .push((data_string.trim_end_matches('\u{0}').to_string(),
+    // (_address, self._pc)));         }
+    //     }
+
+    //     #[cfg(feature = "print_logs")]
+    //     {
+    //         let mut hasher = DefaultHasher::new();
+    //         _data.to_vec().hash(&mut hasher);
+    //         let h = hasher.finish();
+    //         if self.logs.contains(&h) {
+    //             return;
+    //         }
+    //         self.logs.insert(h);
+    //         let now = SystemTime::now()
+    //             .duration_since(UNIX_EPOCH)
+    //             .expect("Time went backwards");
+    //         let timestamp = now.as_nanos();
+    //         debug!("log@{} {:?}", timestamp, hex::encode(_data));
+    //     }
+    // }
+
     fn create(&mut self, inputs: &mut CreateInputs, state: &mut EVMFuzzState) -> CreateOutcome {
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
@@ -1324,6 +1548,7 @@ where
                     r_addr,
                     inputs.caller,
                     inputs.value,
+                    r_addr
                 ),
                 1e10 as u64,
                 false,
@@ -1503,233 +1728,8 @@ where
                 output: res.2.into(),
                 gas: res.1,
             },
-            memory_offset: start..end,
+            memory_offset: start..start + end,
         };
         // res
-    }
-
-    // fn step_end(
-    //     &mut self,
-    //     _interp: &mut Interpreter,
-    //     _ret: InstructionResult,
-    //     _: &mut EVMFuzzState,
-    // ) -> InstructionResult {
-    //     Continue
-    // }
-
-    fn env_mut(&mut self) -> &mut Env {
-        &mut self.env
-    }
-
-    fn env(&self) -> &Env {
-        &self.env
-    }
-
-    // fn load_account(&mut self, _address: EVMAddress) -> Option<(bool, bool)> {
-    //     Some((
-    //         true, true, // self.data.contains_key(&address) ||
-    // self.code.contains_key(&address),     ))
-    // }
-    fn load_account(&mut self, _address: EVMAddress) -> Option<LoadAccountResult> {
-        Some(LoadAccountResult {
-            is_cold: true,
-            is_empty: true,
-        })
-        // Some((
-        //     true, true, // self.data.contains_key(&address) ||
-        // self.code.contains_key(&address), ))
-    }
-
-    fn block_hash(&mut self, _number: EVMU256) -> Option<B256> {
-        // Some(B256::zero())
-        Some(B256::ZERO)
-    }
-
-    fn balance(&mut self, address: EVMAddress) -> Option<(EVMU256, bool)> {
-        #[cfg(feature = "real_balance")]
-        {
-            if let Some(balance) = self.evmstate.get_balance(&address) {
-                return Some((*balance, true));
-            }
-            self.evmstate.set_balance(address, self.next_slot);
-            Some((self.next_slot, true))
-        }
-        #[cfg(not(feature = "real_balance"))]
-        {
-            Some((EVMU256::MAX, true))
-        }
-    }
-
-    // fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
-    //     // debug!("code");
-    //     match self.code.get(&address) {
-    //         Some(code) => Some((code.clone(), true)),
-    //         None => Some((Arc::new(Bytecode::default()), true)),
-    //     }
-    // }
-
-    fn code(&mut self, address: EVMAddress) -> Option<(Arc<Bytecode>, bool)> {
-        // debug!("code");
-        match self.code.get(&address) {
-            Some(code) => Some((code.clone(), true)),
-            None => Some((Arc::new(Bytecode::default()), true)),
-        }
-    }
-
-    fn code_hash(&mut self, _address: EVMAddress) -> Option<(B256, bool)> {
-        Some((
-            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            true,
-        ))
-    }
-
-    fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
-        if let Some(account) = self.evmstate.get_mut(&address) {
-            if let Some(slot) = account.get(&index) {
-                // println!("sload: {:?} -> {:?} = {:?}", address, index, slot);
-                return Some((*slot, true));
-            } else {
-                account.insert(index, self.next_slot);
-            }
-        } else {
-            let mut account = HashMap::new();
-            account.insert(index, self.next_slot);
-            self.evmstate.insert(address, account);
-        }
-        // println!("sload(c): {:?} -> {:?} = {:?}", address, index, self.next_slot);
-        Some((self.next_slot, true))
-    }
-
-    fn sstore(
-        &mut self,
-        address: EVMAddress,
-        index: EVMU256,
-        value: EVMU256,
-        // ) -> Option<(EVMU256, EVMU256, EVMU256, bool)> {
-    ) -> Option<SStoreResult> {
-        match self.evmstate.get_mut(&address) {
-            Some(account) => {
-                account.insert(index, value);
-            }
-            None => {
-                let mut account = HashMap::new();
-                account.insert(index, value);
-                self.evmstate.insert(address, account);
-            }
-        };
-        Some(SStoreResult {
-            original_value: EVMU256::from(0),
-            present_value: EVMU256::from(0),
-            new_value: EVMU256::from(0),
-            is_cold: true,
-        })
-
-        // Some((EVMU256::from(0), EVMU256::from(0), EVMU256::from(0), true))
-    }
-
-    fn tload(&mut self, address: EVMAddress, index: EVMU256) -> EVMU256 {
-        if let Some(slot) = self.transient_storage.get(&(address, index)) {
-            *slot
-        } else {
-            self.transient_storage.insert((address, index), self.next_slot);
-            self.next_slot
-        }
-    }
-
-    fn tstore(&mut self, address: EVMAddress, index: EVMU256, value: EVMU256) {
-        self.transient_storage.insert((address, index), value);
-    }
-
-    // fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
-    //     // flag check
-    //     if _topics.len() == 1 {
-    //         let current_flag = _topics.last().unwrap().0;
-    //         // hex is "fuzzland"
-    //         if current_flag[0] == 0x66 &&
-    //             current_flag[1] == 0x75 &&
-    //             current_flag[2] == 0x7a &&
-    //             current_flag[3] == 0x7a &&
-    //             current_flag[4] == 0x6c &&
-    //             current_flag[5] == 0x61 &&
-    //             current_flag[6] == 0x6e &&
-    //             current_flag[7] == 0x64 &&
-    //             current_flag[8] == 0x00 &&
-    //             current_flag[9] == 0x00 ||
-    //             current_flag == SCRIBBLE_EVENT_HEX
-    //         {
-    //             let data_string =
-    // String::from_utf8(_data[64..].to_vec()).unwrap();             if unsafe {
-    // PANIC_ON_BUG } {                 panic!("target bug found: {}",
-    // data_string);             }
-    //             self.current_typed_bug
-    //                 .push((data_string.trim_end_matches('\u{0}').to_string(),
-    // (_address, self._pc)));         }
-    //     }
-
-    //     #[cfg(feature = "print_logs")]
-    //     {
-    //         let mut hasher = DefaultHasher::new();
-    //         _data.to_vec().hash(&mut hasher);
-    //         let h = hasher.finish();
-    //         if self.logs.contains(&h) {
-    //             return;
-    //         }
-    //         self.logs.insert(h);
-    //         let now = SystemTime::now()
-    //             .duration_since(UNIX_EPOCH)
-    //             .expect("Time went backwards");
-    //         let timestamp = now.as_nanos();
-    //         debug!("log@{} {:?}", timestamp, hex::encode(_data));
-    //     }
-    // }
-
-    fn log(&mut self, log: Log) {
-        let _topics = log.topics();
-        if _topics.len() == 1 {
-            let current_flag = _topics.last().unwrap().0;
-            // hex is "fuzzland"
-            if current_flag[0] == 0x66 &&
-                current_flag[1] == 0x75 &&
-                current_flag[2] == 0x7a &&
-                current_flag[3] == 0x7a &&
-                current_flag[4] == 0x6c &&
-                current_flag[5] == 0x61 &&
-                current_flag[6] == 0x6e &&
-                current_flag[7] == 0x64 &&
-                current_flag[8] == 0x00 &&
-                current_flag[9] == 0x00 ||
-                current_flag == SCRIBBLE_EVENT_HEX
-            {
-                let data_string = String::from_utf8(log.data.data[64..].to_vec()).unwrap();
-                if unsafe { PANIC_ON_BUG } {
-                    panic!("target bug found: {}", data_string);
-                }
-                self.current_typed_bug.push((
-                    data_string.trim_end_matches('\u{0}').to_string(),
-                    (log.address, self._pc),
-                ));
-            }
-        }
-
-        #[cfg(feature = "print_logs")]
-        {
-            let mut hasher = DefaultHasher::new();
-            log.data.to_vec().hash(&mut hasher);
-            let h = hasher.finish();
-            if self.logs.contains(&h) {
-                return;
-            }
-            self.logs.insert(h);
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards");
-            let timestamp = now.as_nanos();
-            // debug!("log@{} {:?}", timestamp, hex::encode(_data));
-        }
-    }
-
-    fn selfdestruct(&mut self, _address: EVMAddress, _target: EVMAddress) -> Option<SelfDestructResult> {
-        self.current_self_destructs.push((_address, self._pc));
-        Some(SelfDestructResult::default())
     }
 }

@@ -374,6 +374,7 @@ where
             0xff => {
                 // stack_pop_n!(1);
             }
+
             _ => panic!("unknown opcode: {:x}", *interp.instruction_pointer),
         }
     }

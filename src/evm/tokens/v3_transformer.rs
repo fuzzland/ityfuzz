@@ -182,6 +182,7 @@ impl PairContext for UniswapV3PairContext {
                     addr,
                     EVMAddress::default(),
                     EVMU256::ZERO,
+                    addr
                 );
                 let mut interp = Interpreter::new(call, 1e10 as u64, false);
                 let ir = vm.host.run_inspect(&mut interp, state);
@@ -231,6 +232,7 @@ impl PairContext for UniswapV3PairContext {
                     addr,
                     $who,
                     EVMU256::ZERO,
+                    addr
                 );
 
                 // println!("approve {:?} for {:?} => {:?}", addr, $who, $dst);
@@ -283,7 +285,7 @@ impl PairContext for UniswapV3PairContext {
         //     },
         // );
 
-        let call = Contract::new(by.into(), router_code, None, router, src, EVMU256::ZERO);
+        let call = Contract::new(by.into(), router_code, None, router, src, EVMU256::ZERO, router);
 
         // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);
         // println!("pre_vm_state: {:?}", vm.host.evmstate.state);

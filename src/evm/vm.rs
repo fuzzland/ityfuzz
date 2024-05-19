@@ -179,7 +179,7 @@ impl SinglePostExecution {
         // gas limit unsure
         CallInputs {
             input: revm_primitives::Bytes::from(self.input.clone()),
-            return_memory_offset: Default::default(),
+            return_memory_offset: self.return_range.clone(),
             // unsure
             gas_limit: 0,
             bytecode_address: self.code_address,
@@ -258,7 +258,7 @@ impl SinglePostExecution {
             // unsure
             input: Bytes::from(interp.contract.input.clone()),
             // unsure
-            code_address: interp.contract.target_address,
+            code_address: interp.contract.bytecode_address,
             address: interp.contract.target_address,
             caller: interp.contract.caller,
             value: CallValue::Apparent(interp.contract.call_value),
@@ -579,6 +579,7 @@ where
             address,
             from,
             value,
+            address
         );
 
         self.host.evmstate = vm_state.clone();
@@ -808,7 +809,7 @@ where
             }
             // Execute the transaction
             let exec_res = if is_step {
-                let post_exec = vm_state.post_execution.pop().unwrap().clone();
+                let mut post_exec = vm_state.post_execution.pop().unwrap().clone();
                 let mut local_res = None;
                 for mut pe in post_exec.pes {
                     // we need push the output of CALL instruction
@@ -1087,6 +1088,7 @@ where
             deployed_address,
             self.deployer,
             EVMU256::from(0),
+            deployed_address,
         );
         // disable middleware for deployment
         unsafe {
@@ -1242,14 +1244,7 @@ where
                 //     call_value: Default::default(),
                 // );
 
-                let call = Contract::new(
-                    revm_primitives::Bytes::new(),
-                    code.clone(),
-                    None,
-                    *address,
-                    Address::default(),
-                    Default::default(),
-                );
+                let call = Contract::new(revm_primitives::Bytes::new(), code.clone(), None, *address, Address::default(), Default::default(), *address);
 
                 let mut interp = Interpreter::new(call, 1e10 as u64, true);
 

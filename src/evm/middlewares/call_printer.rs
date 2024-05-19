@@ -117,7 +117,7 @@ where
     unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if self.entry {
             self.entry = false;
-            let code_address = interp.contract.target_address;
+            let code_address = interp.contract.bytecode_address;
             self.results.data.push((
                 self.current_layer,
                 SingleCall {
@@ -228,7 +228,7 @@ where
             let target = convert_u256_to_h160(address);
 
             // let caller_code_address = interp.contract.code_address;
-            let caller_code_address = interp.contract.target_address;
+            let caller_code_address = interp.contract.bytecode_address;
 
             self.offsets = 0;
             self.results.data.push((

@@ -70,6 +70,7 @@ use crate::{
     scheduler::SortedDroppingScheduler,
     state::{FuzzState, HasExecutionResult},
 };
+use crate::state::{HasCaller, HasPresets};
 
 #[allow(clippy::type_complexity)]
 pub fn evm_fuzzer(

@@ -210,6 +210,7 @@ impl OffChainConfig {
             target,
             EVMAddress::default(),
             EVMU256::ZERO,
+            target
         );
 
         let mut interp = Interpreter::new(call, 1e10 as u64, true);
