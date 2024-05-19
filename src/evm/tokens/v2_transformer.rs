@@ -162,7 +162,7 @@ impl PairContext for UniswapPairContext {
                     addr,
                     EVMAddress::default(),
                     EVMU256::ZERO,
-                    addr
+                    addr,
                 );
                 let mut interp = Interpreter::new(call, 1e10 as u64, false);
                 let ir = vm.host.run_inspect(&mut interp, state);
@@ -214,7 +214,7 @@ impl PairContext for UniswapPairContext {
                     addr,
                     $who,
                     EVMU256::ZERO,
-                    addr
+                    addr,
                 );
 
                 // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);

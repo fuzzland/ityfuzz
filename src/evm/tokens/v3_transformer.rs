@@ -232,7 +232,7 @@ impl PairContext for UniswapV3PairContext {
                     addr,
                     $who,
                     EVMU256::ZERO,
-                    addr
+                    addr,
                 );
 
                 // println!("approve {:?} for {:?} => {:?}", addr, $who, $dst);

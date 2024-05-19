@@ -579,7 +579,7 @@ where
             address,
             from,
             value,
-            address
+            address,
         );
 
         self.host.evmstate = vm_state.clone();
@@ -1244,7 +1244,15 @@ where
                 //     call_value: Default::default(),
                 // );
 
-                let call = Contract::new(revm_primitives::Bytes::new(), code.clone(), None, *address, Address::default(), Default::default(), *address);
+                let call = Contract::new(
+                    revm_primitives::Bytes::new(),
+                    code.clone(),
+                    None,
+                    *address,
+                    Address::default(),
+                    Default::default(),
+                    *address,
+                );
 
                 let mut interp = Interpreter::new(call, 1e10 as u64, true);
 

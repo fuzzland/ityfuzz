@@ -68,9 +68,8 @@ use crate::{
     fuzzer::{ItyFuzzer, REPLAY, RUN_FOREVER},
     oracle::BugMetadata,
     scheduler::SortedDroppingScheduler,
-    state::{FuzzState, HasExecutionResult},
+    state::{FuzzState, HasCaller, HasExecutionResult, HasPresets},
 };
-use crate::state::{HasCaller, HasPresets};
 
 #[allow(clippy::type_complexity)]
 pub fn evm_fuzzer(

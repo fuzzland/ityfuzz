@@ -778,7 +778,6 @@ pub fn evm_main(mut args: EvmArgs) {
 
 // #[test]
 fn test_evm_main() {
-
     let mut args = EvmArgs {
         target: String::from(format!("{}/*", "./tests/evm/reentrancy")), // 这里需要替换 path 为实际路径
         fetch_tx_data: false,
@@ -787,7 +786,6 @@ fn test_evm_main() {
         work_dir: String::from("work_dir"),
         ..Default::default() // 其他参数使用默认值
     };
-
 
     args.setup_file = args.deployment_script;
     let target = args.target.clone();
@@ -911,7 +909,7 @@ fn test_evm_main() {
 
     if !args.builder_artifacts_url.is_empty() || !args.builder_artifacts_file.is_empty() || args.build_command.len() > 0
     {
-       if !args.offchain_config_url.is_empty() || !args.offchain_config_file.is_empty() {
+        if !args.offchain_config_url.is_empty() || !args.offchain_config_file.is_empty() {
             target_type = EVMTargetType::Config;
         } else {
             panic!("Please specify --deployment-script (The contract that deploys the project) or --offchain-config-file (JSON for deploying the project)");
@@ -950,12 +948,13 @@ fn test_evm_main() {
         .collect::<HashMap<_, _>>();
 
     let mut contract_loader = ContractLoader::from_glob(
-            args.target.as_str(),
-            &mut state,
-            &proxy_deploy_codes,
-            &constructor_args_map,
-            args.target.clone(),
-            Some(args.base_path.clone()));
+        args.target.as_str(),
+        &mut state,
+        &proxy_deploy_codes,
+        &constructor_args_map,
+        args.target.clone(),
+        Some(args.base_path.clone()),
+    );
 
     contract_loader.force_abi(force_abis);
 
@@ -1031,13 +1030,9 @@ fn test_evm_main() {
 
     let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
 
-
     debug!("work_dir: {:?}", args.work_dir.clone().as_str());
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     utils::try_write_file(&abis_json, &json_str, true).unwrap();
     evm_fuzzer(config, &mut state)
-
-
-
 }
