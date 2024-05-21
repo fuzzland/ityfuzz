@@ -80,18 +80,30 @@ typetag = "0.2.13"
 lazy_static = "1.4.0"
 num_cpus = "1.0"
 
+<<<<<<< HEAD
 revm = { git = "https://github.com/nick199910/revm", rev = "613df77", features = [
+=======
+revm = { git = "https://github.com/nick199910/revm", rev = "f725a03", features = [
+>>>>>>> 572ffb4 (fix revm bugs)
     # "no_gas_measuring",
     "serde",
     "memory_limit",
 ] }
+<<<<<<< HEAD
 revm-primitives = { git = "https://github.com/nick199910/revm", rev = "613df77", features = [
+=======
+revm-primitives = { git = "https://github.com/nick199910/revm", rev = "f725a03", features = [
+>>>>>>> 572ffb4 (fix revm bugs)
     # "no_gas_measuring",
     "serde",
     "memory_limit",
     "hashbrown",
 ] }
+<<<<<<< HEAD
 revm-interpreter = { git = "https://github.com/nick199910/revm", rev = "613df77", features = [
+=======
+revm-interpreter = { git = "https://github.com/nick199910/revm", rev = "f725a03", features = [
+>>>>>>> 572ffb4 (fix revm bugs)
     # "no_gas_measuring",
     "serde",
     "memory_limit",

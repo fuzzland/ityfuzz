@@ -221,13 +221,11 @@ impl OffChainConfig {
         //         interp.next_action.into_result_return().unwrap().output
         //     );
         // }
-        println!(" ===============: {:?}", ir);
         if !is_call_success!(ir) {
             return Err(anyhow!("Call failed: {:?}", ir));
         }
-
-        // Ok(interp.return_data_buffer.into())
-        Ok(interp.next_action.into_result_return().unwrap().output.0)
+        Ok(interp.return_data_buffer.into())
+        // // Ok(interp.return_data_buffer.into())
     }
 
     // token0()
