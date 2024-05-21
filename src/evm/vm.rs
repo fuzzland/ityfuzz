@@ -231,7 +231,7 @@ impl SinglePostExecution {
             bytecode: contract.bytecode.clone().bytecode_bytes(),
             is_eof: false,
             // gas limit unsure
-            gas: Gas::new(u64::MAX),
+            gas: Gas::new(0),
             shared_memory: self.memory.clone(),
             stack,
             // function stack unsure
