@@ -776,10 +776,10 @@ pub fn evm_main(mut args: EvmArgs) {
     evm_fuzzer(config, &mut state)
 }
 
-// #[test]
+#[test]
 fn test_evm_offchain() {
     let mut args = EvmArgs {
-        target: String::from(format!("{}/*", "./tests/evm/multi-contract")),
+        target: String::from(format!("{}/*", "./tests/evm/flashloan")),
         fetch_tx_data: false,
         panic_on_bug: true,
         flashloan: true,

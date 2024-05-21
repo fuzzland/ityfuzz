@@ -181,7 +181,7 @@ impl SinglePostExecution {
             input: revm_primitives::Bytes::from(self.input.clone()),
             return_memory_offset: self.return_range.clone(),
             // unsure
-            gas_limit: 0,
+            gas_limit: u64::MAX,
             bytecode_address: self.code_address,
             target_address: self.address,
             caller: self.caller,
@@ -223,6 +223,7 @@ impl SinglePostExecution {
         //     contract,
         //     memory_limit: MEM_LIMIT,
         // }
+        let ret_data = self.memory.slice_range(self.return_range.clone()).to_vec();
         Interpreter {
             // instruction_pointer: unsafe { contract.bytecode.as_ptr().add(self.program_counter) },
             instruction_pointer: unsafe { contract.bytecode.bytecode_bytes().as_ptr().add(self.program_counter) },
@@ -230,12 +231,13 @@ impl SinglePostExecution {
             bytecode: contract.bytecode.clone().bytecode_bytes(),
             is_eof: false,
             // gas limit unsure
-            gas: Gas::new(0),
+            gas: Gas::new(u64::MAX),
             shared_memory: self.memory.clone(),
             stack,
             // function stack unsure
             function_stack: Default::default(),
-            return_data_buffer: revm_primitives::Bytes::new(),
+
+            return_data_buffer: ret_data.into(),
             // return_range: self.return_range.clone(),
             is_static: self.is_static,
             contract,
@@ -253,7 +255,7 @@ impl SinglePostExecution {
             // stack: interp.stack.clone(),
             stack: interp.stack.clone(),
             // return_range: interp.return_data_buffer.clone(),
-            return_range: Default::default(),
+            return_range: out_offset..out_offset + out_len,
             is_static: interp.is_static,
             // unsure
             input: Bytes::from(interp.contract.input.clone()),
@@ -714,7 +716,7 @@ where
             // interp.instruction_pointer = interp.contract.bytecode.as_ptr();
             interp.instruction_pointer = interp.contract.bytecode.bytecode_bytes().as_ptr();
             if !is_call_success!(r) {
-                // interp.return_range = 0..0;
+                // interp.shared_memory.context_memory_mut()
                 // unsure
                 // interp.return_data_buffer = 0..0;
                 interp.return_data_buffer.clear();

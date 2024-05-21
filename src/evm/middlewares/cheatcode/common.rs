@@ -341,7 +341,6 @@ where
             false,
             host.call_depth,
         ));
-
         None
     }
 
