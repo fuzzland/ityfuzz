@@ -1039,7 +1039,6 @@ fn test_evm_offchain() {
 
 // #[test]
 pub fn test_evm_onchain() {
-
     let mut args = EvmArgs {
         target: String::from("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c,0x88503F48e437a377f1aC2892cBB3a5b09949faDd,0xc342774492b54ce5F8ac662113ED702Fc1b34972".to_string()),
         fetch_tx_data: false,
