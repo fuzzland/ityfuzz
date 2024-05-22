@@ -140,7 +140,6 @@ pub fn clear_branch_status() {
         for i in BRANCH_STATUS.iter_mut().take(BRANCH_STATUS_IDX + 1) {
             *i = None;
         }
-
         BRANCH_STATUS_IDX = 0;
     }
 }
@@ -597,7 +596,6 @@ where
 
         self.code
             .insert(address, Arc::new(revm_primitives::Bytecode::from(code)));
-        debug!("get code: {:?}", self.code.get(&address).unwrap());
     }
 
     pub fn find_static_call_read_slot(
@@ -816,10 +814,6 @@ where
                     if loc.len() != 1 {
                         panic!("more than one contract found for the same hash");
                     }
-                    let bytecode_arc = self
-                        .code
-                        .get(loc.iter().next().unwrap())
-                        .expect("Expected bytecode not found");
                     let mut interp = Interpreter::new(
                         // Contract::new_with_context_analyzed(
                         //     input_bytes,
@@ -1699,6 +1693,7 @@ where
                 self.evmstate.set_balance(sender, self.next_slot);
                 self.next_slot
             };
+
             // debug!("call sender balance: {}", current);
             if current < value {
                 return CallOutcome {
@@ -1708,7 +1703,7 @@ where
                         // gas: Gas::new(0),
                         gas: Gas::new(1e10 as u64),
                     },
-                    memory_offset: (0..0),
+                    memory_offset: output_info.0..output_info.1 + output_info.0,
                 };
             }
             self.evmstate.set_balance(sender, current - value);
@@ -1721,7 +1716,7 @@ where
                 self.evmstate.set_balance(receiver, self.next_slot + value);
             };
         }
-        // chao  input.contract == target_address
+
         let mut res = if is_precompile(input.target_address, self.precompiles.len()) {
             self.call_precompile(input, state)
         } else if unsafe { IS_FAST_CALL_STATIC || IS_FAST_CALL } {

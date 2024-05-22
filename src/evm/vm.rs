@@ -19,6 +19,7 @@ use bytes::Bytes;
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{
+    gas::ZERO,
     CallInputs,
     CallScheme,
     CallValue,
@@ -180,7 +181,6 @@ impl SinglePostExecution {
         CallInputs {
             input: revm_primitives::Bytes::from(self.input.clone()),
             return_memory_offset: self.return_range.clone(),
-            // unsure
             gas_limit: 1e10 as u64,
             bytecode_address: self.code_address,
             target_address: self.address,
@@ -204,7 +204,6 @@ impl SinglePostExecution {
             &self.get_call_ctx(),
         );
         let mut stack = Stack::new();
-        // sure
         for v in self.stack.data() {
             let _ = stack.push(*v);
         }
@@ -703,12 +702,8 @@ where
         for _v in 0..repeats - 1 {
             // debug!("repeat: {:?}", v);
             r = self.host.run_inspect(&mut interp, state);
-            // sure
             interp.stack.data_mut().clear();
-            // unsure interp.memory.data.clear();
             interp.shared_memory.free_context();
-
-            // interp.instruction_pointer = interp.contract.bytecode.as_ptr();
             interp.instruction_pointer = interp.contract.bytecode.bytecode_bytes().as_ptr();
             if !is_call_success!(r) {
                 // interp.shared_memory.context_memory_mut()
@@ -1039,7 +1034,7 @@ where
                     bytecode_address: *address,
                     target_address: *address,
                     caller: *caller,
-                    value: CallValue::Transfer(U256::ZERO),
+                    value: CallValue::default(),
                     scheme: CallScheme::Call,
                     is_static: false,
                     is_eof: false,
@@ -1102,11 +1097,6 @@ where
             error!("deploy failed: {:?}", r);
             return None;
         }
-        // debug!(
-        //     "deployer = 0x{} contract = {:?}",
-        //     hex::encode(self.deployer),
-        //     hex::encode(interp.return_value())
-        // );
         debug!(
             "deployer = 0x{} contract = {:?}",
             hex::encode(self.deployer),
