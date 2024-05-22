@@ -181,7 +181,7 @@ impl SinglePostExecution {
             input: revm_primitives::Bytes::from(self.input.clone()),
             return_memory_offset: self.return_range.clone(),
             // unsure
-            gas_limit: u64::MAX,
+            gas_limit: 1e10 as u64,
             bytecode_address: self.code_address,
             target_address: self.address,
             caller: self.caller,
@@ -270,7 +270,6 @@ impl SinglePostExecution {
 pub struct PostExecutionCtx {
     pub constraints: Vec<Constraint>,
     pub pes: Vec<SinglePostExecution>,
-
     pub must_step: bool,
 }
 
@@ -837,7 +836,7 @@ where
                         input: revm_primitives::Bytes(data.clone()),
                         return_memory_offset: Default::default(),
                         // unsure
-                        gas_limit: u64::MAX,
+                        gas_limit: 1e10 as u64,
                         bytecode_address: contract_address,
                         target_address: contract_address,
                         caller,
@@ -997,7 +996,7 @@ where
                 let ctx = CallInputs {
                     input: revm_primitives::Bytes::from(by.clone()),
                     return_memory_offset: Default::default(),
-                    gas_limit: u64::MAX,
+                    gas_limit: 1e10 as u64,
                     bytecode_address: *address,
                     target_address: *address,
                     caller: *caller,
@@ -1036,7 +1035,7 @@ where
                 let ctx = CallInputs {
                     input: revm_primitives::Bytes::from(by.clone()),
                     return_memory_offset: Default::default(),
-                    gas_limit: u64::MAX,
+                    gas_limit: 1e10 as u64,
                     bytecode_address: *address,
                     target_address: *address,
                     caller: *caller,
@@ -1298,7 +1297,7 @@ where
                 let ctx = CallInputs {
                     input: (*by).clone().into(),
                     return_memory_offset: Default::default(),
-                    gas_limit: u64::MAX,
+                    gas_limit: 1e10 as u64,
                     bytecode_address: *address,
                     target_address: *address,
                     caller: *caller,
