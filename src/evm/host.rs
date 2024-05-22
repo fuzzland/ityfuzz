@@ -667,7 +667,8 @@ where
         self.call_count += 1;
         if self.call_count >= unsafe { CALL_UNTIL } {
             push_interp!();
-            return (ControlLeak, Gas::new(0), Bytes::new());
+            // return (ControlLeak, Gas::new(0), Bytes::new());
+            return (ControlLeak, Gas::new(u64::MAX), Bytes::new());
         }
 
         if unsafe { WRITE_RELATIONSHIPS } {
@@ -696,10 +697,12 @@ where
             match action {
                 CallMiddlewareReturn::Continue => {}
                 CallMiddlewareReturn::ReturnRevert => {
-                    middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
+                    // middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
+                    middleware_result = Some((Revert, Gas::new(u64::MAX), Bytes::new()));
                 }
                 CallMiddlewareReturn::ReturnSuccess(b) => {
-                    middleware_result = Some((Continue, Gas::new(0), b.clone()));
+                    // middleware_result = Some((Continue, Gas::new(0), b.clone()));
+                    middleware_result = Some((Continue, Gas::new(u64::MAX), b.clone()));
                 }
             }
             if middleware_result.is_some() {
@@ -733,7 +736,13 @@ where
             //     input.contract,
             //     hex::encode(input.input.clone())
             // );
-            return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0), Bytes::new());
+            // return (InstructionResult::AddressUnboundedStaticCall, Gas::new(0),
+            // Bytes::new());
+            return (
+                InstructionResult::AddressUnboundedStaticCall,
+                Gas::new(u64::MAX),
+                Bytes::new(),
+            );
         }
 
         if input.scheme == CallScheme::Call {
@@ -747,7 +756,8 @@ where
                 //     input.contract,
                 //     hex::encode(input.input.clone())
                 // );
-                return (ControlLeak, Gas::new(0), Bytes::new());
+                // return (ControlLeak, Gas::new(0), Bytes::new());
+                return (ControlLeak, Gas::new(u64::MAX), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
             self.pc_to_call_hash
@@ -786,7 +796,8 @@ where
                         input.target_address,
                         input.call_value(),
                     ),
-                    Gas::new(0),
+                    // Gas::new(0),
+                    Gas::new(u64::MAX),
                     Bytes::new(),
                 );
             }
@@ -827,7 +838,7 @@ where
 
                     let ret = self.run_inspect(&mut interp, state);
                     // return (ret, Gas::new(0), interp.return_value());
-                    return (ret, Gas::new(0), interp.return_data_buffer.into());
+                    return (ret, Gas::new(u64::MAX), interp.return_data_buffer.into());
                 }
             }
         }
@@ -864,14 +875,17 @@ where
             );
 
             let ret = self.run_inspect(&mut interp, state);
-            return (ret, Gas::new(0), interp.return_data_buffer.into());
+            // return (ret, Gas::new(0), interp.return_data_buffer.into());
+            return (ret, Gas::new(u64::MAX), interp.return_data_buffer.into());
         }
 
         // transfer txn and fallback provided
         if hash == [0x00, 0x00, 0x00, 0x00] {
-            return (Continue, Gas::new(0), Bytes::new());
+            // return (Continue, Gas::new(0), Bytes::new());
+            return (Continue, Gas::new(u64::MAX), Bytes::new());
         }
-        (Revert, Gas::new(0), Bytes::new())
+        // (Revert, Gas::new(0), Bytes::new())
+        (Revert, Gas::new(u64::MAX), Bytes::new())
     }
 
     fn call_precompile(
@@ -892,8 +906,10 @@ where
             // Precompile::Custom(fun) => fun(input.input.to_vec().as_slice(), u64::MAX),
         };
         match out {
-            Ok((_, data)) => (InstructionResult::Return, Gas::new(0), Bytes::from(data)),
-            Err(_) => (InstructionResult::PrecompileError, Gas::new(0), Bytes::new()),
+            // Ok((_, data)) => (InstructionResult::Return, Gas::new(0), Bytes::from(data)),
+            // Err(_) => (InstructionResult::PrecompileError, Gas::new(0), Bytes::new()),
+            Ok((_, data)) => (InstructionResult::Return, Gas::new(u64::MAX), Bytes::from(data)),
+            Err(_) => (InstructionResult::PrecompileError, Gas::new(u64::MAX), Bytes::new()),
         }
     }
 
@@ -958,7 +974,9 @@ where
 
     pub fn check_assert_result(&mut self) -> Option<(InstructionResult, Gas, Bytes)> {
         if let Some(ref msg) = self.assert_msg {
-            return Some((InstructionResult::Revert, Gas::new(0), msg.abi_encode().into()));
+            // return Some((InstructionResult::Revert, Gas::new(0),
+            // msg.abi_encode().into()));
+            return Some((InstructionResult::Revert, Gas::new(u64::MAX), msg.abi_encode().into()));
         }
 
         None
@@ -1626,7 +1644,8 @@ where
                     result: InterpreterResult {
                         result: Continue,
                         output: revm_primitives::Bytes::from(runtime_code),
-                        gas: Gas::new(0),
+                        // gas: Gas::new(0),
+                        gas: Gas::new(u64::MAX),
                     },
                     address: Some(r_addr),
                 }
@@ -1635,7 +1654,8 @@ where
                     result: InterpreterResult {
                         result: ret,
                         output: revm_primitives::Bytes::new(),
-                        gas: Gas::new(0),
+                        // gas: Gas::new(0),
+                        gas: Gas::new(u64::MAX),
                     },
                     address: Some(r_addr),
                 }
@@ -1645,7 +1665,8 @@ where
                 result: InterpreterResult {
                     result: Revert,
                     output: revm_primitives::Bytes::new(),
-                    gas: Gas::new(0),
+                    // gas: Gas::new(0),
+                    gas: Gas::new(u64::MAX),
                 },
                 address: None,
             }
@@ -1680,7 +1701,8 @@ where
                     result: InterpreterResult {
                         result: Revert,
                         output: revm_primitives::Bytes::new(),
-                        gas: Gas::new(0),
+                        // gas: Gas::new(0),
+                        gas: Gas::new(u64::MAX),
                     },
                     memory_offset: (0..0),
                 };
