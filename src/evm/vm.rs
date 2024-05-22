@@ -259,7 +259,7 @@ impl SinglePostExecution {
             code_address: interp.contract.bytecode_address,
             address: interp.contract.target_address,
             caller: interp.contract.caller,
-            value: CallValue::Apparent(interp.contract.call_value),
+            value: CallValue::Transfer(interp.contract.call_value),
             output_len: out_len,
             output_offset: out_offset,
         }
@@ -841,7 +841,7 @@ where
                         bytecode_address: contract_address,
                         target_address: contract_address,
                         caller,
-                        value: CallValue::Apparent(value),
+                        value: CallValue::Transfer(value),
                         scheme: CallScheme::Call,
                         is_static: false,
                         is_eof: false,
