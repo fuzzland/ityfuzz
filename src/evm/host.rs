@@ -668,7 +668,7 @@ where
         if self.call_count >= unsafe { CALL_UNTIL } {
             push_interp!();
             // return (ControlLeak, Gas::new(0), Bytes::new());
-            return (ControlLeak, Gas::new(u64::MAX), Bytes::new());
+            return (ControlLeak, Gas::new(1e10 as u64), Bytes::new());
         }
 
         if unsafe { WRITE_RELATIONSHIPS } {
@@ -698,11 +698,11 @@ where
                 CallMiddlewareReturn::Continue => {}
                 CallMiddlewareReturn::ReturnRevert => {
                     // middleware_result = Some((Revert, Gas::new(0), Bytes::new()));
-                    middleware_result = Some((Revert, Gas::new(u64::MAX), Bytes::new()));
+                    middleware_result = Some((Revert, Gas::new(1e10 as u64), Bytes::new()));
                 }
                 CallMiddlewareReturn::ReturnSuccess(b) => {
                     // middleware_result = Some((Continue, Gas::new(0), b.clone()));
-                    middleware_result = Some((Continue, Gas::new(u64::MAX), b.clone()));
+                    middleware_result = Some((Continue, Gas::new(1e10 as u64), b.clone()));
                 }
             }
             if middleware_result.is_some() {
@@ -740,7 +740,7 @@ where
             // Bytes::new());
             return (
                 InstructionResult::AddressUnboundedStaticCall,
-                Gas::new(u64::MAX),
+                Gas::new(1e10 as u64),
                 Bytes::new(),
             );
         }
@@ -757,7 +757,7 @@ where
                 //     hex::encode(input.input.clone())
                 // );
                 // return (ControlLeak, Gas::new(0), Bytes::new());
-                return (ControlLeak, Gas::new(u64::MAX), Bytes::new());
+                return (ControlLeak, Gas::new(1e10 as u64), Bytes::new());
             }
             // check whether the whole CALLDATAVALUE can be arbitrary
             self.pc_to_call_hash
@@ -797,7 +797,7 @@ where
                         input.call_value(),
                     ),
                     // Gas::new(0),
-                    Gas::new(u64::MAX),
+                    Gas::new(1e10 as u64),
                     Bytes::new(),
                 );
             }
@@ -838,7 +838,7 @@ where
 
                     let ret = self.run_inspect(&mut interp, state);
                     // return (ret, Gas::new(0), interp.return_value());
-                    return (ret, Gas::new(u64::MAX), interp.return_data_buffer.into());
+                    return (ret, Gas::new(1e10 as u64), interp.return_data_buffer.into());
                 }
             }
         }
@@ -876,16 +876,16 @@ where
 
             let ret = self.run_inspect(&mut interp, state);
             // return (ret, Gas::new(0), interp.return_data_buffer.into());
-            return (ret, Gas::new(u64::MAX), interp.return_data_buffer.into());
+            return (ret, Gas::new(1e10 as u64), interp.return_data_buffer.into());
         }
 
         // transfer txn and fallback provided
         if hash == [0x00, 0x00, 0x00, 0x00] {
             // return (Continue, Gas::new(0), Bytes::new());
-            return (Continue, Gas::new(u64::MAX), Bytes::new());
+            return (Continue, Gas::new(1e10 as u64), Bytes::new());
         }
         // (Revert, Gas::new(0), Bytes::new())
-        (Revert, Gas::new(u64::MAX), Bytes::new())
+        (Revert, Gas::new(1e10 as u64), Bytes::new())
     }
 
     fn call_precompile(
@@ -898,7 +898,7 @@ where
             .get(&input.target_address)
             .expect("Check for precompile should be already done");
         let out = match precompile {
-            Precompile::Standard(fun) => fun(&input.input, u64::MAX),
+            Precompile::Standard(fun) => fun(&input.input, 1e10 as u64),
             // todo! chao
             Precompile::Env(_) => todo!(),
             Precompile::Stateful(_) => todo!(),
@@ -908,8 +908,8 @@ where
         match out {
             // Ok((_, data)) => (InstructionResult::Return, Gas::new(0), Bytes::from(data)),
             // Err(_) => (InstructionResult::PrecompileError, Gas::new(0), Bytes::new()),
-            Ok((_, data)) => (InstructionResult::Return, Gas::new(u64::MAX), Bytes::from(data)),
-            Err(_) => (InstructionResult::PrecompileError, Gas::new(u64::MAX), Bytes::new()),
+            Ok((_, data)) => (InstructionResult::Return, Gas::new(1e10 as u64), Bytes::from(data)),
+            Err(_) => (InstructionResult::PrecompileError, Gas::new(1e10 as u64), Bytes::new()),
         }
     }
 
@@ -976,7 +976,11 @@ where
         if let Some(ref msg) = self.assert_msg {
             // return Some((InstructionResult::Revert, Gas::new(0),
             // msg.abi_encode().into()));
-            return Some((InstructionResult::Revert, Gas::new(u64::MAX), msg.abi_encode().into()));
+            return Some((
+                InstructionResult::Revert,
+                Gas::new(1e10 as u64),
+                msg.abi_encode().into(),
+            ));
         }
 
         None
@@ -1645,7 +1649,7 @@ where
                         result: Continue,
                         output: revm_primitives::Bytes::from(runtime_code),
                         // gas: Gas::new(0),
-                        gas: Gas::new(u64::MAX),
+                        gas: Gas::new(1e10 as u64),
                     },
                     address: Some(r_addr),
                 }
@@ -1655,7 +1659,7 @@ where
                         result: ret,
                         output: revm_primitives::Bytes::new(),
                         // gas: Gas::new(0),
-                        gas: Gas::new(u64::MAX),
+                        gas: Gas::new(1e10 as u64),
                     },
                     address: Some(r_addr),
                 }
@@ -1666,7 +1670,7 @@ where
                     result: Revert,
                     output: revm_primitives::Bytes::new(),
                     // gas: Gas::new(0),
-                    gas: Gas::new(u64::MAX),
+                    gas: Gas::new(1e10 as u64),
                 },
                 address: None,
             }
@@ -1702,7 +1706,7 @@ where
                         result: Revert,
                         output: revm_primitives::Bytes::new(),
                         // gas: Gas::new(0),
-                        gas: Gas::new(u64::MAX),
+                        gas: Gas::new(1e10 as u64),
                     },
                     memory_offset: (0..0),
                 };
