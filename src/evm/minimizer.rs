@@ -1,6 +1,8 @@
 use std::{cell::RefCell, ops::Deref, rc::Rc};
 
+use alloy_primitives::Address;
 use bytes::Bytes;
+// use bytes::Bytes;
 use itertools::Itertools;
 use libafl::{
     prelude::Corpus,
@@ -75,14 +77,14 @@ impl EVMMinimizer {
 type EVMOracleFeedback<'a> = OracleFeedback<
     'a,
     EVMState,
-    revm_primitives::B160,
+    Address,
     Bytecode,
     Bytes,
-    revm_primitives::B160,
+    Address,
     revm_primitives::ruint::Uint<256, 4>,
     Vec<u8>,
     EVMInput,
-    FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
+    FuzzState<EVMInput, EVMState, Address, Address, Vec<u8>, ConciseEVMInput>,
     ConciseEVMInput,
     EVMQueueExecutor,
 >;
@@ -119,7 +121,7 @@ impl<E: libafl::executors::HasObservers>
         txs.extend(input.transactions.iter().map(|ci| ci.to_input(last_sstate.clone())));
         assert!(!txs.is_empty());
         let mut minimized = false;
-        let mut initial_state = txs[0].0.sstate.clone();
+        let initial_state = txs[0].0.sstate.clone();
         while !minimized {
             minimized = true;
             for try_skip in 0..(txs.len()) {

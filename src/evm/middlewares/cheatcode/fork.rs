@@ -17,18 +17,26 @@ use crate::evm::{
 };
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     #[inline]
-    pub fn create_select_fork0(&self, host: &mut FuzzHost<SC>, args: Vm::createSelectFork_0Call) -> Option<Vec<u8>> {
+    pub fn create_select_fork0(
+        &self,
+        host: &mut FuzzHost<SC, DB>,
+        args: Vm::createSelectFork_0Call,
+    ) -> Option<Vec<u8>> {
         let Vm::createSelectFork_0Call { urlOrAlias } = args;
         self.add_onchain_middleware(host, &urlOrAlias, None)
     }
 
     #[inline]
-    pub fn create_select_fork1(&self, host: &mut FuzzHost<SC>, args: Vm::createSelectFork_1Call) -> Option<Vec<u8>> {
+    pub fn create_select_fork1(
+        &self,
+        host: &mut FuzzHost<SC, DB>,
+        args: Vm::createSelectFork_1Call,
+    ) -> Option<Vec<u8>> {
         let Vm::createSelectFork_1Call {
             urlOrAlias,
             blockNumber,
@@ -37,7 +45,11 @@ where
     }
 
     #[inline]
-    pub fn create_select_fork2(&self, host: &mut FuzzHost<SC>, args: Vm::createSelectFork_2Call) -> Option<Vec<u8>> {
+    pub fn create_select_fork2(
+        &self,
+        host: &mut FuzzHost<SC, DB>,
+        args: Vm::createSelectFork_2Call,
+    ) -> Option<Vec<u8>> {
         // onchain middleware doesn't support txHash
         let Vm::createSelectFork_2Call { urlOrAlias, .. } = args;
         self.add_onchain_middleware(host, &urlOrAlias, None)
@@ -45,7 +57,7 @@ where
 
     fn add_onchain_middleware(
         &self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         url_or_alias: &str,
         block: Option<U256>,
     ) -> Option<Vec<u8>> {

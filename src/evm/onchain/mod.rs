@@ -13,7 +13,6 @@ use std::{
     sync::Arc,
 };
 
-use bytes::Bytes;
 use crypto::{digest::Digest, sha3::Sha3};
 use itertools::Itertools;
 use libafl::{prelude::HasMetadata, schedulers::Scheduler};
@@ -156,18 +155,18 @@ pub fn keccak256(input: &[u8]) -> EVMU256 {
     EVMU256::from_be_bytes(output)
 }
 
-impl<SC> Middleware<SC> for OnChain
+impl<SC, DB> Middleware<SC, DB> for OnChain
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, state: &mut EVMFuzzState) {
         #[cfg(feature = "force_cache")]
         macro_rules! force_cache {
             ($ty: expr, $target: expr) => {{
                 let pc = interp.program_counter();
-                match $ty.get_mut(&(interp.contract.address, pc)) {
+                match $ty.get_mut(&(interp.contract.target_address, pc)) {
                     None => {
-                        $ty.insert((interp.contract.address, pc), HashSet::from([$target]));
+                        $ty.insert((interp.contract.target_address, pc), HashSet::from([$target]));
                         false
                     }
                     Some(v) => {
@@ -191,7 +190,7 @@ where
         match *interp.instruction_pointer {
             // SLOAD
             0x54 => {
-                let address = interp.contract.address;
+                let address = interp.contract.target_address;
                 let slot_idx: alloy_primitives::Uint<256, 4> = interp.stack.peek(0).unwrap();
 
                 macro_rules! load_data {
@@ -233,14 +232,15 @@ where
             #[cfg(feature = "real_balance")]
             // 	SELFBALANCE
             0x47 => {
-                let address = interp.contract.address;
+                // let address = interp.contract.address;
+                let address = interp.contract.target_address;
                 debug!("onchain selfbalance for {:?}", address);
                 // std::thread::sleep(std::time::Duration::from_secs(3));
                 host.next_slot = self.endpoint.get_balance(address);
             }
             // COINBASE
             0x41 => {
-                if host.env.block.coinbase == EVMAddress::zero() {
+                if host.env.block.coinbase == EVMAddress::ZERO {
                     host.env.block.coinbase = self.endpoint.fetch_blk_coinbase();
                 }
             }
@@ -262,7 +262,7 @@ where
             }
             // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
             0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
-                let caller = interp.contract.address;
+                let caller = interp.contract.target_address;
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 => {
                         // CALL | CALLCODE
@@ -311,10 +311,10 @@ where
 
 impl OnChain {
     #[allow(clippy::too_many_arguments)]
-    pub fn load_code<SC>(
+    pub fn load_code<SC, DB>(
         &mut self,
         address_h160: EVMAddress,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         force_cache: bool,
         _should_setup_abi: bool,
         is_proxy_call: bool,
@@ -325,7 +325,7 @@ impl OnChain {
     {
         let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
         let code = hex::decode(contract_code).unwrap();
-        let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(code)));
+        let contract_code = to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(code))));
 
         if contract_code.is_empty() || force_cache {
             self.loaded_code.insert(address_h160);
@@ -380,7 +380,7 @@ impl OnChain {
                     // 2. Use Heimdall to extract abi
                     // 3. Reconfirm on failures of heimdall
                     debug!("Contract {:?} has no abi", address_h160);
-                    let contract_code_str = hex::encode(contract_code.bytes());
+                    let contract_code_str = hex::encode(contract_code.bytecode_bytes());
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     for sig in &sigs {

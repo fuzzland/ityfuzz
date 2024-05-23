@@ -80,11 +80,11 @@ fn merge_sorted_vec_dedup(dst: &mut Vec<u32>, another_one: &[u32]) {
 }
 
 // Reentrancy: Read, Read, Write
-impl<SC> Middleware<SC> for ReentrancyTracer
+impl<SC, DB> Middleware<SC, DB> for ReentrancyTracer
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         match *interp.instruction_pointer {
             0x54 => {
                 let depth = host.evmstate.post_execution.len() as u32;
@@ -95,7 +95,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .reads
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
 
                 let mut found_smaller = Vec::new();
@@ -126,7 +126,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .need_writes
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
                 merge_sorted_vec_dedup(write_entry, &found_smaller);
             }
@@ -138,7 +138,7 @@ where
                     .evmstate
                     .reentrancy_metadata
                     .need_writes
-                    .entry((interp.contract.address, slot_idx))
+                    .entry((interp.contract.target_address, slot_idx))
                     .or_default();
                 for i in write_entry.iter() {
                     if depth == *i {
@@ -146,7 +146,7 @@ where
                         host.evmstate
                             .reentrancy_metadata
                             .found
-                            .insert((interp.contract.address, slot_idx));
+                            .insert((interp.contract.target_address, slot_idx));
                         return;
                     }
                 }
@@ -163,7 +163,7 @@ where
     unsafe fn before_execute(
         &mut self,
         interp: Option<&mut Interpreter>,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         state: &mut EVMFuzzState,
         is_step: bool,
         data: &mut Bytes,

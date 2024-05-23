@@ -2,16 +2,16 @@ use std::{clone::Clone, collections::HashMap, fmt::Debug, sync::Arc};
 
 use alloy_primitives::Address;
 use alloy_sol_types::SolValue;
-use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, CallerMode};
 use libafl::schedulers::Scheduler;
-use revm_interpreter::{analysis::to_analysed, BytecodeLocked};
-use revm_primitives::{Bytecode, Env, SpecId, B160, U256};
+use revm_interpreter::analysis::to_analysed;
+use revm_primitives::{handler_cfg, Bytecode, Env, U256};
+use tracing::debug;
 
 use super::Cheatcode;
 use crate::evm::{
     host::FuzzHost,
-    types::{EVMAddress, EVMFuzzState},
+    types::{as_u64, EVMAddress, EVMFuzzState},
     vm::EVMState,
 };
 
@@ -42,7 +42,7 @@ pub struct RecordAccess {
 }
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -51,7 +51,8 @@ where
     pub fn addr(&self, args: Vm::addrCall) -> Option<Vec<u8>> {
         let Vm::addrCall { privateKey } = args;
         let address: Address = privateKey.to_be_bytes::<{ U256::BYTES }>()[..20].try_into().unwrap();
-        Some(address.abi_encode())
+        debug!("[cheatcode vm.addr got address] {:?}", address.into_word());
+        Some(address.into_word().0.to_vec())
     }
 
     /// Sets `block.timestamp`.
@@ -80,9 +81,11 @@ where
     /// instead.
     #[inline]
     pub fn difficulty(&self, env: &mut Env, args: Vm::difficultyCall) -> Option<Vec<u8>> {
-        if env.cfg.spec_id < SpecId::MERGE {
-            env.block.difficulty = args.newDifficulty;
-        }
+        // if env.cfg.spec_id < SpecId::MERGE {
+        //     env.block.difficulty = args.newDifficulty;
+        // }
+        // None
+        env.block.difficulty = args.newDifficulty;
         None
     }
 
@@ -90,9 +93,13 @@ where
     /// Not available on EVM versions before Paris. Use `difficulty` instead.
     #[inline]
     pub fn prevrandao(&self, env: &mut Env, args: Vm::prevrandaoCall) -> Option<Vec<u8>> {
-        if env.cfg.spec_id >= SpecId::MERGE {
-            env.block.prevrandao = Some(args.newPrevrandao.0.into());
-        }
+        // if env.cfg.spec_id >= SpecId::MERGE {
+        //     env.block.prevrandao = Some(args.newPrevrandao.0.into());
+        // }
+        // None
+
+        // todo! 这里需要更改api设计
+        env.block.prevrandao = Some(args.newPrevrandao.0.into());
         None
     }
 
@@ -100,7 +107,9 @@ where
     #[inline]
     pub fn chain_id(&self, env: &mut Env, args: Vm::chainIdCall) -> Option<Vec<u8>> {
         if args.newChainId <= U256::from(u64::MAX) {
-            env.cfg.chain_id = args.newChainId;
+            // env.cfg.chain_id = args.newChainId;
+            // U64::from(args.newChainId);
+            env.cfg.chain_id = as_u64(args.newChainId);
         }
         None
     }
@@ -115,7 +124,8 @@ where
     /// Sets `block.coinbase`.
     #[inline]
     pub fn coinbase(&self, env: &mut Env, args: Vm::coinbaseCall) -> Option<Vec<u8>> {
-        env.block.coinbase = B160(args.newCoinbase.into());
+        // env.block.coinbase = Address(args.newCoinbase.into());
+        env.block.coinbase = Address::from_slice(args.newCoinbase.as_slice());
         None
     }
 
@@ -124,9 +134,15 @@ where
     pub fn load(&self, state: &EVMState, args: Vm::loadCall) -> Option<Vec<u8>> {
         let Vm::loadCall { target, slot } = args;
 
+        // Some(
+        //     state
+        //         .sload(Address(target.into()), slot.into())
+        //         .unwrap_or_default()
+        //         .abi_encode(),
+        // )
         Some(
             state
-                .sload(B160(target.into()), slot.into())
+                .sload(Address::from_slice(target.as_slice()), slot.into())
                 .unwrap_or_default()
                 .abi_encode(),
         )
@@ -136,24 +152,28 @@ where
     #[inline]
     pub fn store(&self, state: &mut EVMState, args: Vm::storeCall) -> Option<Vec<u8>> {
         let Vm::storeCall { target, slot, value } = args;
-        state.sstore(B160(target.into()), slot.into(), value.into());
+        // state.sstore(Address(target.into()), slot.into(), value.into());
+        state.sstore(Address::from_slice(target.as_slice()), slot.into(), value.into());
         None
     }
 
     /// Sets an address' code.
     #[inline]
-    pub fn etch(&self, host: &mut FuzzHost<SC>, args: Vm::etchCall) -> Option<Vec<u8>> {
+    pub fn etch(&self, host: &mut FuzzHost<SC, DB>, args: Vm::etchCall) -> Option<Vec<u8>> {
         let Vm::etchCall {
             target,
             newRuntimeBytecode,
         } = args;
-        let bytecode = to_analysed(Bytecode::new_raw(Bytes::from(newRuntimeBytecode)));
-
+        // let bytecode =
+        // to_analysed(Arc::new(Bytecode::new_raw(revm_primitives::Bytes::from(
+        //     newRuntimeBytecode,
+        // ))));
+        let bytecode = Bytecode::new_raw(revm_primitives::Bytes::from(newRuntimeBytecode));
         // set code but don't invoke middlewares
-        host.code.insert(
-            B160(target.into()),
-            Arc::new(BytecodeLocked::try_from(bytecode).unwrap()),
-        );
+        host.code
+            // .insert(Address(target.into()), Arc::new(Bytecode::new_raw(bytecode)));
+            // .insert(Address(target), Arc::new(bytecode));
+            .insert(Address::from_slice(target.as_slice()), Arc::new(bytecode));
         None
     }
 
@@ -161,7 +181,8 @@ where
     #[inline]
     pub fn deal(&self, state: &mut EVMState, args: Vm::dealCall) -> Option<Vec<u8>> {
         let Vm::dealCall { account, newBalance } = args;
-        state.set_balance(B160(account.into()), newBalance);
+        // state.set_balance(Address(account.into()), newBalance);
+        state.set_balance(Address::from_slice(account.as_slice()), newBalance);
         None
     }
 
@@ -187,8 +208,9 @@ where
                 origin = new_origin;
             }
         }
-
-        Some((mode, Address::from(sender.0), Address::from(origin.0)).abi_encode_params())
+        // todo! error
+        Some(Vec::new())
+        // Some((mode, sender, origin).abi_encode_params())
     }
 
     /// Records all storage reads and writes.
@@ -203,7 +225,8 @@ where
     #[inline]
     pub fn accesses(&mut self, args: Vm::accessesCall) -> Option<Vec<u8>> {
         let Vm::accessesCall { target } = args;
-        let target = B160(target.into());
+        // let target = Address(target.into());
+        let target = Address::from_slice(target.as_slice());
 
         let result = self
             .accesses
@@ -236,7 +259,7 @@ where
     #[inline]
     pub fn prank0(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         args: Vm::prank_0Call,
     ) -> Option<Vec<u8>> {
@@ -244,7 +267,8 @@ where
         host.prank = Some(Prank::new(
             *old_caller,
             None,
-            B160(msgSender.into()),
+            Address::from_slice(msgSender.as_slice()),
+            // Address(msgSender.into()),
             None,
             true,
             host.call_depth,
@@ -258,7 +282,7 @@ where
     #[inline]
     pub fn prank1(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::prank_1Call,
@@ -267,8 +291,8 @@ where
         host.prank = Some(Prank::new(
             *old_caller,
             Some(*old_origin),
-            B160(msgSender.into()),
-            Some(B160(txOrigin.into())),
+            Address::from_slice(msgSender.as_slice()),
+            Some(Address::from_slice(txOrigin.as_slice())),
             true,
             host.call_depth,
         ));
@@ -281,7 +305,7 @@ where
     #[inline]
     pub fn start_prank0(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         args: Vm::startPrank_0Call,
     ) -> Option<Vec<u8>> {
@@ -289,7 +313,7 @@ where
         host.prank = Some(Prank::new(
             *old_caller,
             None,
-            B160(msgSender.into()),
+            Address::from_slice(msgSender.as_slice()),
             None,
             false,
             host.call_depth,
@@ -303,7 +327,7 @@ where
     #[inline]
     pub fn start_prank1(
         &mut self,
-        host: &mut FuzzHost<SC>,
+        host: &mut FuzzHost<SC, DB>,
         old_caller: &EVMAddress,
         old_origin: &EVMAddress,
         args: Vm::startPrank_1Call,
@@ -312,18 +336,17 @@ where
         host.prank = Some(Prank::new(
             *old_caller,
             Some(*old_origin),
-            B160(msgSender.into()),
-            Some(B160(txOrigin.into())),
+            Address::from_slice(msgSender.as_slice()),
+            Some(Address::from_slice(txOrigin.as_slice())),
             false,
             host.call_depth,
         ));
-
         None
     }
 
     /// Resets subsequent calls' `msg.sender` to be `address(this)`.
     #[inline]
-    pub fn stop_prank(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn stop_prank(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         let _ = host.prank.take();
         None
     }

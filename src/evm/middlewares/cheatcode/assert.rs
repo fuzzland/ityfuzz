@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
-use alloy_primitives::{hex, I256};
+use alloy_primitives::hex;
 use foundry_cheatcodes::Vm;
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;
-use revm_primitives::U256;
+use revm_primitives::{I256, U256};
 
 use super::Cheatcode;
 use crate::evm::types::EVMFuzzState;
@@ -12,7 +12,7 @@ use crate::evm::types::EVMFuzzState;
 const EQ_REL_DELTA_RESOLUTION: U256 = U256::from_limbs([18, 0, 0, 0]);
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -347,7 +347,10 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertEqDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_eq(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -365,7 +368,9 @@ where
             error,
         } = args;
         if let Err(e) = assert_eq(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
         }
         None
     }
@@ -665,7 +670,11 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertNotEqDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_not_eq(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -683,7 +692,10 @@ where
             error,
         } = args;
         if let Err(e) = assert_not_eq(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("{}", e.format_for_values()));
         }
         None
     }
@@ -763,7 +775,10 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertGtDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_gt(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -781,7 +796,10 @@ where
             error,
         } = args;
         if let Err(e) = assert_gt(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("{} ", e.format_for_values()));
         }
         None
     }
@@ -861,7 +879,10 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertGeDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_ge(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -879,7 +900,10 @@ where
             error,
         } = args;
         if let Err(e) = assert_ge(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("{}", e.format_for_values()));
         }
         None
     }
@@ -959,7 +983,10 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertLtDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_lt(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -977,7 +1004,10 @@ where
             error,
         } = args;
         if let Err(e) = assert_lt(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("{} ", e.format_for_values()));
         }
         None
     }
@@ -1057,7 +1087,10 @@ where
     ) -> Option<Vec<u8>> {
         let Vm::assertLeDecimal_2Call { left, right, decimals } = args;
         if let Err(e) = assert_le(&left, &right) {
-            assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("assertion failed: {}",
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("assertion failed: {}", e.format_for_values()));
         }
         None
     }
@@ -1075,7 +1108,10 @@ where
             error,
         } = args;
         if let Err(e) = assert_le(&left, &right) {
-            assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
+            // temp error
+            // assert_msg.replace(format!("{}: {}", error,
+            // e.format_with_decimals(&decimals)));
+            assert_msg.replace(format!("{}: {}", error, e.format_for_values()));
         }
         None
     }
@@ -1118,7 +1154,12 @@ where
         assert_msg: &mut Option<String>,
     ) -> Option<Vec<u8>> {
         let Vm::assertApproxEqAbs_2Call { left, right, maxDelta } = args;
-        if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        // if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        if let Err(e) = int_assert_approx_eq_abs(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxDelta,
+        ) {
             assert_msg.replace(format!("assertion failed: {}", e));
         }
         None
@@ -1136,7 +1177,11 @@ where
             maxDelta,
             error,
         } = args;
-        if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        if let Err(e) = int_assert_approx_eq_abs(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxDelta,
+        ) {
             assert_msg.replace(format!("{}: {}", error, e));
         }
         None
@@ -1191,7 +1236,12 @@ where
             maxDelta,
             decimals,
         } = args;
-        if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        // if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        if let Err(e) = int_assert_approx_eq_abs(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxDelta,
+        ) {
             assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
         }
         None
@@ -1210,7 +1260,12 @@ where
             decimals,
             error,
         } = args;
-        if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        // if let Err(e) = int_assert_approx_eq_abs(left, right, maxDelta) {
+        if let Err(e) = int_assert_approx_eq_abs(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxDelta,
+        ) {
             assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
         }
         None
@@ -1262,7 +1317,13 @@ where
             right,
             maxPercentDelta,
         } = args;
-        if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+
+        // if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+        if let Err(e) = int_assert_approx_eq_rel(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxPercentDelta,
+        ) {
             assert_msg.replace(format!("assertion failed: {}", e));
         }
         None
@@ -1280,7 +1341,12 @@ where
             maxPercentDelta,
             error,
         } = args;
-        if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+        // if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+        if let Err(e) = int_assert_approx_eq_rel(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxPercentDelta,
+        ) {
             assert_msg.replace(format!("{}: {}", error, e));
         }
         None
@@ -1335,7 +1401,11 @@ where
             maxPercentDelta,
             decimals,
         } = args;
-        if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+        if let Err(e) = int_assert_approx_eq_rel(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxPercentDelta,
+        ) {
             assert_msg.replace(format!("assertion failed: {}", e.format_with_decimals(&decimals)));
         }
         None
@@ -1354,7 +1424,11 @@ where
             decimals,
             error,
         } = args;
-        if let Err(e) = int_assert_approx_eq_rel(left, right, maxPercentDelta) {
+        if let Err(e) = int_assert_approx_eq_rel(
+            alloy_primitives::I256::from_limbs(*left.as_limbs()),
+            alloy_primitives::I256::from_limbs(*right.as_limbs()),
+            maxPercentDelta,
+        ) {
             assert_msg.replace(format!("{}: {}", error, e.format_with_decimals(&decimals)));
         }
         None
@@ -1562,6 +1636,13 @@ impl<'a, T: Display> ComparisonAssertionError<'a, Vec<T>> {
         format_values!(self, formatter)
     }
 }
+
+// impl<'a> ComparisonAssertionError<'a, U256> {
+//     fn format_with_decimals(&self, decimals: &U256) -> String {
+//         let formatter = |v: &U256| format_units_uint(v, decimals);
+//         format_values!(self, formatter)
+//     }
+// }
 
 impl<'a> ComparisonAssertionError<'a, U256> {
     fn format_with_decimals(&self, decimals: &U256) -> String {

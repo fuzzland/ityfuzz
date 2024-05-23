@@ -331,7 +331,8 @@ where
                 inner_type: (state.rand_mut().below(100) % 4).into(),
             })),
             1 => BoxedABI::new(Box::new(A256 {
-                data: state.get_rand_address().0.into(),
+                // data: state.get_rand_address().0.into(),
+                data: state.get_rand_address().as_slice().into(),
                 is_address: true,
                 dont_mutate: false,
                 inner_type: A256InnerType::Address,
@@ -1382,7 +1383,7 @@ mod tests {
     fn test_null() {
         let mut abi = get_abi_type_boxed(&String::from("(int256,int256,int256,uint256,address)[]"));
         let mut test_state = FuzzState::new(0);
-        test_state.addresses_pool.push(EVMAddress::zero());
+        test_state.addresses_pool.push(EVMAddress::ZERO);
         let mutation_result =
             abi.mutate::<EVMAddress, EVMAddress, EVMState, EVMFuzzState, ConciseEVMInput>(&mut test_state);
         let abibytes = abi.get_bytes();

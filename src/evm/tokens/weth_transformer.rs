@@ -3,14 +3,14 @@ use std::fmt::Debug;
 use alloy_primitives::hex;
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
-use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
+use revm_interpreter::{Contract, Interpreter};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{uniswap::CODE_REGISTRY, PairContext};
 use crate::{
     evm::{
         types::{EVMAddress, EVMFuzzState, EVMU256, EVMU512},
-        vm::{EVMExecutor, MEM_LIMIT},
+        vm::EVMExecutor,
     },
     generic_vm::vm_state::VMStateT,
     get_code_tokens,
@@ -33,13 +33,13 @@ pub fn withdraw_bytes(amount: EVMU256) -> Bytes {
 }
 
 impl PairContext for WethContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where
@@ -72,34 +72,49 @@ impl PairContext for WethContext {
 
         let addr = self.weth_address;
         let code = get_code_tokens!(addr, vm, state);
-        let call = Contract::new_with_context_analyzed(
+        // let call = Contract::new_with_context_analyzed(
+        //     if reverse {
+        //         // buy
+        //         Bytes::from(vec![])
+        //     } else {
+        //         // sell
+        //         withdraw_bytes(amount)
+        //     },
+        //     code,
+        //     &CallContext {
+        //         address: addr,
+        //         caller: if reverse { *next } else { *src },
+        //         code_address: addr,
+        //         apparent_value: if reverse { amount } else { EVMU256::ZERO },
+        //         scheme: CallScheme::Call,
+        //     },
+        // );
+        let call = Contract::new(
             if reverse {
                 // buy
-                Bytes::from(vec![])
+                Bytes::from(vec![]).into()
             } else {
                 // sell
-                withdraw_bytes(amount)
+                withdraw_bytes(amount).into()
             },
             code,
-            &CallContext {
-                address: addr,
-                caller: if reverse { *next } else { *src },
-                code_address: addr,
-                apparent_value: if reverse { amount } else { EVMU256::ZERO },
-                scheme: CallScheme::Call,
-            },
+            None,
+            addr,
+            if reverse { *next } else { *src },
+            if reverse { amount } else { EVMU256::ZERO },
+            addr,
         );
-        let mut interp = Interpreter::new_with_memory_limit(call.clone(), 1e10 as u64, false, MEM_LIMIT);
+        let mut interp = Interpreter::new(call.clone(), 1e10 as u64, false);
         let ir = vm.host.run_inspect(&mut interp, state);
         if !is_call_success!(ir) {
             println!(
                 "call: {:?} => {:?} {:?}",
                 call.caller,
-                call.address,
+                call.target_address,
                 hex::encode(call.input)
             );
-            panic!("Weth call failed: {:?} {:?}", ir, interp.return_value());
-            return None;
+            // panic!("Weth call failed: {:?} {:?}", ir, interp.return_value());
+            panic!("Weth call failed: {:?} {:?}", ir, interp.return_data_buffer);
         }
 
         Some((*next, amount))

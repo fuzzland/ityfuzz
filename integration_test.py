@@ -8,7 +8,6 @@ TIMEOUT_BIN = "timeout" if os.name == "posix" else "gtimeout"
 
 crashed_any = False
 
-
 def read_onchain_tests():
     tests = ""
     with open("onchain_tests.txt", "r") as file:

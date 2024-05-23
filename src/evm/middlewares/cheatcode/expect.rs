@@ -73,13 +73,13 @@ pub enum ExpectedCallType {
 }
 
 /// Cheat VmCalls
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
     /// Expects an error on next call with any revert data.
     #[inline]
-    pub fn expect_revert0(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn expect_revert0(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         host.expected_revert = Some(ExpectedRevert {
             reason: None,
             depth: host.call_depth,
@@ -89,7 +89,7 @@ where
 
     /// Expects an error on next call that starts with the revert data.
     #[inline]
-    pub fn expect_revert1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
+    pub fn expect_revert1(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectRevert_1Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_1Call { revertData } = args;
         let reason = Some(Bytes::from(revertData.0.to_vec()));
         host.expected_revert = Some(ExpectedRevert {
@@ -101,7 +101,7 @@ where
 
     /// Expects an error on next call that exactly matches the revert data.
     #[inline]
-    pub fn expect_revert2(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
+    pub fn expect_revert2(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectRevert_2Call) -> Option<Vec<u8>> {
         let Vm::expectRevert_2Call { revertData } = args;
         let reason = Some(Bytes::from(revertData));
         host.expected_revert = Some(ExpectedRevert {
@@ -117,7 +117,7 @@ where
     /// logs were emitted in the expected order with the expected topics and
     /// data (as specified by the booleans).
     #[inline]
-    pub fn expect_emit0(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
+    pub fn expect_emit0(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_0Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_0Call {
             checkTopic1,
             checkTopic2,
@@ -136,7 +136,7 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    pub fn expect_emit1(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
+    pub fn expect_emit1(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_1Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_1Call {
             checkTopic1,
             checkTopic2,
@@ -147,7 +147,8 @@ where
         let expected = ExpectedEmit {
             depth: host.call_depth,
             checks: [checkTopic1, checkTopic2, checkTopic3, checkData],
-            address: Some(emitter),
+            // address: Some(emitter),
+            address: Some(Address::from_slice(emitter.as_slice())),
             ..Default::default()
         };
         host.expected_emits.push_back(expected);
@@ -159,7 +160,7 @@ where
     /// after the call, we check if logs were emitted in the expected order
     /// with the expected topics and data.
     #[inline]
-    pub fn expect_emit2(&mut self, host: &mut FuzzHost<SC>) -> Option<Vec<u8>> {
+    pub fn expect_emit2(&mut self, host: &mut FuzzHost<SC, DB>) -> Option<Vec<u8>> {
         let expected = ExpectedEmit {
             depth: host.call_depth,
             checks: [true, true, true, true],
@@ -172,12 +173,12 @@ where
     /// Same as the previous method, but also checks supplied address against
     /// emitting contract.
     #[inline]
-    pub fn expect_emit3(&mut self, host: &mut FuzzHost<SC>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
+    pub fn expect_emit3(&mut self, host: &mut FuzzHost<SC, DB>, args: Vm::expectEmit_3Call) -> Option<Vec<u8>> {
         let Vm::expectEmit_3Call { emitter } = args;
         let expected = ExpectedEmit {
             depth: host.call_depth,
             checks: [true, true, true, true],
-            address: Some(emitter),
+            address: Some(Address::from_slice(emitter.as_slice())),
             ..Default::default()
         };
         host.expected_emits.push_back(expected);
@@ -193,7 +194,7 @@ where
         args: Vm::expectCall_0Call,
     ) -> Option<Vec<u8>> {
         let Vm::expectCall_0Call { callee, data } = args;
-        expect_call_non_count(expected_calls, callee, data, None)
+        expect_call_non_count(expected_calls, Address::from_slice(callee.as_slice()), data, None)
     }
 
     /// Expects given number of calls to an address with the specified calldata.
@@ -204,7 +205,13 @@ where
         args: Vm::expectCall_1Call,
     ) -> Option<Vec<u8>> {
         let Vm::expectCall_1Call { callee, data, count } = args;
-        expect_call_with_count(expected_calls, callee, data, None, count)
+        expect_call_with_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            None,
+            count,
+        )
     }
 
     /// Expects a call to an address with the specified `msg.value` and
@@ -216,7 +223,12 @@ where
         args: Vm::expectCall_2Call,
     ) -> Option<Vec<u8>> {
         let Vm::expectCall_2Call { callee, msgValue, data } = args;
-        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
+        expect_call_non_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+        )
     }
 
     /// Expects given number of calls to an address with the specified
@@ -233,7 +245,13 @@ where
             data,
             count,
         } = args;
-        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
+        expect_call_with_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+            count,
+        )
     }
 
     /// Expect a call to an address with the specified `msg.value`, gas, and
@@ -248,7 +266,12 @@ where
         let Vm::expectCall_4Call {
             callee, msgValue, data, ..
         } = args;
-        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
+        expect_call_non_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+        )
     }
 
     /// Expects given number of calls to an address with the specified
@@ -267,7 +290,13 @@ where
             count,
             ..
         } = args;
-        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
+        expect_call_with_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+            count,
+        )
     }
 
     /// Expect a call to an address with the specified `msg.value` and calldata,
@@ -282,7 +311,12 @@ where
         let Vm::expectCallMinGas_0Call {
             callee, msgValue, data, ..
         } = args;
-        expect_call_non_count(expected_calls, callee, data, Some(msgValue))
+        expect_call_non_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+        )
     }
 
     /// Expect given number of calls to an address with the specified
@@ -301,7 +335,13 @@ where
             count,
             ..
         } = args;
-        expect_call_with_count(expected_calls, callee, data, Some(msgValue), count)
+        expect_call_with_count(
+            expected_calls,
+            Address::from_slice(callee.as_slice()),
+            data,
+            Some(msgValue),
+            count,
+        )
     }
 }
 

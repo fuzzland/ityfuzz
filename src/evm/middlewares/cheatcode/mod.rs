@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     clone::Clone,
     cmp::min,
@@ -5,15 +6,16 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     ops::{BitAnd, Not},
+    str::FromStr,
 };
 
-use alloy_primitives::{Address, Bytes as AlloyBytes, Log as RawLog, B256};
-use alloy_sol_types::SolInterface;
+use alloy_primitives::{address, Address, Bytes as AlloyBytes, Log as RawLog, Uint, B256};
+use alloy_sol_types::{sol_data::FixedBytes, SolInterface};
 use bytes::Bytes;
 use foundry_cheatcodes::Vm::{self, VmCalls};
 use libafl::schedulers::Scheduler;
 use revm_interpreter::{opcode, InstructionResult, Interpreter};
-use revm_primitives::{B160, U256};
+use revm_primitives::U256;
 use tracing::{debug, error, warn};
 
 use super::middleware::{Middleware, MiddlewareType};
@@ -29,9 +31,12 @@ pub use expect::{ExpectedCallData, ExpectedCallTracker, ExpectedCallType, Expect
 
 /// 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
 /// address(bytes20(uint160(uint256(keccak256('hevm cheat code')))))
-pub const CHEATCODE_ADDRESS: B160 = B160([
-    113, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246, 127, 91, 29, 209, 45,
-]);
+// pub const CHEATCODE_ADDRESS: Address = Address();
+// pub const CHEATCODE_ADDRESS: Address = Address::from_slice(&[
+//     0x71, 9, 112, 158, 207, 169, 26, 128, 98, 111, 243, 152, 157, 104, 246,
+// 127, 91, 29, 209, 45, ]);
+
+pub const CHEATCODE_ADDRESS: Address = address!("7109709ECfa91a80626fF3989D68f67F5b1DD12D");
 
 /// Solidity revert prefix.
 ///
@@ -44,7 +49,7 @@ pub const REVERT_PREFIX: [u8; 4] = [8, 195, 121, 160];
 pub const ERROR_PREFIX: [u8; 4] = [11, 196, 69, 3];
 
 #[derive(Clone, Debug, Default)]
-pub struct Cheatcode<SC> {
+pub struct Cheatcode<SC, DB> {
     /// Recorded storage reads and writes
     accesses: Option<RecordAccess>,
     /// Recorded logs
@@ -52,7 +57,7 @@ pub struct Cheatcode<SC> {
     /// Etherscan API key
     etherscan_api_key: Vec<String>,
 
-    _phantom: PhantomData<SC>,
+    _phantom: PhantomData<(SC, DB)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,11 +98,11 @@ macro_rules! cheat_call_error {
     }};
 }
 
-impl<SC> Middleware<SC> for Cheatcode<SC>
+impl<SC, DB: 'static + fmt::Debug> Middleware<SC, DB> for Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone + Debug + 'static,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         let op = interp.current_opcode();
         match get_opcode_type(op, interp) {
             OpcodeType::CheatCall => self.cheat_call(interp, host),
@@ -117,7 +122,7 @@ where
     }
 }
 
-impl<SC> Cheatcode<SC>
+impl<SC, DB> Cheatcode<SC, DB>
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
@@ -131,7 +136,7 @@ where
     }
 
     /// Call cheatcode address
-    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC>) {
+    pub fn cheat_call(&mut self, interp: &mut Interpreter, host: &mut FuzzHost<SC, DB>) {
         let op = interp.current_opcode();
         let calldata = unsafe { pop_cheatcall_stack(interp, op) };
         if let Err(err) = calldata {
@@ -321,12 +326,16 @@ where
 
         // set up return data
         interp.instruction_result = InstructionResult::Continue;
-        interp.return_data_buffer = Bytes::new();
+        interp.return_data_buffer = revm_primitives::Bytes::new();
         if let Some(return_data) = res {
-            interp.return_data_buffer = Bytes::from(return_data);
+            interp.return_data_buffer = revm_primitives::Bytes::from(return_data);
         }
         let target_len = min(out_len, interp.return_data_buffer.len());
-        interp.memory.set(out_offset, &interp.return_data_buffer[..target_len]);
+        interp
+            .shared_memory
+            .set(out_offset, &interp.return_data_buffer[..target_len]);
+        // let interper_ret = interp.stack.pop().unwrap();
+        // debug!("[interper_ret] vm {:?}", interper_ret);
         let _ = interp.stack.push(U256::from(1));
         // step over the instruction
         interp.instruction_pointer = unsafe { interp.instruction_pointer.offset(1) };
@@ -382,7 +391,7 @@ where
                     let key = try_or_continue!(interp.stack().peek(0));
                     storage_accesses
                         .reads
-                        .entry(interp.contract().address)
+                        .entry(interp.contract().target_address)
                         .or_default()
                         .push(key);
                 }
@@ -392,12 +401,12 @@ where
                     // An SSTORE does an SLOAD internally
                     storage_accesses
                         .reads
-                        .entry(interp.contract().address)
+                        .entry(interp.contract().target_address)
                         .or_default()
                         .push(key);
                     storage_accesses
                         .writes
-                        .entry(interp.contract().address)
+                        .entry(interp.contract().target_address)
                         .or_default()
                         .push(key);
                 }
@@ -407,6 +416,7 @@ where
     }
 
     /// Check emits / Record logs
+    // todo! @chao
     pub fn log(&mut self, interp: &mut Interpreter, expected_emits: &mut VecDeque<ExpectedEmit>) {
         if expected_emits.is_empty() && self.recorded_logs.is_none() {
             return;
@@ -416,19 +426,29 @@ where
         let op = interp.current_opcode();
         let data = try_or_continue!(peek_log_data(interp));
         let topics = try_or_continue!(peek_log_topics(interp, op));
-        let address = &interp.contract().address;
+        // let address = &interp.contract().address;
+        let address = &interp.contract.target_address;
 
         // Handle expect emit
         if !expected_emits.is_empty() {
-            handle_expect_emit(expected_emits, &Address::from(address.0), &topics, &data);
+            // handle_expect_emit(expected_emits, &Address::from(address.0), &topics,
+            // &data);
+            handle_expect_emit(expected_emits, &Address::from_slice(address.as_slice()), &topics, &data);
         }
 
         // Stores this log if `recordLogs` has been called
+
         if let Some(storage_recorded_logs) = &mut self.recorded_logs {
+            // storage_recorded_logs.push(Vm::Log {
+            //     topics,
+            //     data: data.to_vec(),
+            //     emitter:
+            // alloy_sol_types::private::Address::from_slice(address.as_slice()),
+            // });
             storage_recorded_logs.push(Vm::Log {
-                topics,
+                topics: todo!(),
                 data: data.to_vec(),
-                emitter: Address::from(address.0),
+                emitter: alloy_sol_types::private::Address::from_slice(address.as_slice()),
             });
         }
     }
@@ -451,8 +471,11 @@ macro_rules! memory_resize {
             if new_size > ($interp.memory_limit as usize) {
                 return Err(InstructionResult::MemoryLimitOOG);
             }
-            if new_size > $interp.memory.len() {
-                $interp.memory.resize(new_size);
+            // if new_size > $interp.memory.len() {
+            //     $interp.memory.resize(new_size);
+            // }
+            if new_size > $interp.shared_memory.len() {
+                $interp.shared_memory.resize(new_size);
             }
         } else {
             return Err(InstructionResult::MemoryOOG);
@@ -479,7 +502,8 @@ unsafe fn pop_cheatcall_stack(interp: &mut Interpreter, op: u8) -> Result<(Bytes
 
     let input = if in_len != 0 {
         memory_resize!(interp, in_offset, in_len);
-        Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+        // Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+        Bytes::copy_from_slice(interp.shared_memory.slice(in_offset, in_len))
     } else {
         Bytes::new()
     };
@@ -517,7 +541,8 @@ fn peek_realcall_input_value(interp: &mut Interpreter, op: u8) -> Result<(Bytes,
 
     let input = if in_len != 0 {
         memory_resize!(interp, in_offset, in_len);
-        Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+        // Bytes::copy_from_slice(interp.memory.get_slice(in_offset, in_len))
+        Bytes::copy_from_slice(interp.shared_memory.slice(in_offset, in_len))
     } else {
         Bytes::new()
     };
@@ -534,7 +559,8 @@ fn peek_log_data(interp: &mut Interpreter) -> Result<AlloyBytes, InstructionResu
     }
 
     memory_resize!(interp, offset, len);
-    Ok(AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len)))
+    // Ok(AlloyBytes::copy_from_slice(interp.memory.get_slice(offset, len)))
+    Ok(AlloyBytes::copy_from_slice(interp.shared_memory.slice(offset, len)))
 }
 
 fn peek_log_topics(interp: &Interpreter, op: u8) -> Result<Vec<B256>, InstructionResult> {
@@ -558,7 +584,7 @@ fn try_memory_resize(interp: &mut Interpreter, offset: usize, len: usize) -> Res
 fn get_opcode_type(op: u8, interp: &Interpreter) -> OpcodeType {
     match op {
         opcode::CALL | opcode::CALLCODE | opcode::DELEGATECALL | opcode::STATICCALL => {
-            let target: B160 = B160(
+            let target: Address = Address(
                 interp.stack().peek(1).unwrap().to_be_bytes::<{ U256::BYTES }>()[12..]
                     .try_into()
                     .unwrap(),
@@ -649,11 +675,15 @@ mod tests {
     use std::{cell::RefCell, collections::HashMap, fs, path::Path, rc::Rc, str::FromStr};
 
     use bytes::Bytes;
+    // use ethers::core::k256::elliptic_curve::bigint::fuzz;
     use libafl::prelude::StdScheduler;
+    use revm::db::{CacheDB, EmptyDB};
     use revm_primitives::Bytecode;
+    use tracing::field::debug;
 
     use super::*;
     use crate::{
+        cache::Cache,
         evm::{
             host::FuzzHost,
             input::{ConciseEVMInput, EVMInput, EVMInputTy},
@@ -674,15 +704,15 @@ mod tests {
         let mut state: EVMFuzzState = FuzzState::new(0);
 
         // Reverter.sol: tests/presets/cheatcode/Reverter.sol
-        let reverter_addr = B160::from_str("0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf").unwrap();
+        let reverter_addr = Address::from_str("0xaAbeB5BA46709f61CFd0090334C6E71513ED7BCf").unwrap();
         let reverter_code = load_bytecode("tests/presets/cheatcode/Reverter.bytecode");
 
         // Emitter.sol: tests/presets/cheatcode/Emitter.sol
-        let emitter_addr = B160::from_str("0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD").unwrap();
+        let emitter_addr = Address::from_str("0xC6829a4b1a9bCCc842387F223dd2bC5FA50fd9eD").unwrap();
         let emitter_code = load_bytecode("tests/presets/cheatcode/Emitter.bytecode");
 
         // Caller.sol: tests/presets/cheatcode/Caller.sol
-        let caller_addr = B160::from_str("0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE").unwrap();
+        let caller_addr = Address::from_str("0xBE8d2A52f21dce4b17Ec809BCE76cb403BbFbaCE").unwrap();
         let caller_code = load_bytecode("tests/presets/cheatcode/Caller.bytecode");
 
         // Cheatcode.t.sol: tests/presets/cheatcode/Cheatcode.t.sol
@@ -694,14 +724,16 @@ mod tests {
             std::fs::create_dir(path).unwrap();
         }
         let mut fuzz_host = FuzzHost::new(StdScheduler::new(), "work_dir".to_string());
+
         fuzz_host.add_middlewares(Rc::new(RefCell::new(Cheatcode::new(""))));
         fuzz_host.set_code(
             CHEATCODE_ADDRESS,
-            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+            Bytecode::new_raw(revm_primitives::Bytes::from(vec![0xfd, 0x00])),
             &mut state,
         );
-
-        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        // fuzz_host.set_spec_id("SHANGHAI".to_string());
+        // println!("{:?}", fuzz_host.spec_id);
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, CacheDB<EmptyDB>> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let mut deploy_state = FuzzState::new(0);
@@ -777,7 +809,7 @@ mod tests {
         assert_fn_success!("0b324ebf");
         // testExpectRevertCustomError()
         assert_fn_success!("10fca384");
-        // testExpectRevertNested()
+        // testExpectRevertNested() ====
         assert_fn_success!("cc017d5c");
         // testExpectEmitMultiple()
         assert_fn_success!("8795d87a");
@@ -800,6 +832,6 @@ mod tests {
     fn load_bytecode(path: &str) -> Bytecode {
         let hex_code = fs::read_to_string(path).expect("bytecode not found").trim().to_string();
         let bytecode = hex::decode(hex_code).unwrap();
-        Bytecode::new_raw(Bytes::from(bytecode))
+        Bytecode::new_raw(revm_primitives::Bytes::from(bytecode))
     }
 }

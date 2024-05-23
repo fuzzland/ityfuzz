@@ -1,5 +1,4 @@
 use std::{
-    borrow::BorrowMut,
     cell::RefCell,
     collections::{hash_map, HashMap},
     fmt::Debug,
@@ -8,7 +7,6 @@ use std::{
     str::FromStr,
 };
 
-use alloy_primitives::hex;
 use libafl::schedulers::Scheduler;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -19,14 +17,10 @@ use super::{
 use crate::{
     evm::{
         abi::{AArray, BoxedABI},
-        onchain::endpoints::Chain,
         tokens::v3_transformer::V3_TOKEN_HOLDER,
         types::{EVMAddress, EVMU256},
     },
-    generic_vm::{
-        vm_executor::GenericVM,
-        vm_state::{self, VMStateT},
-    },
+    generic_vm::vm_state::{self, VMStateT},
     input::ConciseSerde,
     state::HasCaller,
 };
@@ -99,14 +93,14 @@ pub struct UniswapInfo {
 }
 
 pub trait PairContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
 
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where
@@ -149,12 +143,12 @@ pub struct TokenContext {
 static mut WETH_MAX: EVMU256 = EVMU256::ZERO;
 
 impl TokenContext {
-    pub fn buy<VS, CI, SC>(
+    pub fn buy<VS, CI, SC, DB>(
         &self,
         amount_in: EVMU256,
         to: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         seed: &[u8],
     ) -> Option<()>
     where
@@ -278,12 +272,12 @@ impl TokenContext {
     }
 
     // swapExactTokensForETHSupportingFeeOnTransferTokens
-    pub fn sell<VS, CI, SC>(
+    pub fn sell<VS, CI, SC, DB>(
         &self,
         amount_in: EVMU256,
         src: EVMAddress,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         seed: &[u8],
     ) -> Option<()>
     where
@@ -295,7 +289,7 @@ impl TokenContext {
             if let PairContextTy::Weth(ctx) = &self.swaps[0].route[0] {
                 ctx.deref()
                     .borrow_mut()
-                    .transform(&src, &EVMAddress::zero(), amount_in, state, vm, false)
+                    .transform(&src, &EVMAddress::ZERO, amount_in, state, vm, false)
                     .map(|_| ());
             } else {
                 panic!("Invalid weth context");
@@ -312,7 +306,8 @@ impl TokenContext {
             for (nth, pair) in path_ctx.route.iter().enumerate() {
                 let is_final = nth == path_len - 1;
                 let next = if is_final {
-                    EVMAddress::zero()
+                    // sure EVMAddress::zero()
+                    EVMAddress::from_slice(&[0u8; 20])
                 } else {
                     match &path_ctx.route[nth + 1] {
                         PairContextTy::Uniswap(ctx) => ctx.borrow().pair_address,
@@ -630,6 +625,7 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use libafl::{schedulers::StdScheduler, state::HasMetadata};
+    use revm::db::EmptyDB;
 
     use super::*;
     use crate::{
@@ -691,7 +687,7 @@ mod tests {
         });
         println!("selected route: {:?}", token_ctx.swaps[nth].route);
 
-        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>> =
+        let mut evm_executor: EVMExecutor<EVMState, ConciseEVMInput, StdScheduler<EVMFuzzState>, EmptyDB> =
             EVMExecutor::new(fuzz_host, generate_random_address(&mut state));
 
         let res = if direction == "buy" {

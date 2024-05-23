@@ -2,7 +2,8 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use bytes::Bytes;
 use libafl::schedulers::Scheduler;
-use revm_interpreter::{CallContext, CallScheme, Contract, Interpreter};
+use revm::DBBox;
+use revm_interpreter::{Contract, Interpreter};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{uniswap::CODE_REGISTRY, PairContext, UniswapInfo};
@@ -25,13 +26,13 @@ pub struct UniswapV3PairContext {
 }
 
 impl UniswapV3PairContext {
-    pub fn initial_transfer<VS, CI, SC>(
+    pub fn initial_transfer<VS, CI, SC, DB>(
         &self,
         src: &EVMAddress,
         next: &EVMAddress,
         amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
     ) -> Option<()>
     where
         VS: VMStateT + Default + 'static,
@@ -85,7 +86,7 @@ pub fn approve_bytes(dst: &EVMAddress) -> Bytes {
     let mut ret = Vec::new();
     ret.extend_from_slice(&[0x09, 0x5e, 0xa7, 0xb3]); // approve
     ret.extend_from_slice(&[0x00; 12]); // padding
-    ret.extend_from_slice(&dst.0); // dst
+    ret.extend_from_slice(&dst.into_array()); // dst
     ret.extend_from_slice([0xff; 32].as_ref()); // amount
     Bytes::from(ret)
 }
@@ -111,13 +112,13 @@ pub fn exact_in_single_swap(
     let mut ret = Vec::new();
     ret.extend_from_slice(&[0x41, 0x4b, 0xf3, 0x89]); // exactInputSingle
     ret.extend_from_slice(&[0x00; 12]); // padding
-    ret.extend_from_slice(&token_in.0); // tokenIn
+    ret.extend_from_slice(&token_in.into_array()); // tokenIn
     ret.extend_from_slice(&[0x00; 12]); // padding
-    ret.extend_from_slice(&token_out.0); // tokenOut
+    ret.extend_from_slice(&token_out.into_array()); // tokenOut
     ret.extend_from_slice(&[0x00; 28]); // padding
     ret.extend_from_slice(&fee.to_be_bytes()); // fee (4 bytes)
     ret.extend_from_slice(&[0x00; 12]); // padding
-    ret.extend_from_slice(&next_hop.0); // recipient
+    ret.extend_from_slice(&next_hop.into_array()); // recipient
     ret.extend_from_slice(&[0xff; 32]); // deadline
     ret.extend_from_slice(&amount_in.to_be_bytes::<32>()); // amountIn
     ret.extend_from_slice(&[0x00; 32]); // amountOutMinimum
@@ -127,13 +128,13 @@ pub fn exact_in_single_swap(
 
 pub const V3_TOKEN_HOLDER: [u8; 20] = [0xa1; 20];
 impl PairContext for UniswapV3PairContext {
-    fn transform<VS, CI, SC>(
+    fn transform<VS, CI, SC, DB>(
         &self,
         _src: &EVMAddress,
         next: &EVMAddress,
         _amount: EVMU256,
         state: &mut EVMFuzzState,
-        vm: &mut EVMExecutor<VS, CI, SC>,
+        vm: &mut EVMExecutor<VS, CI, SC, DB>,
         reverse: bool,
     ) -> Option<(EVMAddress, EVMU256)>
     where
@@ -151,31 +152,46 @@ impl PairContext for UniswapV3PairContext {
 
         let in_token_code = get_code_tokens!(in_token_address, vm, state);
         let out_token_code = get_code_tokens!(out_token_address, vm, state);
+
         macro_rules! balanceof_token {
             ($dir: expr, $who: expr) => {{
                 let addr = if $dir { in_token_address } else { out_token_address };
-                let call = Contract::new_with_context_analyzed(
-                    balance_of_bytes($who),
+                // let call = Contract::new_with_context_analyzed(
+                //     balance_of_bytes($who),
+                //     if $dir {
+                //         in_token_code.clone()
+                //     } else {
+                //         out_token_code.clone()
+                //     },
+                //     &CallContext {
+                //         address: addr,
+                //         caller: EVMAddress::default(),
+                //         code_address: addr,
+                //         apparent_value: EVMU256::ZERO,
+                //         scheme: CallScheme::Call,
+                //     },
+                // );
+                let call = Contract::new(
+                    balance_of_bytes($who).into(),
                     if $dir {
                         in_token_code.clone()
                     } else {
                         out_token_code.clone()
                     },
-                    &CallContext {
-                        address: addr,
-                        caller: EVMAddress::default(),
-                        code_address: addr,
-                        apparent_value: EVMU256::ZERO,
-                        scheme: CallScheme::Call,
-                    },
+                    None,
+                    addr,
+                    EVMAddress::default(),
+                    EVMU256::ZERO,
+                    addr
                 );
-                let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
                 let ir = vm.host.run_inspect(&mut interp, state);
                 if !is_call_success!(ir) {
                     return None;
                 }
                 let in_balance =
-                    if let Some(num) = EVMU256::try_from_be_slice(interp.return_value().to_vec().as_slice()) {
+                    // if let Some(num) = EVMU256::try_from_be_slice(interp.return_value().to_vec().as_slice()) {
+                        if let Some(num) = EVMU256::try_from_be_slice(interp.return_data_buffer.as_ref()) {
                         num
                     } else {
                         // println!("balance of failed");
@@ -190,26 +206,39 @@ impl PairContext for UniswapV3PairContext {
         macro_rules! approve_token {
             ($dir: expr, $who: expr, $dst: expr) => {{
                 let addr = if $dir { in_token_address } else { out_token_address };
-                let call = Contract::new_with_context_analyzed(
-                    approve_bytes($dst),
+                // let call = Contract::new_with_context_analyzed(
+                //     approve_bytes($dst),
+                //     if $dir {
+                //         in_token_code.clone()
+                //     } else {
+                //         out_token_code.clone()
+                //     },
+                //     &CallContext {
+                //         address: addr,
+                //         caller: $who,
+                //         code_address: addr,
+                //         apparent_value: EVMU256::ZERO,
+                //         scheme: CallScheme::Call,
+                //     },
+                // );
+                let call = Contract::new(
+                    approve_bytes($dst).into(),
                     if $dir {
                         in_token_code.clone()
                     } else {
                         out_token_code.clone()
                     },
-                    &CallContext {
-                        address: addr,
-                        caller: $who,
-                        code_address: addr,
-                        apparent_value: EVMU256::ZERO,
-                        scheme: CallScheme::Call,
-                    },
+                    None,
+                    addr,
+                    $who,
+                    EVMU256::ZERO,
+                    addr,
                 );
 
                 // println!("approve {:?} for {:?} => {:?}", addr, $who, $dst);
                 // println!("pre_vm_state: {:?}", vm.host.evmstate.state);
 
-                let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+                let mut interp = Interpreter::new(call, 1e10 as u64, false);
 
                 let ir = vm.host.run_inspect(&mut interp, state);
                 // println!("bytes: {:?}", transfer_bytes($dst, $amt));
@@ -244,22 +273,24 @@ impl PairContext for UniswapV3PairContext {
         let by = exact_in_single_swap(in_token_address, out_token_address, self.fee, *next, _amount);
         // println!("bytes: {:?}", hex::encode(by.clone()));
 
-        let call = Contract::new_with_context_analyzed(
-            by,
-            router_code,
-            &CallContext {
-                address: router,
-                caller: src,
-                code_address: router,
-                apparent_value: EVMU256::ZERO,
-                scheme: CallScheme::Call,
-            },
-        );
+        // let call = Contract::new_with_context_analyzed(
+        //     by,
+        //     router_code,
+        //     &CallContext {
+        //         address: router,
+        //         caller: src,
+        //         code_address: router,
+        //         apparent_value: EVMU256::ZERO,
+        //         scheme: CallScheme::Call,
+        //     },
+        // );
+
+        let call = Contract::new(by.into(), router_code, None, router, src, EVMU256::ZERO, router);
 
         // println!("transfer {:?}@{:?} for {:?} => {:?}", $amt, addr, $who, $dst);
         // println!("pre_vm_state: {:?}", vm.host.evmstate.state);
 
-        let mut interp = Interpreter::new_with_memory_limit(call, 1e10 as u64, false, MEM_LIMIT);
+        let mut interp = Interpreter::new(call, 1e10 as u64, false);
 
         let ir = vm.host.run_inspect(&mut interp, state);
         if !is_call_success!(ir) {

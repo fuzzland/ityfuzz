@@ -110,22 +110,22 @@ impl CallPrinter {
     }
 }
 
-impl<SC> Middleware<SC> for CallPrinter
+impl<SC, DB> Middleware<SC, DB> for CallPrinter
 where
     SC: Scheduler<State = EVMFuzzState> + Clone,
 {
-    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC>, _state: &mut EVMFuzzState) {
+    unsafe fn on_step(&mut self, interp: &mut Interpreter, _host: &mut FuzzHost<SC, DB>, _state: &mut EVMFuzzState) {
         if self.entry {
             self.entry = false;
-            let code_address = interp.contract.address;
+            let code_address = interp.contract.bytecode_address;
             self.results.data.push((
                 self.current_layer,
                 SingleCall {
                     call_type: CallType::FirstLevelCall,
                     caller: self.translate_address(interp.contract.caller),
-                    contract: self.translate_address(interp.contract.address),
+                    contract: self.translate_address(interp.contract.target_address),
                     input: hex::encode(interp.contract.input.clone()),
-                    value: format!("{}", interp.contract.value),
+                    value: format!("{}", interp.contract.call_value),
                     source: SOURCE_MAP_PROVIDER
                         .lock()
                         .unwrap()
@@ -139,17 +139,20 @@ where
         if *interp.instruction_pointer >= 0xa0 && *interp.instruction_pointer <= 0xa4 {
             let offset = as_u64(interp.stack.peek(0).unwrap()) as usize;
             let len = as_u64(interp.stack.peek(1).unwrap()) as usize;
-            let arg = if interp.memory.len() < offset {
+            let arg = if interp.shared_memory.len() < offset {
                 debug!(
                     "encountered unknown event at PC {} of contract {:?}",
                     interp.program_counter(),
-                    interp.contract.address
+                    interp.contract.target_address
                 );
                 "unknown".to_string()
-            } else if interp.memory.len() < offset + len {
-                hex::encode(&interp.memory.data[offset..])
+            } else if interp.shared_memory.len() < offset + len {
+                // hex::encode(&interp.shared_memory.data[offset..])
+                // unsure
+                hex::encode(&interp.shared_memory.get_word(offset))
             } else {
-                hex::encode(interp.memory.get_slice(offset, len))
+                // hex::encode(interp.shared_memory.get_slice(offset, len))
+                hex::encode(interp.shared_memory.slice(offset, len))
             };
             let topic_amount = *interp.instruction_pointer - 0xa0;
             let mut topics = Vec::new();
@@ -166,7 +169,7 @@ where
                 SingleCall {
                     call_type: CallType::Event,
                     caller: self.translate_address(interp.contract.caller),
-                    contract: self.translate_address(interp.contract.address),
+                    contract: self.translate_address(interp.contract.target_address),
                     input: arg.clone(),
                     value: "".to_string(),
                     source: None,
@@ -199,13 +202,16 @@ where
             let arg_offset = as_u64(arg_offset) as usize;
             let arg_len = as_u64(arg_len) as usize;
 
-            let arg = if interp.memory.len() < arg_offset + arg_len {
-                hex::encode(&interp.memory.data[arg_len..])
+            let arg = if interp.shared_memory.len() < arg_offset + arg_len {
+                // hex::encode(&interp.shared_memory.data[arg_len..])
+                hex::encode(&interp.shared_memory.slice_range(arg_len..interp.shared_memory.len()))
             } else {
-                hex::encode(interp.memory.get_slice(arg_offset, arg_len))
+                // hex::encode(interp.shared_memory.get_slice(arg_offset, arg_len))
+                hex::encode(interp.shared_memory.slice(arg_offset, arg_len))
             };
 
-            let caller = interp.contract.address;
+            // unsure let caller = interp.contract.address;
+            let caller = interp.contract.target_address;
             let address = match *interp.instruction_pointer {
                 0xf1 | 0xf2 | 0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
                 0x3b | 0x3c => interp.stack.peek(0).unwrap(),
@@ -221,7 +227,8 @@ where
 
             let target = convert_u256_to_h160(address);
 
-            let caller_code_address = interp.contract.code_address;
+            // let caller_code_address = interp.contract.code_address;
+            let caller_code_address = interp.contract.bytecode_address;
 
             self.offsets = 0;
             self.results.data.push((
@@ -245,7 +252,7 @@ where
     unsafe fn on_return(
         &mut self,
         _interp: &mut Interpreter,
-        _host: &mut FuzzHost<SC>,
+        _host: &mut FuzzHost<SC, DB>,
         _state: &mut EVMFuzzState,
         by: &Bytes,
     ) {

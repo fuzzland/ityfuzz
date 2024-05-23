@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
 
+use alloy_primitives::Address;
 use bytes::Bytes;
 use glob::glob;
 use itertools::Itertools;
@@ -453,14 +454,14 @@ pub fn evm_fuzzer(
     let objective: OracleFeedback<
         '_,
         EVMState,
-        revm_primitives::B160,
+        Address,
         Bytecode,
         Bytes,
-        revm_primitives::B160,
+        Address,
         revm_primitives::ruint::Uint<256, 4>,
         Vec<u8>,
         EVMInput,
-        FuzzState<EVMInput, EVMState, revm_primitives::B160, revm_primitives::B160, Vec<u8>, ConciseEVMInput>,
+        FuzzState<EVMInput, EVMState, Address, Address, Vec<u8>, ConciseEVMInput>,
         ConciseEVMInput,
         EVMQueueExecutor,
     > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());

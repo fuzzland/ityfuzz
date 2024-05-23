@@ -12,7 +12,6 @@ contract main {
     address owner;
     uint256 is_success;
 
-
     constructor() {
         balances = 1;
         is_success = 0;

@@ -19,3 +19,5 @@ combined.json
 /**/build/
 Move.lock
 /w_**/
+/venv
+src/.DS_Store
