@@ -303,7 +303,11 @@ where
         self.pc_coverage.entry(address).or_default().insert(pc);
 
         if *interp.instruction_pointer == JUMPI {
-            let condition = if is_zero(interp.stack.peek(1).unwrap()) { false } else { true };
+            let condition = if is_zero(interp.stack.peek(1).unwrap()) {
+                false
+            } else {
+                true
+            };
             self.jumpi_coverage.entry(address).or_default().insert((pc, condition));
         }
     }

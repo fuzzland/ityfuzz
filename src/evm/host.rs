@@ -1342,6 +1342,20 @@ where
         if unsafe { IN_DEPLOY } {
             // todo: use nonce + hash instead
             let r_addr = generate_random_address(state);
+
+            // update local balance
+            // for create we don't check sender balance
+            // todo: only disable checking in setUp
+            let value = EVMU256::from(inputs.value);
+            if cfg!(feature = "real_balance") && value != EVMU256::ZERO {
+                let receiver = r_addr;
+                if let Some(balance) = self.evmstate.get_balance(&receiver) {
+                    self.evmstate.set_balance(receiver, *balance + value);
+                } else {
+                    self.evmstate.set_balance(receiver, self.next_slot + value);
+                };
+            }
+
             let mut interp = Interpreter::new_with_memory_limit(
                 Contract::new_with_context(
                     Bytes::new(),
