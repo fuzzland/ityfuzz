@@ -23,6 +23,7 @@ COPY Cargo.lock .
 COPY rust-toolchain.toml .
 COPY src ./src
 COPY benches ./benches
+COPY tests ./tests
 
 # build offchain binary
 RUN cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
