@@ -35,7 +35,7 @@ use libafl::{
 use libafl_bolts::{impl_serdeany, prelude::Rand, tuples::tuple_list, Named};
 use serde::{Deserialize, Serialize};
 
-use crate::evm::types::EVMU256;
+use crate::{evm::types::EVMU256, r#const::MAX_STACK_POW};
 
 /// Constants in the contracts
 ///
@@ -209,6 +209,73 @@ where
     }
 }
 
+/// [`IncDecValue`] is a mutator that mutates the input by overflowing_add 1 or
+/// overflowing_sub 1
+///
+/// When paired with [`ConstantHintedMutator`], it allows us to increase test
+/// coverage by passing `<input> <CONSTANT> gt` and `<input> <CONSTANT> lt` in
+/// the contract
+#[derive(Default)]
+pub struct IncDecValue;
+
+impl Named for IncDecValue {
+    fn name(&self) -> &str {
+        "IncDecValue"
+    }
+}
+
+impl IncDecValue {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl<I, S> Mutator<I, S> for IncDecValue
+where
+    S: State + HasRand + HasMetadata,
+    I: Input + HasBytesVec,
+{
+    /// Mutate the input by adding 1 to the last byte, with carry propagation
+    fn mutate(&mut self, state: &mut S, input: &mut I, _stage_idx: i32) -> Result<MutationResult, Error> {
+        let input_bytes = input.bytes_mut();
+        match state.rand_mut().below(2) {
+            0 => {
+                // increment input by 1
+                let mut carry = true;
+                for byte in input_bytes.iter_mut().rev() {
+                    if carry {
+                        let (new_byte, new_carry) = byte.overflowing_add(1);
+                        *byte = new_byte;
+                        carry = new_carry;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(MutationResult::Mutated)
+            }
+            1 => {
+                // decrement input by 1
+                let mut borrow = true;
+                for byte in input_bytes.iter_mut().rev() {
+                    if borrow {
+                        let (new_byte, new_borrow) = byte.overflowing_sub(1);
+                        *byte = new_byte;
+                        borrow = new_borrow;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(MutationResult::Mutated)
+            }
+            _ => {
+                // Should be unreachable. If here, rand.below didn't work as expected.
+                // unreachable!()
+                Ok(MutationResult::Skipped)
+            }
+        }
+    }
+}
+
 /// [`ConstantHintedMutator`] is a mutator that mutates the input to a constant
 /// in the contract
 ///
@@ -328,13 +395,17 @@ where
         DwordInterestingMutator::new(),
         ConstantHintedMutator::new(),
         GaussianNoiseMutator::new(),
+        IncDecValue::new(),
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(
+            (VMStateHintedMutator::new(&vm_slots), mutations),
+            MAX_STACK_POW as u64,
+        );
         mutator.mutate(state, input, 0).unwrap()
     } else {
-        let mut mutator = StdScheduledMutator::new(mutations);
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(mutations, MAX_STACK_POW as u64);
         mutator.mutate(state, input, 0).unwrap()
     }
 }
@@ -358,15 +429,20 @@ where
         DwordInterestingMutator::new(),
         BytesExpandMutator::new(),
         BytesInsertMutator::new(),
+        BytesRandInsertMutator::new(),
         ConstantHintedMutator::new(),
         GaussianNoiseMutator::new(),
+        IncDecValue::new(),
     );
 
     if let Some(vm_slots) = vm_slots {
-        let mut mutator = StdScheduledMutator::new((VMStateHintedMutator::new(&vm_slots), mutations));
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(
+            (VMStateHintedMutator::new(&vm_slots), mutations),
+            MAX_STACK_POW as u64,
+        );
         mutator.mutate(state, input, 0).unwrap()
     } else {
-        let mut mutator = StdScheduledMutator::new(mutations);
+        let mut mutator = StdScheduledMutator::with_max_stack_pow(mutations, MAX_STACK_POW as u64);
         mutator.mutate(state, input, 0).unwrap()
     }
 }
