@@ -69,7 +69,7 @@ On Consensys's [Daedaluzz](https://github.com/Consensys/daedaluzz) benchmark, It
 * **Liquidation support** to simulate buying and selling any token from liquidity pools during fuzzing.
 * **Decompilation support** for fuzzing contracts without source code.
 * **Supports complex contracts initialization** using Foundry setup script, forking Anvil RPC, or providing a JSON config file.
-* Backed by SOTA Web2 fuzzing engine [LibAFL](https://github.com/AFLplusplus/LibAFL).
+* Backed by SOTA fuzzing engine [LibAFL](https://github.com/AFLplusplus/LibAFL).
 
 ## Bugs Found
 
