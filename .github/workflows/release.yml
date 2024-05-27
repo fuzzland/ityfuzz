@@ -124,17 +124,6 @@ jobs:
           # make -j64
           # sudo make install
 
-      - name: Apple M1 setup
-        if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
-        run: |
-          brew install llvm
-          echo "/opt/homebrew/opt/llvm/bin" >> $GITHUB_PATH
-          echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
-          echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
-          echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx --show-sdk-platform-version)" >> $GITHUB_ENV
-          clang -v
-
       - name: Linux ARM setup
         if: ${{ matrix.job.target == 'aarch64-unknown-linux-gnu' }}
         run: |
