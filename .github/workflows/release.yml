@@ -127,7 +127,8 @@ jobs:
       - name: Apple M1 setup
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
-          brew install llvm
+          brew install llvm@14 
+          clang -v
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
