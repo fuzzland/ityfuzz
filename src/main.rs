@@ -45,7 +45,7 @@ pub fn init_sentry() {
 }
 
 #[derive(Parser)]
-#[command(author, version, about)]
+#[command(author, version=env!("GIT_HASH"), about)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
