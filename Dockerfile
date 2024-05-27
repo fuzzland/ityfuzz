@@ -28,7 +28,7 @@ COPY tests ./tests
 COPY .git ./.git
 
 # build offchain binary
-RUN cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace" --no-default-features
+RUN cargo build --release --features "cmp dataflow evm print_txn_corpus full_trace force_cache real_balance" --no-default-features
 RUN cp target/release/ityfuzz /bins/cli_offchain
 
 # build onchain binary
