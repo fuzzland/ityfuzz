@@ -128,7 +128,7 @@ jobs:
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
           brew install llvm
-          echo 'PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> $GITHUB_ENV
+          echo "/opt/homebrew/opt/llvm/bin" >> $GITHUB_PATH
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
