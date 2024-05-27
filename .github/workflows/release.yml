@@ -127,12 +127,13 @@ jobs:
       - name: Apple M1 setup
         if: ${{ matrix.job.target == 'aarch64-apple-darwin' }}
         run: |
-          brew install llvm@14 
-          clang -v
+          brew install llvm
+          echo 'PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> $GITHUB_ENV
           echo "AR=/usr/local/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
           echo "CC=/usr/local/opt/llvm/bin/clang" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
           echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx --show-sdk-platform-version)" >> $GITHUB_ENV
+          clang -v
 
       - name: Linux ARM setup
         if: ${{ matrix.job.target == 'aarch64-unknown-linux-gnu' }}
