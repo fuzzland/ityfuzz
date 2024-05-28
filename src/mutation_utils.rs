@@ -520,7 +520,7 @@ where
         let mut mutator = StdScheduledMutator::with_max_stack_pow(mutations, MAX_STACK_POW as u64);
         res = mutator.mutate(state, input, 0).unwrap();
     }
-  
+
     state
         .metadata_map_mut()
         .get_mut::<MutatorMetadata>()
