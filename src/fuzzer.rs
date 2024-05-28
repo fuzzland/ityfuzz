@@ -43,6 +43,7 @@ use tracing::info;
 
 use crate::{
     evm::{host::JMP_MAP, solution, utils::prettify_concise_inputs},
+    feedback::CmpMetadata,
     generic_vm::{vm_executor::MAP_SIZE, vm_state::VMStateT},
     input::{ConciseSerde, SolutionTx, VMInputT},
     minimizer::SequentialMinimizer,
@@ -167,11 +168,12 @@ where
     }
 
     /// Determine if a testcase should be replaced based on the minimizer map
-    /// If the new testcase has a higher fav factor, replace the old one
+    /// If the new testcase has a higher fav factor or any better comparison
+    /// results, replace the old one
     /// Returns None if the testcase should not be replaced
-    /// Returns Some((hash, new_fav_factor, testcase_idx)) if the testcase
-    /// should be replaced
-    pub fn should_replace(&self, input: &I, coverage: &[u8; MAP_SIZE]) -> Option<(u64, f64, usize)> {
+    /// Returns Some((hash, new_fav_factor, testcase_idx)) if
+    /// the testcase should be replaced
+    pub fn should_replace(&self, input: &I, coverage: &[u8; MAP_SIZE], state: &S) -> Option<(u64, f64, usize)> {
         let mut hasher = DefaultHasher::new();
         coverage.hash(&mut hasher);
         let hash = hasher.finish();
@@ -181,6 +183,14 @@ where
             // if the new testcase has a higher fav factor, replace the old one
             if new_fav_factor > *fav_factor {
                 return Some((hash, new_fav_factor, *testcase_idx));
+            }
+
+            // check if the testcase had a better comparison result
+            // if full_overwrite_performed is true, we skip mutation
+            if let Some(metadata) = state.metadata_map().get::<CmpMetadata>() {
+                if metadata.cmp_interesting {
+                    return Some((hash, new_fav_factor, *testcase_idx));
+                }
             }
         }
         None
@@ -489,7 +499,7 @@ where
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
                 self.objective.discard_metadata(state, &input)?;
-                match self.should_replace(&input, unsafe { &JMP_MAP }) {
+                match self.should_replace(&input, unsafe { &JMP_MAP }, state) {
                     Some((hash, new_fav_factor, old_testcase_idx)) => {
                         let testcase = Testcase::new(input.clone());
                         let prev = state.corpus_mut().replace(old_testcase_idx.into(), testcase)?;
