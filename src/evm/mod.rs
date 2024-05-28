@@ -29,6 +29,7 @@ pub mod vm;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt,
     fs::OpenOptions,
     io::Write,
     path::Path,
@@ -51,8 +52,11 @@ use num_cpus;
 use onchain::endpoints::{Chain, OnChainConfig};
 use oracles::{erc20::IERC20OracleFlashloan, v2_pair::PairBalanceOracle};
 use producers::erc20::ERC20Producer;
+use revm_primitives::B160;
+// use revm_primitives::ruint::aliases::B160;
 use serde::Deserialize;
 use serde_json::json;
+use tracing::debug;
 use types::{EVMAddress, EVMFuzzState, EVMU256};
 use vm::EVMState;
 
@@ -96,7 +100,7 @@ struct RPCCall {
 }
 
 /// CLI for ItyFuzz for EVM smart contracts
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(author, version, about, long_about = None, trailing_var_arg = true, allow_hyphen_values = true)]
 pub struct EvmArgs {
     /// Glob pattern / address to find contracts
@@ -288,6 +292,64 @@ pub struct EvmArgs {
     /// build contracts instead of using bins and abis.
     #[arg()]
     build_command: Vec<String>,
+}
+
+impl fmt::Display for EvmArgs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EvmArgs {{\n")?;
+        write!(f, "    target: {},\n", self.target)?;
+        write!(f, "    fetch_tx_data: {},\n", self.fetch_tx_data)?;
+        write!(f, "    proxy_address: {},\n", self.proxy_address)?;
+        write!(f, "    constructor_args: {},\n", self.constructor_args)?;
+        write!(f, "    target_type: {:?},\n", self.target_type)?;
+        write!(f, "    chain_type: {:?},\n", self.chain_type)?;
+        write!(f, "    onchain_block_number: {:?},\n", self.onchain_block_number)?;
+        write!(f, "    onchain_url: {:?},\n", self.onchain_url)?;
+        write!(f, "    onchain_chain_id: {:?},\n", self.onchain_chain_id)?;
+        write!(f, "    onchain_explorer_url: {:?},\n", self.onchain_explorer_url)?;
+        write!(f, "    onchain_chain_name: {:?},\n", self.onchain_chain_name)?;
+        write!(
+            f,
+            "    onchain_etherscan_api_key: {:?},\n",
+            self.onchain_etherscan_api_key
+        )?;
+        write!(f, "    onchain_storage_fetching: {},\n", self.onchain_storage_fetching)?;
+        write!(f, "    concolic: {},\n", self.concolic)?;
+        write!(f, "    concolic_caller: {},\n", self.concolic_caller)?;
+        write!(f, "    concolic_timeout: {},\n", self.concolic_timeout)?;
+        write!(f, "    concolic_num_threads: {},\n", self.concolic_num_threads)?;
+        write!(f, "    flashloan: {},\n", self.flashloan)?;
+        write!(f, "    panic_on_bug: {},\n", self.panic_on_bug)?;
+        write!(f, "    detectors: {},\n", self.detectors)?;
+        write!(f, "    replay_file: {:?},\n", self.replay_file)?;
+        write!(f, "    work_dir: {},\n", self.work_dir)?;
+        write!(f, "    write_relationship: {},\n", self.write_relationship)?;
+        write!(f, "    run_forever: {},\n", self.run_forever)?;
+        write!(f, "    seed: {},\n", self.seed)?;
+        write!(f, "    sha3_bypass: {},\n", self.sha3_bypass)?;
+        write!(f, "    only_fuzz: {},\n", self.only_fuzz)?;
+        write!(f, "    base_path: {},\n", self.base_path)?;
+        write!(f, "    spec_id: {},\n", self.spec_id)?;
+        write!(f, "    onchain_builder: {},\n", self.onchain_builder)?;
+        write!(
+            f,
+            "    onchain_replacements_file: {},\n",
+            self.onchain_replacements_file
+        )?;
+        write!(f, "    builder_artifacts_url: {},\n", self.builder_artifacts_url)?;
+        write!(f, "    builder_artifacts_file: {},\n", self.builder_artifacts_file)?;
+        write!(f, "    offchain_config_url: {},\n", self.offchain_config_url)?;
+        write!(f, "    offchain_config_file: {},\n", self.offchain_config_file)?;
+        write!(f, "    load_corpus: {},\n", self.load_corpus)?;
+        write!(f, "    setup_file: {},\n", self.setup_file)?;
+        write!(f, "    deployment_script: {},\n", self.deployment_script)?;
+        write!(f, "    force_abi: {},\n", self.force_abi)?;
+        #[cfg(feature = "use_presets")]
+        write!(f, "    preset_file_path: {},\n", self.preset_file_path)?;
+        write!(f, "    base_directory: {},\n", self.base_directory)?;
+        write!(f, "    build_command: {:?},\n", self.build_command)?;
+        write!(f, "}}")
+    }
 }
 
 enum EVMTargetType {
@@ -777,6 +839,181 @@ pub fn evm_main(mut args: EvmArgs) {
 
     let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
 
+    let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
+
+    utils::try_write_file(&abis_json, &json_str, true).unwrap();
+    evm_fuzzer(config, &mut state)
+}
+
+// #[test]
+fn test_evm_offchain_setup() {
+    let mut args = EvmArgs {
+        proxy_address: String::from("http://localhost:5001/data"),
+        onchain_storage_fetching: String::from("onebyone"),
+        concolic_timeout: 1000,
+        detectors: String::from("high_confidence"),
+        work_dir: String::from("work_dir"),
+        seed: 1667840158231589000,
+        spec_id: String::from("Latest"),
+        deployment_script: String::from("test/foundry/invariants/BaseInvariant.t.sol:BaseInvariant"),
+        build_command: vec![String::from("forge"), String::from("build")],
+        ..Default::default()
+    };
+
+    args.setup_file = args.deployment_script;
+    if !args.base_directory.is_empty() {
+        std::env::set_current_dir(args.base_directory).unwrap();
+    }
+
+    let work_dir = args.work_dir.clone();
+    let work_path = Path::new(work_dir.as_str());
+    let _ = std::fs::create_dir_all(work_path);
+
+    let mut target_type: EVMTargetType = EVMTargetType::Setup;
+
+    let erc20_producer = Rc::new(RefCell::new(ERC20Producer::new()));
+
+    let flashloan_oracle = Rc::new(RefCell::new(IERC20OracleFlashloan::new(erc20_producer.clone())));
+
+    let mut oracles: Vec<
+        Rc<
+            RefCell<
+                dyn Oracle<
+                    EVMState,
+                    B160,
+                    revm_primitives::Bytecode,
+                    bytes::Bytes,
+                    B160,
+                    revm_primitives::ruint::Uint<256, 4>,
+                    Vec<u8>,
+                    EVMInput,
+                    FuzzState<EVMInput, EVMState, B160, B160, Vec<u8>, ConciseEVMInput>,
+                    ConciseEVMInput,
+                    EVMQueueExecutor,
+                >,
+            >,
+        >,
+    > = vec![];
+
+    let mut producers: Vec<
+        Rc<
+            RefCell<
+                dyn Producer<
+                    EVMState,
+                    EVMAddress,
+                    _,
+                    _,
+                    EVMAddress,
+                    EVMU256,
+                    Vec<u8>,
+                    EVMInput,
+                    EVMFuzzState,
+                    ConciseEVMInput,
+                    EVMQueueExecutor,
+                >,
+            >,
+        >,
+    > = vec![];
+
+    let oracle_types = OracleType::from_strs(args.detectors.as_str());
+
+    if oracle_types.contains(&OracleType::Pair) {
+        oracles.push(Rc::new(RefCell::new(PairBalanceOracle::new())));
+    }
+
+    if oracle_types.contains(&OracleType::ERC20) {
+        oracles.push(flashloan_oracle.clone());
+        producers.push(erc20_producer);
+    }
+
+    let mut state: EVMFuzzState = FuzzState::new(args.seed);
+
+    let builder = None;
+
+    let offchain_artifacts = if !args.builder_artifacts_url.is_empty() {
+        Some(OffChainArtifact::from_json_url(args.builder_artifacts_url).expect("failed to parse builder artifacts"))
+    } else if !args.builder_artifacts_file.is_empty() {
+        Some(OffChainArtifact::from_file(args.builder_artifacts_file).expect("failed to parse builder artifacts"))
+    } else if args.build_command.len() > 0 {
+        let command = args.build_command.join(" ");
+        Some(OffChainArtifact::from_command(command).expect("Failed to build the project"))
+    } else {
+        None
+    };
+
+    let mut contract_loader = ContractLoader::from_setup(
+        &offchain_artifacts.expect("offchain artifacts is required for config target type"),
+        args.setup_file,
+        args.work_dir.clone(),
+        "",
+    );
+
+    let config = Config {
+        contract_loader,
+        only_fuzz: HashSet::new(),
+        onchain: None,
+        concolic: args.concolic,
+        concolic_caller: args.concolic_caller,
+        concolic_timeout: args.concolic_timeout,
+        concolic_num_threads: {
+            if args.concolic_num_threads == 0 {
+                num_cpus::get()
+            } else {
+                args.concolic_num_threads
+            }
+        },
+        oracle: oracles,
+        producers,
+        flashloan: args.flashloan,
+        onchain_storage_fetching: None,
+        replay_file: args.replay_file,
+        flashloan_oracle,
+        selfdestruct_oracle: oracle_types.contains(&OracleType::SelfDestruct),
+        reentrancy_oracle: oracle_types.contains(&OracleType::Reentrancy),
+        work_dir: args.work_dir.clone(),
+        write_relationship: args.write_relationship,
+        run_forever: args.run_forever,
+        sha3_bypass: args.sha3_bypass,
+        base_path: args.base_path,
+        echidna_oracle: oracle_types.contains(&OracleType::Echidna),
+        invariant_oracle: oracle_types.contains(&OracleType::Invariant),
+        panic_on_bug: args.panic_on_bug,
+        spec_id: args.spec_id,
+        typed_bug: oracle_types.contains(&OracleType::TypedBug),
+        arbitrary_external_call: oracle_types.contains(&OracleType::ArbitraryCall),
+        math_calculate_oracle: oracle_types.contains(&OracleType::MathCalculate),
+        builder,
+        local_files_basedir_pattern: match target_type {
+            EVMTargetType::Glob => Some(args.target),
+            _ => None,
+        },
+        #[cfg(feature = "use_presets")]
+        preset_file_path: args.preset_file_path,
+        load_corpus: args.load_corpus,
+        etherscan_api_key: String::from(""),
+    };
+
+    let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
+
+    for contract_info in config.contract_loader.contracts.clone() {
+        let abis: Vec<serde_json::Value> = contract_info
+            .abi
+            .iter()
+            .map(|config| {
+                json!({
+                    hex::encode(config.function): format!("{}{}", &config.function_name, &config.abi)
+                })
+            })
+            .collect();
+        abis_map
+            .entry(hex::encode(contract_info.deployed_address))
+            .or_default()
+            .push(abis);
+    }
+
+    let json_str = serde_json::to_string(&abis_map).expect("Failed to serialize ABI map to JSON");
+
+    debug!("work_dir: {:?}", args.work_dir.clone().as_str());
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     utils::try_write_file(&abis_json, &json_str, true).unwrap();

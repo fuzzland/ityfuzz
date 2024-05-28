@@ -6681,6 +6681,7 @@ dependencies = [
  "revm-primitives 1.1.2",
  "rlp",
  "rust-crypto",
+ "semver 1.0.22",
  "sentry",
  "serde",
  "serde_cbor",

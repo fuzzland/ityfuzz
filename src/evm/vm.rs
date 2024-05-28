@@ -961,11 +961,11 @@ where
             error!("deploy failed: {:?}", r);
             return None;
         }
-        debug!(
-            "deployer = 0x{} contract = {:?}",
-            hex::encode(self.deployer),
-            hex::encode(interp.return_value())
-        );
+        // debug!(
+        //     "deployer = 0x{} contract = {:?}",
+        //     hex::encode(self.deployer),
+        //     hex::encode(interp.return_value())
+        // );
         let mut contract_code = Bytecode::new_raw(interp.return_value());
         bytecode_analyzer::add_analysis_result_to_state(&contract_code, state);
         unsafe {

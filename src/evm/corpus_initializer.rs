@@ -200,6 +200,7 @@ where
             .host
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
+        // deploy
         for contract in &mut loader.contracts {
             info!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
@@ -260,6 +261,7 @@ where
                     .expect("get runtime bytecode failed")
                     .bytecode()
                     .to_vec();
+
                 SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
                     &contract.deployed_address,
                     runtime_bytecode,

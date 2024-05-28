@@ -10,6 +10,7 @@ pub struct OffchainContractConfig {
     pub address: EVMAddress,
 }
 
+// filename -> contractname -> OffchainContractConfig
 pub struct OffchainConfig {
     pub configs: HashMap<(String, String), OffchainContractConfig>,
 }

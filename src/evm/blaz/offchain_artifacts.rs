@@ -1,24 +1,52 @@
-use std::{error::Error, process::Stdio};
+use std::{
+    collections::{BTreeMap, HashMap},
+    default::Default,
+    error::Error,
+    process::Stdio,
+};
 
 use bytes::Bytes;
 use itertools::Itertools;
-use revm_primitives::HashMap;
+use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::evm::blaz::{builder::BuildJobResult, get_client};
 
-#[derive(Clone, Debug)]
+// #[derive(Clone, Debug)]
+// pub struct ContractArtifact {
+//     pub deploy_bytecode: Bytes,
+//     pub abi: String,
+//     pub source_map: String,
+//     pub source_map_replacements: Vec<(String, String)>,
+// }
+//
+// #[derive(Clone, Debug)]
+// pub struct OffChainArtifact {
+//     pub contracts: HashMap<(String, String), ContractArtifact>,
+//     pub sources: Vec<(String, String)>,
+// }
+
+#[derive(Clone, Default, Debug)]
 pub struct ContractArtifact {
+    pub deploy_bytecode_str: String,
     pub deploy_bytecode: Bytes,
+    pub lib_address: BTreeMap<String, BTreeMap<String, String>>,
     pub abi: String,
     pub source_map: String,
+    pub link_references: BTreeMap<String, BTreeMap<String, Vec<LinkReference>>>,
     pub source_map_replacements: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct OffChainArtifact {
-    pub contracts: HashMap<(String, String), ContractArtifact>,
+    pub contracts: BTreeMap<(String, String), ContractArtifact>,
     pub sources: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct LinkReference {
+    pub(crate) start: usize,
+    pub(crate) length: usize,
 }
 
 impl OffChainArtifact {
@@ -104,7 +132,7 @@ impl OffChainArtifact {
                 all_sources[idx] = (filename.clone(), code.to_string());
             }
 
-            let mut contracts = HashMap::new();
+            let mut contracts = BTreeMap::new();
             for (loc, _) in &all_bytecode {
                 let bytecode = all_bytecode.get(loc).expect("get bytecode failed").clone();
                 let abi = all_abi.get(loc).expect("get abi failed").clone();
@@ -113,10 +141,13 @@ impl OffChainArtifact {
                 contracts.insert(
                     loc.clone(),
                     ContractArtifact {
+                        deploy_bytecode_str: "".to_string(),
                         deploy_bytecode: bytecode,
                         abi,
                         source_map,
+                        link_references: Default::default(),
                         source_map_replacements,
+                        lib_address: Default::default(),
                     },
                 );
             }
@@ -134,6 +165,13 @@ impl OffChainArtifact {
     }
 
     pub fn from_command(command: String) -> Result<Vec<Self>, Box<dyn Error>> {
+        // let new_working_directory = "tests/evm_manual/story-core";
+        // println!("Changing working directory to: {:?}", new_working_directory);
+        //
+        // std::env::set_current_dir(&new_working_directory)?;
+        // println!("Current working directory is now: {:?}", std::env::current_dir()?);
+        // println!("command is....... {:?}", command.to_string());
+
         // parse the command
         let mut parts = command.split_whitespace().collect_vec();
         if parts.len() < 2 {
@@ -150,6 +188,7 @@ impl OffChainArtifact {
         if !std::path::Path::new(&folder).exists() {
             std::fs::create_dir_all(&folder)?;
         }
+        println!("folder is {}", folder);
 
         macro_rules! remove_folder {
             () => {
@@ -178,6 +217,11 @@ impl OffChainArtifact {
                 if !has_build_info_path {
                     parts.push("--build-info-path");
                     parts.push(folder.as_str());
+                    println!(
+                        "current dir: {:?}",
+                        std::env::current_dir()?.to_str().unwrap().to_string()
+                    );
+                    println!("parts is {:?}", parts);
                 } else {
                     remove_folder!();
                     return Err("build-info-path is not supported".into());
@@ -238,9 +282,11 @@ impl OffChainArtifact {
                 )
             }
             "forge" => {
+                println!("forge path is: {:?}", folder.clone());
                 for entry in std::fs::read_dir(folder.clone())? {
                     let entry = entry?;
                     let path = entry.path();
+                    println!("path is {:?}", path);
                     if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
                         let json = std::fs::read_to_string(path)?;
                         remove_folder!();
@@ -305,7 +351,7 @@ impl OffChainArtifact {
 
     fn _from_solc_json(input: Vec<(String, String)>, output: &Map<String, Value>) -> Result<Vec<Self>, Box<dyn Error>> {
         let mut result = Self {
-            contracts: HashMap::new(),
+            contracts: BTreeMap::new(),
             sources: vec![],
         };
 
@@ -350,7 +396,8 @@ impl OffChainArtifact {
                 let file_name = parts[0];
                 let contract = contract.as_object().expect("get contract failed");
                 let bytecode = contract["bin"].as_str().expect("get bytecode failed");
-                let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                // let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode
+                // failed"));
                 let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
                 let source_map = contract["srcmap-runtime"]
                     .as_str()
@@ -359,20 +406,27 @@ impl OffChainArtifact {
                 result.contracts.insert(
                     (file_name.to_string(), contract_name.to_string()),
                     ContractArtifact {
-                        deploy_bytecode: bytecode,
+                        deploy_bytecode_str: bytecode.to_string(),
+                        deploy_bytecode: Default::default(),
                         abi,
                         source_map,
+                        link_references: Default::default(),
                         source_map_replacements: vec![],
+                        lib_address: Default::default(),
                     },
                 );
             } else {
+                // 1. judge lib contract
                 for (contract_name, contract) in contract.as_object().expect("get contract failed") {
                     let contract = contract.as_object().expect("get contract failed");
                     let bytecode = contract["evm"]["bytecode"]["object"]
                         .as_str()
                         .expect("get bytecode failed");
-                    let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode failed"));
+                    // let bytecode = Bytes::from(hex::decode(bytecode).expect("decode bytecode
+                    // failed"));
                     let abi = serde_json::to_string(&contract["abi"]).expect("get abi failed");
+                    let link_references = serde_json::from_value(contract["evm"]["bytecode"]["linkReferences"].clone())
+                        .unwrap_or_default();
                     let source_map = contract["evm"]["deployedBytecode"]["sourceMap"]
                         .as_str()
                         .expect("get sourceMap failed")
@@ -380,10 +434,13 @@ impl OffChainArtifact {
                     result.contracts.insert(
                         (file_name.clone(), contract_name.clone()),
                         ContractArtifact {
-                            deploy_bytecode: bytecode,
+                            deploy_bytecode_str: bytecode.to_string(),
+                            deploy_bytecode: Bytes::default(),
                             abi,
                             source_map,
+                            link_references,
                             source_map_replacements: vec![],
+                            lib_address: BTreeMap::default(),
                         },
                     );
                 }

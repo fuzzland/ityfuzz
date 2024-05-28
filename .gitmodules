@@ -4,3 +4,4 @@
 [submodule "tests/evm_manual/foundry1/lib/openzeppelin-contracts"]
 	path = tests/evm_manual/foundry1/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+
