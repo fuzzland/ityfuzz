@@ -33,6 +33,7 @@ use crate::{
     generic_vm::vm_state::VMStateT,
     input::ConciseSerde,
     mutation_utils::{byte_mutator, byte_mutator_with_expansion},
+    r#const::{EXPAND_CHOICE_MAX, MUTATE_CHOICE_MAX, RANDOM_ADDRESS_CHOICE, SAMPLE_MAX},
     state::{HasCaller, HasItyState},
 };
 
@@ -344,7 +345,7 @@ where
         match state.rand_mut().below(100) % 4 {
             // dynamic
             0 => BoxedABI::new(Box::new(ADynamic {
-                data: vec![state.rand_mut().below(255) as u8; vec_size],
+                data: vec![state.rand_mut().below(256) as u8; vec_size],
                 multiplier: 32,
             })),
             // tuple
@@ -412,7 +413,7 @@ impl BoxedABI {
                     return MutationResult::Skipped;
                 }
                 if a256.is_address {
-                    if state.rand_mut().below(100) < 90 {
+                    if state.rand_mut().below(SAMPLE_MAX) < RANDOM_ADDRESS_CHOICE {
                         a256.data = state.get_rand_address().0.to_vec();
                     } else {
                         a256.data = [0; 20].to_vec();
@@ -438,13 +439,13 @@ impl BoxedABI {
                     return MutationResult::Skipped;
                 }
                 if aarray.dynamic_size {
-                    match state.rand_mut().below(100) {
-                        0..=80 => {
+                    match state.rand_mut().below(SAMPLE_MAX) {
+                        0..=MUTATE_CHOICE_MAX => {
                             let index: usize = state.rand_mut().next() as usize % data_len;
                             let result = aarray.data[index].mutate_with_vm_slots(state, vm_slots);
                             return result;
                         }
-                        81..=90 => {
+                        MUTATE_CHOICE_MAX..=EXPAND_CHOICE_MAX => {
                             // increase size
                             if state.max_size() <= aarray.data.len() {
                                 return MutationResult::Skipped;
@@ -453,7 +454,7 @@ impl BoxedABI {
                                 aarray.data.push(aarray.data[0].clone());
                             }
                         }
-                        91..=100 => {
+                        EXPAND_CHOICE_MAX..=SAMPLE_MAX => {
                             // decrease size
                             if aarray.data.is_empty() {
                                 return MutationResult::Skipped;
@@ -478,7 +479,7 @@ impl BoxedABI {
                     a_unknown.concrete = BoxedABI::new(Box::new(AEmpty {}));
                     return MutationResult::Skipped;
                 }
-                if (state.rand_mut().below(100)) < 80 {
+                if (state.rand_mut().below(SAMPLE_MAX)) < MUTATE_CHOICE_MAX {
                     a_unknown.concrete.mutate_with_vm_slots(state, vm_slots)
                 } else {
                     a_unknown.concrete = sample_abi(state, a_unknown.size);
