@@ -186,7 +186,6 @@ where
             }
 
             // check if the testcase had a better comparison result
-            // if full_overwrite_performed is true, we skip mutation
             if let Some(metadata) = state.metadata_map().get::<CmpMetadata>() {
                 if metadata.cmp_interesting {
                     return Some((hash, new_fav_factor, *testcase_idx));
