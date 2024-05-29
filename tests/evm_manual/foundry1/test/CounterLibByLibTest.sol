@@ -14,6 +14,6 @@ contract CounterLibByLibTest is Test {
     function test1() public {
         console.log("here");
         bug();
-
     }
 }
+

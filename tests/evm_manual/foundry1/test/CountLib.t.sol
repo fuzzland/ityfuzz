@@ -2,7 +2,7 @@
 pragma solidity 0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
-import {CallingContract} from "../src/CountLib.sol";
+import {CallingContract, NewCallingContract} from "../src/CountLib.sol";
 import "/Users/wangchao/work/test_ityfuzz/ityfuzz/solidity_utils/lib.sol";
 
 contract CounterTestLib is Test {
@@ -16,4 +16,18 @@ contract CounterTestLib is Test {
         callingContract.callImplementationLib();
         bug();
     }
+}
+
+contract TestNewCallingContract is Test {
+    NewCallingContract public newCallingContract;
+
+    function setUp() public {
+        newCallingContract = new NewCallingContract();
+    }
+
+    function testFuzz() public {
+        newCallingContract.test_new();
+        bug();
+    }
+
 }

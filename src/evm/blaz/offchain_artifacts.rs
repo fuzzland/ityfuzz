@@ -166,6 +166,7 @@ impl OffChainArtifact {
 
     pub fn from_command(command: String) -> Result<Vec<Self>, Box<dyn Error>> {
         // let new_working_directory = "tests/evm_manual/story-core";
+        // let new_working_directory = "tests/evm_manual/foundry1";
         // println!("Changing working directory to: {:?}", new_working_directory);
         //
         // std::env::set_current_dir(&new_working_directory)?;
@@ -177,6 +178,7 @@ impl OffChainArtifact {
         if parts.len() < 2 {
             return Err("invalid command".into());
         }
+
         let bin = parts.remove(0);
         let mut folder = format!(
             ".tmp-build-info-{}",

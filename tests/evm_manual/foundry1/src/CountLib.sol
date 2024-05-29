@@ -23,3 +23,15 @@ contract CallingContract {
         ImplementationLib2.doSomething();
     }
 }
+
+contract NewCallingContract {
+    CallingContract cc;
+
+    constructor() {
+        cc = new CallingContract();
+    }
+
+    function test_new() public {
+        cc.callImplementationLib();
+    }
+}

@@ -819,6 +819,7 @@ impl ContractLoader {
         let setup_file = all_matched_slugs[0].clone();
         // find all libs
         let libs = Linker::find_all_libs_in_offchain_artifacts(offchain_artifacts).unwrap();
+        println!("libs is {:?}", libs);
         // link inner libs
         let libs_linked = if !libs.is_empty() {
             Linker::link_libs_inner_lib(Some(libs)).unwrap()
@@ -1032,7 +1033,7 @@ impl ContractLoader {
                 assert!(lib_addr.is_some(), "failed to deploy lib");
             }
         }
-
+        println!("setup contract is {:?}", deploy_code_str);
         let deploy_code = Bytes::from(hex::decode(deploy_code_str).unwrap());
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
@@ -1044,6 +1045,7 @@ impl ContractLoader {
             IN_DEPLOY = true;
         }
         assert!(addr.is_some(), "failed to deploy contract");
+
         let state_after_deployment = evm_executor.host.evmstate.clone();
 
         // invoke setUp() and fails imeediately if setUp() reverts
@@ -1058,6 +1060,8 @@ impl ContractLoader {
 
         if !res[0].1 {
             error!("setUp() failed: {:?}", res[0].0);
+        } else {
+           debug!("setUp() successful!");
         }
 
         // now get Foundry invariant test config by calling

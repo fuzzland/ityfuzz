@@ -65,6 +65,16 @@ impl Linker {
                     }
                 }
             }
+        } else {
+            for (index, offchain_art) in offchain_artifacts.iter().enumerate() {
+                for (contract_key, contract) in &offchain_art.contracts {
+                    offchain_artifacts_clone[index]
+                        .contracts
+                        .get_mut(contract_key)
+                        .unwrap()
+                        .deploy_bytecode = Bytes::from(hex::decode(contract.clone().deploy_bytecode_str).unwrap());
+                }
+            }
         }
         offchain_artifacts_clone
     }
