@@ -109,14 +109,19 @@ pub struct EvmArgs {
     #[arg(long, default_value = "http://localhost:5001/data")]
     proxy_address: String,
 
+    /// Constructor arguments for the contract, separated by semicolon. Example:
+    /// https://docs.ityfuzz.rs/docs-evm-contract/constructor-for-offchain-fuzzing
     #[arg(long, default_value = "")]
     constructor_args: String,
 
-    /// Target type (glob, address) (Default: Automatically infer from target)
+    /// Target type (glob, address, anvil_fork, config, setup)
+    /// (Default: Automatically infer from target)
     #[arg(long)]
     target_type: Option<String>,
 
-    /// Onchain - Chain type (ETH, BSC, POLYGON, MUMBAI)
+    /// Onchain - Chain type
+    /// (eth,goerli,sepolia,bsc,chapel,polygon,mumbai,fantom,avalanche,optimism,
+    /// arbitrum,gnosis,base,celo,zkevm,zkevm_testnet,blast,local)
     #[arg(short, long)]
     chain_type: Option<String>,
 
@@ -147,8 +152,8 @@ pub struct EvmArgs {
     #[arg(long, short = 'k')]
     onchain_etherscan_api_key: Option<String>,
 
-    /// Onchain which fetching method to use (All, Dump, OneByOne) (Default:
-    /// OneByOne)
+    /// Onchain which fetching method to use (dump, onebyone) (Default:
+    /// onebyone)
     #[arg(long, default_value = "onebyone")]
     onchain_storage_fetching: String,
 
@@ -210,7 +215,7 @@ pub struct EvmArgs {
     #[arg(long, default_value = "false")]
     sha3_bypass: bool,
 
-    /// Only fuzz contracts with the addresses, separated by comma
+    /// Only fuzz contracts with the addresses provided, separated by comma
     #[arg(long, default_value = "")]
     only_fuzz: String,
 
@@ -220,7 +225,10 @@ pub struct EvmArgs {
     #[arg(long, default_value = "")]
     base_path: String,
 
-    /// Spec ID
+    /// Spec ID.
+    /// Frontier,Homestead,Tangerine,Spurious,Byzantium,Constantinople,
+    /// Petersburg,Istanbul,MuirGlacier,Berlin,London,Merge,Shanghai,Cancun,
+    /// Latest
     #[arg(long, default_value = "Latest")]
     spec_id: String,
 
