@@ -8,6 +8,7 @@ use std::{
     rc::Rc,
     time::Duration,
 };
+use std::io::Read;
 
 use bytes::Bytes;
 use hex;
@@ -22,6 +23,7 @@ use libafl_bolts::impl_serdeany;
 use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
+// use z3_sys::ParamKind::String;
 
 use super::{scheduler::ABIScheduler, srcmap::SOURCE_MAP_PROVIDER};
 /// Utilities to initialize the corpus
@@ -58,6 +60,7 @@ use crate::{
     state::HasCaller,
     state_input::StagedVMState,
 };
+use crate::evm::contract_utils::to_hex_string;
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
@@ -247,8 +250,24 @@ where
                 continue;
             }
 
+
             if let Some(build_job_result) = &contract.build_artifact {
                 build_job_result.save_source_map(&contract.deployed_address);
+
+                // let runtime_bytecode = self
+                //     .executor
+                //     .host
+                //     .code
+                //     .get(&contract.deployed_address)
+                //     .expect("get runtime bytecode failed")
+                //     .bytecode().to_vec();
+                //
+                // // let runtime_bytecode_str = String::from_utf8(runtime_bytecode.clone()).unwrap();
+                // let build_job_bytecode = build_job_result.bytecodes.clone().to_vec();
+                // println!("contract.name is: {:?}", contract.name);
+                // println!("runtime_bytecode_str {:?}", to_hex_string(runtime_bytecode.as_slice()));
+                // println!("build_job_bytecode_str {:?}", to_hex_string(build_job_bytecode.as_slice()));
+                // assert_eq!(runtime_bytecode, build_job_bytecode, "Bytecode mismatch");
                 continue;
             }
 

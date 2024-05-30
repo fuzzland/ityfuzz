@@ -1,4 +1,5 @@
 use core::panic;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap, HashSet},
@@ -14,10 +15,12 @@ use std::{
 use alloy_primitives::{Address, Keccak256};
 // use alloy_primitives::Bytes;
 use bytes::Bytes;
+use colored::Colorize;
 /// Load contract from file system or remote
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
+use libafl_bolts::AsSlice;
 use revm_primitives::{bitvec::vec, Bytecode, Env};
 use serde_json::Value;
 
@@ -1026,14 +1029,18 @@ impl ContractLoader {
             // finish link
             for (key, value) in _libs.unwrap().into_iter() {
                 let lib_bytecode = value.deploy_bytecode_str;
-                let lib_bytecode_hex = Bytes::from(hex::decode(lib_bytecode).unwrap());
+                let lib_bytecode_hex = Bytes::from(hex::decode(lib_bytecode.clone()).unwrap());
                 let lib_addr = compute_address(&key);
                 let lib_addr = EVMAddress::from_str(lib_addr.as_str()).unwrap();
-                let lib_addr = evm_executor.deploy(Bytecode::new_raw(lib_bytecode_hex), None, lib_addr, &mut state);
+                let lib_addr = evm_executor.deploy(Bytecode::new_raw(lib_bytecode_hex.clone()), None, lib_addr, &mut state);
+                println!("lib_bytecode is {:?} \n, lib is {:?} \n, lib_addr: {:?} \n, lib_bytecode_hex {:?} \n",
+                         lib_bytecode,
+                    key,
+                    lib_addr.unwrap(),
+                    to_hex_string(evm_executor.host.code.get(&lib_addr.unwrap()).expect("get runtime bytecode failed").bytecode().to_vec().as_slice()));
                 assert!(lib_addr.is_some(), "failed to deploy lib");
             }
         }
-        println!("setup contract is {:?}", deploy_code_str);
         let deploy_code = Bytes::from(hex::decode(deploy_code_str).unwrap());
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
@@ -1341,6 +1348,16 @@ pub fn compute_address(target_salt: &(String, String)) -> String {
     hasher.update(target_salt.1.as_bytes());
     let result = hasher.finalize();
     Address::from_slice(&result[12..]).to_string().to_lowercase().as_str()[2..].to_string()
+}
+
+pub fn to_hex_string(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| match format!("{:02x}", b) {
+            s => s.to_string(),
+        })
+        .collect::<Vec<String>>()
+        .join("")
 }
 
 #[cfg(test)]
