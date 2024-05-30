@@ -351,7 +351,10 @@ impl OffChainArtifact {
         )
     }
 
-    fn _from_solc_json(input: Vec<(String, String)>, output: &Map<String, Value>) -> Result<Vec<Self>, Box<dyn Error>> {
+    fn _from_solc_json(
+        mut input: Vec<(String, String)>,
+        output: &Map<String, Value>,
+    ) -> Result<Vec<Self>, Box<dyn Error>> {
         let mut result = Self {
             contracts: BTreeMap::new(),
             sources: vec![],
@@ -380,9 +383,34 @@ impl OffChainArtifact {
                 }
             }
         } else {
-            for (name, source) in &input {
-                result.sources.push((name.clone(), source.clone()));
+            let mut insertion_order = HashMap::new();
+            let mut input_idx = 0;
+            for (name, _) in &input {
+                let real_idx = output
+                    .get("sources")
+                    .expect("get sources failed")
+                    .as_object()
+                    .expect("failed to convert to dict")
+                    .get(name)
+                    .expect("failed to get file in output")
+                    .get("id")
+                    .expect("failed to get id")
+                    .as_u64()
+                    .expect("failed to convert id to u64");
+
+                insertion_order.insert(real_idx, (input_idx, name.clone()));
+                input_idx += 1;
             }
+
+            // insert source by real_idx order
+            for (_, (input_idx, name)) in insertion_order.iter().sorted() {
+                let source = std::mem::take(&mut input[*input_idx]);
+                result.sources.push(source);
+            }
+
+            // for (name, source) in &input {
+            //     result.sources.push((name.clone(), source.clone()));
+            // }
         }
 
         let contracts = output
