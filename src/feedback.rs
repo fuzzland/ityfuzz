@@ -17,8 +17,8 @@ use libafl::{
     state::{HasCorpus, State},
     Error,
 };
-use libafl_bolts::Named;
-use serde::{de::DeserializeOwned, Serialize};
+use libafl_bolts::{impl_serdeany, Named};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::debug;
 
 /// Implements the feedback mechanism needed by ItyFuzz.
@@ -497,6 +497,7 @@ where
     S0: State
         + HasInfantStateState<Loc, Addr, VS, CI>
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
+        + HasMetadata
         + UsesInput<Input = I0>,
     SC: Scheduler<State = InfantStateState<Loc, Addr, VS, CI>> + HasVote<InfantStateState<Loc, Addr, VS, CI>>,
     VS: Default + VMStateT + 'static,
@@ -528,12 +529,30 @@ where
         let mut cmp_interesting = false;
         let cov_interesting = false;
 
+        // Clear the result of any cached cmp analysis
+        if let Some(metadata) = state.metadata_map_mut().get_mut::<CmpMetadata>() {
+            metadata.set_cmp_interesting(false);
+        } else {
+            let mut metadata = CmpMetadata::new();
+            metadata.set_cmp_interesting(false);
+            state.metadata_map_mut().insert(metadata);
+        }
+
         // check if the current distance is smaller than the min_map
         for i in 0..MAP_SIZE {
             if self.current_map[i] < self.min_map[i] {
                 self.min_map[i] = self.current_map[i];
                 cmp_interesting = true;
             }
+        }
+
+        // cache the result of this testcase's cmp analysis
+        if let Some(metadata) = state.metadata_map_mut().get_mut::<CmpMetadata>() {
+            metadata.set_cmp_interesting(cmp_interesting);
+        } else {
+            let mut metadata = CmpMetadata::new();
+            metadata.set_cmp_interesting(cmp_interesting);
+            state.metadata_map_mut().insert(metadata);
         }
 
         // if the current distance is smaller than the min_map, vote for the state
@@ -573,3 +592,24 @@ where
         Ok(false)
     }
 }
+
+/// Metadata for Coverage Comparisons
+///
+/// This is metadata attached to the global fuzz state
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct CmpMetadata {
+    /// Used to cache the result of the last run's comparison mapping
+    pub cmp_interesting: bool,
+}
+
+impl CmpMetadata {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn set_cmp_interesting(&mut self, cmp_interesting: bool) {
+        self.cmp_interesting = cmp_interesting;
+    }
+}
+
+impl_serdeany!(CmpMetadata);
