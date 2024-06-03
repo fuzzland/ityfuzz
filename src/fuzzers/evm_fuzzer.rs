@@ -556,7 +556,6 @@ pub fn evm_fuzzer(
             } else {
                 error!("{}", rv);
             }
-
             exit(1);
         }
         Some(_) => {

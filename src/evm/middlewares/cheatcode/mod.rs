@@ -1,7 +1,7 @@
 use std::{
     clone::Clone,
     cmp::min,
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     fmt::Debug,
     marker::PhantomData,
     ops::{BitAnd, Not},
@@ -21,8 +21,10 @@ use crate::evm::{host::FuzzHost, types::EVMFuzzState};
 
 mod assert;
 mod common;
+mod env;
 mod expect;
 mod fork;
+mod string;
 
 pub use common::{Prank, RecordAccess};
 pub use expect::{ExpectedCallData, ExpectedCallTracker, ExpectedCallType, ExpectedEmit, ExpectedRevert};
@@ -51,6 +53,8 @@ pub struct Cheatcode<SC> {
     recorded_logs: Option<Vec<Vm::Log>>,
     /// Etherscan API key
     etherscan_api_key: Vec<String>,
+    /// Address labels
+    labels: HashMap<Address, String>,
 
     _phantom: PhantomData<SC>,
 }
@@ -126,6 +130,7 @@ where
             accesses: None,
             recorded_logs: None,
             etherscan_api_key: etherscan_api_key.split(',').map(|s| s.to_string()).collect(),
+            labels: HashMap::new(),
             _phantom: PhantomData,
         }
     }
@@ -172,6 +177,8 @@ where
             VmCalls::startPrank_0(args) => self.start_prank0(host, caller, args),
             VmCalls::startPrank_1(args) => self.start_prank1(host, caller, tx_origin, args),
             VmCalls::stopPrank(_) => self.stop_prank(host),
+            VmCalls::label(args) => self.label(args),
+            VmCalls::getLabel(args) => self.get_label(args),
 
             // fork
             VmCalls::createSelectFork_0(args) => self.create_select_fork0(host, args),
@@ -312,6 +319,37 @@ where
             VmCalls::assertApproxEqRelDecimal_1(args) => self.assert_approx_eq_rel_decimal1(args, &mut host.assert_msg),
             VmCalls::assertApproxEqRelDecimal_2(args) => self.assert_approx_eq_rel_decimal2(args, &mut host.assert_msg),
             VmCalls::assertApproxEqRelDecimal_3(args) => self.assert_approx_eq_rel_decimal3(args, &mut host.assert_msg),
+
+            // env
+            VmCalls::envBool_0(args) => self.env_bool0(args),
+            VmCalls::envUint_0(args) => self.env_uint0(args),
+            VmCalls::envInt_0(args) => self.env_int0(args),
+            VmCalls::envAddress_0(args) => self.env_address0(args),
+            VmCalls::envBytes32_0(args) => self.env_bytes32_0(args),
+            VmCalls::envString_0(args) => self.env_string(args),
+            VmCalls::envBytes_0(args) => self.env_bytes(args),
+            VmCalls::envBool_1(args) => self.env_bool1(args),
+            VmCalls::envUint_1(args) => self.env_uint1(args),
+            VmCalls::envInt_1(args) => self.env_int1(args),
+            VmCalls::envAddress_1(args) => self.env_address1(args),
+            VmCalls::envBytes32_1(args) => self.env_bytes32_1(args),
+            VmCalls::envString_1(args) => self.env_string1(args),
+            VmCalls::envBytes_1(args) => self.env_bytes1(args),
+            VmCalls::envOr_0(args) => self.env_or0(args),
+            VmCalls::envOr_1(args) => self.env_or1(args),
+            VmCalls::envOr_2(args) => self.env_or2(args),
+            VmCalls::envOr_3(args) => self.env_or3(args),
+            VmCalls::envOr_4(args) => self.env_or4(args),
+            VmCalls::envOr_5(args) => self.env_or5(args),
+            VmCalls::envOr_6(args) => self.env_or6(args),
+            VmCalls::envOr_7(args) => self.env_or7(args),
+            VmCalls::envOr_8(args) => self.env_or8(args),
+            VmCalls::envOr_9(args) => self.env_or9(args),
+            VmCalls::envOr_10(args) => self.env_or10(args),
+            VmCalls::envOr_11(args) => self.env_or11(args),
+            VmCalls::envOr_12(args) => self.env_or12(args),
+            VmCalls::envOr_13(args) => self.env_or13(args),
+
             _ => {
                 warn!("[cheatcode] unknown VmCall: {:?}", vm_call);
                 None

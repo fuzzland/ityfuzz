@@ -1,7 +1,7 @@
 use core::panic;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::File,
     io::Read,
     ops::Deref,
@@ -11,11 +11,15 @@ use std::{
     sync::RwLockReadGuard,
 };
 
+use alloy_primitives::{Address, Keccak256};
+// use alloy_primitives::Bytes;
 use bytes::Bytes;
+use colored::Colorize;
 /// Load contract from file system or remote
 use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
+use libafl_bolts::AsSlice;
 use revm_primitives::{bitvec::vec, Bytecode, Env};
 use serde_json::Value;
 
@@ -32,7 +36,6 @@ use crate::{
 };
 
 extern crate crypto;
-
 use revm_interpreter::opcode::PUSH4;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
@@ -52,7 +55,8 @@ use crate::evm::{
     abi::get_abi_type_boxed_with_address,
     blaz::{
         builder::{BuildJob, BuildJobResult},
-        offchain_artifacts::OffChainArtifact,
+        linking::Linker,
+        offchain_artifacts::{ContractArtifact, OffChainArtifact},
         offchain_config::OffchainConfig,
     },
     bytecode_iterator::all_bytecode,
@@ -654,9 +658,17 @@ impl ContractLoader {
         let mut all_candidates = vec![];
         for (idx, artifact) in offchain_artifacts.iter().enumerate() {
             for (loc, contract) in &artifact.contracts {
-                if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) < 2 {
-                    candidates.push((idx, loc.clone()));
+                if contract.deploy_bytecode.is_empty() {
+                    let contract_deploy_bytecode = hex::decode(contract.deploy_bytecode_str.as_str()).unwrap();
+                    if is_bytecode_similar_lax(to_find.clone(), contract_deploy_bytecode) < 2 {
+                        candidates.push((idx, loc.clone()));
+                    }
+                } else {
+                    if is_bytecode_similar_lax(to_find.clone(), contract.deploy_bytecode.to_vec()) < 2 {
+                        candidates.push((idx, loc.clone()));
+                    }
                 }
+
                 all_candidates.push((idx, loc.clone()));
             }
         }
@@ -755,7 +767,6 @@ impl ContractLoader {
     ) -> Self {
         let mut contracts: Vec<ContractInfo> = vec![];
         let mut abis: Vec<ABIInfo> = vec![];
-
         for artifact in offchain_artifacts {
             for (slug, contract_artifact) in &artifact.contracts {
                 let abi = Self::parse_abi_str(&contract_artifact.abi);
@@ -808,17 +819,35 @@ impl ContractLoader {
         }
 
         let setup_file = all_matched_slugs[0].clone();
+        // find all libs
+        let libs = Linker::find_all_libs_in_offchain_artifacts(offchain_artifacts).unwrap();
+        // link inner libs
+        let libs_linked = if !libs.is_empty() {
+            Linker::link_libs_inner_lib(Some(libs)).unwrap()
+        } else {
+            BTreeMap::default()
+        };
 
-        'artifacts: for artifact in offchain_artifacts {
+        let mut linked_offchain_artifacts = offchain_artifacts.clone();
+
+        'artifacts: for (index, artifact) in offchain_artifacts.iter().enumerate() {
             for ((filename, contract_name), contract_artifact) in &artifact.contracts {
                 let slug = format!("{filename}:{contract_name}");
                 all_slugs.push(slug.clone());
-
                 if slug.contains(&setup_file) {
+                    let contract_artifact_linked =
+                        Linker::link_setup_target_with_compute_address(&libs_linked, contract_artifact.clone())
+                            .unwrap();
+                    linked_offchain_artifacts[index]
+                        .contracts
+                        .get_mut(&(filename.clone(), contract_name.clone()))
+                        .unwrap()
+                        .deploy_bytecode = contract_artifact_linked.deploy_bytecode.clone();
                     setup_data = Some(Self::call_setup(
-                        contract_artifact.deploy_bytecode.clone(),
+                        contract_artifact_linked.deploy_bytecode_str.clone(),
                         work_dir.clone(),
                         etherscan_api_key,
+                        Some(libs_linked.clone()),
                     ));
                     break 'artifacts;
                 }
@@ -863,18 +892,35 @@ impl ContractLoader {
             }
         }
 
+        // update libs
+        for (index, offchain_art) in offchain_artifacts.iter().enumerate() {
+            for (contract_key, contract) in &offchain_art.contracts {
+                if libs_linked.contains_key(contract_key) {
+                    linked_offchain_artifacts[index]
+                        .contracts
+                        .get_mut(contract_key)
+                        .unwrap()
+                        .deploy_bytecode = contract.deploy_bytecode.clone();
+                }
+            }
+        }
+
+        // link all contracts
+        linked_offchain_artifacts = Linker::link_all_contract(&linked_offchain_artifacts, libs_linked);
+
         for (addr, code) in setup_data.clone().unwrap().code {
             if known_addr.contains(&addr) {
                 continue;
             }
+
             known_addr.insert(addr);
-            let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), offchain_artifacts);
+            let (artifact_idx, slug) = Self::find_contract_artifact(code.to_vec(), &linked_offchain_artifacts);
 
             debug!(
                 "Contract at address {:?} is {:?}. If this is not correct, please log an issue on GitHub",
                 addr, slug
             );
-            let artifact = &offchain_artifacts[artifact_idx];
+            let artifact = &linked_offchain_artifacts[artifact_idx];
             let more_info = &artifact.contracts[&slug];
 
             let abi: Vec<ABIConfig> = Self::parse_abi_str(&more_info.abi);
@@ -954,7 +1000,12 @@ impl ContractLoader {
     /// Deploy the contract and invoke "setUp()", returns the code, state, and
     /// environment after deployment. Foundry VM Cheatcodes and Hardhat
     /// consoles are enabled here.
-    fn call_setup(deploy_code: Bytes, work_dir: String, etherscan_api_key: &str) -> SetupData {
+    fn call_setup(
+        deploy_code_str: String,
+        work_dir: String,
+        etherscan_api_key: &str,
+        _libs: Option<BTreeMap<(String, String), ContractArtifact>>,
+    ) -> SetupData {
         let deployer = EVMAddress::from_str(FOUNDRY_DEPLOYER).unwrap();
         let deployed_addr = EVMAddress::from_str(FOUNDRY_SETUP_ADDR).unwrap();
 
@@ -971,6 +1022,37 @@ impl ContractLoader {
         let deployed_weth = evm_executor.deploy(Bytecode::new_raw(weth_code), None, weth_addr, &mut state);
         assert!(deployed_weth.is_some(), "failed to deploy WETH");
 
+        // deploy libs
+        if _libs.is_some() {
+            let mut lib_clone = _libs.clone().unwrap();
+            // finish link
+            for (key, value) in _libs.unwrap().into_iter() {
+                let lib_bytecode = value.deploy_bytecode_str;
+                let lib_bytecode_hex = Bytes::from(hex::decode(lib_bytecode.clone()).unwrap());
+                let lib_addr = compute_address(&key);
+                let lib_addr = EVMAddress::from_str(lib_addr.as_str()).unwrap();
+                let lib_addr =
+                    evm_executor.deploy(Bytecode::new_raw(lib_bytecode_hex.clone()), None, lib_addr, &mut state);
+                println!(
+                    "lib_bytecode is {:?} \n, lib is {:?} \n, lib_addr: {:?} \n, lib_bytecode_hex {:?} \n",
+                    lib_bytecode,
+                    key,
+                    lib_addr.unwrap(),
+                    to_hex_string(
+                        evm_executor
+                            .host
+                            .code
+                            .get(&lib_addr.unwrap())
+                            .expect("get runtime bytecode failed")
+                            .bytecode()
+                            .to_vec()
+                            .as_slice()
+                    )
+                );
+                assert!(lib_addr.is_some(), "failed to deploy lib");
+            }
+        }
+        let deploy_code = Bytes::from(hex::decode(deploy_code_str).unwrap());
         let addr = evm_executor.deploy(
             Bytecode::new_raw(deploy_code),
             None,
@@ -981,6 +1063,7 @@ impl ContractLoader {
             IN_DEPLOY = true;
         }
         assert!(addr.is_some(), "failed to deploy contract");
+
         let state_after_deployment = evm_executor.host.evmstate.clone();
 
         // invoke setUp() and fails imeediately if setUp() reverts
@@ -995,6 +1078,8 @@ impl ContractLoader {
 
         if !res[0].1 {
             error!("setUp() failed: {:?}", res[0].0);
+        } else {
+            debug!("setUp() successful!");
         }
 
         // now get Foundry invariant test config by calling
@@ -1145,7 +1230,6 @@ impl ContractLoader {
             .collect();
 
         let mut onchain_middleware = None;
-
         {
             for middleware in evm_executor.host.middlewares.read().unwrap().clone().into_iter() {
                 if middleware.borrow().get_type() == MiddlewareType::OnChain {
@@ -1267,6 +1351,24 @@ pub fn extract_sig_from_contract(code: &str) -> Vec<[u8; 4]> {
         }
     }
     code_sig.iter().cloned().collect_vec()
+}
+
+pub fn compute_address(target_salt: &(String, String)) -> String {
+    let mut hasher = Keccak256::new();
+    hasher.update(target_salt.0.as_bytes());
+    hasher.update(target_salt.1.as_bytes());
+    let result = hasher.finalize();
+    Address::from_slice(&result[12..]).to_string().to_lowercase().as_str()[2..].to_string()
+}
+
+pub fn to_hex_string(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| match format!("{:02x}", b) {
+            s => s.to_string(),
+        })
+        .collect::<Vec<String>>()
+        .join("")
 }
 
 #[cfg(test)]

@@ -327,6 +327,22 @@ where
         let _ = host.prank.take();
         None
     }
+
+    /// Label an address in test traces.
+    #[inline]
+    pub fn label(&mut self, args: Vm::labelCall) -> Option<Vec<u8>> {
+        let Vm::labelCall { account, newLabel } = args;
+        self.labels.insert(account, newLabel);
+        None
+    }
+
+    /// Gets the label of an address in test traces.
+    #[inline]
+    pub fn get_label(&self, args: Vm::getLabelCall) -> Option<Vec<u8>> {
+        let Vm::getLabelCall { account } = args;
+        let result = self.labels.get(&account).cloned()?;
+        Some(result.abi_encode())
+    }
 }
 
 impl Prank {

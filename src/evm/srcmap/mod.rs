@@ -77,8 +77,11 @@ impl SourceMapProvider {
             let raw_info = list_raw_infos.get(raw_info_idx);
 
             if let Some(info) = raw_info {
+                // println!("info file is {:?} file index is {:?}", info.file, info.file_idx);
                 let source_code = if let Some(file_idx) = info.file_idx {
                     let file_content = files[file_idx].1.clone();
+                    // println!("file_content length is : {:?}", file_content.len());
+                    // println!("file_content offset is : {:?}", info.offset);
                     Some(file_content[info.offset..info.offset + info.length].to_string())
                 } else {
                     None

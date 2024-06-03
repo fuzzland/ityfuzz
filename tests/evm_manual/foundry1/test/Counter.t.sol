@@ -4,8 +4,9 @@ pragma solidity ^0.8.13;
 import {Test, console2} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {Counter} from "../src/Counter.sol";
+import "solidity_utils/lib.sol";
 
-contract CounterTest is Test {
+contract CounterTestX is Test {
     Counter public counter1;
     Counter public counter2;
     Counter public counter3;
@@ -26,7 +27,12 @@ contract CounterTest is Test {
         targetSelector(selector);
     }
 
-    function invariant_1() public {
+    function echidna_test() public {
         assertEq(counter2.number(), 0);
+    }
+
+    function test_Fuzz() public {
+        assertEq(counter2.number(), 0);
+        bug();
     }
 }

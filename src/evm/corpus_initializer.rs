@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs::File,
-    io::Write,
+    io::{Read, Write},
     ops::Deref,
     path::Path,
     rc::Rc,
@@ -34,7 +34,7 @@ use crate::{
     evm::{
         blaz::builder::BuildJobResult,
         bytecode_analyzer,
-        contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader},
+        contract_utils::{extract_sig_from_contract, to_hex_string, ABIConfig, ContractLoader},
         input::{ConciseEVMInput, EVMInput, EVMInputTy},
         middlewares::cheatcode::CHEATCODE_ADDRESS,
         mutator::AccessPattern,
@@ -200,6 +200,7 @@ where
             .host
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
+        // deploy
         for contract in &mut loader.contracts {
             info!("Deploying contract: {}", contract.name);
             let deployed_address = if !contract.is_code_deployed {
@@ -248,6 +249,22 @@ where
 
             if let Some(build_job_result) = &contract.build_artifact {
                 build_job_result.save_source_map(&contract.deployed_address);
+
+                // let runtime_bytecode = self
+                //     .executor
+                //     .host
+                //     .code
+                //     .get(&contract.deployed_address)
+                //     .expect("get runtime bytecode failed")
+                //     .bytecode().to_vec();
+                //
+                // let build_job_bytecode = build_job_result.bytecodes.clone().to_vec();
+                // println!("contract.name is: {:?}", contract.name);
+                // println!("runtime_bytecode_str {:?}",
+                // to_hex_string(runtime_bytecode.as_slice()));
+                // println!("build_job_bytecode_str {:?}",
+                // to_hex_string(build_job_bytecode.as_slice()));
+                // assert_eq!(runtime_bytecode, build_job_bytecode, "Bytecode mismatch");
                 continue;
             }
 
@@ -260,6 +277,7 @@ where
                     .expect("get runtime bytecode failed")
                     .bytecode()
                     .to_vec();
+
                 SOURCE_MAP_PROVIDER.lock().unwrap().decode_instructions_for_address(
                     &contract.deployed_address,
                     runtime_bytecode,

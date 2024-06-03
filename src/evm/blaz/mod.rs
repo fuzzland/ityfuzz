@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod builder;
+pub(crate) mod linking;
 pub mod offchain_artifacts;
 pub mod offchain_config;
 
