@@ -6,9 +6,9 @@ use std::{
     fs::OpenOptions,
     io::Write,
     path::Path,
+    str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
-use std::str::FromStr;
 
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;
@@ -244,7 +244,8 @@ impl Coverage {
         // const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
         for (addr, all_pcs) in &self.total_instr_set {
             if addr.eq(&EVMAddress::from_str("7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap()) ||
-                addr.eq(&EVMAddress::from_str("10ed43c718714eb63d5aa57b78b54704e256024e").unwrap()) {
+                addr.eq(&EVMAddress::from_str("10ed43c718714eb63d5aa57b78b54704e256024e").unwrap())
+            {
                 continue;
             }
             let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
