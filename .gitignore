@@ -20,4 +20,5 @@ combined.json
 Move.lock
 /w_**/
 /tests/evm_manual/story-core
+/tests/evm_manual/TokenVestingPlans
 run_ityfuzz.sh

@@ -8,6 +8,7 @@ use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
+use std::str::FromStr;
 
 use itertools::Itertools;
 use libafl::schedulers::Scheduler;
@@ -239,8 +240,13 @@ impl Coverage {
 
         // Figure out covered and not covered instructions
         let default_skipper = HashSet::new();
-
+        // const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
+        // const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
         for (addr, all_pcs) in &self.total_instr_set {
+            if addr.eq(&EVMAddress::from_str("7a250d5630b4cf539739df2c5dacb4c659f2488d").unwrap()) ||
+                addr.eq(&EVMAddress::from_str("10ed43c718714eb63d5aa57b78b54704e256024e").unwrap()) {
+                continue;
+            }
             let name = self.address_to_name.get(addr).unwrap_or(&format!("{:?}", addr)).clone();
             match self.pc_coverage.get_mut(addr) {
                 None => {}
