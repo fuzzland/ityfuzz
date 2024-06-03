@@ -15,9 +15,9 @@ contract sb {
 }
 
 contract main {
-    // solution: a = 1
-    function process(uint256 x) public {
-        bytes32 v = keccak256(abi.encodePacked(x));
+    // Magic word is "Solidity"
+    function process(string memory _word) public {
+        bytes32 v = keccak256(abi.encodePacked(_word));
         sb(0x8B5b40e31dCB1166f17d31315E3b17b6Bfc82B37).lol(v);
     }
 }
