@@ -3,7 +3,7 @@ pragma solidity 0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
 import {CallingContract, NewCallingContract} from "../src/CountLib.sol";
-import "/Users/wangchao/work/test_ityfuzz/ityfuzz/solidity_utils/lib.sol";
+import "solidity_utils/lib.sol";
 
 contract CounterTestLib is Test {
     CallingContract public callingContract;

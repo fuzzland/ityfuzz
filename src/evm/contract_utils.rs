@@ -1,5 +1,4 @@
 use core::panic;
-
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap, HashSet},
@@ -906,7 +905,8 @@ impl ContractLoader {
                 }
             }
         }
-        // link all contract
+
+        // link all contracts
         linked_offchain_artifacts = Linker::link_all_contract(&linked_offchain_artifacts, libs_linked);
 
         for (addr, code) in setup_data.clone().unwrap().code {
@@ -1032,12 +1032,24 @@ impl ContractLoader {
                 let lib_bytecode_hex = Bytes::from(hex::decode(lib_bytecode.clone()).unwrap());
                 let lib_addr = compute_address(&key);
                 let lib_addr = EVMAddress::from_str(lib_addr.as_str()).unwrap();
-                let lib_addr = evm_executor.deploy(Bytecode::new_raw(lib_bytecode_hex.clone()), None, lib_addr, &mut state);
-                println!("lib_bytecode is {:?} \n, lib is {:?} \n, lib_addr: {:?} \n, lib_bytecode_hex {:?} \n",
-                         lib_bytecode,
+                let lib_addr =
+                    evm_executor.deploy(Bytecode::new_raw(lib_bytecode_hex.clone()), None, lib_addr, &mut state);
+                println!(
+                    "lib_bytecode is {:?} \n, lib is {:?} \n, lib_addr: {:?} \n, lib_bytecode_hex {:?} \n",
+                    lib_bytecode,
                     key,
                     lib_addr.unwrap(),
-                    to_hex_string(evm_executor.host.code.get(&lib_addr.unwrap()).expect("get runtime bytecode failed").bytecode().to_vec().as_slice()));
+                    to_hex_string(
+                        evm_executor
+                            .host
+                            .code
+                            .get(&lib_addr.unwrap())
+                            .expect("get runtime bytecode failed")
+                            .bytecode()
+                            .to_vec()
+                            .as_slice()
+                    )
+                );
                 assert!(lib_addr.is_some(), "failed to deploy lib");
             }
         }
@@ -1068,7 +1080,7 @@ impl ContractLoader {
         if !res[0].1 {
             error!("setUp() failed: {:?}", res[0].0);
         } else {
-           debug!("setUp() successful!");
+            debug!("setUp() successful!");
         }
 
         // now get Foundry invariant test config by calling

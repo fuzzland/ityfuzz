@@ -3,14 +3,19 @@ pragma solidity ^0.8.0;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Create3Deployer} from "../src/Create3Deploy.sol";
-import "/Users/wangchao/work/test_ityfuzz/ityfuzz/solidity_utils/lib.sol";
+import "solidity_utils/lib.sol";
 
 contract Create3DeployerTest is Test {
-    Create3Deployer public create3Deployer;
+    //
+    Create3Deployer public create3Deployer = new Create3Deployer();
     TestCreate3 public testCreate3;
 
+//    constructor() {
+//        create3Deployer = new Create3Deployer();
+//    }
+
     function setUp() public {
-         create3Deployer = new Create3Deployer();
+        require(address(create3Deployer) != address(0x0));
     }
 
     function test_deploy() public {

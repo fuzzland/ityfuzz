@@ -2,13 +2,12 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs::File,
-    io::Write,
+    io::{Read, Write},
     ops::Deref,
     path::Path,
     rc::Rc,
     time::Duration,
 };
-use std::io::Read;
 
 use bytes::Bytes;
 use hex;
@@ -23,7 +22,6 @@ use libafl_bolts::impl_serdeany;
 use revm_primitives::{Bytecode, Env};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
-// use z3_sys::ParamKind::String;
 
 use super::{scheduler::ABIScheduler, srcmap::SOURCE_MAP_PROVIDER};
 /// Utilities to initialize the corpus
@@ -36,7 +34,7 @@ use crate::{
     evm::{
         blaz::builder::BuildJobResult,
         bytecode_analyzer,
-        contract_utils::{extract_sig_from_contract, ABIConfig, ContractLoader},
+        contract_utils::{extract_sig_from_contract, to_hex_string, ABIConfig, ContractLoader},
         input::{ConciseEVMInput, EVMInput, EVMInputTy},
         middlewares::cheatcode::CHEATCODE_ADDRESS,
         mutator::AccessPattern,
@@ -60,7 +58,6 @@ use crate::{
     state::HasCaller,
     state_input::StagedVMState,
 };
-use crate::evm::contract_utils::to_hex_string;
 
 pub const INITIAL_BALANCE: u128 = 100_000_000_000_000_000_000; // 100 ether
 
@@ -250,7 +247,6 @@ where
                 continue;
             }
 
-
             if let Some(build_job_result) = &contract.build_artifact {
                 build_job_result.save_source_map(&contract.deployed_address);
 
@@ -262,11 +258,12 @@ where
                 //     .expect("get runtime bytecode failed")
                 //     .bytecode().to_vec();
                 //
-                // // let runtime_bytecode_str = String::from_utf8(runtime_bytecode.clone()).unwrap();
                 // let build_job_bytecode = build_job_result.bytecodes.clone().to_vec();
                 // println!("contract.name is: {:?}", contract.name);
-                // println!("runtime_bytecode_str {:?}", to_hex_string(runtime_bytecode.as_slice()));
-                // println!("build_job_bytecode_str {:?}", to_hex_string(build_job_bytecode.as_slice()));
+                // println!("runtime_bytecode_str {:?}",
+                // to_hex_string(runtime_bytecode.as_slice()));
+                // println!("build_job_bytecode_str {:?}",
+                // to_hex_string(build_job_bytecode.as_slice()));
                 // assert_eq!(runtime_bytecode, build_job_bytecode, "Bytecode mismatch");
                 continue;
             }

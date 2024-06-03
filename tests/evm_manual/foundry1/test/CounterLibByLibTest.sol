@@ -3,7 +3,7 @@ pragma solidity 0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
 import {CounterLibByLib} from "src/CounterLibByLib.sol";
-import "/Users/wangchao/work/test_ityfuzz/ityfuzz/solidity_utils/lib.sol";
+import "solidity_utils/lib.sol";
 
 contract CounterLibByLibTest is Test {
     function setUp() public {
@@ -11,7 +11,7 @@ contract CounterLibByLibTest is Test {
         t.test3();
     }
 
-    function test1() public {
+    function echidna_test1() public {
         console.log("here");
         bug();
     }

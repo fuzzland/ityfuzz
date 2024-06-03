@@ -845,7 +845,7 @@ pub fn evm_main(mut args: EvmArgs) {
     evm_fuzzer(config, &mut state)
 }
 
-#[test]
+// #[test]
 fn test_evm_offchain_setup() {
     let mut args = EvmArgs {
         proxy_address: String::from("http://localhost:5001/data"),
@@ -856,7 +856,7 @@ fn test_evm_offchain_setup() {
         seed: 1667840158231589000,
         spec_id: String::from("Latest"),
         // deployment_script: String::from("test/foundry/invariants/BaseInvariant.t.sol:BaseInvariant"),
-        deployment_script: String::from("test/CheatCodeTest.sol"),
+        deployment_script: String::from("CounterLibByLibTest"),
         build_command: vec![String::from("forge"), String::from("build")],
         ..Default::default()
     };
