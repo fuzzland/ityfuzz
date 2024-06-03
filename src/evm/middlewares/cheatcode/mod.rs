@@ -795,44 +795,44 @@ mod tests {
             };
         }
 
-        // // test()
-        // assert_fn_success!("f8a8fd6d");
-        // // testPrank()
-        // assert_fn_success!("7e550aac");
-        // // testExpectRevertBeforePrank()
-        // assert_fn_success!("c2bb38d3");
-        // // testExpectRevertAfterConsumePrank()
-        // assert_fn_success!("cc5c4741");
-        // // testExpectRevertPrankSenderOrigin()
-        // assert_fn_success!("177d2a31");
+        // test()
+        assert_fn_success!("f8a8fd6d");
+        // testPrank()
+        assert_fn_success!("7e550aac");
+        // testExpectRevertBeforePrank()
+        assert_fn_success!("c2bb38d3");
+        // testExpectRevertAfterConsumePrank()
+        assert_fn_success!("cc5c4741");
+        // testExpectRevertPrankSenderOrigin()
+        assert_fn_success!("177d2a31");
         // testStartStopPrank()
         assert_fn_success!("9c0046b9");
-        // // testExpectRevertAfterStopPrank()
-        // assert_fn_success!("3dee8e2a");
-        // // testExpectRevertWithoutReason()
-        // assert_fn_success!("6bd496f0");
-        // // testExpectRevertWithMessage()
-        // assert_fn_success!("0b324ebf");
-        // // testExpectRevertCustomError()
-        // assert_fn_success!("10fca384");
-        // // testExpectRevertNested()
-        // assert_fn_success!("cc017d5c");
-        // // testExpectEmitMultiple()
-        // assert_fn_success!("8795d87a");
-        // // testExpectEmitMultipleWithArgs()
-        // assert_fn_success!("65e9c19f");
-        // // testExpectedEmitMultipleNested()
-        // assert_fn_success!("d06f71e2");
-        // // testExpectEmitCanMatchWithoutExactOrder()
-        // assert_fn_success!("47feb1dd");
-        // // testExpectEmitCanMatchWithoutExactOrder2()
-        // assert_fn_success!("5e553090");
-        // // testExpectCallWithData()
-        // assert_fn_success!("268100f8");
-        // // testExpectCallWithValue()
-        // assert_fn_success!("77651c29");
-        // // testExpectMultipleCallsWithData()
-        // assert_fn_success!("b5a49624");
+        // testExpectRevertAfterStopPrank()
+        assert_fn_success!("3dee8e2a");
+        // testExpectRevertWithoutReason()
+        assert_fn_success!("6bd496f0");
+        // testExpectRevertWithMessage()
+        assert_fn_success!("0b324ebf");
+        // testExpectRevertCustomError()
+        assert_fn_success!("10fca384");
+        // testExpectRevertNested()
+        assert_fn_success!("cc017d5c");
+        // testExpectEmitMultiple()
+        assert_fn_success!("8795d87a");
+        // testExpectEmitMultipleWithArgs()
+        assert_fn_success!("65e9c19f");
+        // testExpectedEmitMultipleNested()
+        assert_fn_success!("d06f71e2");
+        // testExpectEmitCanMatchWithoutExactOrder()
+        assert_fn_success!("47feb1dd");
+        // testExpectEmitCanMatchWithoutExactOrder2()
+        assert_fn_success!("5e553090");
+        // testExpectCallWithData()
+        assert_fn_success!("268100f8");
+        // testExpectCallWithValue()
+        assert_fn_success!("77651c29");
+        // testExpectMultipleCallsWithData()
+        assert_fn_success!("b5a49624");
     }
 
     fn load_bytecode(path: &str) -> Bytecode {
