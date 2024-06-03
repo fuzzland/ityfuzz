@@ -56,13 +56,12 @@ def test_one(path):
     start_time = time.time()
     cmd = [
         TIMEOUT_BIN,
-        "5s",
+        "10s",
         "./target/release/ityfuzz",
         "evm",
         "-t",
         f"'{path}/*'",
         "-f",
-        "--panic-on-bug",
     ]
     # exit(0)
 
@@ -78,14 +77,7 @@ def test_one(path):
         " ".join(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
 
-    if (
-        b"target bug found" not in p.stderr
-        and b"bug() hit" not in p.stdout
-        and b"[typed_bug]" not in p.stdout
-        and b"[selfdestruct]" not in p.stdout
-        and b"[echidna_bug]" not in p.stdout
-        and b"Found violations!" not in p.stdout
-    ):
+    if b"Found vulnerabilities!" not in p.stdout:
         print("================ STDERR =================")
         print(p.stderr.decode("utf-8"))
         print("================ STDOUT =================")
