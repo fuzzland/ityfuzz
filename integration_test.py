@@ -72,7 +72,6 @@ def test_one(path):
     if "taint" in path:
         cmd.append("--sha3-bypass")
 
-
     print(" ".join(cmd))
 
     p = subprocess.run(
@@ -94,8 +93,10 @@ def test_one(path):
         print(f"=== Failed to fuzz {path}")
         if b"panicked" in p.stderr or b"panicked" in p.stdout:
             crashed_any = True
+        return False, path
     else:
         print(f"=== Success: {path}, Finished in {time.time() - start_time}s")
+        return True, path
 
     # clean up
     # os.system(f"rm -rf {path}/*.abi")
@@ -230,7 +231,13 @@ if __name__ == "__main__":
     if "offchain" in actions:
         build_fuzzer()
         with multiprocessing.Pool(3) as p:
-            p.map(test_one, glob.glob("./tests/evm/*", recursive=True))
+            results = p.map(test_one, glob.glob("./tests/evm/*", recursive=True))
+        failed = [result for result in results if result and not result[0]]
+        if failed:
+            print("❌ Failed tests:")
+            for f in failed:
+                print(f[1])
+            exit(1)
 
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
