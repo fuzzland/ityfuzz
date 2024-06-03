@@ -190,7 +190,6 @@ impl OffChainArtifact {
         if !std::path::Path::new(&folder).exists() {
             std::fs::create_dir_all(&folder)?;
         }
-        println!("folder is {}", folder);
 
         macro_rules! remove_folder {
             () => {
@@ -219,11 +218,6 @@ impl OffChainArtifact {
                 if !has_build_info_path {
                     parts.push("--build-info-path");
                     parts.push(folder.as_str());
-                    println!(
-                        "current dir: {:?}",
-                        std::env::current_dir()?.to_str().unwrap().to_string()
-                    );
-                    println!("parts is {:?}", parts);
                 } else {
                     remove_folder!();
                     return Err("build-info-path is not supported".into());
@@ -284,11 +278,9 @@ impl OffChainArtifact {
                 )
             }
             "forge" => {
-                println!("forge path is: {:?}", folder.clone());
                 for entry in std::fs::read_dir(folder.clone())? {
                     let entry = entry?;
                     let path = entry.path();
-                    println!("path is {:?}", path);
                     if path.is_file() && path.file_name().unwrap().to_str().unwrap().ends_with(".json") {
                         let json = std::fs::read_to_string(path)?;
                         remove_folder!();

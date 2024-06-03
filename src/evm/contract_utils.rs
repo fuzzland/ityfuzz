@@ -821,7 +821,6 @@ impl ContractLoader {
         let setup_file = all_matched_slugs[0].clone();
         // find all libs
         let libs = Linker::find_all_libs_in_offchain_artifacts(offchain_artifacts).unwrap();
-        println!("libs is {:?}", libs);
         // link inner libs
         let libs_linked = if !libs.is_empty() {
             Linker::link_libs_inner_lib(Some(libs)).unwrap()

@@ -20,3 +20,4 @@ combined.json
 Move.lock
 /w_**/
 /tests/evm_manual/story-core
+run_ityfuzz.sh
