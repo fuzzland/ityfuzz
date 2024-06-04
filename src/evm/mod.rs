@@ -741,19 +741,6 @@ pub fn evm_main(mut args: EvmArgs) {
             }
             let mut args_target = args.target.clone();
 
-            if oracle_types.contains(&OracleType::ERC20) || args.flashloan {
-                const ETH_ADDRESS: &str = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";
-                const BSC_ADDRESS: &str = "0x10ed43c718714eb63d5aa57b78b54704e256024e";
-                if "bsc" == onchain.as_ref().unwrap().chain_name {
-                    if !args_target.contains(BSC_ADDRESS) {
-                        args_target.push(',');
-                        args_target.push_str(BSC_ADDRESS);
-                    }
-                } else if "eth" == onchain.as_ref().unwrap().chain_name && !args_target.contains(ETH_ADDRESS) {
-                    args_target.push(',');
-                    args_target.push_str(ETH_ADDRESS);
-                }
-            }
             let addresses: Vec<EVMAddress> = args_target
                 .split(',')
                 .map(|s| EVMAddress::from_str(s).unwrap())
