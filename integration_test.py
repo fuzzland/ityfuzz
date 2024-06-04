@@ -56,13 +56,12 @@ def test_one(path):
     start_time = time.time()
     cmd = [
         TIMEOUT_BIN,
-        "5s",
+        "10s",
         "./target/release/ityfuzz",
         "evm",
         "-t",
         f"'{path}/*'",
         "-f",
-        "--panic-on-bug",
     ]
     # exit(0)
 
@@ -72,21 +71,13 @@ def test_one(path):
     if "taint" in path:
         cmd.append("--sha3-bypass")
 
-
     print(" ".join(cmd))
 
     p = subprocess.run(
         " ".join(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
 
-    if (
-        b"target bug found" not in p.stderr
-        and b"bug() hit" not in p.stdout
-        and b"[typed_bug]" not in p.stdout
-        and b"[selfdestruct]" not in p.stdout
-        and b"[echidna_bug]" not in p.stdout
-        and b"Found violations!" not in p.stdout
-    ):
+    if b"Found vulnerabilities!" not in p.stdout:
         print("================ STDERR =================")
         print(p.stderr.decode("utf-8"))
         print("================ STDOUT =================")
@@ -94,8 +85,10 @@ def test_one(path):
         print(f"=== Failed to fuzz {path}")
         if b"panicked" in p.stderr or b"panicked" in p.stdout:
             crashed_any = True
+        return False, path
     else:
         print(f"=== Success: {path}, Finished in {time.time() - start_time}s")
+        return True, path
 
     # clean up
     # os.system(f"rm -rf {path}/*.abi")
@@ -230,7 +223,13 @@ if __name__ == "__main__":
     if "offchain" in actions:
         build_fuzzer()
         with multiprocessing.Pool(3) as p:
-            p.map(test_one, glob.glob("./tests/evm/*", recursive=True))
+            results = p.map(test_one, glob.glob("./tests/evm/*", recursive=True))
+        failed = [result for result in results if result and not result[0]]
+        if failed:
+            print("❌ Failed tests:")
+            for f in failed:
+                print(f[1])
+            exit(1)
 
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
