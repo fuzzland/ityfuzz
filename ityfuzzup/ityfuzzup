@@ -85,7 +85,9 @@ main() {
         | tr -d '"' \
         | tr -d ' ' \
         | cut -d ':' -f2 )
-      ITYFUZZ_TAG="nightly-${SHA}"
+      if [ -n "$SHA" ]; then
+        ITYFUZZ_TAG="nightly-${SHA}"
+      fi
     elif [[ "$ITYFUZZ_VERSION" == nightly* ]]; then
       ITYFUZZ_VERSION="nightly"
     elif [[ "$ITYFUZZ_VERSION" == [[:digit:]]* ]]; then
