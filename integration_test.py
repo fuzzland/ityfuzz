@@ -229,7 +229,7 @@ if __name__ == "__main__":
             print("❌ Failed tests:")
             for f in failed:
                 print(f[1])
-            # exit(1)
+            exit(1)
 
     if "onchain" in actions:
         build_flash_loan_v2_fuzzer()
