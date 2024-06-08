@@ -143,6 +143,10 @@ jobs:
           sudo apt-get install -y cmake
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
+      - name: Windows setup
+        if: ${{ matrix.job.target == 'x86_64-pc-windows-msvc' }}
+        uses: lukka/get-cmake@latest
+
       - name: Build binaries
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
