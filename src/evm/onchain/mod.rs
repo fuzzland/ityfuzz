@@ -260,8 +260,8 @@ where
             0x46 => {
                 host.env.tx.chain_id = Some(self.endpoint.chain_id as u64);
             }
-            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
-            0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
+            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY | EXTCODEHASH
+            0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c | 0x3f => {
                 let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 => {
@@ -275,7 +275,7 @@ where
                         interp.stack.peek(1).unwrap()
                     }
                     0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
-                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                    0x3b | 0x3c | 0x3f => interp.stack.peek(0).unwrap(),
                     _ => unreachable!(),
                 };
 
