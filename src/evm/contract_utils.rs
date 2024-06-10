@@ -1241,6 +1241,11 @@ impl ContractLoader {
             }
         }
 
+        evm_executor.host.env.block.number = EVMU256::from(
+            u64::from_str_radix(
+                &onchain_middleware.as_ref().unwrap().endpoint.block_number.trim_start_matches("0x"), 
+            16).unwrap());
+
         SetupData {
             evmstate: new_vm_state,
             env: evm_executor.host.env.clone(),
