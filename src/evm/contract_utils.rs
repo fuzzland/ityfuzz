@@ -20,16 +20,13 @@ use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
 use libafl_bolts::AsSlice;
+use regex::Regex;
 use revm_primitives::{bitvec::vec, Bytecode, Env};
 use serde_json::Value;
 
 use crate::{
     evm::{
-        middlewares::middleware::MiddlewareType,
-        tokens::constant_pair::ConstantPairMetadata,
-        types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
-        vm::{IN_DEPLOY, SETCODE_ONLY},
-        PRESET_WETH,
+        middlewares::middleware::MiddlewareType, onchain::abi_decompiler::fetch_abi_evmole, tokens::constant_pair::ConstantPairMetadata, types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState}, vm::{IN_DEPLOY, SETCODE_ONLY}, PRESET_WETH
     },
     generic_vm::vm_executor::GenericVM,
     state::{FuzzState, HasCaller},
@@ -870,7 +867,10 @@ impl ContractLoader {
                     error!("Failed to get code for contract at address {:?}", addr);
                     continue;
                 }
-                let abi = Self::parse_abi_str(&onchain_config.fetch_abi(addr).unwrap());
+                let abi = match onchain_config.fetch_abi(addr) {
+                    Some(abi_str) => Self::parse_abi_str(&abi_str),
+                    None => fetch_abi_evmole(code.clone()),
+                };
 
                 contracts.push(ContractInfo {
                     name: format!("{}", addr),
