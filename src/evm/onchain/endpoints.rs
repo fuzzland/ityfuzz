@@ -48,6 +48,7 @@ pub enum Chain {
     ZKEVM,
     ZkevmTestnet,
     BLAST,
+    LINEA,
     LOCAL,
 }
 
@@ -79,6 +80,7 @@ impl FromStr for Chain {
             "zkevm" => Ok(Self::ZKEVM),
             "zkevm_testnet" => Ok(Self::ZkevmTestnet),
             "blast" => Ok(Self::BLAST),
+            "linea" => Ok(Self::LINEA),
             "local" => Ok(Self::LOCAL),
             _ => Err(()),
         }
@@ -123,6 +125,7 @@ impl Chain {
             1101 => Self::ZKEVM,
             1442 => Self::ZkevmTestnet,
             81457 => Self::BLAST,
+            59144 => Self::LINEA,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -147,6 +150,7 @@ impl Chain {
             Chain::ZKEVM => 1101,
             Chain::ZkevmTestnet => 1442,
             Chain::BLAST => 81457,
+            Chain::LINEA => 59144,
             Chain::LOCAL => 31337,
         }
     }
@@ -170,6 +174,7 @@ impl Chain {
             Chain::ZKEVM => "zkevm",
             Chain::ZkevmTestnet => "zkevm_testnet",
             Chain::BLAST => "blast",
+            Chain::LINEA => "linea",
             Chain::LOCAL => "local",
         }
         .to_string()
@@ -197,6 +202,7 @@ impl Chain {
             Chain::ZKEVM => "https://rpc.ankr.com/polygon_zkevm",
             Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
             Chain::BLAST => "https://rpc.ankr.com/blast",
+            Chain::LINEA => "https://rpc.ankr.com/linea",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -221,6 +227,7 @@ impl Chain {
             Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
             Chain::ZkevmTestnet => "https://api-testnet-zkevm.polygonscan.com/api",
             Chain::BLAST => "https://api.routescan.io/v2/network/mainnet/evm/81457/etherscan",
+            Chain::LINEA => "https://api.lineascan.build/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
         }
         .to_string()
