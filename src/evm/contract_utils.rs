@@ -26,7 +26,12 @@ use serde_json::Value;
 
 use crate::{
     evm::{
-        middlewares::middleware::MiddlewareType, onchain::abi_decompiler::fetch_abi_evmole, tokens::constant_pair::ConstantPairMetadata, types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState}, vm::{IN_DEPLOY, SETCODE_ONLY}, PRESET_WETH
+        middlewares::middleware::MiddlewareType,
+        onchain::abi_decompiler::fetch_abi_evmole,
+        tokens::constant_pair::ConstantPairMetadata,
+        types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
+        vm::{IN_DEPLOY, SETCODE_ONLY},
+        PRESET_WETH,
     },
     generic_vm::vm_executor::GenericVM,
     state::{FuzzState, HasCaller},
@@ -1243,8 +1248,16 @@ impl ContractLoader {
 
         evm_executor.host.env.block.number = EVMU256::from(
             u64::from_str_radix(
-                &onchain_middleware.as_ref().unwrap().endpoint.block_number.trim_start_matches("0x"), 
-            16).unwrap());
+                &onchain_middleware
+                    .as_ref()
+                    .unwrap()
+                    .endpoint
+                    .block_number
+                    .trim_start_matches("0x"),
+                16,
+            )
+            .unwrap(),
+        );
 
         SetupData {
             evmstate: new_vm_state,
