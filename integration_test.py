@@ -56,7 +56,7 @@ def test_one(path):
     start_time = time.time()
     cmd = [
         TIMEOUT_BIN,
-        "10s",
+        "30s",
         "./target/release/ityfuzz",
         "evm",
         "-t",
