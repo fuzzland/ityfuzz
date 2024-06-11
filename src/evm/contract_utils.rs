@@ -20,12 +20,14 @@ use glob::glob;
 use itertools::Itertools;
 use libafl::{schedulers::StdScheduler, state::HasMetadata};
 use libafl_bolts::AsSlice;
+use regex::Regex;
 use revm_primitives::{bitvec::vec, Bytecode, Env};
 use serde_json::Value;
 
 use crate::{
     evm::{
         middlewares::middleware::MiddlewareType,
+        onchain::abi_decompiler::fetch_abi_evmole,
         tokens::constant_pair::ConstantPairMetadata,
         types::{fixed_address, generate_random_address, EVMAddress, EVMFuzzState},
         vm::{IN_DEPLOY, SETCODE_ONLY},
@@ -870,7 +872,10 @@ impl ContractLoader {
                     error!("Failed to get code for contract at address {:?}", addr);
                     continue;
                 }
-                let abi = Self::parse_abi_str(&onchain_config.fetch_abi(addr).unwrap());
+                let abi = match onchain_config.fetch_abi(addr) {
+                    Some(abi_str) => Self::parse_abi_str(&abi_str),
+                    None => fetch_abi_evmole(code.clone()),
+                };
 
                 contracts.push(ContractInfo {
                     name: format!("{}", addr),
@@ -1240,6 +1245,19 @@ impl ContractLoader {
                 }
             }
         }
+
+        evm_executor.host.env.block.number = EVMU256::from(
+            u64::from_str_radix(
+                &onchain_middleware
+                    .as_ref()
+                    .unwrap()
+                    .endpoint
+                    .block_number
+                    .trim_start_matches("0x"),
+                16,
+            )
+            .unwrap(),
+        );
 
         SetupData {
             evmstate: new_vm_state,
