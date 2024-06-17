@@ -150,7 +150,7 @@ jobs:
       - name: Build binaries
         env:
           SVM_TARGET_PLATFORM: ${{ matrix.job.svm_target_platform }}
-        run: cargo build --release --bins --target ${{ matrix.job.target }} --features "cmp dataflow evm print_txn_corpus full_trace force_cache real_balance" --no-default-features
+        run: cargo build --release --bins --target ${{ matrix.job.target }} --features "cmp dataflow evm print_txn_corpus full_trace force_cache real_balance" --no-default-features --locked
 
       - name: Archive binaries
         id: artifacts
