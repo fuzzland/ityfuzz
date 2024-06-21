@@ -1229,11 +1229,11 @@ where
         }
     }
 
-    fn code_hash(&mut self, _address: EVMAddress) -> Option<(B256, bool)> {
-        Some((
-            B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            true,
-        ))
+    fn code_hash(&mut self, address: EVMAddress) -> Option<(B256, bool)> {
+        match self.code.get(&address) {
+            Some(code) => Some((code.hash(), true)),
+            None => Some((B256::zero(), true)),
+        }
     }
 
     fn sload(&mut self, address: EVMAddress, index: EVMU256) -> Option<(EVMU256, bool)> {
