@@ -16,7 +16,7 @@ use tracing::{debug, error, info};
 use crate::{
     evm::{
         abi::{ABIAddressToInstanceMap, BoxedABI},
-        blaz::builder::ArtifactInfoMetadata,
+        blaz::{builder::ArtifactInfoMetadata, offchain_corpus::OffchainCorpus},
         concolic::{
             concolic_host::CONCOLIC_TIMEOUT,
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
@@ -88,6 +88,7 @@ pub fn evm_fuzzer(
     state: &mut EVMFuzzState,
 ) {
     info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
+    // read tx info from crypo_path
 
     // create work dir if not exists
     let _path = Path::new(config.work_dir.as_str());
@@ -104,7 +105,8 @@ pub fn evm_fuzzer(
     let jmp_observer = unsafe { StdMapObserver::new("jmp", jmps) };
 
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new(scheduler.clone(), config.work_dir.clone());
+    let mut fuzz_host: FuzzHost<PowerABIScheduler<EVMFuzzState>> =
+        FuzzHost::new(scheduler.clone(), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
 
     // **Note**: cheatcode should be the first middleware because it consumes the
@@ -194,6 +196,7 @@ pub fn evm_fuzzer(
             fuzz_host.add_flashloan_middleware(Flashloan::new(true, chain_cfg, config.flashloan_oracle));
         }
     }
+
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
 
     if config.sha3_bypass {
@@ -204,6 +207,13 @@ pub fn evm_fuzzer(
     if config.reentrancy_oracle {
         debug!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
+    }
+
+    // load all bytecode
+    if config.load_crypo_corpus.is_some() {
+        let crypo_corpus = config.load_crypo_corpus.clone().unwrap();
+        let rpc_url = "https://lb.nodies.app/v1/181a5ebf4c954f8496ae7cbc1ac8d03b";
+        OffchainCorpus::generate_vm_accounts_from_pre_state(rpc_url, &mut fuzz_host, crypo_corpus.as_str());
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -340,7 +350,19 @@ pub fn evm_fuzzer(
 
     let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
 
-    let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
+    let mut executor: FuzzExecutor<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        (StdMapObserver<u8, false>, ()),
+        ConciseEVMInput,
+    > = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
@@ -464,6 +486,7 @@ pub fn evm_fuzzer(
         ConciseEVMInput,
         EVMQueueExecutor,
     > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
+
     let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,
         sha3_taint,
@@ -527,6 +550,30 @@ pub fn evm_fuzzer(
                 );
             }
         };
+    }
+
+    // add
+    // generate vm_state
+    if config.load_crypo_corpus.is_some() {
+        let rpc_url = "https://lb.nodies.app/v1/181a5ebf4c954f8496ae7cbc1ac8d03b";
+        let crypo_corpus = config.load_crypo_corpus.unwrap();
+
+        let testcases = OffchainCorpus::generate_testcases_sync(rpc_url, crypo_corpus.as_str());
+
+        for testcase in testcases {
+            let mut vm_state = OffchainCorpus::generate_vm_state_from_pre_state(&testcase);
+            for txn in testcase.0 {
+                load_code!(txn);
+                let (inp, call_until) = txn.to_input(vm_state.clone());
+                unsafe {
+                    CALL_UNTIL = call_until;
+                }
+                fuzzer
+                    .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
+                    .unwrap();
+                vm_state = state.get_execution_result().new_state.clone();
+            }
+        }
     }
 
     match config.replay_file {

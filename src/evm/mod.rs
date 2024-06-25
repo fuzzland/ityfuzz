@@ -100,7 +100,7 @@ struct RPCCall {
 }
 
 /// CLI for ItyFuzz for EVM smart contracts
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 #[command(author, version, about, long_about = None, trailing_var_arg = true, allow_hyphen_values = true)]
 pub struct EvmArgs {
     /// Glob pattern / address to find contracts
@@ -268,6 +268,10 @@ pub struct EvmArgs {
     /// Load corpus from directory. If not specified, will use empty corpus.
     #[arg(long, default_value = "")]
     load_corpus: String,
+
+    /// Load corpus from crypo. If not specified, will use empty corpus.
+    #[arg(long, short = 'l', default_value = None)]
+    load_crypo_corpus: Option<String>,
 
     /// [DEPRECATED] Specify the setup file that deploys all the contract.
     /// Fuzzer invokes setUp() to deploy.
@@ -812,6 +816,7 @@ pub fn evm_main(mut args: EvmArgs) {
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
         etherscan_api_key,
+        load_crypo_corpus: args.load_crypo_corpus,
     };
 
     let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
@@ -837,6 +842,9 @@ pub fn evm_main(mut args: EvmArgs) {
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     utils::try_write_file(&abis_json, &json_str, true).unwrap();
+
+    // load crypo_corpus tx
+
     evm_fuzzer(config, &mut state)
 }
 
@@ -987,6 +995,7 @@ fn test_evm_offchain_setup() {
         preset_file_path: args.preset_file_path,
         load_corpus: args.load_corpus,
         etherscan_api_key: String::from(""),
+        load_crypo_corpus: args.load_crypo_corpus,
     };
 
     let mut abis_map: HashMap<String, Vec<Vec<serde_json::Value>>> = HashMap::new();
