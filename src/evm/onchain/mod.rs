@@ -384,10 +384,17 @@ impl OnChain {
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     for sig in &sigs {
-                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
-                            parsed_abi.push(abi.clone());
-                        } else {
-                            unknown_sigs += 1;
+                        match state.metadata_map().get::<ABIMap>() {
+                            Some(abis) => {
+                                if let Some(abi) = abis.get(sig) {
+                                    parsed_abi.push(abi.clone());
+                                } else {
+                                    unknown_sigs += 1;
+                                }
+                            }
+                            None => {
+                                unknown_sigs += 1;
+                            }
                         }
                     }
 
