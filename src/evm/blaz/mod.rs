@@ -14,7 +14,7 @@ pub mod builder;
 pub(crate) mod linking;
 pub mod offchain_artifacts;
 pub mod offchain_config;
-pub mod offchain_corpus;
+pub mod offchain_cor;
 
 fn get_client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()

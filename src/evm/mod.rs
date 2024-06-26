@@ -126,7 +126,7 @@ pub struct EvmArgs {
     /// Onchain - Chain type
     /// (eth,goerli,sepolia,bsc,chapel,polygon,mumbai,fantom,avalanche,optimism,
     /// arbitrum,gnosis,base,celo,zkevm,zkevm_testnet,blast,local)
-    #[arg(short, long)]
+    #[arg(short = 'p', long)]
     chain_type: Option<String>,
 
     /// Onchain - Block number (Default: 0 / latest)
@@ -842,8 +842,6 @@ pub fn evm_main(mut args: EvmArgs) {
     let abis_json = format!("{}/abis.json", args.work_dir.clone().as_str());
 
     utils::try_write_file(&abis_json, &json_str, true).unwrap();
-
-    // load crypo_corpus tx
 
     evm_fuzzer(config, &mut state)
 }

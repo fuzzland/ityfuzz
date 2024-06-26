@@ -16,7 +16,7 @@ use tracing::{debug, error, info};
 use crate::{
     evm::{
         abi::{ABIAddressToInstanceMap, BoxedABI},
-        blaz::{builder::ArtifactInfoMetadata, offchain_corpus::OffchainCorpus},
+        blaz::{builder::ArtifactInfoMetadata, offchain_cor::OffchainCor},
         concolic::{
             concolic_host::CONCOLIC_TIMEOUT,
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
@@ -207,13 +207,6 @@ pub fn evm_fuzzer(
     if config.reentrancy_oracle {
         debug!("reentrancy oracle enabled");
         fuzz_host.add_middlewares(Rc::new(RefCell::new(ReentrancyTracer::new())));
-    }
-
-    // load all bytecode
-    if config.load_crypo_corpus.is_some() {
-        let crypo_corpus = config.load_crypo_corpus.clone().unwrap();
-        let rpc_url = "https://lb.nodies.app/v1/181a5ebf4c954f8496ae7cbc1ac8d03b";
-        OffchainCorpus::generate_vm_accounts_from_pre_state(rpc_url, &mut fuzz_host, crypo_corpus.as_str());
     }
 
     let mut evm_executor: EVMQueueExecutor = EVMExecutor::new(fuzz_host, deployer);
@@ -552,28 +545,26 @@ pub fn evm_fuzzer(
         };
     }
 
-    // add
-    // generate vm_state
     if config.load_crypo_corpus.is_some() {
-        let rpc_url = "https://lb.nodies.app/v1/181a5ebf4c954f8496ae7cbc1ac8d03b";
         let crypo_corpus = config.load_crypo_corpus.unwrap();
-
-        let testcases = OffchainCorpus::generate_testcases_sync(rpc_url, crypo_corpus.as_str());
-
+        let rpc_url = config.onchain.unwrap().endpoint_url;
+        let testcases = OffchainCor::generate_testcases_from_txhash(rpc_url.as_str(), crypo_corpus);
+        debug!("start gen testcases");
         for testcase in testcases {
-            let mut vm_state = OffchainCorpus::generate_vm_state_from_pre_state(&testcase);
-            for txn in testcase.0 {
+            let mut vm_state = initial_vm_state.clone();
+            for txn in testcase {
                 load_code!(txn);
                 let (inp, call_until) = txn.to_input(vm_state.clone());
-                unsafe {
-                    CALL_UNTIL = call_until;
-                }
                 fuzzer
                     .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                     .unwrap();
                 vm_state = state.get_execution_result().new_state.clone();
             }
         }
+        unsafe {
+            CALL_UNTIL = u32::MAX;
+        }
+        debug!("finish gen testcases");
     }
 
     match config.replay_file {
