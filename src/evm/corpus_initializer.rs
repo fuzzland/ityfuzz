@@ -289,11 +289,6 @@ where
         }
     }
 
-    pub fn initialize_corpus_with_crypo(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
-        todo!()
-        // 1.
-    }
-
     pub fn initialize_corpus(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         let mut artifacts = EVMInitializationArtifacts {
             address_to_bytecode: HashMap::new(),
