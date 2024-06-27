@@ -126,7 +126,7 @@ pub struct EvmArgs {
     /// Onchain - Chain type
     /// (eth,goerli,sepolia,bsc,chapel,polygon,mumbai,fantom,avalanche,optimism,
     /// arbitrum,gnosis,base,celo,zkevm,zkevm_testnet,blast,local)
-    #[arg(short = 'p', long)]
+    #[arg(short, long)]
     chain_type: Option<String>,
 
     /// Onchain - Block number (Default: 0 / latest)

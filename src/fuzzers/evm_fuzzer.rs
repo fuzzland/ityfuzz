@@ -555,9 +555,10 @@ pub fn evm_fuzzer(
             for txn in testcase {
                 load_code!(txn);
                 let (inp, call_until) = txn.to_input(vm_state.clone());
-                fuzzer
+                let txu = fuzzer
                     .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                     .unwrap();
+
                 vm_state = state.get_execution_result().new_state.clone();
             }
         }
