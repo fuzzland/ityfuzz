@@ -1,4 +1,14 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs::File,
+    io::Read,
+    ops::Deref,
+    path::Path,
+    process,
+    process::exit,
+    rc::Rc,
+};
 
 use bytes::Bytes;
 use glob::glob;
@@ -16,7 +26,7 @@ use tracing::{debug, error, info};
 use crate::{
     evm::{
         abi::{ABIAddressToInstanceMap, BoxedABI},
-        blaz::builder::ArtifactInfoMetadata,
+        blaz::{builder::ArtifactInfoMetadata, offchain_cor::OffchainCor},
         concolic::{
             concolic_host::CONCOLIC_TIMEOUT,
             concolic_stage::{ConcolicFeedbackWrapper, ConcolicStage},
@@ -47,7 +57,7 @@ use crate::{
             sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis},
         },
         minimizer::EVMMinimizer,
-        mutator::FuzzMutator,
+        mutator::{AccessPattern, FuzzMutator},
         onchain::{flashloan::Flashloan, offchain::OffChainConfig, ChainConfig, OnChain, WHITELIST_ADDR},
         oracles::{
             arb_call::ArbitraryCallOracle,
@@ -60,7 +70,7 @@ use crate::{
         presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
-        vm::{EVMExecutor, EVMState},
+        vm::{EVMExecutor, EVMState, IS_FAST_CALL},
     },
     executor::FuzzExecutor,
     feedback::{CmpFeedback, DataflowFeedback, OracleFeedback},
@@ -88,6 +98,7 @@ pub fn evm_fuzzer(
     state: &mut EVMFuzzState,
 ) {
     info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
+    // read tx info from crypo_path
 
     // create work dir if not exists
     let _path = Path::new(config.work_dir.as_str());
@@ -104,7 +115,8 @@ pub fn evm_fuzzer(
     let jmp_observer = unsafe { StdMapObserver::new("jmp", jmps) };
 
     let deployer = fixed_address(FIX_DEPLOYER);
-    let mut fuzz_host = FuzzHost::new(scheduler.clone(), config.work_dir.clone());
+    let mut fuzz_host: FuzzHost<PowerABIScheduler<EVMFuzzState>> =
+        FuzzHost::new(scheduler.clone(), config.work_dir.clone());
     fuzz_host.set_spec_id(config.spec_id);
 
     // **Note**: cheatcode should be the first middleware because it consumes the
@@ -194,6 +206,7 @@ pub fn evm_fuzzer(
             fuzz_host.add_flashloan_middleware(Flashloan::new(true, chain_cfg, config.flashloan_oracle));
         }
     }
+
     let sha3_taint = Rc::new(RefCell::new(Sha3TaintAnalysis::new()));
 
     if config.sha3_bypass {
@@ -340,7 +353,19 @@ pub fn evm_fuzzer(
 
     let mut stages = tuple_list!(std_stage, concolic_stage, coverage_obs_stage);
 
-    let mut executor = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
+    let mut executor: FuzzExecutor<
+        EVMState,
+        EVMAddress,
+        Bytecode,
+        Bytes,
+        EVMAddress,
+        EVMU256,
+        Vec<u8>,
+        EVMInput,
+        EVMFuzzState,
+        (StdMapObserver<u8, false>, ()),
+        ConciseEVMInput,
+    > = FuzzExecutor::new(evm_executor_ref.clone(), tuple_list!(jmp_observer));
 
     #[cfg(feature = "deployer_is_attacker")]
     state.add_caller(&deployer);
@@ -464,6 +489,7 @@ pub fn evm_fuzzer(
         ConciseEVMInput,
         EVMQueueExecutor,
     > = OracleFeedback::new(&mut oracles, &mut producers, evm_executor_ref.clone());
+
     let wrapped_feedback = ConcolicFeedbackWrapper::new(Sha3WrappedFeedback::new(
         feedback,
         sha3_taint,
@@ -528,6 +554,78 @@ pub fn evm_fuzzer(
             }
         };
     }
+
+    macro_rules! load_sep_input {
+        ($txn: expr) => {{
+            let result = if let Some(onchain_mid) = onchain_middleware.clone() {
+                onchain_mid.borrow_mut().load_sep_input(
+                    $txn.contract,
+                    &mut evm_executor_ref.clone().deref().borrow_mut().host,
+                    false,
+                    true,
+                    false,
+                    $txn.caller,
+                    state,
+                )
+            } else {
+                vec![]
+            };
+            result
+        }};
+    }
+
+    if config.load_crypo_corpus.is_some() {
+        let crypo_corpus = config.load_crypo_corpus.unwrap();
+        let rpc_url = config.onchain.unwrap().endpoint_url;
+        let testcases = OffchainCor::generate_testcases_from_txhash(rpc_url.as_str(), crypo_corpus);
+        debug!("start gen testcases");
+        unsafe {
+            IS_FAST_CALL = true;
+        }
+
+        for testcase in testcases {
+            let mut vm_state = initial_vm_state.clone();
+            for txn in testcase {
+                load_code!(txn);
+                let (inp, call_until) = txn.to_input(vm_state.clone());
+                println!("data bytes is : {:?}", inp.data.clone().unwrap().get_bytes());
+                unsafe {
+                    CALL_UNTIL = call_until;
+                }
+                fuzzer
+                    .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
+                    .unwrap();
+                vm_state = state.get_execution_result().new_state.clone();
+                // let rets: Vec<EVMInput> = load_sep_input!(txn);
+                // for ret in rets {
+                //     if ret.data.is_some() &&
+                // ret.clone().data.unwrap().function.eq(&[82, 187, 190, 41]) {
+                //         println!("input data is {:?}",
+                // ret.clone().data.unwrap());         let inp =
+                // ret;
+                //
+                //         // let (inp, call_until) =
+                // txn.to_input(vm_state.clone());         //
+                // println!("input is {:?}", inp);
+                //         fuzzer
+                //             .evaluate_input_events(state, &mut executor, &mut
+                // mgr, inp, false)             .unwrap();
+                //
+                //         vm_state =
+                // state.get_execution_result().new_state.clone();
+                //         break;
+                //     }
+                // }
+            }
+        }
+        unsafe {
+            CALL_UNTIL = u32::MAX;
+            IS_FAST_CALL = false;
+        }
+        debug!("finish gen testcases");
+    }
+
+    // process::exit(1);
 
     match config.replay_file {
         None => {
