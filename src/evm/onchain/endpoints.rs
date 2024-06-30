@@ -201,7 +201,7 @@ impl Chain {
             Chain::CELO => "https://rpc.ankr.com/celo",
             Chain::ZKEVM => "https://rpc.ankr.com/polygon_zkevm",
             Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
-            Chain::BLAST => "https://rpc.ankr.com/blast",
+            Chain::BLAST => "https://lb.nodies.app/v1/041287f6f8c549fa8cf6d4f9b745206d",
             Chain::LINEA => "https://rpc.ankr.com/linea",
             Chain::LOCAL => "http://localhost:8545",
         }
@@ -226,7 +226,7 @@ impl Chain {
             Chain::CELO => "https://api.celoscan.io/api",
             Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
             Chain::ZkevmTestnet => "https://api-testnet-zkevm.polygonscan.com/api",
-            Chain::BLAST => "https://api.routescan.io/v2/network/mainnet/evm/81457/etherscan",
+            Chain::BLAST => " https://api.blastscan.io/api",
             Chain::LINEA => "https://api.lineascan.build/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
         }

@@ -1,4 +1,14 @@
-use std::{cell::RefCell, collections::HashMap, fs::File, io::Read, ops::Deref, path::Path, process::exit, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs::File,
+    io::Read,
+    ops::Deref,
+    path::Path,
+    process,
+    process::exit,
+    rc::Rc,
+};
 
 use bytes::Bytes;
 use glob::glob;
@@ -47,7 +57,7 @@ use crate::{
             sha3_bypass::{Sha3Bypass, Sha3TaintAnalysis},
         },
         minimizer::EVMMinimizer,
-        mutator::FuzzMutator,
+        mutator::{AccessPattern, FuzzMutator},
         onchain::{flashloan::Flashloan, offchain::OffChainConfig, ChainConfig, OnChain, WHITELIST_ADDR},
         oracles::{
             arb_call::ArbitraryCallOracle,
@@ -60,7 +70,7 @@ use crate::{
         presets::ExploitTemplate,
         scheduler::{PowerABIMutationalStage, PowerABIScheduler, UncoveredBranchesMetadata},
         types::{fixed_address, EVMAddress, EVMFuzzMutator, EVMFuzzState, EVMQueueExecutor, EVMU256},
-        vm::{EVMExecutor, EVMState},
+        vm::{EVMExecutor, EVMState, IS_FAST_CALL},
     },
     executor::FuzzExecutor,
     feedback::{CmpFeedback, DataflowFeedback, OracleFeedback},
@@ -545,28 +555,77 @@ pub fn evm_fuzzer(
         };
     }
 
+    macro_rules! load_sep_input {
+        ($txn: expr) => {{
+            let result = if let Some(onchain_mid) = onchain_middleware.clone() {
+                onchain_mid.borrow_mut().load_sep_input(
+                    $txn.contract,
+                    &mut evm_executor_ref.clone().deref().borrow_mut().host,
+                    false,
+                    true,
+                    false,
+                    $txn.caller,
+                    state,
+                )
+            } else {
+                vec![]
+            };
+            result
+        }};
+    }
+
     if config.load_crypo_corpus.is_some() {
         let crypo_corpus = config.load_crypo_corpus.unwrap();
         let rpc_url = config.onchain.unwrap().endpoint_url;
         let testcases = OffchainCor::generate_testcases_from_txhash(rpc_url.as_str(), crypo_corpus);
         debug!("start gen testcases");
+        unsafe {
+            IS_FAST_CALL = true;
+        }
+
         for testcase in testcases {
             let mut vm_state = initial_vm_state.clone();
             for txn in testcase {
                 load_code!(txn);
                 let (inp, call_until) = txn.to_input(vm_state.clone());
-                let txu = fuzzer
+                println!("data bytes is : {:?}", inp.data.clone().unwrap().get_bytes());
+                unsafe {
+                    CALL_UNTIL = call_until;
+                }
+                fuzzer
                     .evaluate_input_events(state, &mut executor, &mut mgr, inp, false)
                     .unwrap();
-
                 vm_state = state.get_execution_result().new_state.clone();
+                // let rets: Vec<EVMInput> = load_sep_input!(txn);
+                // for ret in rets {
+                //     if ret.data.is_some() &&
+                // ret.clone().data.unwrap().function.eq(&[82, 187, 190, 41]) {
+                //         println!("input data is {:?}",
+                // ret.clone().data.unwrap());         let inp =
+                // ret;
+                //
+                //         // let (inp, call_until) =
+                // txn.to_input(vm_state.clone());         //
+                // println!("input is {:?}", inp);
+                //         fuzzer
+                //             .evaluate_input_events(state, &mut executor, &mut
+                // mgr, inp, false)             .unwrap();
+                //
+                //         vm_state =
+                // state.get_execution_result().new_state.clone();
+                //         break;
+                //     }
+                // }
             }
         }
         unsafe {
             CALL_UNTIL = u32::MAX;
+            IS_FAST_CALL = false;
         }
         debug!("finish gen testcases");
     }
+
+    // process::exit(1);
 
     match config.replay_file {
         None => {

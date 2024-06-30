@@ -15,6 +15,7 @@ use ethers::{
 use foundry_cheatcodes::Vm::VmCalls::rpc;
 use libafl::prelude::{Scheduler, StdMapObserver};
 use parquet::{
+    data_type::AsBytes,
     file::reader::{FileReader, SerializedFileReader},
     record::{Field, Row},
 };
@@ -24,7 +25,7 @@ use revm_primitives::{BlockEnv, Bytecode, Env, B160};
 use tracing::debug;
 
 use crate::evm::{
-    abi::BoxedABI,
+    abi::{get_abi_type_boxed, BoxedABI},
     input::{ConciseEVMInput, EVMInput, EVMInputTy::ABI},
     onchain::endpoints::{
         Chain::{BSC, ETH},
@@ -75,14 +76,24 @@ impl OffchainCor {
         let req = H256::from_str(tx_hash.as_str()).unwrap();
         let env = Self::get_call_env(rpc_url, tx_hash).await;
         let tx_info = provider.get_transaction(req).await.expect("rpc error").unwrap();
-        let abi_data = BoxedABI::default();
+
+        let mut abi = get_abi_type_boxed(&String::from(
+            "((uint256,uint256,address,address,uint256,bytes),address,bool,address,bool,uint256,uint256)",
+        ));
+        abi.function = [82, 187, 190, 41];
+        let tx_data = "52bbbe2900000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000b0b401d4761317e272e02c9513771768a10133870000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b0b401d4761317e272e02c9513771768a101338700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006b3c379d592b75990000000000000000000000000000000000000000000000000000000066675e5edc4a9779d6084c1ab3e815b67ed5e6780ccf4d900002000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000086cba7808127d76deac14ec26ef6000aa78b2ebb000000000000000000000000000000000000000000000000000012309ce5400000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000014b0b401d4761317e272e02c9513771768a1013387000000000000000000000000";
+        let mut tx_data_vec = hex::decode(tx_data).unwrap();
+        // println!("tx_data_vec1 is {:?}", tx_data_vec);
+        abi.set_bytes(tx_data_vec);
+        // println!("tx_data_vec2 is {:?}", abi.get_bytes());
+
         let to_address = B160::from_slice(&tx_info.to.unwrap().0);
         ConciseEVMInput {
             input_type: ABI,
             caller: tx_info.from.into(),
             contract: to_address,
             #[cfg(not(feature = "debug"))]
-            data: Some(abi_data),
+            data: Some(abi),
             txn_value: Some(tx_info.value.into()),
             step: false,
             env,
