@@ -324,25 +324,23 @@ impl ContractLoader {
     ) -> Self {
         let contract_name = prefix.split('/').last().unwrap().replace('*', "");
 
-        
         let contract_balance = if !constructor_args.is_empty() {
             let bal = constructor_args.last().unwrap().to_owned();
             EVMU256::from_str(bal.as_str()).unwrap()
         } else {
             EVMU256::from(0)
         };
-        
-   
+
         let mut real_constructor_args = constructor_args.to_owned();
 
         // dele the last element to get real constructor args
         if !constructor_args.is_empty() {
             real_constructor_args.remove(constructor_args.len() - 1);
-        } 
-       
+        }
+
         // get constructor args
         let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(&real_constructor_args);
-        
+
         // create dummy contract info
         let mut contract_result = ContractInfo {
             name: prefix.to_string(),
@@ -398,7 +396,7 @@ impl ContractLoader {
                 contract_result.constructor_args = abi_instance.get().get_bytes();
             }
             // debug!("Constructor args: {:?}", result.constructor_args);
-            // set constructor args balance 
+            // set constructor args balance
             contract_result.code.extend(contract_result.constructor_args.clone());
         } else {
             debug!("No constructor in ABI found, skipping");
@@ -494,7 +492,6 @@ impl ContractLoader {
         }
 
         let (files, source_map_replacements, raw_sourcemaps) = match contract_combined_json_info {
-         
             Some(json_filename) => {
                 let mut json_file = File::open(json_filename).unwrap();
                 let mut buf = String::new();
@@ -519,7 +516,7 @@ impl ContractLoader {
                         }
                     }
                 }
-      
+
                 let prefix_loader = Self::from_prefix(
                     (prefix.to_owned() + &String::from('*')).as_str(),
                     state,
@@ -1420,10 +1417,17 @@ mod tests {
     #[test]
     fn test_load() {
         let codes: Vec<String> = vec![];
-        // let mut args: HashMap<String, Vec<String>> = HashMap::new(); 
+        // let mut args: HashMap<String, Vec<String>> = HashMap::new();
         let input = "contract1:88,97C6D26d7E0D316850A967b46845E15a32666d25,1800;contract2:88,97C6D26d7E0D316850A967b46845E15a32666d25,1800".to_string();
         let args = parse_constructor_args_string(input);
-        let loader = ContractLoader::from_glob("tests/evm/real_balance/*", &mut FuzzState::new(0), &codes, &args, String::from(""), None);
+        let loader = ContractLoader::from_glob(
+            "tests/evm/real_balance/*",
+            &mut FuzzState::new(0),
+            &codes,
+            &args,
+            String::from(""),
+            None,
+        );
         debug!(
             "{:?}",
             loader.contracts.iter().map(|x| x.name.clone()).collect::<Vec<String>>()

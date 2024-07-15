@@ -993,7 +993,7 @@ fn test_evm_offchain_setup() {
 
     for contract_info in config.contract_loader.contracts.clone() {
         let abis: Vec<serde_json::Value> = contract_info
-            .abi 
+            .abi
             .iter()
             .map(|config| {
                 json!({
@@ -1022,9 +1022,10 @@ mod test {
 
     #[test]
     fn test_parse_constructor_args_string() {
-        let input = "Test1:88,0x97C6D26d7E0D316850A967b46845E15a32666d25;Test2:88,0x97C6D26d7E0D316850A967b46845E15a32666d25".to_string();
+        let input =
+            "Test1:88,0x97C6D26d7E0D316850A967b46845E15a32666d25;Test2:88,0x97C6D26d7E0D316850A967b46845E15a32666d25"
+                .to_string();
         let ret = parse_constructor_args_string(input);
         // println!("constructor args: {:?}", ret);
     }
-
 }
