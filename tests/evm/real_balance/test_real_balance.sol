@@ -31,3 +31,11 @@ contract Test2 {
         x2 = 2;
     }
 }
+
+contract Test3 {
+    uint x2 = 0;
+
+    function test1() public {
+        x2 = 2;
+    }
+}

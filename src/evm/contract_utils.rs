@@ -324,14 +324,22 @@ impl ContractLoader {
     ) -> Self {
         let contract_name = prefix.split('/').last().unwrap().replace('*', "");
 
-        // constructor_args length should be always >= 1, because we need to get the balance
-        let bal = constructor_args.last().unwrap().to_owned();
-        let contract_balance  = EVMU256::from_str(bal.as_str()).unwrap();
+        
+        let contract_balance = if !constructor_args.is_empty() {
+            let bal = constructor_args.last().unwrap().to_owned();
+            EVMU256::from_str(bal.as_str()).unwrap()
+        } else {
+            EVMU256::from(0)
+        };
+        
+   
+        let mut real_constructor_args = constructor_args.to_owned();
 
         // dele the last element to get real constructor args
-        let mut real_constructor_args = constructor_args.to_owned();
-        real_constructor_args.remove(constructor_args.len() - 1);
-
+        if !constructor_args.is_empty() {
+            real_constructor_args.remove(constructor_args.len() - 1);
+        } 
+       
         // get constructor args
         let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(&real_constructor_args);
         
