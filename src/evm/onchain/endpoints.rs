@@ -188,7 +188,7 @@ impl Chain {
             Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
-            Chain::BSC => "https://rpc.ankr.com/bsc",
+            Chain::BSC => "https://bnb.api.onfinality.io/public",
             Chain::CHAPEL => "https://rpc.ankr.com/bsc_testnet_chapel",
             Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
