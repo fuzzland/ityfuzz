@@ -872,14 +872,15 @@ impl ContractLoader {
                     error!("Failed to get code for contract at address {:?}", addr);
                     continue;
                 }
+                let code_bytes = hex::decode(&code).expect("code is not hex");
                 let abi = match onchain_config.fetch_abi(addr) {
                     Some(abi_str) => Self::parse_abi_str(&abi_str),
-                    None => fetch_abi_evmole(code.clone()),
+                    None => fetch_abi_evmole(&code_bytes),
                 };
 
                 contracts.push(ContractInfo {
                     name: format!("{}", addr),
-                    code: hex::decode(&code).expect("code is not hex"),
+                    code: code_bytes,
                     abi: abi.clone(),
                     is_code_deployed: true,
                     constructor_args: vec![],
