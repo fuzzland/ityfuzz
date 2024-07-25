@@ -1120,28 +1120,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-openai"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d5e93aca1b2f0ca772c76cadd43e965809df87ef98e25e47244c7f006c85d2"
-dependencies = [
- "backoff",
- "base64 0.21.7",
- "derive_builder 0.12.0",
- "futures",
- "rand 0.8.5",
- "reqwest",
- "reqwest-eventsource",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util 0.7.10",
- "tracing",
-]
-
-[[package]]
 name = "async-recursion"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2649,16 +2627,6 @@ checksum = "90bc066a67923782aa8515dbaea16946c5bcc5addbd668bb80af688e53e548a0"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.4",
-]
-
-[[package]]
-name = "clap-verbosity-flag"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0636f9c040082f8e161555a305f8cec1a1c2828b3d981c812b8c39f4ac00c42c"
-dependencies = [
- "clap 3.2.25",
- "log",
 ]
 
 [[package]]
@@ -4667,21 +4635,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "eventsource-stream"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74fef4569247a5f429d9156b9d0a2599914385dd189c539334c625d8099d90ab"
-dependencies = [
- "futures-core",
- "nom 7.1.3",
- "pin-project-lite",
-]
-
-[[package]]
 name = "evmole"
-version = "0.3.3"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd4e05af4c306bcba507bd358feac33ec73f4314a89bd93758d035c629f2f5fe"
+checksum = "ce047d502545e3a726948bb8a532b8ea1446238f829e01448c802b2f10edbe70"
 dependencies = [
  "ruint",
 ]
@@ -4715,16 +4672,6 @@ dependencies = [
  "lazy_static",
  "log",
  "rand 0.7.3",
-]
-
-[[package]]
-name = "fancy-regex"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95f7c0680e4142284cf8b22c14a476e87d61b004a3a0861872b32ef7ead40a2"
-dependencies = [
- "bit-set",
- "regex",
 ]
 
 [[package]]
@@ -5915,82 +5862,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "heimdall-cache"
-version = "0.6.5"
-source = "git+https://github.com/Jon-Becker/heimdall-rs.git?rev=256973b58370e05aed1536d1cfe44add20805ea4#256973b58370e05aed1536d1cfe44add20805ea4"
-dependencies = [
- "bincode",
- "clap 3.2.25",
- "serde",
-]
-
-[[package]]
-name = "heimdall-common"
-version = "0.6.5"
-source = "git+https://github.com/Jon-Becker/heimdall-rs.git?rev=256973b58370e05aed1536d1cfe44add20805ea4#256973b58370e05aed1536d1cfe44add20805ea4"
-dependencies = [
- "async-openai",
- "async-recursion",
- "async-trait",
- "backoff",
- "chrono",
- "clap 3.2.25",
- "clap-verbosity-flag",
- "colored",
- "crossbeam-channel",
- "ethers",
- "fancy-regex",
- "heimdall-cache",
- "indicatif",
- "lazy_static",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "strsim 0.10.0",
- "tokio",
-]
-
-[[package]]
-name = "heimdall-config"
-version = "0.6.5"
-source = "git+https://github.com/Jon-Becker/heimdall-rs.git?rev=256973b58370e05aed1536d1cfe44add20805ea4#256973b58370e05aed1536d1cfe44add20805ea4"
-dependencies = [
- "clap 3.2.25",
- "clap-verbosity-flag",
- "heimdall-common",
- "serde",
- "toml 0.7.8",
-]
-
-[[package]]
-name = "heimdall-core"
-version = "0.6.5"
-source = "git+https://github.com/Jon-Becker/heimdall-rs.git?rev=256973b58370e05aed1536d1cfe44add20805ea4#256973b58370e05aed1536d1cfe44add20805ea4"
-dependencies = [
- "backtrace",
- "clap 3.2.25",
- "clap-verbosity-flag",
- "colored",
- "crossterm 0.26.1",
- "derive_builder 0.12.0",
- "ethers",
- "fancy-regex",
- "heimdall-cache",
- "heimdall-common",
- "heimdall-config",
- "indicatif",
- "lazy_static",
- "petgraph 0.6.4",
- "serde",
- "serde_json",
- "strsim 0.10.0",
- "thiserror",
- "tokio",
- "tui 0.19.0",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6656,7 +6527,6 @@ dependencies = [
  "foundry-cheatcodes",
  "glob",
  "handlebars",
- "heimdall-core",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
@@ -6691,7 +6561,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "thiserror",
- "tokio",
  "tracing",
  "tracing-subscriber 0.3.18",
  "typetag",
@@ -7635,7 +7504,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "regex",
- "tui 0.17.0",
+ "tui",
 ]
 
 [[package]]
@@ -10752,7 +10621,6 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
- "mime_guess",
  "native-tls",
  "once_cell",
  "percent-encoding",
@@ -10768,31 +10636,13 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
- "tokio-util 0.7.10",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-streams",
  "web-sys",
  "webpki-roots 0.25.4",
  "winreg 0.50.0",
-]
-
-[[package]]
-name = "reqwest-eventsource"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f03f570355882dd8d15acc3a313841e6e90eddbc76a93c748fd82cc13ba9f51"
-dependencies = [
- "eventsource-stream",
- "futures-core",
- "futures-timer",
- "mime",
- "nom 7.1.3",
- "pin-project-lite",
- "reqwest",
- "thiserror",
 ]
 
 [[package]]
@@ -13935,19 +13785,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccdd26cbd674007e649a272da4475fb666d3aa0ad0531da7136db6fab0e5bad1"
-dependencies = [
- "bitflags 1.3.2",
- "cassowary",
- "crossterm 0.25.0",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "tungstenite"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14539,19 +14376,6 @@ name = "wasm-bindgen-shared"
 version = "0.2.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af190c94f2773fdb3729c55b007a722abb5384da03bc0986df4c289bf5567e96"
-
-[[package]]
-name = "wasm-streams"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b65dc4c90b63b118468cf747d8bf3566c1913ef60be765b5730ead9e0a3ba129"
-dependencies = [
- "futures-util",
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
 
 [[package]]
 name = "web-sys"
@@ -15756,7 +15580,7 @@ dependencies = [
  "treeline",
  "try-lock",
  "ttl_cache",
- "tui 0.17.0",
+ "tui",
  "twox-hash",
  "typed-arena",
  "typenum",
