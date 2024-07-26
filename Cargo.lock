@@ -4636,9 +4636,9 @@ dependencies = [
 
 [[package]]
 name = "evmole"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce047d502545e3a726948bb8a532b8ea1446238f829e01448c802b2f10edbe70"
+checksum = "628b1881ed2b7f83a32418f6de735c49292065dfc225067687ee1d4fc59a134e"
 dependencies = [
  "ruint",
 ]
