@@ -174,6 +174,27 @@ pub fn set_hash(name: &str, out: &mut [u8]) {
     hasher.result(out)
 }
 
+fn parse_and_convert(input: &str) -> String {
+    let parts: Vec<&str> = input.trim().split_whitespace().collect();
+    if parts.len() != 2 && (parts[1] != "wei" || parts[1] != "gwei" || parts[1] != "ether") {
+        return 0.to_string();
+    }
+
+    let number = match u128::from_str(parts[0]) {
+        Ok(num) => num,
+        Err(_) => return 0.to_string(),
+    };
+
+    let value = match parts[1].to_lowercase().as_str() {
+        "wei" => number,
+        "gwei" => number.checked_mul(10u128.pow(9)).unwrap_or(0),
+        "ether" => number.checked_mul(10u128.pow(18)).unwrap_or(0),
+        _ => 0,
+    }
+    .to_string();
+    value
+}
+
 impl ContractLoader {
     fn parse_abi(path: &Path) -> Vec<ABIConfig> {
         let mut file = File::open(path).unwrap();
@@ -323,18 +344,25 @@ impl ContractLoader {
         raw_source_maps: HashMap<String, String>, // contract name -> raw source map
     ) -> Self {
         let contract_name = prefix.split('/').last().unwrap().replace('*', "");
-
+        // number ether, number wei, number gwei
         let contract_balance = if !constructor_args.is_empty() {
-            let bal = constructor_args.last().unwrap().to_owned();
-            EVMU256::from_str(bal.as_str()).unwrap()
+            let bal: String = constructor_args.last().unwrap().to_owned();
+            if bal.ends_with("wei") || bal.ends_with("gwei") || bal.ends_with("ether") {
+                EVMU256::from_str(parse_and_convert(bal.as_str()).as_str()).unwrap()
+            } else {
+                EVMU256::from(0)
+            }
         } else {
             EVMU256::from(0)
         };
 
         let mut real_constructor_args = constructor_args.to_owned();
 
-        // dele the last element to get real constructor args
-        if !constructor_args.is_empty() {
+        if !constructor_args.is_empty() &&
+            (constructor_args[constructor_args.len() - 1].ends_with("wei") ||
+                constructor_args[constructor_args.len() - 1].ends_with("gwei") ||
+                constructor_args[constructor_args.len() - 1].ends_with("ether"))
+        {
             real_constructor_args.remove(constructor_args.len() - 1);
         }
 
