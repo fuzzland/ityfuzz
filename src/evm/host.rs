@@ -78,7 +78,7 @@ use crate::{
         middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType},
         mutator::AccessPattern,
         onchain::{
-            abi_decompiler::fetch_abi_heimdall,
+            abi_decompiler::fetch_abi_evmole,
             flashloan::{register_borrow_txn, Flashloan},
         },
         types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256},
@@ -1379,7 +1379,7 @@ where
                 self.set_code(r_addr, Bytecode::new_raw(runtime_code.clone()), state);
                 if !unsafe { SETCODE_ONLY } {
                     // now we build & insert abi
-                    let contract_code_str = hex::encode(runtime_code.clone());
+                    let contract_code_str = hex::encode(&runtime_code);
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     let mut parsed_abi = vec![];
@@ -1392,8 +1392,8 @@ where
                     }
 
                     if unknown_sigs >= sigs.len() / 30 {
-                        debug!("Too many unknown function signature for newly created contract, we are going to decompile this contract using Heimdall");
-                        let abis = fetch_abi_heimdall(contract_code_str)
+                        debug!("Too many unknown function signature for newly created contract, we are going to decompile this contract using EVMole");
+                        let abis = fetch_abi_evmole(&runtime_code)
                             .iter()
                             .map(|abi| {
                                 if let Some(known_abi) =

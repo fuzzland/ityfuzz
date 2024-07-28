@@ -153,7 +153,7 @@ ityfuzz evm -o -t 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 --onchain-block-num
 ```
 
 ItyFuzz 将从 Etherscan 拉取合约的 ABI 并 fuzz 它。如果 ItyFuzz 遇到 Storage 中未知的槽，它将从 RPC 同步槽。
-如果 ItyFuzz 遇到对外部未知合约的调用，它将拉取该合约的字节码和 ABI。 如果它的 ABI 不可用，ItyFuzz 将使用 heimdall 对字节码进行反编译分析 ABI。
+如果 ItyFuzz 遇到对外部未知合约的调用，它将拉取该合约的字节码和 ABI。 如果它的 ABI 不可用，ItyFuzz 将使用 EVMole 对字节码进行反编译分析 ABI。
 
 ### Onchain 获取
 

@@ -50,6 +50,7 @@ pub enum Chain {
     BLAST,
     LINEA,
     LOCAL,
+    IOTEX,
 }
 
 pub trait PriceOracle: Debug {
@@ -82,6 +83,7 @@ impl FromStr for Chain {
             "blast" => Ok(Self::BLAST),
             "linea" => Ok(Self::LINEA),
             "local" => Ok(Self::LOCAL),
+            "iotex" => Ok(Self::IOTEX),
             _ => Err(()),
         }
     }
@@ -126,6 +128,7 @@ impl Chain {
             1442 => Self::ZkevmTestnet,
             81457 => Self::BLAST,
             59144 => Self::LINEA,
+            4689 => Self::IOTEX,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -151,6 +154,7 @@ impl Chain {
             Chain::ZkevmTestnet => 1442,
             Chain::BLAST => 81457,
             Chain::LINEA => 59144,
+            Chain::IOTEX => 4689,
             Chain::LOCAL => 31337,
         }
     }
@@ -176,6 +180,7 @@ impl Chain {
             Chain::BLAST => "blast",
             Chain::LINEA => "linea",
             Chain::LOCAL => "local",
+            Chain::IOTEX => "iotex",
         }
         .to_string()
     }
@@ -203,6 +208,7 @@ impl Chain {
             Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
             Chain::BLAST => "https://rpc.ankr.com/blast",
             Chain::LINEA => "https://rpc.ankr.com/linea",
+            Chain::IOTEX => "https://rpc.ankr.com/iotex",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -229,6 +235,7 @@ impl Chain {
             Chain::BLAST => "https://api.routescan.io/v2/network/mainnet/evm/81457/etherscan",
             Chain::LINEA => "https://api.lineascan.build/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
+            Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
         }
         .to_string()
     }

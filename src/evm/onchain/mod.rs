@@ -38,7 +38,7 @@ use crate::{
             middleware::{add_corpus, Middleware, MiddlewareType},
         },
         mutator::AccessPattern,
-        onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
+        onchain::{abi_decompiler::fetch_abi_evmole, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::IS_FAST_CALL,
     },
@@ -377,10 +377,11 @@ impl OnChain {
                 None => {
                     // 1. Extract abi from bytecode, and see do we have any function sig available
                     //    in state
-                    // 2. Use Heimdall to extract abi
-                    // 3. Reconfirm on failures of heimdall
+                    // 2. Use EVMole to extract abi
+                    // 3. Reconfirm on failures of EVMole
                     debug!("Contract {:?} has no abi", address_h160);
-                    let contract_code_str = hex::encode(contract_code.bytes());
+                    let contract_code = contract_code.bytes();
+                    let contract_code_str = hex::encode(contract_code);
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     for sig in &sigs {
@@ -399,8 +400,8 @@ impl OnChain {
                     }
 
                     if unknown_sigs >= sigs.len() / 30 {
-                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
-                        let abis = fetch_abi_heimdall(contract_code_str)
+                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using EVMole", unknown_sigs, address_h160);
+                        let abis = fetch_abi_evmole(contract_code)
                             .iter()
                             .map(|abi| {
                                 if let Some(known_abi) =
