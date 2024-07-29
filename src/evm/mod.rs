@@ -1015,3 +1015,17 @@ fn test_evm_offchain_setup() {
     utils::try_write_file(&abis_json, &json_str, true).unwrap();
     evm_fuzzer(config, &mut state)
 }
+
+#[cfg(test)]
+mod test {
+    use super::parse_constructor_args_string;
+
+    #[test]
+    fn test_parse_constructor_args_string() {
+        let input =
+            "Test1:88,0x97C6D26d7E0D316850A967b46845E15a32666d25;Test2:88,0x97C6D26d7E0D316850A967b46845E15a32666d25"
+                .to_string();
+        let ret = parse_constructor_args_string(input);
+        // println!("constructor args: {:?}", ret);
+    }
+}

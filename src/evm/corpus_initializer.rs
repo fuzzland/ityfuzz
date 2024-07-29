@@ -200,6 +200,7 @@ where
             .host
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
+
         // deploy
         for contract in &mut loader.contracts {
             info!("Deploying contract: {}", contract.name);
@@ -228,7 +229,17 @@ where
                 contract.deployed_address
             };
             contract.deployed_address = deployed_address;
-            info!("Contract {} deployed to: {deployed_address:?}", contract.name);
+
+            // set all contracts real balance
+            self.executor
+                .host
+                .evmstate
+                .set_balance(deployed_address, contract.balance);
+
+            info!(
+                "Contract {} deployed to: {deployed_address:?} -> balacne is {:?}",
+                contract.name, contract.balance
+            );
 
             if deployed_address != CHEATCODE_ADDRESS {
                 self.state.add_address(&deployed_address);
