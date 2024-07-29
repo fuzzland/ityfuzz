@@ -211,6 +211,8 @@ where
                     }};
                     () => {};
                 }
+
+                // todo! get storage data from reth
                 host.next_slot = match self.storage_fetching {
                     StorageFetchingMode::Dump => {
                         load_data!(fetch_storage_dump, storage_dump, slot_idx)
