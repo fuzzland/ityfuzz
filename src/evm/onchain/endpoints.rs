@@ -1124,7 +1124,7 @@ impl OnChainConfig {
         } else {
             format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
-        info!("🔥 {url}");
+        // info!("{url}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
         if let Some(resp_pairs) = resp.as_array() {
