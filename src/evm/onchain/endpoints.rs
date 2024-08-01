@@ -386,6 +386,7 @@ impl ChainConfig for OnChainConfig {
             "eth" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "arbitrum" => return pegged_token.get("WETH").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             // "mumbai" => panic!("Not supported"),
             _ => {
@@ -428,6 +429,18 @@ impl ChainConfig for OnChainConfig {
                 ("DAI", "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"),
                 ("WBTC", "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6"),
                 ("WETH", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "arbitrum" => [
+                ("WETH", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"),
+                ("WBTC", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"),
+                ("USDT", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"),
+                ("USDC.e", "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"),
+                ("USDC", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"),
+                ("DAI", "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"),
+                ("crvUSD", "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5"),
             ]
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -1107,10 +1120,11 @@ impl OnChainConfig {
         }
         info!("fetching pairs for {token}");
         let url = if is_pegged {
-            format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
+            format!("https://pairs-all.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
             format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
+        // info!("{url}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
         if let Some(resp_pairs) = resp.as_array() {
