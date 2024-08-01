@@ -163,8 +163,8 @@ fn get_pair(chain: &mut Box<dyn ChainConfig>, token: &str, is_pegged: bool) -> V
     let pegged_tokens = chain.get_pegged_token();
     let mut pairs = chain.get_pair(token.as_str(), is_pegged || pegged_tokens.values().contains(&token));
 
-    // println!("original pairs: {:?}", pairs,);
-    // println!("token: {:?}", token,);
+    println!("original pairs: {:?}", pairs,);
+    println!("token: {:?}", token,);
 
     for pair in &mut pairs {
         add_reserve_info(chain, pair);
@@ -178,7 +178,7 @@ fn get_pair(chain: &mut Box<dyn ChainConfig>, token: &str, is_pegged: bool) -> V
     if pairs.len() > 3 {
         pairs = pairs[0..3].to_vec();
     }
-    // println!("pairs: {:?}", pairs);
+    println!("pairs: {:?}", pairs);
     pairs
 }
 
