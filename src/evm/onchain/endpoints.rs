@@ -1120,7 +1120,7 @@ impl OnChainConfig {
         }
         info!("fetching pairs for {token}");
         let url = if is_pegged {
-            format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
+            format!("https://pairs-all.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
             format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
