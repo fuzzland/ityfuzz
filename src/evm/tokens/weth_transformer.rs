@@ -26,8 +26,9 @@ pub struct WethContext {
 
 pub fn withdraw_bytes(amount: EVMU256) -> Bytes {
     let mut ret = Vec::new();
-    ret.extend_from_slice(&[0xa9, 0x05, 0x9c, 0xbb]); // transfer to null
-    ret.extend_from_slice(&[0x00; 32]); // padding
+    ret.extend_from_slice(&[0xa9, 0x05, 0x9c, 0xbb]); // transfer to a dead address
+    ret.extend_from_slice(&[0x00; 30]); // 0x000...dead
+    ret.extend_from_slice(&[0xde, 0xad]);
     ret.extend_from_slice(&amount.to_be_bytes::<32>()); // amount
     Bytes::from(ret)
 }

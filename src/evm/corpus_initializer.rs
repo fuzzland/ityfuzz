@@ -38,7 +38,7 @@ use crate::{
         input::{ConciseEVMInput, EVMInput, EVMInputTy},
         middlewares::cheatcode::CHEATCODE_ADDRESS,
         mutator::AccessPattern,
-        onchain::{abi_decompiler::fetch_abi_heimdall, flashloan::register_borrow_txn, BLACKLIST_ADDR},
+        onchain::{abi_decompiler::fetch_abi_evmole, flashloan::register_borrow_txn, BLACKLIST_ADDR},
         presets::Preset,
         types::{
             fixed_address,
@@ -200,6 +200,7 @@ where
             .host
             .evmstate
             .set_balance(self.executor.deployer, EVMU256::from(INITIAL_BALANCE));
+
         // deploy
         for contract in &mut loader.contracts {
             info!("Deploying contract: {}", contract.name);
@@ -228,7 +229,17 @@ where
                 contract.deployed_address
             };
             contract.deployed_address = deployed_address;
-            info!("Contract {} deployed to: {deployed_address:?}", contract.name);
+
+            // set all contracts real balance
+            self.executor
+                .host
+                .evmstate
+                .set_balance(deployed_address, contract.balance);
+
+            info!(
+                "Contract {} deployed to: {deployed_address:?} -> balacne is {:?}",
+                contract.name, contract.balance
+            );
 
             if deployed_address != CHEATCODE_ADDRESS {
                 self.state.add_address(&deployed_address);
@@ -315,10 +326,10 @@ where
                 // this contract's abi is not available, we will use 3 layers to handle this
                 // 1. Extract abi from bytecode, and see do we have any function sig available
                 //    in state
-                // 2. Use Heimdall to extract abi
-                // 3. Reconfirm on failures of heimdall
+                // 2. Use EVMole to extract abi
+                // 3. Reconfirm on failures of EVMole
                 info!("Contract {} has no abi", contract.name);
-                let contract_code = hex::encode(contract.code.clone());
+                let contract_code = hex::encode(&contract.code);
                 let sigs = extract_sig_from_contract(&contract_code);
                 let mut unknown_sigs: usize = 0;
                 for sig in &sigs {
@@ -330,8 +341,8 @@ where
                 }
 
                 if unknown_sigs >= sigs.len() / UNKNOWN_SIGS_DIVISOR {
-                    info!("Too many unknown function signature for {:?}, we are going to decompile this contract using Heimdall", contract.name);
-                    let abis = fetch_abi_heimdall(contract_code)
+                    info!("Too many unknown function signature for {:?}, we are going to decompile this contract using EVMole", contract.name);
+                    let abis = fetch_abi_evmole(&contract.code)
                         .iter()
                         .map(|abi| {
                             if let Some(known_abi) =

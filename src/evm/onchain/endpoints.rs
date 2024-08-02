@@ -3,15 +3,16 @@ use std::{
     env,
     fmt::Debug,
     hash::{Hash, Hasher},
+    io::{Read, Write},
+    os::unix::net::UnixStream,
     panic,
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use itertools::Itertools;
 use reqwest::{blocking, header::HeaderMap};
 use retry::{delay::Fixed, retry_with_index, OperationResult};
 use revm_interpreter::analysis::to_analysed;
@@ -50,6 +51,7 @@ pub enum Chain {
     BLAST,
     LINEA,
     LOCAL,
+    IOTEX,
 }
 
 pub trait PriceOracle: Debug {
@@ -82,6 +84,7 @@ impl FromStr for Chain {
             "blast" => Ok(Self::BLAST),
             "linea" => Ok(Self::LINEA),
             "local" => Ok(Self::LOCAL),
+            "iotex" => Ok(Self::IOTEX),
             _ => Err(()),
         }
     }
@@ -90,21 +93,40 @@ impl FromStr for Chain {
 impl Chain {
     pub fn new_with_rpc_url(rpc_url: &str) -> Result<Self> {
         let client = blocking::Client::new();
-        let body = json!({"method":"eth_chainId","params":[],"id":1,"jsonrpc":"2.0"});
-        let resp: Value = client
-            .post(rpc_url)
-            .header("Content-Type", "application/json")
-            .body(body.to_string())
-            .send()?
-            .json()?;
+        let body = json!({
+            "method": "eth_chainId",
+            "params": [],
+            "id": 1,
+            "jsonrpc": "2.0"
+        })
+        .to_string();
+
+        let resp: Value = if rpc_url.starts_with("http://") || rpc_url.starts_with("https://") {
+            // HTTP request
+            let response = client
+                .post(rpc_url)
+                .header("Content-Type", "application/json")
+                .body(body.clone())
+                .send()?;
+            response.json::<Value>()?
+        } else if rpc_url.starts_with("/") || rpc_url.starts_with("./") || rpc_url.starts_with("../") {
+            // IPC request
+            let mut stream = UnixStream::connect(rpc_url)?;
+            stream.write_all(body.as_bytes())?;
+
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            serde_json::from_str(&response)?
+        } else {
+            return Err(anyhow!("Unsupported URL scheme: {}", rpc_url));
+        };
 
         let chain_id = resp
             .get("result")
             .and_then(|result| result.as_str())
             .and_then(|result| u64::from_str_radix(result.trim_start_matches("0x"), 16).ok())
-            .ok_or_else(|| anyhow!("Unknown chain id: {}", rpc_url))?;
+            .ok_or_else(|| anyhow!("Failed to parse chain id from response: {}", rpc_url))?;
 
-        // Use rpc_url instead of the default one
         env::set_var("ETH_RPC_URL", rpc_url);
 
         Ok(match chain_id {
@@ -126,6 +148,7 @@ impl Chain {
             1442 => Self::ZkevmTestnet,
             81457 => Self::BLAST,
             59144 => Self::LINEA,
+            4689 => Self::IOTEX,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -151,6 +174,7 @@ impl Chain {
             Chain::ZkevmTestnet => 1442,
             Chain::BLAST => 81457,
             Chain::LINEA => 59144,
+            Chain::IOTEX => 4689,
             Chain::LOCAL => 31337,
         }
     }
@@ -176,6 +200,7 @@ impl Chain {
             Chain::BLAST => "blast",
             Chain::LINEA => "linea",
             Chain::LOCAL => "local",
+            Chain::IOTEX => "iotex",
         }
         .to_string()
     }
@@ -188,7 +213,7 @@ impl Chain {
             Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
-            Chain::BSC => "https://rpc.ankr.com/bsc",
+            Chain::BSC => "https://bnb.api.onfinality.io/public",
             Chain::CHAPEL => "https://rpc.ankr.com/bsc_testnet_chapel",
             Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
@@ -203,6 +228,7 @@ impl Chain {
             Chain::ZkevmTestnet => "https://rpc.ankr.com/polygon_zkevm_testnet",
             Chain::BLAST => "https://lb.nodies.app/v1/041287f6f8c549fa8cf6d4f9b745206d",
             Chain::LINEA => "https://rpc.ankr.com/linea",
+            Chain::IOTEX => "https://rpc.ankr.com/iotex",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -229,6 +255,7 @@ impl Chain {
             Chain::BLAST => " https://api.blastscan.io/api",
             Chain::LINEA => "https://api.lineascan.build/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
+            Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
         }
         .to_string()
     }
@@ -359,6 +386,7 @@ impl ChainConfig for OnChainConfig {
             "eth" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "arbitrum" => return pegged_token.get("WETH").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             // "mumbai" => panic!("Not supported"),
             _ => {
@@ -401,6 +429,18 @@ impl ChainConfig for OnChainConfig {
                 ("DAI", "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"),
                 ("WBTC", "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6"),
                 ("WETH", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "arbitrum" => [
+                ("WETH", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"),
+                ("WBTC", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"),
+                ("USDT", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"),
+                ("USDC.e", "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"),
+                ("USDC", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"),
+                ("DAI", "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"),
+                ("crvUSD", "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5"),
             ]
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -693,18 +733,91 @@ impl OnChainConfig {
         abi
     }
 
-    fn _request(&self, method: String, params: String) -> Option<Value> {
+    pub fn _request(&self, method: String, params: String) -> Option<Value> {
         let data = format!(
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, self.chain_id
         );
-        self.post(self.endpoint_url.clone(), data)
-            .and_then(|resp| serde_json::from_str(&resp).ok())
-            .and_then(|json: Value| json.get("result").cloned())
-            .or_else(|| {
-                error!("failed to fetch from {}", self.endpoint_url);
-                None
-            })
+
+        // Handling HTTP request
+        if self.endpoint_url.starts_with("http://") || self.endpoint_url.starts_with("https://") {
+            let client = reqwest::blocking::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .expect("Failed to create HTTP client");
+
+            return client
+                .post(&self.endpoint_url)
+                .header("Content-Type", "application/json")
+                .body(data)
+                .send()
+                .ok()
+                .and_then(|resp| resp.text().ok())
+                .and_then(|resp| serde_json::from_str(&resp).ok())
+                .and_then(|json: Value| json.get("result").cloned());
+        }
+        // Handling IPC request
+        else if self.endpoint_url.starts_with("/") ||
+            self.endpoint_url.starts_with("./") ||
+            self.endpoint_url.starts_with("../")
+        {
+            match UnixStream::connect(&self.endpoint_url) {
+                Ok(mut socket) => {
+                    socket
+                        .set_read_timeout(Some(Duration::from_secs(10)))
+                        .expect("Failed to set read timeout");
+                    socket
+                        .set_write_timeout(Some(Duration::from_secs(5)))
+                        .expect("Failed to set write timeout");
+
+                    if let Err(e) = socket.write_all(data.as_bytes()) {
+                        error!("Failed to write to IPC stream: {}", e);
+                        return None;
+                    }
+
+                    let mut response = String::new();
+                    let mut buffer = [0; 4096];
+                    let timeout = Duration::from_secs(10);
+                    let start_time = Instant::now();
+
+                    while start_time.elapsed() < timeout {
+                        match socket.read(&mut buffer) {
+                            Ok(0) => {
+                                error!("No data read from IPC stream; the stream might have been closed.");
+                                return None;
+                            }
+                            Ok(n) => {
+                                response.push_str(&String::from_utf8_lossy(&buffer[..n]));
+                                if response.contains("\n") {
+                                    break;
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                            Err(e) => {
+                                error!("Failed to read from IPC stream: {}", e);
+                                return None;
+                            }
+                        }
+                    }
+
+                    if start_time.elapsed() >= timeout {
+                        error!("Timeout reached while reading from the IPC stream.");
+                        return None;
+                    }
+
+                    serde_json::from_str(&response)
+                        .ok()
+                        .and_then(|json: Value| json.get("result").cloned())
+                }
+                Err(e) => {
+                    error!("IPC connection failed: {}", e);
+                    return None;
+                }
+            }
+        } else {
+            error!("Unsupported URL scheme: {}", self.endpoint_url);
+            None
+        }
     }
 
     fn _request_with_id(&self, method: String, params: String, id: u8) -> Option<Value> {
@@ -712,13 +825,86 @@ impl OnChainConfig {
             "{{\"jsonrpc\":\"2.0\", \"method\": \"{}\", \"params\": {}, \"id\": {}}}",
             method, params, id
         );
-        self.post(self.endpoint_url.clone(), data)
-            .and_then(|resp| serde_json::from_str(&resp).ok())
-            .and_then(|json: Value| json.get("result").cloned())
-            .or_else(|| {
-                error!("failed to fetch from {}", self.endpoint_url);
-                None
-            })
+
+        // Handling HTTP request
+        if self.endpoint_url.starts_with("http://") || self.endpoint_url.starts_with("https://") {
+            let client = reqwest::blocking::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .expect("Failed to create HTTP client");
+
+            return client
+                .post(&self.endpoint_url)
+                .header("Content-Type", "application/json")
+                .body(data)
+                .send()
+                .ok()
+                .and_then(|resp| resp.text().ok())
+                .and_then(|resp| serde_json::from_str(&resp).ok())
+                .and_then(|json: Value| json.get("result").cloned());
+        }
+        // Handling IPC request
+        else if self.endpoint_url.starts_with("/") ||
+            self.endpoint_url.starts_with("./") ||
+            self.endpoint_url.starts_with("../")
+        {
+            match UnixStream::connect(&self.endpoint_url) {
+                Ok(mut socket) => {
+                    socket
+                        .set_read_timeout(Some(Duration::from_secs(10)))
+                        .expect("Failed to set read timeout");
+                    socket
+                        .set_write_timeout(Some(Duration::from_secs(5)))
+                        .expect("Failed to set write timeout");
+
+                    if let Err(e) = socket.write_all(data.as_bytes()) {
+                        error!("Failed to write to IPC stream: {}", e);
+                        return None;
+                    }
+
+                    let mut response = String::new();
+                    let mut buffer = [0; 4096];
+                    let timeout = Duration::from_secs(10);
+                    let start_time = Instant::now();
+
+                    while start_time.elapsed() < timeout {
+                        match socket.read(&mut buffer) {
+                            Ok(0) => {
+                                error!("No data read from IPC stream; the stream might have been closed.");
+                                return None;
+                            }
+                            Ok(n) => {
+                                response.push_str(&String::from_utf8_lossy(&buffer[..n]));
+                                if response.contains("\n") {
+                                    break;
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                            Err(e) => {
+                                error!("Failed to read from IPC stream: {}", e);
+                                return None;
+                            }
+                        }
+                    }
+
+                    if start_time.elapsed() >= timeout {
+                        error!("Timeout reached while reading from the IPC stream.");
+                        return None;
+                    }
+
+                    serde_json::from_str(&response)
+                        .ok()
+                        .and_then(|json: Value| json.get("result").cloned())
+                }
+                Err(e) => {
+                    error!("IPC connection failed: {}", e);
+                    return None;
+                }
+            }
+        } else {
+            error!("Unsupported URL scheme: {}", self.endpoint_url);
+            None
+        }
     }
 
     pub fn get_balance(&mut self, address: EVMAddress) -> EVMU256 {
@@ -934,10 +1120,11 @@ impl OnChainConfig {
         }
         info!("fetching pairs for {token}");
         let url = if is_pegged {
-            format!("https://pairs.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
+            format!("https://pairs-all.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
             format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
+        // info!("{url}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
         let mut pairs: Vec<PairData> = Vec::new();
         if let Some(resp_pairs) = resp.as_array() {

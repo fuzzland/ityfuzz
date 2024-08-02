@@ -88,6 +88,7 @@ pub struct ContractInfo {
     pub code: Vec<u8>,
     pub abi: Vec<ABIConfig>,
     pub is_code_deployed: bool,
+    pub balance: EVMU256,
     pub constructor_args: Vec<u8>,
     pub deployed_address: EVMAddress,
     pub build_artifact: Option<BuildJobResult>,
@@ -171,6 +172,27 @@ pub fn set_hash(name: &str, out: &mut [u8]) {
     let mut hasher = Sha3::keccak256();
     hasher.input_str(name);
     hasher.result(out)
+}
+
+fn parse_and_convert(input: &str) -> String {
+    let parts: Vec<&str> = input.trim().split_whitespace().collect();
+    if parts.len() != 2 && (parts[1] != "wei" || parts[1] != "gwei" || parts[1] != "ether") {
+        return 0.to_string();
+    }
+
+    let number = match u128::from_str(parts[0]) {
+        Ok(num) => num,
+        Err(_) => return 0.to_string(),
+    };
+
+    let value = match parts[1].to_lowercase().as_str() {
+        "wei" => number,
+        "gwei" => number.checked_mul(10u128.pow(9)).unwrap_or(0),
+        "ether" => number.checked_mul(10u128.pow(18)).unwrap_or(0),
+        _ => 0,
+    }
+    .to_string();
+    value
 }
 
 impl ContractLoader {
@@ -322,9 +344,30 @@ impl ContractLoader {
         raw_source_maps: HashMap<String, String>, // contract name -> raw source map
     ) -> Self {
         let contract_name = prefix.split('/').last().unwrap().replace('*', "");
+        // number ether, number wei, number gwei
+        let contract_balance = if !constructor_args.is_empty() {
+            let bal: String = constructor_args.last().unwrap().to_owned();
+            if bal.ends_with("wei") || bal.ends_with("gwei") || bal.ends_with("ether") {
+                EVMU256::from_str(parse_and_convert(bal.as_str()).as_str()).unwrap()
+            } else {
+                EVMU256::from(0)
+            }
+        } else {
+            EVMU256::from(0)
+        };
+
+        let mut real_constructor_args = constructor_args.to_owned();
+
+        if !constructor_args.is_empty() &&
+            (constructor_args[constructor_args.len() - 1].ends_with("wei") ||
+                constructor_args[constructor_args.len() - 1].ends_with("gwei") ||
+                constructor_args[constructor_args.len() - 1].ends_with("ether"))
+        {
+            real_constructor_args.remove(constructor_args.len() - 1);
+        }
 
         // get constructor args
-        let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(constructor_args);
+        let constructor_args_in_bytes: Vec<u8> = Self::constructor_args_encode(&real_constructor_args);
 
         // create dummy contract info
         let mut contract_result = ContractInfo {
@@ -338,6 +381,7 @@ impl ContractLoader {
             files,
             source_map_replacements,
             raw_source_map: raw_source_maps.get(&contract_name).cloned(),
+            balance: contract_balance,
         };
         let mut abi_result = ABIInfo {
             source: prefix.to_string(),
@@ -380,6 +424,7 @@ impl ContractLoader {
                 contract_result.constructor_args = abi_instance.get().get_bytes();
             }
             // debug!("Constructor args: {:?}", result.constructor_args);
+            // set constructor args balance
             contract_result.code.extend(contract_result.constructor_args.clone());
         } else {
             debug!("No constructor in ABI found, skipping");
@@ -499,6 +544,7 @@ impl ContractLoader {
                         }
                     }
                 }
+
                 let prefix_loader = Self::from_prefix(
                     (prefix.to_owned() + &String::from('*')).as_str(),
                     state,
@@ -584,6 +630,7 @@ impl ContractLoader {
                 files,
                 source_map_replacements,
                 raw_source_map,
+                balance: EVMU256::from(0),
             });
             abis.push(ABIInfo {
                 source: addr.to_string(),
@@ -642,6 +689,7 @@ impl ContractLoader {
                 files: sources,
                 source_map_replacements: Some(more_info.source_map_replacements),
                 raw_source_map: Some(more_info.source_map.clone()),
+                balance: EVMU256::from(0),
             });
         }
 
@@ -752,6 +800,7 @@ impl ContractLoader {
                 files: artifact.sources.clone(),
                 source_map_replacements: Some(more_info.source_map_replacements.clone()),
                 raw_source_map: Some(more_info.source_map.clone()),
+                balance: EVMU256::from(0),
             });
         }
         Self {
@@ -872,14 +921,15 @@ impl ContractLoader {
                     error!("Failed to get code for contract at address {:?}", addr);
                     continue;
                 }
+                let code_bytes = hex::decode(&code).expect("code is not hex");
                 let abi = match onchain_config.fetch_abi(addr) {
                     Some(abi_str) => Self::parse_abi_str(&abi_str),
-                    None => fetch_abi_evmole(code.clone()),
+                    None => fetch_abi_evmole(&code_bytes),
                 };
 
                 contracts.push(ContractInfo {
                     name: format!("{}", addr),
-                    code: hex::decode(&code).expect("code is not hex"),
+                    code: code_bytes,
                     abi: abi.clone(),
                     is_code_deployed: true,
                     constructor_args: vec![],
@@ -888,6 +938,7 @@ impl ContractLoader {
                     files: vec![],
                     source_map_replacements: None,
                     raw_source_map: None,
+                    balance: EVMU256::from(0),
                 });
 
                 abis.push(ABIInfo {
@@ -949,6 +1000,7 @@ impl ContractLoader {
                 files: artifact.sources.clone(),
                 source_map_replacements: Some(more_info.source_map_replacements.clone()),
                 raw_source_map: Some(more_info.source_map.clone()),
+                balance: EVMU256::from(0),
             });
         }
 
@@ -1389,13 +1441,22 @@ pub fn to_hex_string(bytes: &[u8]) -> String {
 mod tests {
 
     use super::*;
-    use crate::{skip_cbor, state::FuzzState};
+    use crate::{evm::parse_constructor_args_string, skip_cbor, state::FuzzState};
 
     #[test]
     fn test_load() {
         let codes: Vec<String> = vec![];
-        let args: HashMap<String, Vec<String>> = HashMap::new();
-        let loader = ContractLoader::from_glob("demo/*", &mut FuzzState::new(0), &codes, &args, String::from(""), None);
+        // let mut args: HashMap<String, Vec<String>> = HashMap::new();
+        let input = "contract1:88,97C6D26d7E0D316850A967b46845E15a32666d25,1800;contract2:88,97C6D26d7E0D316850A967b46845E15a32666d25,1800".to_string();
+        let args = parse_constructor_args_string(input);
+        let loader = ContractLoader::from_glob(
+            "tests/evm/real_balance/*",
+            &mut FuzzState::new(0),
+            &codes,
+            &args,
+            String::from(""),
+            None,
+        );
         debug!(
             "{:?}",
             loader.contracts.iter().map(|x| x.name.clone()).collect::<Vec<String>>()

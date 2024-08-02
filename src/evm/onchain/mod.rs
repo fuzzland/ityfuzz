@@ -38,7 +38,7 @@ use crate::{
             middleware::{add_corpus, Middleware, MiddlewareType},
         },
         mutator::AccessPattern,
-        onchain::{abi_decompiler::fetch_abi_heimdall, endpoints::OnChainConfig, flashloan::register_borrow_txn},
+        onchain::{abi_decompiler::fetch_abi_evmole, endpoints::OnChainConfig, flashloan::register_borrow_txn},
         types::{convert_u256_to_h160, EVMAddress, EVMU256},
         vm::IS_FAST_CALL,
     },
@@ -211,6 +211,8 @@ where
                     }};
                     () => {};
                 }
+
+                // todo! get storage data from reth
                 host.next_slot = match self.storage_fetching {
                     StorageFetchingMode::Dump => {
                         load_data!(fetch_storage_dump, storage_dump, slot_idx)
@@ -260,8 +262,8 @@ where
             0x46 => {
                 host.env.tx.chain_id = Some(self.endpoint.chain_id as u64);
             }
-            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY
-            0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c => {
+            // CALL | CALLCODE | DELEGATECALL | STATICCALL | EXTCODESIZE | EXTCODECOPY | EXTCODEHASH
+            0xf1 | 0xf2 | 0xf4 | 0xfa | 0x3b | 0x3c | 0x3f => {
                 let caller = interp.contract.address;
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 => {
@@ -275,7 +277,7 @@ where
                         interp.stack.peek(1).unwrap()
                     }
                     0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
-                    0x3b | 0x3c => interp.stack.peek(0).unwrap(),
+                    0x3b | 0x3c | 0x3f => interp.stack.peek(0).unwrap(),
                     _ => unreachable!(),
                 };
 
@@ -377,23 +379,31 @@ impl OnChain {
                 None => {
                     // 1. Extract abi from bytecode, and see do we have any function sig available
                     //    in state
-                    // 2. Use Heimdall to extract abi
-                    // 3. Reconfirm on failures of heimdall
+                    // 2. Use EVMole to extract abi
+                    // 3. Reconfirm on failures of EVMole
                     debug!("Contract {:?} has no abi", address_h160);
-                    let contract_code_str = hex::encode(contract_code.bytes());
+                    let contract_code = contract_code.bytes();
+                    let contract_code_str = hex::encode(contract_code);
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     for sig in &sigs {
-                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
-                            parsed_abi.push(abi.clone());
-                        } else {
-                            unknown_sigs += 1;
+                        match state.metadata_map().get::<ABIMap>() {
+                            Some(abis) => {
+                                if let Some(abi) = abis.get(sig) {
+                                    parsed_abi.push(abi.clone());
+                                } else {
+                                    unknown_sigs += 1;
+                                }
+                            }
+                            None => {
+                                unknown_sigs += 1;
+                            }
                         }
                     }
 
                     if unknown_sigs >= sigs.len() / 30 {
-                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
-                        let abis = fetch_abi_heimdall(contract_code_str)
+                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using EVMole", unknown_sigs, address_h160);
+                        let abis = fetch_abi_evmole(contract_code)
                             .iter()
                             .map(|abi| {
                                 if let Some(known_abi) =

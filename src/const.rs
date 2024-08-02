@@ -41,7 +41,7 @@ pub const RANDOM_ADDRESS_CHOICE: u64 = 90;
 
 // src/evm/corpus_initializer.rs
 /// If there are more than 1/UNKNOWN_SIGS_DIVISOR unknown sigs, we will
-/// decompile with heimdall
+/// decompile with EVMole
 pub const UNKNOWN_SIGS_DIVISOR: usize = 30;
 
 // src/evm/mutator.rs
