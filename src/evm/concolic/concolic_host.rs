@@ -388,10 +388,10 @@ impl<'a> Solving<'a> {
 }
 
 // Note: To model concolic memory, we need to remember previous constraints as
-// well. when solving a constraint involving persistant memory, if the
-// persistant memory is not depenent on other non-persitent variables, this
-// means that the persistant memory change might not be feasible, because the
-// persistant memory cannot change it self. Example:
+// well. when solving a constraint involving persistent memory, if the
+// persistent memory is not dependent on other non-persistent variables, this
+// means that the persistent memory change might not be feasible, because the
+// persistent memory cannot change it self. Example:
 //     // in this case, even if we get the constraints for the memory element
 // m[0]     // we cannot solve it (invert it), because the memory element is
 // cannot change     // it self.
@@ -401,7 +401,7 @@ impl<'a> Solving<'a> {
 //             do something
 //         else:
 //             bug
-//     // in this case, we can actually solve for m[0]!=0, becuase the memeory
+//     // in this case, we can actually solve for m[0]!=0, because the memory
 // element     // is dependent on the input a.
 //     fn g(a):
 //         m[0] = a
