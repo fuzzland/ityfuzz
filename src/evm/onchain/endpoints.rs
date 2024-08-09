@@ -52,6 +52,7 @@ pub enum Chain {
     LINEA,
     LOCAL,
     IOTEX,
+    SCROLL,
 }
 
 pub trait PriceOracle: Debug {
@@ -85,6 +86,7 @@ impl FromStr for Chain {
             "linea" => Ok(Self::LINEA),
             "local" => Ok(Self::LOCAL),
             "iotex" => Ok(Self::IOTEX),
+            "scroll" => Ok(Self::SCROLL),
             _ => Err(()),
         }
     }
@@ -149,6 +151,7 @@ impl Chain {
             81457 => Self::BLAST,
             59144 => Self::LINEA,
             4689 => Self::IOTEX,
+            534352 => Self::SCROLL,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -175,6 +178,7 @@ impl Chain {
             Chain::BLAST => 81457,
             Chain::LINEA => 59144,
             Chain::IOTEX => 4689,
+            Chain::SCROLL => 534352,
             Chain::LOCAL => 31337,
         }
     }
@@ -201,6 +205,7 @@ impl Chain {
             Chain::LINEA => "linea",
             Chain::LOCAL => "local",
             Chain::IOTEX => "iotex",
+            Chain::SCROLL => "scroll",
         }
         .to_string()
     }
@@ -229,6 +234,7 @@ impl Chain {
             Chain::BLAST => "https://rpc.ankr.com/blast",
             Chain::LINEA => "https://rpc.ankr.com/linea",
             Chain::IOTEX => "https://rpc.ankr.com/iotex",
+            Chain::SCROLL => "https://rpc.ankr.com/scroll",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -256,6 +262,7 @@ impl Chain {
             Chain::LINEA => "https://api.lineascan.build/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
             Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
+            Chain::SCROLL => "https://api.scrollscan.com/api",
         }
         .to_string()
     }
@@ -383,10 +390,9 @@ impl ChainConfig for OnChainConfig {
         let pegged_token = self.get_pegged_token();
 
         match self.chain_name.as_str() {
-            "eth" => return pegged_token.get("WETH").unwrap().to_string(),
+            "eth" | "arbitrum" | "scroll" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
-            "arbitrum" => return pegged_token.get("WETH").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             // "mumbai" => panic!("Not supported"),
             _ => {
@@ -441,6 +447,16 @@ impl ChainConfig for OnChainConfig {
                 ("USDC", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"),
                 ("DAI", "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"),
                 ("crvUSD", "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "scroll" => [
+                ("WETH", "0x5300000000000000000000000000000000000004"),
+                ("WBTC", "0x3C1BCa5a656e69edCD0D4E36BEbb3FcDAcA60Cf1"),
+                ("USDT", "0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df"),
+                ("USDC", "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),
+                ("DAI", "0xcA77eB3fEFe3725Dc33bccB54eDEFc3D9f764f97"),
             ]
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
