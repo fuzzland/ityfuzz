@@ -482,6 +482,7 @@ impl OnChain {
                 }
 
                 let mut abi_instance = get_abi_type_boxed(&abi.abi);
+
                 abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
                 register_abi_instance(target, abi_instance.clone(), state);
 
@@ -504,5 +505,168 @@ impl OnChain {
                 };
                 add_corpus(host, state, &input);
             });
+    }
+}
+
+impl OnChain {
+    #[allow(clippy::too_many_arguments)]
+    pub fn load_sep_input<SC>(
+        &mut self,
+        address_h160: EVMAddress,
+        host: &mut FuzzHost<SC>,
+        force_cache: bool,
+        _should_setup_abi: bool,
+        is_proxy_call: bool,
+        caller: EVMAddress,
+        state: &mut EVMFuzzState,
+    ) -> Vec<EVMInput>
+    where
+        SC: Scheduler<State = EVMFuzzState> + Clone,
+    {
+        let contract_code = self.endpoint.get_contract_code(address_h160, force_cache);
+        let code = hex::decode(contract_code).unwrap();
+        let contract_code = to_analysed(Bytecode::new_raw(Bytes::from(code)));
+
+        let mut parsed_abi = vec![];
+        if let Some(abis) = self.address_to_abi.get(&address_h160) {
+            parsed_abi = abis.clone();
+        } else {
+            let mut abi = None;
+            if let Some(builder) = &self.builder {
+                debug!("onchain job {:?}", address_h160);
+                let build_job = builder.onchain_job(self.endpoint.chain_name.clone(), address_h160);
+
+                if let Some(job) = build_job {
+                    abi = Some(job.abi.clone());
+                    // replace the code with the one from builder
+                    // debug!("replace code for {:?} with builder's", address_h160);
+                    // host.set_codedata(address_h160, contract_code.clone());
+                    state
+                        .metadata_map_mut()
+                        .get_mut::<ArtifactInfoMetadata>()
+                        .expect("artifact info metadata")
+                        .add(address_h160, job.clone());
+
+                    job.save_source_map(&address_h160);
+                }
+            }
+
+            if abi.is_none() {
+                debug!("fetching abi {:?}", address_h160);
+                abi = self.endpoint.fetch_abi(address_h160);
+            }
+
+            match abi {
+                Some(ref abi_ins) => parsed_abi = ContractLoader::parse_abi_str(abi_ins),
+                None => {
+                    // 1. Extract abi from bytecode, and see do we have any function sig available
+                    //    in state
+                    // 2. Use Heimdall to extract abi
+                    // 3. Reconfirm on failures of heimdall
+                    debug!("Contract {:?} has no abi", address_h160);
+                    let contract_code_str = hex::encode(contract_code.bytes());
+                    let sigs = extract_sig_from_contract(&contract_code_str);
+                    let mut unknown_sigs: usize = 0;
+                    for sig in &sigs {
+                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
+                            parsed_abi.push(abi.clone());
+                        } else {
+                            unknown_sigs += 1;
+                        }
+                    }
+
+                    if unknown_sigs >= sigs.len() / 30 {
+                        debug!("Too many unknown function signature ({:?}) for {:?}, we are going to decompile this contract using Heimdall", unknown_sigs, address_h160);
+                        let abis = fetch_abi_heimdall(contract_code_str)
+                            .iter()
+                            .map(|abi| {
+                                if let Some(known_abi) =
+                                    state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
+                                {
+                                    known_abi
+                                } else {
+                                    abi
+                                }
+                            })
+                            .cloned()
+                            .collect_vec();
+                        parsed_abi = abis;
+                    }
+                }
+            }
+        }
+
+        println!("parsed_abi is {:?}", parsed_abi);
+        // set up host
+        let mut abi_hashes_to_add = HashSet::new();
+        if is_proxy_call {
+            // check caller's hash and see what is missing
+            let caller_hashes: Vec<[u8; 4]> = match host.address_to_hash.get(&caller) {
+                Some(v) => v.clone(),
+                None => vec![],
+            };
+            let caller_hashes_set = caller_hashes.iter().cloned().collect::<HashSet<_>>();
+            let new_hashes = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+            for hash in new_hashes {
+                if !caller_hashes_set.contains(&hash) {
+                    abi_hashes_to_add.insert(hash);
+                    host.add_one_hashes(caller, hash);
+                }
+            }
+        } else {
+            abi_hashes_to_add = parsed_abi.iter().map(|abi| abi.function).collect::<HashSet<_>>();
+            host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
+        }
+        let target = if is_proxy_call { caller } else { address_h160 };
+        if target != CHEATCODE_ADDRESS {
+            state.add_address(&target);
+        }
+
+        // notify flashloan and blacklisting flashloan addresses
+        {
+            handle_contract_insertion!(
+                state,
+                host,
+                target,
+                parsed_abi
+                    .iter()
+                    .filter(|x| abi_hashes_to_add.contains(&x.function))
+                    .cloned()
+                    .collect::<Vec<ABIConfig>>()
+            );
+        }
+
+        let mut tx_input = vec![];
+
+        parsed_abi
+            .iter()
+            .filter(|v| !v.is_constructor)
+            .filter(|v| abi_hashes_to_add.contains(&v.function))
+            .for_each(|abi| {
+                let mut abi_instance = get_abi_type_boxed(&abi.abi);
+                abi_instance.set_func_with_signature(abi.function, &abi.function_name, &abi.abi);
+                register_abi_instance(target, abi_instance.clone(), state);
+
+                let input = EVMInput {
+                    caller: state.get_rand_caller(),
+                    contract: target,
+                    data: Some(abi_instance),
+                    sstate: StagedVMState::new_uninitialized(),
+                    sstate_idx: 0,
+                    txn_value: if abi.is_payable { Some(EVMU256::ZERO) } else { None },
+                    step: false,
+                    env: state.metadata_map().get::<EnvMetadata>().unwrap().env.clone(),
+                    access_pattern: Rc::new(RefCell::new(AccessPattern::new())),
+                    liquidation_percent: 0,
+                    input_type: EVMInputTy::ABI,
+                    direct_data: Default::default(),
+                    randomness: vec![0],
+                    repeat: 1,
+                    swap_data: HashMap::new(),
+                };
+                tx_input.push(input);
+            });
+
+        tx_input
     }
 }

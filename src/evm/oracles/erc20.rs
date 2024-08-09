@@ -101,7 +101,7 @@ impl
                 }
             }
 
-            let _path_idx = ctx.input.get_randomness()[0] as usize;
+            // let _path_idx = ctx.input.get_randomness()[0] as usize;
 
             {
                 ctx.executor.deref().borrow_mut().host.evmstate = ctx.post_state.clone();

@@ -17,6 +17,7 @@ use alloy_sol_types::SolValue;
 use bytes::Bytes;
 use itertools::Itertools;
 use libafl::prelude::{HasMetadata, Scheduler};
+use parquet::data_type::AsBytes;
 use revm::precompile::{Precompile, Precompiles};
 use revm_interpreter::{
     analysis::to_analysed,
@@ -72,7 +73,7 @@ use super::{
 use crate::{
     evm::{
         abi::{get_abi_type_boxed, register_abi_instance},
-        contract_utils::extract_sig_from_contract,
+        contract_utils::{extract_sig_from_contract, to_hex_string},
         corpus_initializer::ABIMap,
         input::{EVMInput, EVMInputTy},
         middlewares::middleware::{add_corpus, CallMiddlewareReturn, Middleware, MiddlewareType},
