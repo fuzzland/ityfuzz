@@ -151,6 +151,7 @@ impl Chain {
             81457 => Self::BLAST,
             59144 => Self::LINEA,
             4689 => Self::IOTEX,
+            534352 => Self::SCROLL,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -177,6 +178,7 @@ impl Chain {
             Chain::BLAST => 81457,
             Chain::LINEA => 59144,
             Chain::IOTEX => 4689,
+            Chain::SCROLL => 534352,
             Chain::LOCAL => 31337,
         }
     }
