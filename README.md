@@ -3,7 +3,7 @@
 
 [\[Docs\]](https://docs.ityfuzz.rs) /
 [\[Research Paper\]](https://dl.acm.org/doi/pdf/10.1145/3597926.3598059) / 
-[\[Twitter\]](https://twitter.com/hackthedefi) / 
+[\[Twitter\]](https://twitter.com/fuzzland_) / 
 [\[Discord\]](https://discord.com/invite/qQa436VEwt) / 
 [\[Telegram\]](https://t.me/fuzzland) 
 
