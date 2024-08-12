@@ -183,10 +183,16 @@ impl BuildJobResult {
         let resp = client.get(&url).send().expect("retrieve onchain job failed");
 
         let json = serde_json::from_str::<Value>(&resp.text().expect("parse json failed")).expect("parse json failed");
-        if !json["success"].as_bool().expect("get status failed") {
-            error!("retrieve onchain job failed for {:?}", url);
+        if let Some(success) = json["success"].as_bool() {
+            if !success {
+                error!("retrieve onchain job failed for {:?}", url);
+                return None;
+            }
+        } else {
+            error!("retrieve onchain job status failed for {:?}", url);
             return None;
         }
+
         Self::from_json(&json)
     }
 
