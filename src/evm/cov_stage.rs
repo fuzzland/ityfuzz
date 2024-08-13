@@ -167,15 +167,7 @@ where
                 .deref()
                 .borrow_mut()
                 .save_trace(format!("{}/{}", self.trace_dir, i).as_str());
-            if let Some(bug_idx) = meta.corpus_idx_to_bug.get(&i.into()) {
-                for id in bug_idx {
-                    fs::copy(
-                        format!("{}/{}.json", self.trace_dir, i),
-                        format!("{}/bug_{}.json", self.trace_dir, id),
-                    )
-                    .unwrap();
-                }
-            }
+
             unsafe {
                 EVAL_COVERAGE = false;
             }
