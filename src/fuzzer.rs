@@ -380,7 +380,6 @@ where
         + HasExecutionResult<Loc, Addr, VS, Out, CI>
         + HasExecutions
         + HasMetadata
-        + HasCurrentInputIdx
         + HasRand
         + HasLastReportTime
         + UsesInput<Input = I>,
@@ -578,18 +577,6 @@ where
                 println!("{}", cur_report);
 
                 solution::generate_test(cur_report.clone(), minimized);
-
-                unsafe {
-                    for bug_idx in ORACLE_OUTPUT.iter().map(|v| v["bug_idx"].as_u64().unwrap()) {
-                        let src = format!("{}/traces/{}.json", self.work_dir, &state.get_current_input_idx());
-                        let dest = format!("{}/traces/bug_{}.json", self.work_dir, bug_idx);
-                        if std::fs::metadata(&src).is_ok() {
-                            std::fs::copy(&src, &dest).unwrap();
-                        } else {
-                            eprintln!("Source trace {} does not exist", src);
-                        }
-                    }
-                }
 
                 let vuln_file = format!("{}/vuln_info.jsonl", self.work_dir.as_str());
                 let mut f = OpenOptions::new()
