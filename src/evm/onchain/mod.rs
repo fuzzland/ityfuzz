@@ -268,13 +268,14 @@ where
                 let address = match *interp.instruction_pointer {
                     0xf1 | 0xf2 => {
                         // CALL | CALLCODE
+                        let callee = interp.stack.peek(1).unwrap();
                         #[cfg(feature = "real_balance")]
                         {
                             // Get balance of the callee
-                            host.next_slot = self.endpoint.get_balance(caller);
+                            host.next_slot = self.endpoint.get_balance(convert_u256_to_h160(callee));
                         }
 
-                        interp.stack.peek(1).unwrap()
+                        callee
                     }
                     0xf4 | 0xfa => interp.stack.peek(1).unwrap(),
                     0x3b | 0x3c | 0x3f => interp.stack.peek(0).unwrap(),
