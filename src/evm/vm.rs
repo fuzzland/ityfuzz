@@ -7,7 +7,7 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    ops::Deref,
+    ops::{Deref, Mul},
     rc::Rc,
     sync::Arc,
 };
@@ -675,9 +675,14 @@ where
         {
             let tx_value = input.get_txn_value().unwrap_or_default();
             if tx_value > EVMU256::ZERO {
+                // tmp modify
+                vm_state.set_balance(input.get_caller(), tx_value + tx_value);
                 let caller_balance = *vm_state.get_balance(&input.get_caller()).unwrap_or(&EVMU256::ZERO);
                 let contract_balance = *vm_state.get_balance(&input.get_contract()).unwrap_or(&EVMU256::ZERO);
                 if caller_balance < tx_value {
+                    println!("caller_balance is {:?}", caller_balance);
+                    println!("tx_value is {:?}", tx_value);
+                    println!("coming tx_value.....");
                     return ExecutionResult {
                         output: vec![],
                         reverted: true,
@@ -693,6 +698,7 @@ where
         let r;
         let mut is_step = input.is_step();
         let mut data = Bytes::from(input.to_bytes());
+        // println!("call data is: {:?}", data);
         // use direct data (mostly used for debugging) if there is no data
         if data.is_empty() {
             data = Bytes::from(input.get_direct_data());
@@ -762,6 +768,7 @@ where
             }
         }
         let mut r = r.unwrap();
+
         match r.ret {
             ControlLeak |
             InstructionResult::ArbitraryExternalCallAddressBounded(_, _, _) |
