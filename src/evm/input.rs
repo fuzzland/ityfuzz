@@ -884,7 +884,7 @@ impl EVMInput {
         }
         add_mutator!(caller);
         add_mutator!(balance, !ap.balance.is_empty());
-        if self.get_txn_value().is_some() {
+        if ap.call_value || self.get_txn_value().is_some() {
             mutators.push(&EVMInput::call_value as &dyn Fn(&mut EVMInput, &mut S) -> MutationResult);
         }
         add_mutator!(gas_price);
