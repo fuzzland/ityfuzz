@@ -116,11 +116,11 @@ impl ABIMap {
 
 #[macro_export]
 macro_rules! handle_contract_insertion {
-    ($state: expr, $host: expr, $deployed_address: expr, $abi: expr) => {
+    ($state: expr, $host: expr, $deployed_address: expr, $impl_address: expr, $abi: expr) => {
         let (is_erc20, is_pair) = match $host.flashloan_middleware {
             Some(ref middleware) => {
                 let mut mid = middleware.deref().borrow_mut();
-                mid.on_contract_insertion(&$deployed_address, &$abi, $state)
+                mid.on_contract_insertion(&$deployed_address, &$impl_address, &$abi, $state)
             }
             None => (false, false),
         };
@@ -386,6 +386,7 @@ where
                 handle_contract_insertion!(
                     self.state,
                     self.executor.host,
+                    contract.deployed_address,
                     contract.deployed_address,
                     contract.abi.clone()
                 );

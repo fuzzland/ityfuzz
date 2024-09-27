@@ -46,7 +46,7 @@ pub enum EVMInputTy {
     Liquidate,
 }
 
-const CALL_VALUE_MAX_BYTES: usize = 21; // 309M ether
+const CALL_VALUE_MAX_BYTES: usize = 23; // 309M ether
 
 /// EVM Input Trait
 pub trait EVMInputT {

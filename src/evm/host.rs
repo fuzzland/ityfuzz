@@ -1409,7 +1409,7 @@ where
                         parsed_abi = abis;
                     }
                     // notify flashloan and blacklisting flashloan addresses
-                    handle_contract_insertion!(state, self, r_addr, parsed_abi);
+                    handle_contract_insertion!(state, self, r_addr, r_addr, parsed_abi);
 
                     parsed_abi.iter().filter(|v| !v.is_constructor).for_each(|abi| {
                         #[cfg(not(feature = "fuzz_static"))]

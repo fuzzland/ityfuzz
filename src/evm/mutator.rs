@@ -95,6 +95,7 @@ impl AccessPattern {
             0x45 => self.gas_limit = true,
             0x46 => self.chain_id = true,
             0x48 => self.basefee = true,
+            0x34 => self.call_value = true,
             _ => {}
         }
     }

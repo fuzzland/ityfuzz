@@ -140,14 +140,15 @@ impl Flashloan {
     pub fn on_contract_insertion(
         &mut self,
         addr: &EVMAddress,
+        impl_addr: &EVMAddress,
         abi: &[ABIConfig],
         _state: &mut EVMFuzzState,
     ) -> (bool, bool) {
         // should not happen, just sanity check
-        if self.known_addresses.contains(addr) {
+        if self.known_addresses.contains(impl_addr) {
             return (false, false);
         }
-        self.known_addresses.insert(*addr);
+        self.known_addresses.insert(*impl_addr);
 
         // balanceOf(address) - 70a08231
         // allowance(address,address) - dd62ed3e

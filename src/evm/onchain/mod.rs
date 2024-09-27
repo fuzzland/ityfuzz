@@ -457,6 +457,7 @@ impl OnChain {
                 state,
                 host,
                 target,
+                address_h160,
                 parsed_abi
                     .iter()
                     .filter(|x| abi_hashes_to_add.contains(&x.function))
