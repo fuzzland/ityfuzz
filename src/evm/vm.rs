@@ -688,7 +688,7 @@ where
                     }
                     vm_state.set_balance(input.get_caller(), caller_balance - tx_value);
                 }
-                
+
                 vm_state.set_balance(input.get_contract(), contract_balance + tx_value);
             }
         }
