@@ -53,6 +53,7 @@ pub enum Chain {
     LOCAL,
     IOTEX,
     SCROLL,
+    VANA,
 }
 
 pub trait PriceOracle: Debug {
@@ -87,6 +88,7 @@ impl FromStr for Chain {
             "local" => Ok(Self::LOCAL),
             "iotex" => Ok(Self::IOTEX),
             "scroll" => Ok(Self::SCROLL),
+            "vana" => Ok(Self::VANA),
             _ => Err(()),
         }
     }
@@ -152,6 +154,7 @@ impl Chain {
             59144 => Self::LINEA,
             4689 => Self::IOTEX,
             534352 => Self::SCROLL,
+            1480 => Self::VANA,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -179,6 +182,7 @@ impl Chain {
             Chain::LINEA => 59144,
             Chain::IOTEX => 4689,
             Chain::SCROLL => 534352,
+            Chain::VANA => 1480,
             Chain::LOCAL => 31337,
         }
     }
@@ -206,6 +210,7 @@ impl Chain {
             Chain::LOCAL => "local",
             Chain::IOTEX => "iotex",
             Chain::SCROLL => "scroll",
+            Chain::VANA => "vana",
         }
         .to_string()
     }
@@ -235,6 +240,7 @@ impl Chain {
             Chain::LINEA => "https://rpc.ankr.com/linea",
             Chain::IOTEX => "https://rpc.ankr.com/iotex",
             Chain::SCROLL => "https://rpc.ankr.com/scroll",
+            Chain::VANA => "https://rpc.vana.org",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -263,6 +269,7 @@ impl Chain {
             Chain::LOCAL => "http://localhost:8080/abi/",
             Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
             Chain::SCROLL => "https://api.scrollscan.com/api",
+            Chain::VANA => "https://api.vanascan.io/api/v2",
         }
         .to_string()
     }
@@ -393,6 +400,7 @@ impl ChainConfig for OnChainConfig {
             "eth" | "arbitrum" | "scroll" => return pegged_token.get("WETH").unwrap().to_string(),
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
+            "vana" => return pegged_token.get("WVANA").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             // "mumbai" => panic!("Not supported"),
             _ => {
@@ -457,6 +465,14 @@ impl ChainConfig for OnChainConfig {
                 ("USDT", "0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df"),
                 ("USDC", "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),
                 ("DAI", "0xcA77eB3fEFe3725Dc33bccB54eDEFc3D9f764f97"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            "vana" => [
+                ("WETH", "0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590"),
+                ("USDC.e", "0xF1815bd50389c46847f0Bda824eC8da914045D14"),
+                ("WVANA", "0x00EDdD9621Fb08436d0331c149D1690909a5906d"),
             ]
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -698,6 +714,10 @@ impl OnChainConfig {
     }
 
     pub fn fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
+        if self.chain_name == "vana" {
+            return self.fetch_vana_abi_uncached(address);
+        }
+
         #[cfg(feature = "no_etherscan")]
         {
             return None;
@@ -735,6 +755,28 @@ impl OnChainConfig {
             }
             None => {
                 error!("failed to fetch abi from {}", endpoint);
+                None
+            }
+        }
+    }
+
+    fn fetch_vana_abi_uncached(&self, address: EVMAddress) -> Option<String> {
+        let endpoint = format!("{}/smart-contracts/{:?}", self.etherscan_base, address);
+
+        // info!(">> {}", endpoint);
+        match self.get(endpoint.clone()) {
+            Some(resp) => match serde_json::from_str::<Value>(&resp) {
+                Ok(json) => {
+                    // info!("<< {}", json);
+                    json.get("abi").map(|abi| abi.to_string())
+                }
+                Err(_) => {
+                    error!("Failed to parse JSON response from Vana API");
+                    None
+                }
+            },
+            None => {
+                error!("Failed to fetch ABI from Vana API: {}", endpoint);
                 None
             }
         }
