@@ -54,6 +54,7 @@ pub enum Chain {
     IOTEX,
     SCROLL,
     VANA,
+    STORY,
 }
 
 pub trait PriceOracle: Debug {
@@ -89,6 +90,7 @@ impl FromStr for Chain {
             "iotex" => Ok(Self::IOTEX),
             "scroll" => Ok(Self::SCROLL),
             "vana" => Ok(Self::VANA),
+            "story" => Ok(Self::STORY),
             _ => Err(()),
         }
     }
@@ -155,6 +157,7 @@ impl Chain {
             4689 => Self::IOTEX,
             534352 => Self::SCROLL,
             1480 => Self::VANA,
+            1514 => Self::STORY,
             31337 => Self::LOCAL,
             _ => return Err(anyhow!("Unknown chain id: {}", chain_id)),
         })
@@ -183,6 +186,7 @@ impl Chain {
             Chain::IOTEX => 4689,
             Chain::SCROLL => 534352,
             Chain::VANA => 1480,
+            Chain::STORY => 1514,
             Chain::LOCAL => 31337,
         }
     }
@@ -211,6 +215,7 @@ impl Chain {
             Chain::IOTEX => "iotex",
             Chain::SCROLL => "scroll",
             Chain::VANA => "vana",
+            Chain::STORY => "story",
         }
         .to_string()
     }
@@ -241,6 +246,7 @@ impl Chain {
             Chain::IOTEX => "https://rpc.ankr.com/iotex",
             Chain::SCROLL => "https://rpc.ankr.com/scroll",
             Chain::VANA => "https://rpc.vana.org",
+            Chain::STORY => "https://mainnet.storyrpc.io",
             Chain::LOCAL => "http://localhost:8545",
         }
         .to_string()
@@ -270,6 +276,7 @@ impl Chain {
             Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
             Chain::SCROLL => "https://api.scrollscan.com/api",
             Chain::VANA => "https://api.vanascan.io/api/v2",
+            Chain::STORY => "https://www.storyscan.xyz/api/v2",
         }
         .to_string()
     }
@@ -401,6 +408,7 @@ impl ChainConfig for OnChainConfig {
             "bsc" => return pegged_token.get("WBNB").unwrap().to_string(),
             "polygon" => return pegged_token.get("WMATIC").unwrap().to_string(),
             "vana" => return pegged_token.get("WVANA").unwrap().to_string(),
+            "story" => return pegged_token.get("WIP").unwrap().to_string(),
             "local" => return pegged_token.get("ZERO").unwrap().to_string(),
             // "mumbai" => panic!("Not supported"),
             _ => {
@@ -477,10 +485,29 @@ impl ChainConfig for OnChainConfig {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+
+            "story" => [
+                ("WETH", "0xBAb93B7ad7fE8692A878B95a8e689423437cc500"),
+                ("uWETH", "0x28B931354098D6863817dFDce7A2D7c52B25d76a"),
+                ("storyWETH", "0x2D08d948fC0BD2Db5411E8Ab3c49E0bB89A2B428"),
+                ("USDC.e", "0xF1815bd50389c46847f0Bda824eC8da914045D14"),
+                ("USDC", "0x49Fe4CbB645CfE997465CA9F70f03DD9c58d1acF"),
+                ("storyUSDC", "0x968B9a5603ddEb2A78Aa08182BC44Ece1D9E5bf0"),
+                ("uStoryUSDC", "0xa9651875651Ff7F303605C23EF5c20C8f7BE8266"),
+                ("sdaiUSDC", "0x06578bE47CF7D19784A07DB64DCF95B84EE88671"),
+                ("USDT", "0x6c9b999D33C612cCd8721b0e349adcAE151fcbBf"),
+                ("bridgedUSDT", "0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8"),
+                ("WIP", "0x1514000000000000000000000000000000000000"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+
             "local" => [("ZERO", "0x0000000000000000000000000000000000000000")]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
+
             _ => {
                 warn!("[Flashloan] Network is not supported");
                 HashMap::new()
@@ -714,8 +741,8 @@ impl OnChainConfig {
     }
 
     pub fn fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
-        if self.chain_name == "vana" {
-            return self.fetch_vana_abi_uncached(address);
+        if self.is_blockscout_api() {
+            return self.blockscout_fetch_abi_uncached(address);
         }
 
         #[cfg(feature = "no_etherscan")]
@@ -760,7 +787,7 @@ impl OnChainConfig {
         }
     }
 
-    fn fetch_vana_abi_uncached(&self, address: EVMAddress) -> Option<String> {
+    fn blockscout_fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
         let endpoint = format!("{}/smart-contracts/{:?}", self.etherscan_base, address);
 
         // info!(">> {}", endpoint);
@@ -771,14 +798,21 @@ impl OnChainConfig {
                     json.get("abi").map(|abi| abi.to_string())
                 }
                 Err(_) => {
-                    error!("Failed to parse JSON response from Vana API");
+                    error!("Failed to parse JSON response from Blockscout API");
                     None
                 }
             },
             None => {
-                error!("Failed to fetch ABI from Vana API: {}", endpoint);
+                error!("Failed to fetch ABI from Blockscout API: {}", endpoint);
                 None
             }
+        }
+    }
+
+    fn is_blockscout_api(&self) -> bool {
+        match self.chain_name.as_str() {
+            "vana" | "story" => true,
+            _ => false,
         }
     }
 
