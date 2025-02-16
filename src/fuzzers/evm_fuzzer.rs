@@ -89,9 +89,6 @@ pub fn evm_fuzzer(
 ) {
     info!("\n\n ================ EVM Fuzzer Start ===================\n\n");
 
-    // create work dir if not exists
-    let _path = Path::new(config.work_dir.as_str());
-
     let monitor = SimpleMonitor::new(|s| info!("{}", s));
     let mut mgr = SimpleEventManager::new(monitor);
     let infant_scheduler = SortedDroppingScheduler::new();
