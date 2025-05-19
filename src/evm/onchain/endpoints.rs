@@ -254,27 +254,27 @@ impl Chain {
 
     pub fn get_chain_etherscan_base(&self) -> String {
         match self {
-            Chain::ETH => "https://api.etherscan.io/api",
-            Chain::GOERLI => "https://api-goerli.etherscan.io/api",
-            Chain::SEPOLIA => "https://api-sepolia.etherscan.io/api",
-            Chain::BSC => "https://api.bscscan.com/api",
-            Chain::CHAPEL => "https://api-testnet.bscscan.com/api",
-            Chain::POLYGON => "https://api.polygonscan.com/api",
-            Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
-            Chain::FANTOM => "https://api.ftmscan.com/api",
-            Chain::AVALANCHE => "https://api.snowtrace.io/api",
-            Chain::OPTIMISM => "https://api-optimistic.etherscan.io/api",
-            Chain::ARBITRUM => "https://api.arbiscan.io/api",
-            Chain::GNOSIS => "https://api.gnosisscan.io/api",
-            Chain::BASE => "https://api.basescan.org/api",
-            Chain::CELO => "https://api.celoscan.io/api",
-            Chain::ZKEVM => "https://api-zkevm.polygonscan.com/api",
-            Chain::ZkevmTestnet => "https://api-testnet-zkevm.polygonscan.com/api",
-            Chain::BLAST => "https://api.routescan.io/v2/network/mainnet/evm/81457/etherscan",
-            Chain::LINEA => "https://api.lineascan.build/api",
+            Chain::ETH => "https://api.etherscan.io/v2/api",
+            Chain::GOERLI => "https://api.etherscan.io/v2/api",
+            Chain::SEPOLIA => "https://api.etherscan.io/v2/api",
+            Chain::BSC => "https://api.etherscan.io/v2/api",
+            Chain::CHAPEL => "https://api.etherscan.io/v2/api",
+            Chain::POLYGON => "https://api.etherscan.io/v2/api",
+            Chain::MUMBAI => "https://api.etherscan.io/v2/api",
+            Chain::FANTOM => "https://api.etherscan.io/v2/api",
+            Chain::AVALANCHE => "https://api.etherscan.io/v2/api",
+            Chain::OPTIMISM => "https://api.etherscan.io/v2/api",
+            Chain::ARBITRUM => "https://api.etherscan.io/v2/api",
+            Chain::GNOSIS => "https://api.etherscan.io/v2/api",
+            Chain::BASE => "https://api.etherscan.io/v2/api",
+            Chain::CELO => "https://api.etherscan.io/v2/api",
+            Chain::ZKEVM => "https://api.etherscan.io/v2/api",
+            Chain::ZkevmTestnet => "https://api.etherscan.io/v2/api",
+            Chain::BLAST => "https://api.etherscan.io/v2/api",
+            Chain::LINEA => "https://api.etherscan.io/v2/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
-            Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
-            Chain::SCROLL => "https://api.scrollscan.com/api",
+            Chain::IOTEX => "https://api.etherscan.io/v2/api",
+            Chain::SCROLL => "https://api.etherscan.io/v2/api",
             Chain::VANA => "https://api.vanascan.io/api/v2",
             Chain::STORY => "https://www.storyscan.xyz/api/v2",
         }
@@ -749,16 +749,32 @@ impl OnChainConfig {
         {
             return None;
         }
-        let endpoint = format!(
-            "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
-            self.etherscan_base,
-            address,
-            if !self.etherscan_api_key.is_empty() {
-                self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()].clone()
-            } else {
-                "".to_string()
-            }
-        );
+        
+        let endpoint = if self.etherscan_base.contains("/v2/api") {
+            format!(
+                "{}?chainid={}&module=contract&action=getabi&address={:?}&format=json&apikey={}",
+                self.etherscan_base,
+                self.chain_id,
+                address,
+                if !self.etherscan_api_key.is_empty() {
+                    self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()].clone()
+                } else {
+                    "".to_string()
+                }
+            )
+        } else {
+            format!(
+                "{}?module=contract&action=getabi&address={:?}&format=json&apikey={}",
+                self.etherscan_base,
+                address,
+                if !self.etherscan_api_key.is_empty() {
+                    self.etherscan_api_key[rand::random::<usize>() % self.etherscan_api_key.len()].clone()
+                } else {
+                    "".to_string()
+                }
+            )
+        };
+        
         info!("fetching abi from {}", endpoint);
         match self.get(endpoint.clone()) {
             Some(resp) => {
