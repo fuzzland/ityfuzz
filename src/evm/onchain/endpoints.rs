@@ -255,12 +255,12 @@ impl Chain {
     pub fn get_chain_etherscan_base(&self) -> String {
         match self {
             Chain::ETH => "https://api.etherscan.io/v2/api",
-            Chain::GOERLI => "https://api.etherscan.io/v2/api",
+            Chain::GOERLI => "https://api-goerli.etherscan.io/api",
             Chain::SEPOLIA => "https://api.etherscan.io/v2/api",
             Chain::BSC => "https://api.etherscan.io/v2/api",
             Chain::CHAPEL => "https://api.etherscan.io/v2/api",
             Chain::POLYGON => "https://api.etherscan.io/v2/api",
-            Chain::MUMBAI => "https://api.etherscan.io/v2/api",
+            Chain::MUMBAI => "https://mumbai.polygonscan.com/api",
             Chain::FANTOM => "https://api.etherscan.io/v2/api",
             Chain::AVALANCHE => "https://api.etherscan.io/v2/api",
             Chain::OPTIMISM => "https://api.etherscan.io/v2/api",
@@ -273,7 +273,7 @@ impl Chain {
             Chain::BLAST => "https://api.etherscan.io/v2/api",
             Chain::LINEA => "https://api.etherscan.io/v2/api",
             Chain::LOCAL => "http://localhost:8080/abi/",
-            Chain::IOTEX => "https://api.etherscan.io/v2/api",
+            Chain::IOTEX => "https://babel-api.mainnet.IoTeX.io",
             Chain::SCROLL => "https://api.etherscan.io/v2/api",
             Chain::VANA => "https://api.vanascan.io/api/v2",
             Chain::STORY => "https://www.storyscan.xyz/api/v2",
