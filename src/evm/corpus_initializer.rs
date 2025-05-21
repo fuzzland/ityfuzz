@@ -237,7 +237,7 @@ where
                 .set_balance(deployed_address, contract.balance);
 
             info!(
-                "Contract {} deployed to: {deployed_address:?} -> balacne is {:?}",
+                "Contract {} deployed to: {deployed_address:?} -> balance is {:?}",
                 contract.name, contract.balance
             );
 
