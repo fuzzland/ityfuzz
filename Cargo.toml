@@ -114,7 +114,7 @@ sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional
 handlebars = "4.4"
 
 # for cheatcode middleware
-foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "cafc260" }
+foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "f625d0f" }
 alloy-sol-types = "0.6"
 alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
 alloy-primitives = "0.6"
