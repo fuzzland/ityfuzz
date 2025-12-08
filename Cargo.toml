@@ -134,4 +134,4 @@ time = "0.3.35"
 metatype = "0.2.2"
 
 [patch.crates-io]
-svm-rs = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "v0.5.0" }
+svm-rs = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "v0.5.1" }
