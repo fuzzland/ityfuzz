@@ -6638,6 +6638,7 @@ dependencies = [
  "lazy_static",
  "libafl",
  "libafl_bolts",
+ "metatype",
  "move-binary-format",
  "move-core-types",
  "move-stdlib",
@@ -7367,9 +7368,9 @@ dependencies = [
 
 [[package]]
 name = "metatype"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23decce7c32638bcefbd5a5a5d79a5bb5b720c47b82ad5cb670a7eb912705946"
+checksum = "2552a8a37950d86f701b262b7323c1c400218a70e33ebd47a34f0b994a3c0fce"
 
 [[package]]
 name = "migrations_internals"

@@ -132,3 +132,4 @@ semver = "1.0.22"
 # for compatibility
 svm-rs-builds = "0.5.0"
 time = "0.3.35"
+metatype = "0.2.2"
