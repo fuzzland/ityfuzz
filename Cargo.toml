@@ -34,7 +34,7 @@ force_cache = []
 use_presets = []
 print_logs = []
 z3_debug = []
-# sui_support = [
+sui_support = []
 #     "dep:move-binary-format",
 #     "dep:move-core-types",
 #     "dep:move-stdlib",
