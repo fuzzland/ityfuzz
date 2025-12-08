@@ -2711,15 +2711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmake"
-version = "0.1.54"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "cobs"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16158,9 +16149,9 @@ dependencies = [
 
 [[package]]
 name = "z3"
-version = "0.14.4"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3767e1ffc46e0fa6dd5ab3be5d9c7a4f54ba3af572f0b14d6f4fc7e7932d798d"
+checksum = "11593be221028adbadaa25a9ace764693d059c51d58870b27d8c78582aaa6574"
 dependencies = [
  "log",
  "num 0.4.1",
@@ -16174,7 +16165,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cd1b38ffd95fae0fcc40026fb1a822074e2a923ad4e011e90df878cbed721e0"
 dependencies = [
  "bindgen 0.72.1",
- "cmake",
  "pkg-config",
 ]
 
