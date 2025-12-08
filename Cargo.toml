@@ -114,7 +114,7 @@ sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional
 handlebars = "4.4"
 
 # for cheatcode middleware
-foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "617dfc28" }
+foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "cafc260" }
 alloy-sol-types = "0.6"
 alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
 alloy-primitives = "0.6"
@@ -132,7 +132,3 @@ semver = "1.0.22"
 # for compatibility
 time = "0.3.35"
 metatype = "0.2.2"
-
-[patch.crates-io]
-svm-rs = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "v0.5.1" }
-svm-rs-builds = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "v0.5.1" }

@@ -15902,13 +15902,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "svm-rs"
-version = "0.5.1"
-source = "git+https://github.com/alloy-rs/svm-rs.git?tag=v0.5.1#be60cc33f9c6f0fb8faee473a21caa68614771a3"
-
-[[patch.unused]]
-name = "svm-rs-builds"
-version = "0.5.1"
-source = "git+https://github.com/alloy-rs/svm-rs.git?tag=v0.5.1#be60cc33f9c6f0fb8faee473a21caa68614771a3"
