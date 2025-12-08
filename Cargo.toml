@@ -97,18 +97,18 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "1dead51", 
     "memory_limit",
 ] }
 
-move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
-move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
-    "address32",
-], optional = true }
-move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
-move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
-    "lazy_natives",
-], optional = true }
-move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
-sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
-sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
-sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# move-binary-format = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# move-core-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
+#     "address32",
+# ], optional = true }
+# move-stdlib = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# move-vm-runtime = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", features = [
+#     "lazy_natives",
+# ], optional = true }
+# move-vm-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# sui-move-natives-latest = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# sui-protocol-config = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
+# sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional = true }
 
 # template engine
 handlebars = "4.4"
