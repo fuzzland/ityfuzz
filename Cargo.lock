@@ -6674,7 +6674,6 @@ dependencies = [
  "tracing-subscriber 0.3.18",
  "typetag",
  "z3",
- "z3-sys",
 ]
 
 [[package]]
@@ -16159,9 +16158,9 @@ dependencies = [
 
 [[package]]
 name = "z3"
-version = "0.13.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11593be221028adbadaa25a9ace764693d059c51d58870b27d8c78582aaa6574"
+checksum = "3767e1ffc46e0fa6dd5ab3be5d9c7a4f54ba3af572f0b14d6f4fc7e7932d798d"
 dependencies = [
  "log",
  "num 0.4.1",
