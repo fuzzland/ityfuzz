@@ -114,7 +114,7 @@ revm-interpreter = { git = "https://github.com/fuzzland/revm", rev = "1dead51", 
 handlebars = "4.4"
 
 # for cheatcode middleware
-foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "5ac78a9" }
+foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "7bef9ca" }
 alloy-sol-types = "0.6"
 alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
 alloy-primitives = "0.6"
