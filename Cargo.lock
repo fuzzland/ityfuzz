@@ -1031,7 +1031,7 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -1292,7 +1292,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.28",
  "ring 0.16.20",
- "time 0.3.34",
+ "time 0.3.37",
  "tokio",
  "tower",
  "tracing",
@@ -1488,7 +1488,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "sha2 0.10.8",
- "time 0.3.34",
+ "time 0.3.37",
  "tracing",
 ]
 
@@ -1628,7 +1628,7 @@ dependencies = [
  "itoa",
  "num-integer",
  "ryu",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -3939,7 +3939,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -6668,6 +6668,7 @@ dependencies = [
  "sui-types",
  "svm-rs-builds 0.5.3",
  "thiserror 1.0.58",
+ "time 0.3.37",
  "tracing",
  "tracing-subscriber 0.3.18",
  "typetag",
@@ -10085,7 +10086,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde_json",
- "time 0.3.34",
+ "time 0.3.37",
  "url",
 ]
 
@@ -10591,7 +10592,7 @@ checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
 dependencies = [
  "pem",
  "ring 0.16.20",
- "time 0.3.34",
+ "time 0.3.37",
  "yasna",
 ]
 
@@ -12012,7 +12013,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
  "url",
  "uuid 1.8.0",
 ]
@@ -12186,7 +12187,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -12450,7 +12451,7 @@ dependencies = [
  "num-bigint 0.4.4",
  "num-traits",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -13425,9 +13426,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.34"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8248b6521bb14bc45b4067159b9b6ad792e2d6d754d6c41fb50e29fefe38749"
+checksum = "35e7868883861bd0e56d9ac6efcaaca0d6d5d82a2a7ec8209ff492c07cf37b21"
 dependencies = [
  "deranged",
  "itoa",
@@ -13446,9 +13447,9 @@ checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 
 [[package]]
 name = "time-macros"
-version = "0.2.17"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ba3a3ef41e6672a2f0f001392bb5dcd3ff0a9992d618ca761a11c3121547774"
+checksum = "2834e6017e3e5e4b9834939793b282bc03b37a3336245fa820e35e233e2a85de"
 dependencies = [
  "num-conv",
  "time-core",
@@ -14007,7 +14008,7 @@ checksum = "3566e8ce28cc0a3fe42519fc80e6b4c943cc4c8cef275620eb8dac2d3d4e06cf"
 dependencies = [
  "crossbeam-channel",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
  "tracing-subscriber 0.3.18",
 ]
 
@@ -14087,7 +14088,7 @@ dependencies = [
  "sharded-slab",
  "smallvec",
  "thread_local",
- "time 0.3.34",
+ "time 0.3.37",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -15935,7 +15936,7 @@ dependencies = [
  "thread_local",
  "threadpool",
  "time 0.1.43",
- "time 0.3.34",
+ "time 0.3.37",
  "time-core",
  "time-macros",
  "tiny-bip39",
@@ -16104,7 +16105,7 @@ dependencies = [
  "oid-registry",
  "rusticata-macros",
  "thiserror 1.0.58",
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -16152,7 +16153,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 dependencies = [
- "time 0.3.34",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -16233,7 +16234,7 @@ dependencies = [
  "hmac 0.12.1",
  "pbkdf2 0.11.0",
  "sha1",
- "time 0.3.34",
+ "time 0.3.37",
  "zstd 0.11.2+zstd.1.5.2",
 ]
 
