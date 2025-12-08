@@ -135,3 +135,4 @@ metatype = "0.2.2"
 
 [patch.crates-io]
 svm-rs = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "v0.5.1" }
+svm-rs-build = { git = "https://github.com/alloy-rs/svm-rs.git", package = "svm-builds", tag = "v0.5.1" }
