@@ -130,6 +130,8 @@ evmole = "0.3.8"
 semver = "1.0.22"
 
 # for compatibility
-svm-rs-builds = "0.5.0"
 time = "0.3.35"
 metatype = "0.2.2"
+
+[patch.crates-io]
+svm-rs = { git = "https://github.com/alloy-rs/svm-rs.git", tag = "0.5.0" }
