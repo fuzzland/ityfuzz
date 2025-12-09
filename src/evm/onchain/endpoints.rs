@@ -806,7 +806,7 @@ impl OnChainConfig {
                 return None;
             }
 
-            debug!("abi fetched: {}", result);
+            // debug!("abi fetched: {}", result);
             return Some(result.to_string());
         }
 
@@ -1243,9 +1243,9 @@ impl OnChainConfig {
         } else {
             format!("https://pairs-all.infra.fuzz.land/pairs/{network}/{token}")
         };
-        // info!(">> {url}");
+        debug!(">> {url}");
         let resp: Value = reqwest::blocking::get(url).unwrap().json().unwrap();
-        // info!("<< {}", resp.to_string());
+        debug!("<< {}", resp.to_string());
         let mut pairs: Vec<PairData> = Vec::new();
         if let Some(resp_pairs) = resp.as_array() {
             for item in resp_pairs {
