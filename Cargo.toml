@@ -114,7 +114,8 @@ sui-types = { git = "https://github.com/fuzzland/ityfuzz-sui-fork.git", optional
 handlebars = "4.4"
 
 # for cheatcode middleware
-foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "617dfc28" }
+# TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+# foundry-cheatcodes = { git = "https://github.com/foundry-rs/foundry.git", rev = "617dfc28" }
 alloy-sol-types = "0.6"
 alloy-dyn-abi = { version = "0.6", features = ["arbitrary", "eip712"] }
 alloy-primitives = "0.6"
@@ -128,4 +129,3 @@ tracing-subscriber = "0.3"
 colored = "2.0"
 evmole = "0.3.8"
 semver = "1.0.22"
-

@@ -1029,9 +1029,10 @@ impl ContractLoader {
             Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
             &mut state,
         );
-        executor
-            .host
-            .add_middlewares(Rc::new(RefCell::new(Cheatcode::new(etherscan_api_key))));
+        // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+        // executor
+        //     .host
+        //     .add_middlewares(Rc::new(RefCell::new(Cheatcode::new(etherscan_api_key))));
 
         // Initialize state
         state
