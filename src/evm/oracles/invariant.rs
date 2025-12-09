@@ -12,7 +12,7 @@ use revm_primitives::Bytecode;
 use crate::{
     evm::{
         input::{ConciseEVMInput, EVMInput},
-        middlewares::cheatcode::CHEATCODE_ADDRESS,
+        // middlewares::cheatcode::CHEATCODE_ADDRESS,
         oracle::EVMBugResult,
         oracles::INVARIANT_BUG_IDX,
         types::{EVMAddress, EVMFuzzState, EVMOracleCtx, EVMQueueExecutor, EVMU256},
@@ -115,14 +115,15 @@ impl
                     // 0x6661696c65640000000000000000000000000000000000000000000000000000
                     // if the invariant is violated in cheatcode cotract.
                     // @shou: tbh, i feel its dumb and wasteful
-                    new_state
-                        .get(&CHEATCODE_ADDRESS)
-                        .map(|data| {
-                            data.get(&self.failed_slot)
-                                .map(|v| v == &EVMU256::from(1))
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false)
+                    // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+                    // new_state
+                    //     .get(&CHEATCODE_ADDRESS)
+                    //     .map(|data| {
+                    //         data.get(&self.failed_slot)
+                    //             .map(|v| v == &EVMU256::from(1))
+                    //             .unwrap_or(false)
+                    //     })
+                    //     .unwrap_or(false)
                 }
             {
                 continue;

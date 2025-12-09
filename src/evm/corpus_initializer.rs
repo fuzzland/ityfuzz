@@ -36,7 +36,7 @@ use crate::{
         bytecode_analyzer,
         contract_utils::{extract_sig_from_contract, to_hex_string, ABIConfig, ContractLoader},
         input::{ConciseEVMInput, EVMInput, EVMInputTy},
-        middlewares::cheatcode::CHEATCODE_ADDRESS,
+        // middlewares::cheatcode::CHEATCODE_ADDRESS,
         mutator::AccessPattern,
         onchain::{abi_decompiler::fetch_abi_evmole, flashloan::register_borrow_txn, BLACKLIST_ADDR},
         presets::Preset,
@@ -241,9 +241,11 @@ where
                 contract.name, contract.balance
             );
 
-            if deployed_address != CHEATCODE_ADDRESS {
-                self.state.add_address(&deployed_address);
-            }
+            // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+            // if deployed_address != CHEATCODE_ADDRESS {
+            //     self.state.add_address(&deployed_address);
+            // }
+            self.state.add_address(&deployed_address);
         }
         info!("Deployed all contracts\n");
     }
@@ -520,11 +522,12 @@ where
     }
 
     pub fn init_cheatcode_contract(&mut self) {
-        self.executor.host.set_code(
-            CHEATCODE_ADDRESS,
-            Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
-            self.state,
-        );
+        // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+        // self.executor.host.set_code(
+        //     CHEATCODE_ADDRESS,
+        //     Bytecode::new_raw(Bytes::from(vec![0xfd, 0x00])),
+        //     self.state,
+        // );
     }
 
     fn add_abi(&mut self, abi: &ABIConfig, deployed_address: EVMAddress, artifacts: &mut EVMInitializationArtifacts) {

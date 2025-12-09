@@ -56,16 +56,17 @@ use revm_primitives::{
 use tracing::debug;
 
 use super::{
-    middlewares::cheatcode::{
-        ExpectedCallData,
-        ExpectedCallTracker,
-        ExpectedCallType,
-        ExpectedEmit,
-        ExpectedRevert,
-        Prank,
-        ERROR_PREFIX,
-        REVERT_PREFIX,
-    },
+    // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+    // middlewares::cheatcode::{
+    //     ExpectedCallData,
+    //     ExpectedCallTracker,
+    //     ExpectedCallType,
+    //     ExpectedEmit,
+    //     ExpectedRevert,
+    //     Prank,
+    //     ERROR_PREFIX,
+    //     REVERT_PREFIX,
+    // },
     types::EVMFuzzState,
     vm::{IS_FAST_CALL, MEM_LIMIT, SETCODE_ONLY},
 };
@@ -233,16 +234,17 @@ where
 
     /// Depth of call stack
     pub call_depth: u64,
-    /// Prank information
-    pub prank: Option<Prank>,
-    /// Expected revert information
-    pub expected_revert: Option<ExpectedRevert>,
-    /// Expected emits
-    pub expected_emits: VecDeque<ExpectedEmit>,
-    /// Expected calls
-    pub expected_calls: ExpectedCallTracker,
-    /// Assert failed message for the cheatcode
-    pub assert_msg: Option<String>,
+    // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+    // /// Prank information
+    // pub prank: Option<Prank>,
+    // /// Expected revert information
+    // pub expected_revert: Option<ExpectedRevert>,
+    // /// Expected emits
+    // pub expected_emits: VecDeque<ExpectedEmit>,
+    // /// Expected calls
+    // pub expected_calls: ExpectedCallTracker,
+    // /// Assert failed message for the cheatcode
+    // pub assert_msg: Option<String>,
 }
 
 impl<SC> Debug for FuzzHost<SC>
@@ -310,11 +312,11 @@ where
             mapping_sstore_pcs_to_slot: self.mapping_sstore_pcs_to_slot.clone(),
             jumpi_trace: self.jumpi_trace,
             call_depth: self.call_depth,
-            prank: self.prank.clone(),
-            expected_emits: self.expected_emits.clone(),
-            expected_revert: self.expected_revert.clone(),
-            expected_calls: self.expected_calls.clone(),
-            assert_msg: self.assert_msg.clone(),
+            // prank: self.prank.clone(),
+            // expected_emits: self.expected_emits.clone(),
+            // expected_revert: self.expected_revert.clone(),
+            // expected_calls: self.expected_calls.clone(),
+            // assert_msg: self.assert_msg.clone(),
         }
     }
 }
@@ -372,11 +374,12 @@ where
             mapping_sstore_pcs_to_slot: Default::default(),
             jumpi_trace: 37,
             call_depth: 0,
-            prank: None,
-            expected_revert: None,
-            expected_emits: VecDeque::new(),
-            expected_calls: ExpectedCallTracker::new(),
-            assert_msg: None,
+            // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+            // prank: None,
+            // expected_revert: None,
+            // expected_emits: VecDeque::new(),
+            // expected_calls: ExpectedCallTracker::new(),
+            // assert_msg: None,
         }
     }
 
@@ -788,177 +791,178 @@ where
         }
     }
 
-    /// Apply the prank
-    pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut CallInputs) {
-        if let Some(prank) = &self.prank {
-            if self.call_depth >= prank.depth && contract_caller == &prank.old_caller {
-                // At the target depth we set `msg.sender`
-                if self.call_depth == prank.depth {
-                    input.context.caller = prank.new_caller;
-                    input.transfer.source = prank.new_caller;
-                }
+    // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+    // /// Apply the prank
+    // pub fn apply_prank(&mut self, contract_caller: &EVMAddress, input: &mut
+    // CallInputs) {     if let Some(prank) = &self.prank {
+    //         if self.call_depth >= prank.depth && contract_caller ==
+    // &prank.old_caller {             // At the target depth we set
+    // `msg.sender`             if self.call_depth == prank.depth {
+    //                 input.context.caller = prank.new_caller;
+    //                 input.transfer.source = prank.new_caller;
+    //             }
 
-                // At the target depth, or deeper, we set `tx.origin`
-                if let Some(new_origin) = prank.new_origin {
-                    self.env.tx.caller = new_origin;
-                }
-            }
-        }
-    }
+    //             // At the target depth, or deeper, we set `tx.origin`
+    //             if let Some(new_origin) = prank.new_origin {
+    //                 self.env.tx.caller = new_origin;
+    //             }
+    //         }
+    //     }
+    // }
 
-    /// Clean up the prank
-    pub fn clean_prank(&mut self) {
-        if let Some(prank) = &self.prank {
-            if self.call_depth != prank.depth {
-                return;
-            }
-            if let Some(old_origin) = prank.old_origin {
-                self.env.tx.caller = old_origin;
-            }
-            if prank.single_call {
-                let _ = self.prank.take();
-            }
-        }
-    }
+    // /// Clean up the prank
+    // pub fn clean_prank(&mut self) {
+    //     if let Some(prank) = &self.prank {
+    //         if self.call_depth != prank.depth {
+    //             return;
+    //         }
+    //         if let Some(old_origin) = prank.old_origin {
+    //             self.env.tx.caller = old_origin;
+    //         }
+    //         if prank.single_call {
+    //             let _ = self.prank.take();
+    //         }
+    //     }
+    // }
 
-    /// Check expected
-    pub fn check_expected(
-        &mut self,
-        call: &CallInputs,
-        res: (InstructionResult, Gas, Bytes),
-    ) -> (InstructionResult, Gas, Bytes) {
-        // Check assert result
-        if let Some(res) = self.check_assert_result() {
-            return res;
-        }
+    // /// Check expected
+    // pub fn check_expected(
+    //     &mut self,
+    //     call: &CallInputs,
+    //     res: (InstructionResult, Gas, Bytes),
+    // ) -> (InstructionResult, Gas, Bytes) {
+    //     // Check assert result
+    //     if let Some(res) = self.check_assert_result() {
+    //         return res;
+    //     }
 
-        // Check expected reverts
-        let res = self.check_expected_revert(res);
-        if res.0 == Revert {
-            return res;
-        }
-        // Check expected emits
-        let res = self.check_expected_emits(call, res);
-        if res.0 == Revert {
-            return res;
-        }
-        // Check expected calls
-        self.check_expected_calls(res)
-    }
+    //     // Check expected reverts
+    //     let res = self.check_expected_revert(res);
+    //     if res.0 == Revert {
+    //         return res;
+    //     }
+    //     // Check expected emits
+    //     let res = self.check_expected_emits(call, res);
+    //     if res.0 == Revert {
+    //         return res;
+    //     }
+    //     // Check expected calls
+    //     self.check_expected_calls(res)
+    // }
 
-    pub fn check_assert_result(&mut self) -> Option<(InstructionResult, Gas, Bytes)> {
-        if let Some(ref msg) = self.assert_msg {
-            return Some((InstructionResult::Revert, Gas::new(0), msg.abi_encode().into()));
-        }
+    // pub fn check_assert_result(&mut self) -> Option<(InstructionResult, Gas,
+    // Bytes)> {     if let Some(ref msg) = self.assert_msg {
+    //         return Some((InstructionResult::Revert, Gas::new(0),
+    // msg.abi_encode().into()));     }
 
-        None
-    }
+    //     None
+    // }
 
-    /// Check expected reverts
-    fn check_expected_revert(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
-        // Check if we should check for reverts
-        if self.expected_revert.is_none() {
-            return res;
-        }
-        let expected_revert = self.expected_revert.as_ref().unwrap();
-        if self.call_depth > expected_revert.depth {
-            return res;
-        }
-        let (result, gas, retdata) = res;
-        let mut expected_revert = self.expected_revert.take().unwrap();
+    // /// Check expected reverts
+    // fn check_expected_revert(&mut self, res: (InstructionResult, Gas, Bytes)) ->
+    // (InstructionResult, Gas, Bytes) {     // Check if we should check for
+    // reverts     if self.expected_revert.is_none() {
+    //         return res;
+    //     }
+    //     let expected_revert = self.expected_revert.as_ref().unwrap();
+    //     if self.call_depth > expected_revert.depth {
+    //         return res;
+    //     }
+    //     let (result, gas, retdata) = res;
+    //     let mut expected_revert = self.expected_revert.take().unwrap();
 
-        // Check result
-        if matches!(result, return_ok!()) {
-            return (
-                InstructionResult::Revert,
-                gas,
-                "Call did not revert as expected".abi_encode().into(),
-            );
-        }
+    //     // Check result
+    //     if matches!(result, return_ok!()) {
+    //         return (
+    //             InstructionResult::Revert,
+    //             gas,
+    //             "Call did not revert as expected".abi_encode().into(),
+    //         );
+    //     }
 
-        // Check revert reason
-        if expected_revert.reason.is_none() {
-            return (InstructionResult::Return, gas, retdata);
-        }
-        let expected_reason = expected_revert.reason.take().unwrap();
-        let mut actual_reason = retdata.clone();
-        if actual_reason.len() >= 4 && matches!(actual_reason[..4].try_into(), Ok(ERROR_PREFIX | REVERT_PREFIX)) {
-            if let Ok(parsed_bytes) = DynSolType::Bytes.abi_decode(&actual_reason[4..]) {
-                if let Some(bytes) = parsed_bytes.as_bytes().map(|b| b.to_vec()) {
-                    actual_reason = bytes.into();
-                }
-            }
-        }
-        if actual_reason != expected_reason {
-            return (
-                InstructionResult::Revert,
-                gas,
-                "Revert reason mismatch".abi_encode().into(),
-            );
-        }
+    //     // Check revert reason
+    //     if expected_revert.reason.is_none() {
+    //         return (InstructionResult::Return, gas, retdata);
+    //     }
+    //     let expected_reason = expected_revert.reason.take().unwrap();
+    //     let mut actual_reason = retdata.clone();
+    //     if actual_reason.len() >= 4 && matches!(actual_reason[..4].try_into(),
+    // Ok(ERROR_PREFIX | REVERT_PREFIX)) {         if let Ok(parsed_bytes) =
+    // DynSolType::Bytes.abi_decode(&actual_reason[4..]) {             if let
+    // Some(bytes) = parsed_bytes.as_bytes().map(|b| b.to_vec()) {
+    // actual_reason = bytes.into();             }
+    //         }
+    //     }
+    //     if actual_reason != expected_reason {
+    //         return (
+    //             InstructionResult::Revert,
+    //             gas,
+    //             "Revert reason mismatch".abi_encode().into(),
+    //         );
+    //     }
 
-        (InstructionResult::Return, gas, retdata)
-    }
+    //     (InstructionResult::Return, gas, retdata)
+    // }
 
-    /// Check expected emits
-    fn check_expected_emits(
-        &mut self,
-        call: &CallInputs,
-        res: (InstructionResult, Gas, Bytes),
-    ) -> (InstructionResult, Gas, Bytes) {
-        let should_check_emits = self
-            .expected_emits
-            .iter()
-            .any(|expected| expected.depth == self.call_depth) &&
-            // Ignore staticcalls
-            !call.is_static;
-        if !should_check_emits {
-            return res;
-        }
+    // /// Check expected emits
+    // fn check_expected_emits(
+    //     &mut self,
+    //     call: &CallInputs,
+    //     res: (InstructionResult, Gas, Bytes),
+    // ) -> (InstructionResult, Gas, Bytes) {
+    //     let should_check_emits = self
+    //         .expected_emits
+    //         .iter()
+    //         .any(|expected| expected.depth == self.call_depth) &&
+    //         // Ignore staticcalls
+    //         !call.is_static;
+    //     if !should_check_emits {
+    //         return res;
+    //     }
 
-        let (result, gas, retdata) = res;
-        // Not all emits were matched.
-        if self.expected_emits.iter().any(|expected| !expected.found) {
-            return (
-                InstructionResult::Revert,
-                gas,
-                "log != expected log".abi_encode().into(),
-            );
-        }
+    //     let (result, gas, retdata) = res;
+    //     // Not all emits were matched.
+    //     if self.expected_emits.iter().any(|expected| !expected.found) {
+    //         return (
+    //             InstructionResult::Revert,
+    //             gas,
+    //             "log != expected log".abi_encode().into(),
+    //         );
+    //     }
 
-        self.expected_emits.clear();
-        (result, gas, retdata)
-    }
+    //     self.expected_emits.clear();
+    //     (result, gas, retdata)
+    // }
 
-    /// Check expected calls
-    fn check_expected_calls(&mut self, res: (InstructionResult, Gas, Bytes)) -> (InstructionResult, Gas, Bytes) {
-        // Only check expected calls at the root call
-        if self.call_depth > 0 {
-            return res;
-        }
+    // /// Check expected calls
+    // fn check_expected_calls(&mut self, res: (InstructionResult, Gas, Bytes)) ->
+    // (InstructionResult, Gas, Bytes) {     // Only check expected calls at the
+    // root call     if self.call_depth > 0 {
+    //         return res;
+    //     }
 
-        let (result, gas, retdata) = res;
-        let expected_calls = std::mem::take(&mut self.expected_calls);
-        for (_, calldatas) in expected_calls {
-            // Loop over each address, and for each address, loop over each calldata it
-            // expects.
-            for (_, (expected, actual_count)) in calldatas {
-                // Grab the values we expect to see
-                let ExpectedCallData { count, call_type, .. } = expected;
+    //     let (result, gas, retdata) = res;
+    //     let expected_calls = std::mem::take(&mut self.expected_calls);
+    //     for (_, calldatas) in expected_calls {
+    //         // Loop over each address, and for each address, loop over each
+    // calldata it         // expects.
+    //         for (_, (expected, actual_count)) in calldatas {
+    //             // Grab the values we expect to see
+    //             let ExpectedCallData { count, call_type, .. } = expected;
 
-                let failed = match call_type {
-                    ExpectedCallType::Count => count != actual_count,
-                    ExpectedCallType::NonCount => count > actual_count,
-                };
-                if failed {
-                    let msg = "expected call count mismatch";
-                    return (InstructionResult::Revert, gas, msg.abi_encode().into());
-                }
-            }
-        }
+    //             let failed = match call_type {
+    //                 ExpectedCallType::Count => count != actual_count,
+    //                 ExpectedCallType::NonCount => count > actual_count,
+    //             };
+    //             if failed {
+    //                 let msg = "expected call count mismatch";
+    //                 return (InstructionResult::Revert, gas,
+    // msg.abi_encode().into());             }
+    //         }
+    //     }
 
-        (result, gas, retdata)
-    }
+    //     (result, gas, retdata)
+    // }
 }
 
 macro_rules! process_rw_key {

@@ -40,7 +40,7 @@ use crate::{
         input::{ConciseEVMInput, EVMInput},
         middlewares::{
             call_printer::CallPrinter,
-            cheatcode::Cheatcode,
+            // cheatcode::Cheatcode,
             coverage::{Coverage, EVAL_COVERAGE},
             middleware::Middleware,
             reentrancy::ReentrancyTracer,

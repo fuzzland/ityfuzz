@@ -34,7 +34,7 @@ use crate::{
         host::FuzzHost,
         input::{EVMInput, EVMInputTy},
         middlewares::{
-            cheatcode::CHEATCODE_ADDRESS,
+            // cheatcode::CHEATCODE_ADDRESS,
             middleware::{add_corpus, Middleware, MiddlewareType},
         },
         mutator::AccessPattern,
@@ -447,9 +447,11 @@ impl OnChain {
             host.add_hashes(address_h160, parsed_abi.iter().map(|abi| abi.function).collect());
         }
         let target = if is_proxy_call { caller } else { address_h160 };
-        if target != CHEATCODE_ADDRESS {
-            state.add_address(&target);
-        }
+        // TODO: enable cheatcode when https://github.com/matter-labs/zksync-era/issues/4581 is resolved
+        // if target != CHEATCODE_ADDRESS {
+        //     state.add_address(&target);
+        // }
+        state.add_address(&target);
 
         // notify flashloan and blacklisting flashloan addresses
         {
