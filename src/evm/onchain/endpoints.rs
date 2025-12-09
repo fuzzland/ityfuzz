@@ -1159,7 +1159,7 @@ impl OnChainConfig {
             return "".to_string();
         }
 
-        info!("fetching code from {}", hex::encode(address));
+        info!("eth_getCode 0x{}", hex::encode(address));
 
         let resp_string = {
             let mut params = String::from("[");
@@ -1170,10 +1170,12 @@ impl OnChainConfig {
             match resp {
                 Some(resp) => {
                     let code = resp.as_str().unwrap();
-                    debug!("address: 0x{}, code: {}", hex::encode(address), code);
                     code.to_string()
                 }
-                None => "".to_string(),
+                None => {
+                    info!("empty code for address 0x{:x}", address);
+                    "".to_string()
+                }
             }
         }
         .trim_start_matches("0x")
