@@ -228,7 +228,7 @@ impl Chain {
             Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
-            Chain::BSC => "https://bnb.api.onfinality.io/public",
+            Chain::BSC => "https://bsc.drpc.org",
             Chain::CHAPEL => "https://rpc.ankr.com/bsc_testnet_chapel",
             Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
@@ -749,7 +749,7 @@ impl OnChainConfig {
         {
             return None;
         }
-        
+
         let endpoint = if self.etherscan_base.contains("/v2/api") {
             format!(
                 "{}?chainid={}&module=contract&action=getabi&address={:?}&format=json&apikey={}",
@@ -774,7 +774,7 @@ impl OnChainConfig {
                 }
             )
         };
-        
+
         info!("fetching abi from {}", endpoint);
         match self.get(endpoint.clone()) {
             Some(resp) => {
