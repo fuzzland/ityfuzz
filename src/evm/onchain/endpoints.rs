@@ -806,6 +806,7 @@ impl OnChainConfig {
                 return None;
             }
 
+            debug!("abi fetched: {}", result);
             return Some(result.to_string());
         }
 
