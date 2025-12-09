@@ -1291,6 +1291,8 @@ impl OnChainConfig {
         }
         self.pair_cache
             .insert(EVMAddress::from_str(&token).unwrap(), pairs.clone());
+
+        info!(?pairs, "fetched {} pairs for {}", pairs.len(), token);
         pairs
     }
 
