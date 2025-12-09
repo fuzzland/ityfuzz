@@ -163,7 +163,6 @@ fn get_pair(chain: &mut Box<dyn ChainConfig>, token: &str, is_pegged: bool) -> V
     }
     let pegged_tokens = chain.get_pegged_token();
     let mut pairs = chain.get_pair(token.as_str(), is_pegged || pegged_tokens.values().contains(&token));
-    debug!("fetched {} pairs for {}", pairs.len(), token);
 
     // println!("original pairs: {:?}", pairs,);
     // println!("token: {:?}", token,);

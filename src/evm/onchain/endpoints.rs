@@ -1170,6 +1170,7 @@ impl OnChainConfig {
             match resp {
                 Some(resp) => {
                     let code = resp.as_str().unwrap();
+                    debug!("address: 0x{}, code: {}", hex::encode(address), code);
                     code.to_string()
                 }
                 None => "".to_string(),
@@ -1237,7 +1238,6 @@ impl OnChainConfig {
         if self.pair_cache.contains_key(&EVMAddress::from_str(&token).unwrap()) {
             return self.pair_cache[&EVMAddress::from_str(&token).unwrap()].clone();
         }
-        info!("fetching pairs for {token}");
         let url = if is_pegged {
             format!("https://pairs-all.infra.fuzz.land/single_pair/{network}/{token}/{weth}")
         } else {
@@ -1252,6 +1252,7 @@ impl OnChainConfig {
                 let pair = item["pair"].as_str().unwrap().to_string();
                 let code = self.get_contract_code(EVMAddress::from_str(&pair).unwrap(), false);
                 if code.is_empty() {
+                    info!("skip pair {pair} due to empty code");
                     continue;
                 }
                 let token0 = item["token0"].as_str().unwrap().to_string();
