@@ -865,11 +865,15 @@ impl OnChainConfig {
                 .build()
                 .expect("Failed to create HTTP client");
 
-            return client
+            debug!(">> {} {}", self.endpoint_url, data);
+            let resp = client
                 .post(&self.endpoint_url)
                 .header("Content-Type", "application/json")
-                .body(data)
-                .send()
+                .body(data.clone())
+                .send();
+            debug!("<< {:?}", resp);
+
+            return resp
                 .ok()
                 .and_then(|resp| resp.text().ok())
                 .and_then(|resp| serde_json::from_str(&resp).ok())
