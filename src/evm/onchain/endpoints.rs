@@ -228,7 +228,7 @@ impl Chain {
             Chain::ETH => "https://eth.merkle.io",
             Chain::GOERLI => "https://rpc.ankr.com/eth_goerli",
             Chain::SEPOLIA => "https://rpc.ankr.com/eth_sepolia",
-            Chain::BSC => "https://0.48.club",
+            Chain::BSC => "https://bsc-mainnet.public.blastapi.io",
             Chain::CHAPEL => "https://rpc.ankr.com/bsc_testnet_chapel",
             Chain::POLYGON => "https://polygon.llamarpc.com",
             Chain::MUMBAI => "https://rpc-mumbai.maticvigil.com/",
