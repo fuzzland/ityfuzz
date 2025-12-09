@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use revm_primitives::Bytecode;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use super::{
     get_uniswap_info,
@@ -158,10 +158,12 @@ fn get_pair(chain: &mut Box<dyn ChainConfig>, token: &str, is_pegged: bool) -> V
     let token = token.to_lowercase();
     info!("fetching pairs for {token}");
     if token == chain.get_weth() {
+        debug!("token {} is weth, returning empty pairs", token);
         return vec![];
     }
     let pegged_tokens = chain.get_pegged_token();
     let mut pairs = chain.get_pair(token.as_str(), is_pegged || pegged_tokens.values().contains(&token));
+    debug!("fetched {} pairs for {}", pairs.len(), token);
 
     // println!("original pairs: {:?}", pairs,);
     // println!("token: {:?}", token,);
@@ -228,7 +230,10 @@ fn get_pegged_next_hop(chain: &mut Box<dyn ChainConfig>, token: &str) -> PairDat
             token1: "".to_string(),
         };
     }
-    let mut peg_info = get_pair(chain, token, true)
+
+    let pairs = get_pair(chain, token, true);
+    debug!(chain, token, ?pairs, "get_pair (pegged)");
+    let mut peg_info = pairs
         .first()
         .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
         .clone();
