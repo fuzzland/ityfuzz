@@ -875,8 +875,8 @@ impl OnChainConfig {
                 .and_then(|resp| resp.text().ok())?;
             debug!("<< {}", resp);
 
-            return resp
-                .and_then(|resp| serde_json::from_str(&resp).ok())
+            return serde_json::from_str(&resp)
+                .ok()
                 .and_then(|json: Value| json.get("result").cloned());
         }
         // Handling IPC request
