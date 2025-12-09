@@ -870,12 +870,12 @@ impl OnChainConfig {
                 .post(&self.endpoint_url)
                 .header("Content-Type", "application/json")
                 .body(data.clone())
-                .send();
-            debug!("<< {:?}", resp);
+                .send()
+                .ok()
+                .and_then(|resp| resp.text().ok())?;
+            debug!("<< {}", resp);
 
             return resp
-                .ok()
-                .and_then(|resp| resp.text().ok())
                 .and_then(|resp| serde_json::from_str(&resp).ok())
                 .and_then(|json: Value| json.get("result").cloned());
         }
