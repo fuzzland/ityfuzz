@@ -232,7 +232,7 @@ fn get_pegged_next_hop(chain: &mut Box<dyn ChainConfig>, token: &str) -> PairDat
     }
 
     let pairs = get_pair(chain, token, true);
-    debug!(chain, token, ?pairs, "get_pair (pegged)");
+    debug!(%token, ?pairs, "get_pair (pegged)");
     let mut peg_info = pairs
         .first()
         .expect("Unexpected RPC error, consider setting env <ETH_RPC_URL> ")
