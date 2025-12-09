@@ -1168,7 +1168,8 @@ impl OnChainConfig {
         let resp_string = {
             let mut params = String::from("[");
             params.push_str(&format!("\"0x{:x}\",", address));
-            params.push_str(&format!("\"{}\"", self.block_number));
+            // params.push_str(&format!("\"{}\"", self.block_number));
+            params.push_str("\"latest\"");
             params.push(']');
             let resp = self._request("eth_getCode".to_string(), params);
             match resp {
