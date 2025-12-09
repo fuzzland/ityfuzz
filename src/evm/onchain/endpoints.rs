@@ -776,31 +776,41 @@ impl OnChainConfig {
         };
 
         info!("fetching abi from {}", endpoint);
-        match self.get(endpoint.clone()) {
-            Some(resp) => {
-                let json = serde_json::from_str::<Value>(&resp);
-                match json {
-                    Ok(json) => {
-                        let result_parsed = json["result"].as_str();
-                        match result_parsed {
-                            Some(result) => {
-                                if result == "Contract source code not verified" {
-                                    None
-                                } else {
-                                    Some(result.to_string())
-                                }
-                            }
-                            _ => None,
-                        }
-                    }
-                    Err(_) => None,
-                }
+        for attempt in 0..3 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(1));
             }
-            None => {
-                error!("failed to fetch abi from {}", endpoint);
-                None
+
+            let resp = match self.get(endpoint.clone()) {
+                Some(resp) => resp,
+                None => continue, // Request failed, retry
+            };
+
+            let json: Value = match serde_json::from_str(&resp) {
+                Ok(json) => json,
+                Err(_) => continue, // JSON parse error, retry
+            };
+
+            let status_ok = json["status"].as_str() == Some("1");
+            let message_ok = json["message"].as_str() == Some("OK");
+            if !status_ok || !message_ok {
+                continue; // status/message not OK, retry
             }
+
+            let result = match json["result"].as_str() {
+                Some(result) => result,
+                None => continue, // result field missing or invalid, retry
+            };
+
+            if result == "Contract source code not verified" {
+                return None;
+            }
+
+            return Some(result.to_string());
         }
+
+        error!("failed to fetch abi from {} after 3 attempts", endpoint);
+        None
     }
 
     fn blockscout_fetch_abi_uncached(&self, address: EVMAddress) -> Option<String> {
