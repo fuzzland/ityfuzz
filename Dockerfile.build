@@ -1,0 +1,43 @@
+# Build environment for ityfuzz (pinned nightly via rust-toolchain.toml).
+#
+# Build the image:
+#   docker build -f Dockerfile.build -t ityfuzz-build .
+#
+# Compile (debug):
+#   docker run --rm -v "$PWD:/workspace" -w /workspace ityfuzz-build cargo build
+#
+# Compile (release):
+#   docker run --rm -v "$PWD:/workspace" -w /workspace ityfuzz-build cargo build --release
+#
+# Or use docker compose:
+#   docker compose -f docker-compose.build.yml run --rm build cargo build --release
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    clang \
+    cmake \
+    curl \
+    git \
+    libclang-dev \
+    libssl-dev \
+    libudev-dev \
+    libz3-dev \
+    pkg-config \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain none --profile minimal \
+    && rustup toolchain install nightly-2024-01-01 --profile minimal \
+    && rustup default nightly-2024-01-01
+
+WORKDIR /workspace
+
+CMD ["cargo", "build", "--release"]
