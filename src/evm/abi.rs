@@ -108,10 +108,17 @@ impl ABIAddressToInstanceMap {
 }
 
 pub fn register_abi_instance<S: HasMetadata>(address: EVMAddress, abi: BoxedABI, state: &mut S) {
+    if !state.has_metadata::<ABIAddressToInstanceMap>() {
+        state
+            .metadata_map_mut()
+            .insert(ABIAddressToInstanceMap::new());
+    }
+
     let abi_map = state
         .metadata_map_mut()
         .get_mut::<ABIAddressToInstanceMap>()
-        .expect("ABIAddressToInstanceMap not found");
+        .expect("ABIAddressToInstanceMap initialization failed");
+
     abi_map.add(address, abi);
 }
 

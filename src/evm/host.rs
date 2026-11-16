@@ -1404,8 +1404,10 @@ where
                     let sigs = extract_sig_from_contract(&contract_code_str);
                     let mut unknown_sigs: usize = 0;
                     let mut parsed_abi = vec![];
+                    let abi_map = state.metadata_map().get::<ABIMap>();
+
                     for sig in &sigs {
-                        if let Some(abi) = state.metadata_map().get::<ABIMap>().unwrap().get(sig) {
+                        if let Some(abi) = abi_map.and_then(|map| map.get(sig)) {
                             parsed_abi.push(abi.clone());
                         } else {
                             unknown_sigs += 1;
@@ -1418,7 +1420,7 @@ where
                             .iter()
                             .map(|abi| {
                                 if let Some(known_abi) =
-                                    state.metadata_map().get::<ABIMap>().unwrap().get(&abi.function)
+                                    abi_map.and_then(|map| map.get(&abi.function))
                                 {
                                     known_abi
                                 } else {
