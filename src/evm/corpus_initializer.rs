@@ -26,7 +26,7 @@ use tracing::{debug, error, info};
 use super::{scheduler::ABIScheduler, srcmap::SOURCE_MAP_PROVIDER};
 /// Utilities to initialize the corpus
 /// Add all potential calls with default args to the corpus
-use crate::evm::abi::{get_abi_type_boxed, BoxedABI};
+use crate::evm::abi::{get_abi_type_boxed, ABIAddressToInstanceMap, BoxedABI};
 #[cfg(feature = "print_txn_corpus")]
 use crate::fuzzer::DUMP_FILE_COUNT;
 use crate::{
@@ -187,6 +187,13 @@ where
 
     pub fn initialize(&mut self, loader: &mut ContractLoader) -> EVMInitializationArtifacts {
         self.state.metadata_map_mut().insert(ABIMap::new());
+
+        if !self.state.has_metadata::<ABIAddressToInstanceMap>() {
+            self.state
+                .metadata_map_mut()
+                .insert(ABIAddressToInstanceMap::new());
+        }
+
         self.setup_default_callers(loader);
         self.setup_contract_callers(loader);
         self.init_cheatcode_contract();

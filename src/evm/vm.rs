@@ -955,8 +955,7 @@ where
             IN_DEPLOY = true;
         }
         let mut interp = Interpreter::new_with_memory_limit(deployer, 1e10 as u64, false, MEM_LIMIT);
-        let mut dummy_state = EVMFuzzState::default();
-        let r = self.host.run_inspect(&mut interp, &mut dummy_state);
+        let r = self.host.run_inspect(&mut interp, state);
         unsafe {
             IN_DEPLOY = false;
         }
